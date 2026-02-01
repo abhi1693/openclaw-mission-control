@@ -23,16 +23,10 @@ import {
   useListProjectMembersProjectsProjectIdMembersGet,
   useAddProjectMemberProjectsProjectIdMembersPost,
   useRemoveProjectMemberProjectsProjectIdMembersMemberIdDelete,
+  useUpdateProjectMemberProjectsProjectIdMembersMemberIdPatch,
 } from "@/api/generated/projects/projects";
 
-const STATUSES = [
-  "backlog",
-  "ready",
-  "in_progress",
-  "review",
-  "done",
-  "blocked",
-] as const;
+const STATUSES = ["backlog", "ready", "in_progress", "review", "done", "blocked"] as const;
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -48,6 +42,9 @@ export default function ProjectDetailPage() {
     mutation: { onSuccess: () => members.refetch() },
   });
   const removeMember = useRemoveProjectMemberProjectsProjectIdMembersMemberIdDelete({
+    mutation: { onSuccess: () => members.refetch() },
+  });
+  const updateMember = useUpdateProjectMemberProjectsProjectIdMembersMemberIdPatch({
     mutation: { onSuccess: () => members.refetch() },
   });
 
@@ -161,7 +158,7 @@ export default function ProjectDetailPage() {
             <Select onChange={(e) => {
               const empId = e.target.value;
               if (!empId) return;
-              addMember.mutate({ projectId, data: { project_id: projectId, employee_id: Number(empId), role: null } });
+              addMember.mutate({ projectId, data: { project_id: projectId, employee_id: Number(empId), role: "member" } });
               e.currentTarget.value = "";
             }}>
               <option value="">Add member…</option>
@@ -171,14 +168,29 @@ export default function ProjectDetailPage() {
             </Select>
             <ul className="space-y-2">
               {projectMembers.map((m) => (
-                <li key={m.id ?? `${m.project_id}-${m.employee_id}`} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                  <div>{employeeName(m.employee_id)}</div>
-                  <Button
-                    variant="outline"
-                    onClick={() => removeMember.mutate({ projectId, memberId: Number(m.id) })}
-                  >
-                    Remove
-                  </Button>
+                <li key={m.id ?? `${m.project_id}-${m.employee_id}`} className="rounded-md border p-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>{employeeName(m.employee_id)}</div>
+                    <Button
+                      variant="outline"
+                      onClick={() => removeMember.mutate({ projectId, memberId: Number(m.id) })}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="mt-2">
+                    <Input
+                      placeholder="Role (e.g., PM, QA, Dev)"
+                      defaultValue={m.role ?? ""}
+                      onBlur={(e) =>
+                        updateMember.mutate({
+                          projectId,
+                          memberId: Number(m.id),
+                          data: { project_id: projectId, employee_id: m.employee_id, role: e.currentTarget.value || null },
+                        })
+                      }
+                    />
+                  </div>
                 </li>
               ))}
               {projectMembers.length === 0 ? <li className="text-sm text-muted-foreground">No members yet.</li> : null}

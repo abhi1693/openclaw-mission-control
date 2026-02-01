@@ -64,7 +64,7 @@ def add_project_member(project_id: int, payload: ProjectMember, session: Session
         entity_type="project_member",
         entity_id=member.id,
         verb="added",
-        payload={"project_id": project_id, "employee_id": member.employee_id},
+        payload={"project_id": project_id, "employee_id": member.employee_id, "role": member.role},
     )
     session.commit()
     return member
@@ -87,3 +87,27 @@ def remove_project_member(project_id: int, member_id: int, session: Session = De
     )
     session.commit()
     return {"ok": True}
+
+
+@router.patch("/{project_id}/members/{member_id}", response_model=ProjectMember)
+def update_project_member(project_id: int, member_id: int, payload: ProjectMember, session: Session = Depends(get_session)):
+    member = session.get(ProjectMember, member_id)
+    if not member or member.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Project member not found")
+
+    if payload.role is not None:
+        member.role = payload.role
+
+    session.add(member)
+    session.commit()
+    session.refresh(member)
+    log_activity(
+        session,
+        actor_employee_id=None,
+        entity_type="project_member",
+        entity_id=member.id,
+        verb="updated",
+        payload={"project_id": project_id, "role": member.role},
+    )
+    session.commit()
+    return member

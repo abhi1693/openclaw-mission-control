@@ -960,3 +960,162 @@ export const useRemoveProjectMemberProjectsProjectIdMembersMemberIdDelete = <
     queryClient,
   );
 };
+/**
+ * @summary Update Project Member
+ */
+export type updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse200 =
+  {
+    data: ProjectMember;
+    status: 200;
+  };
+
+export type updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponseSuccess =
+  updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse200 & {
+    headers: Headers;
+  };
+export type updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponseError =
+  updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse422 & {
+    headers: Headers;
+  };
+
+export type updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse =
+  | updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponseSuccess
+  | updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponseError;
+
+export const getUpdateProjectMemberProjectsProjectIdMembersMemberIdPatchUrl = (
+  projectId: number,
+  memberId: number,
+) => {
+  return `/projects/${projectId}/members/${memberId}`;
+};
+
+export const updateProjectMemberProjectsProjectIdMembersMemberIdPatch = async (
+  projectId: number,
+  memberId: number,
+  projectMember: ProjectMember,
+  options?: RequestInit,
+): Promise<updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse> => {
+  return customFetch<updateProjectMemberProjectsProjectIdMembersMemberIdPatchResponse>(
+    getUpdateProjectMemberProjectsProjectIdMembersMemberIdPatchUrl(
+      projectId,
+      memberId,
+    ),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(projectMember),
+    },
+  );
+};
+
+export const getUpdateProjectMemberProjectsProjectIdMembersMemberIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateProjectMemberProjectsProjectIdMembersMemberIdPatch
+        >
+      >,
+      TError,
+      { projectId: number; memberId: number; data: ProjectMember },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof updateProjectMemberProjectsProjectIdMembersMemberIdPatch
+      >
+    >,
+    TError,
+    { projectId: number; memberId: number; data: ProjectMember },
+    TContext
+  > => {
+    const mutationKey = [
+      "updateProjectMemberProjectsProjectIdMembersMemberIdPatch",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof updateProjectMemberProjectsProjectIdMembersMemberIdPatch
+        >
+      >,
+      { projectId: number; memberId: number; data: ProjectMember }
+    > = (props) => {
+      const { projectId, memberId, data } = props ?? {};
+
+      return updateProjectMemberProjectsProjectIdMembersMemberIdPatch(
+        projectId,
+        memberId,
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type UpdateProjectMemberProjectsProjectIdMembersMemberIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof updateProjectMemberProjectsProjectIdMembersMemberIdPatch
+      >
+    >
+  >;
+export type UpdateProjectMemberProjectsProjectIdMembersMemberIdPatchMutationBody =
+  ProjectMember;
+export type UpdateProjectMemberProjectsProjectIdMembersMemberIdPatchMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Update Project Member
+ */
+export const useUpdateProjectMemberProjectsProjectIdMembersMemberIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateProjectMemberProjectsProjectIdMembersMemberIdPatch
+        >
+      >,
+      TError,
+      { projectId: number; memberId: number; data: ProjectMember },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateProjectMemberProjectsProjectIdMembersMemberIdPatch>
+  >,
+  TError,
+  { projectId: number; memberId: number; data: ProjectMember },
+  TContext
+> => {
+  return useMutation(
+    getUpdateProjectMemberProjectsProjectIdMembersMemberIdPatchMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
