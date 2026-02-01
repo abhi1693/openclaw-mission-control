@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import styles from "@/app/_components/Shell.module.css";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,24 +31,21 @@ export default function ProjectsPage() {
   }, [projects.data]);
 
   return (
-    <main className="mx-auto max-w-5xl p-6">
-      <div className="flex items-start justify-between gap-4">
+    <main>
+      <div className={styles.topbar}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Create and manage projects.</p>
+          <h1 className={styles.h1}>Projects</h1>
+          <p className={styles.p}>Create, view, and drill into projects.</p>
         </div>
         <Button variant="outline" onClick={() => projects.refetch()} disabled={projects.isFetching}>
           Refresh
         </Button>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create project</CardTitle>
-            <CardDescription>Minimal fields for v1</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+      <div className={styles.grid2}>
+        <div className={styles.card}>
+          <div className={styles.cardTitle}>Create project</div>
+          <div className={styles.list}>
             <Input
               placeholder="Project name"
               value={name}
@@ -59,10 +58,10 @@ export default function ProjectsPage() {
               Create
             </Button>
             {createProject.error ? (
-              <div className="text-sm text-destructive">{(createProject.error as Error).message}</div>
+              <div className={styles.mono}>{(createProject.error as Error).message}</div>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         <Card>
           <CardHeader>
@@ -70,21 +69,20 @@ export default function ProjectsPage() {
             <CardDescription>{sorted.length} total</CardDescription>
           </CardHeader>
           <CardContent>
-            {projects.isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> : null}
-            {projects.error ? (
-              <div className="text-sm text-destructive">{(projects.error as Error).message}</div>
-            ) : null}
-            {!projects.isLoading && !projects.error ? (
-              <ul className="space-y-2">
-                {sorted.map((p) => (
-                  <li key={p.id ?? p.name} className="flex items-center justify-between rounded-md border p-3">
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{p.status}</div>
-                  </li>
-                ))}
-                {sorted.length === 0 ? <li className="text-sm text-muted-foreground">No projects yet.</li> : null}
-              </ul>
-            ) : null}
+            <div className={styles.list}>
+              {sorted.map((p) => (
+                <div key={p.id ?? p.name} className={styles.item}>
+                  <div style={{ fontWeight: 600 }}>{p.name}</div>
+                  <div className={styles.mono} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span>{p.status}</span>
+                    {p.id ? (
+                      <Link href={`/projects/${p.id}`} className={styles.badge}>Open</Link>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              {sorted.length === 0 ? <div className={styles.mono}>No projects yet.</div> : null}
+            </div>
           </CardContent>
         </Card>
       </div>
