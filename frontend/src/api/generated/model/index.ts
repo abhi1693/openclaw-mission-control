@@ -22,6 +22,7 @@ export * from "./listTaskCommentsTaskCommentsGetParams";
 export * from "./listTasksTasksGetParams";
 export * from "./project";
 export * from "./projectCreate";
+export * from "./projectMember";
 export * from "./projectUpdate";
 export * from "./task";
 export * from "./taskComment";

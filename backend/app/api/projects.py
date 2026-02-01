@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app.api.utils import log_activity
 from app.db.session import get_session
-from app.models.projects import Project
+from app.models.projects import Project, ProjectMember
 from app.schemas.projects import ProjectCreate, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -43,3 +43,47 @@ def update_project(project_id: int, payload: ProjectUpdate, session: Session = D
     log_activity(session, actor_employee_id=None, entity_type="project", entity_id=proj.id, verb="updated", payload=data)
     session.commit()
     return proj
+
+
+@router.get("/{project_id}/members", response_model=list[ProjectMember])
+def list_project_members(project_id: int, session: Session = Depends(get_session)):
+    return session.exec(
+        select(ProjectMember).where(ProjectMember.project_id == project_id).order_by(ProjectMember.id.asc())
+    ).all()
+
+
+@router.post("/{project_id}/members", response_model=ProjectMember)
+def add_project_member(project_id: int, payload: ProjectMember, session: Session = Depends(get_session)):
+    member = ProjectMember(project_id=project_id, employee_id=payload.employee_id, role=payload.role)
+    session.add(member)
+    session.commit()
+    session.refresh(member)
+    log_activity(
+        session,
+        actor_employee_id=None,
+        entity_type="project_member",
+        entity_id=member.id,
+        verb="added",
+        payload={"project_id": project_id, "employee_id": member.employee_id},
+    )
+    session.commit()
+    return member
+
+
+@router.delete("/{project_id}/members/{member_id}")
+def remove_project_member(project_id: int, member_id: int, session: Session = Depends(get_session)):
+    member = session.get(ProjectMember, member_id)
+    if not member or member.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Project member not found")
+    session.delete(member)
+    session.commit()
+    log_activity(
+        session,
+        actor_employee_id=None,
+        entity_type="project_member",
+        entity_id=member_id,
+        verb="removed",
+        payload={"project_id": project_id},
+    )
+    session.commit()
+    return {"ok": True}

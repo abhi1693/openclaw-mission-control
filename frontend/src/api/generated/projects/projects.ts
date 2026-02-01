@@ -24,6 +24,7 @@ import type {
   HTTPValidationError,
   Project,
   ProjectCreate,
+  ProjectMember,
   ProjectUpdate,
 } from ".././model";
 
@@ -437,6 +438,525 @@ export const useUpdateProjectProjectsProjectIdPatch = <
 > => {
   return useMutation(
     getUpdateProjectProjectsProjectIdPatchMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary List Project Members
+ */
+export type listProjectMembersProjectsProjectIdMembersGetResponse200 = {
+  data: ProjectMember[];
+  status: 200;
+};
+
+export type listProjectMembersProjectsProjectIdMembersGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type listProjectMembersProjectsProjectIdMembersGetResponseSuccess =
+  listProjectMembersProjectsProjectIdMembersGetResponse200 & {
+    headers: Headers;
+  };
+export type listProjectMembersProjectsProjectIdMembersGetResponseError =
+  listProjectMembersProjectsProjectIdMembersGetResponse422 & {
+    headers: Headers;
+  };
+
+export type listProjectMembersProjectsProjectIdMembersGetResponse =
+  | listProjectMembersProjectsProjectIdMembersGetResponseSuccess
+  | listProjectMembersProjectsProjectIdMembersGetResponseError;
+
+export const getListProjectMembersProjectsProjectIdMembersGetUrl = (
+  projectId: number,
+) => {
+  return `/projects/${projectId}/members`;
+};
+
+export const listProjectMembersProjectsProjectIdMembersGet = async (
+  projectId: number,
+  options?: RequestInit,
+): Promise<listProjectMembersProjectsProjectIdMembersGetResponse> => {
+  return customFetch<listProjectMembersProjectsProjectIdMembersGetResponse>(
+    getListProjectMembersProjectsProjectIdMembersGetUrl(projectId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListProjectMembersProjectsProjectIdMembersGetQueryKey = (
+  projectId: number,
+) => {
+  return [`/projects/${projectId}/members`] as const;
+};
+
+export const getListProjectMembersProjectsProjectIdMembersGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListProjectMembersProjectsProjectIdMembersGetQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>>
+  > = ({ signal }) =>
+    listProjectMembersProjectsProjectIdMembersGet(projectId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListProjectMembersProjectsProjectIdMembersGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>>
+  >;
+export type ListProjectMembersProjectsProjectIdMembersGetQueryError =
+  HTTPValidationError;
+
+export function useListProjectMembersProjectsProjectIdMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: number,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectMembersProjectsProjectIdMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListProjectMembersProjectsProjectIdMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Project Members
+ */
+
+export function useListProjectMembersProjectsProjectIdMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  projectId: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listProjectMembersProjectsProjectIdMembersGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListProjectMembersProjectsProjectIdMembersGetQueryOptions(
+      projectId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add Project Member
+ */
+export type addProjectMemberProjectsProjectIdMembersPostResponse200 = {
+  data: ProjectMember;
+  status: 200;
+};
+
+export type addProjectMemberProjectsProjectIdMembersPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type addProjectMemberProjectsProjectIdMembersPostResponseSuccess =
+  addProjectMemberProjectsProjectIdMembersPostResponse200 & {
+    headers: Headers;
+  };
+export type addProjectMemberProjectsProjectIdMembersPostResponseError =
+  addProjectMemberProjectsProjectIdMembersPostResponse422 & {
+    headers: Headers;
+  };
+
+export type addProjectMemberProjectsProjectIdMembersPostResponse =
+  | addProjectMemberProjectsProjectIdMembersPostResponseSuccess
+  | addProjectMemberProjectsProjectIdMembersPostResponseError;
+
+export const getAddProjectMemberProjectsProjectIdMembersPostUrl = (
+  projectId: number,
+) => {
+  return `/projects/${projectId}/members`;
+};
+
+export const addProjectMemberProjectsProjectIdMembersPost = async (
+  projectId: number,
+  projectMember: ProjectMember,
+  options?: RequestInit,
+): Promise<addProjectMemberProjectsProjectIdMembersPostResponse> => {
+  return customFetch<addProjectMemberProjectsProjectIdMembersPostResponse>(
+    getAddProjectMemberProjectsProjectIdMembersPostUrl(projectId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(projectMember),
+    },
+  );
+};
+
+export const getAddProjectMemberProjectsProjectIdMembersPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectMemberProjectsProjectIdMembersPost>>,
+    TError,
+    { projectId: number; data: ProjectMember },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addProjectMemberProjectsProjectIdMembersPost>>,
+  TError,
+  { projectId: number; data: ProjectMember },
+  TContext
+> => {
+  const mutationKey = ["addProjectMemberProjectsProjectIdMembersPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addProjectMemberProjectsProjectIdMembersPost>>,
+    { projectId: number; data: ProjectMember }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return addProjectMemberProjectsProjectIdMembersPost(
+      projectId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddProjectMemberProjectsProjectIdMembersPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof addProjectMemberProjectsProjectIdMembersPost>>
+  >;
+export type AddProjectMemberProjectsProjectIdMembersPostMutationBody =
+  ProjectMember;
+export type AddProjectMemberProjectsProjectIdMembersPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Add Project Member
+ */
+export const useAddProjectMemberProjectsProjectIdMembersPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof addProjectMemberProjectsProjectIdMembersPost>>,
+      TError,
+      { projectId: number; data: ProjectMember },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof addProjectMemberProjectsProjectIdMembersPost>>,
+  TError,
+  { projectId: number; data: ProjectMember },
+  TContext
+> => {
+  return useMutation(
+    getAddProjectMemberProjectsProjectIdMembersPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary Remove Project Member
+ */
+export type removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse200 =
+  {
+    data: unknown;
+    status: 200;
+  };
+
+export type removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponseSuccess =
+  removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponseError =
+  removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse =
+  | removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponseSuccess
+  | removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponseError;
+
+export const getRemoveProjectMemberProjectsProjectIdMembersMemberIdDeleteUrl = (
+  projectId: number,
+  memberId: number,
+) => {
+  return `/projects/${projectId}/members/${memberId}`;
+};
+
+export const removeProjectMemberProjectsProjectIdMembersMemberIdDelete = async (
+  projectId: number,
+  memberId: number,
+  options?: RequestInit,
+): Promise<removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse> => {
+  return customFetch<removeProjectMemberProjectsProjectIdMembersMemberIdDeleteResponse>(
+    getRemoveProjectMemberProjectsProjectIdMembersMemberIdDeleteUrl(
+      projectId,
+      memberId,
+    ),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveProjectMemberProjectsProjectIdMembersMemberIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeProjectMemberProjectsProjectIdMembersMemberIdDelete
+        >
+      >,
+      TError,
+      { projectId: number; memberId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof removeProjectMemberProjectsProjectIdMembersMemberIdDelete
+      >
+    >,
+    TError,
+    { projectId: number; memberId: number },
+    TContext
+  > => {
+    const mutationKey = [
+      "removeProjectMemberProjectsProjectIdMembersMemberIdDelete",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof removeProjectMemberProjectsProjectIdMembersMemberIdDelete
+        >
+      >,
+      { projectId: number; memberId: number }
+    > = (props) => {
+      const { projectId, memberId } = props ?? {};
+
+      return removeProjectMemberProjectsProjectIdMembersMemberIdDelete(
+        projectId,
+        memberId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type RemoveProjectMemberProjectsProjectIdMembersMemberIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof removeProjectMemberProjectsProjectIdMembersMemberIdDelete
+      >
+    >
+  >;
+
+export type RemoveProjectMemberProjectsProjectIdMembersMemberIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Remove Project Member
+ */
+export const useRemoveProjectMemberProjectsProjectIdMembersMemberIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeProjectMemberProjectsProjectIdMembersMemberIdDelete
+        >
+      >,
+      TError,
+      { projectId: number; memberId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof removeProjectMemberProjectsProjectIdMembersMemberIdDelete>
+  >,
+  TError,
+  { projectId: number; memberId: number },
+  TContext
+> => {
+  return useMutation(
+    getRemoveProjectMemberProjectsProjectIdMembersMemberIdDeleteMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };

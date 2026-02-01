@@ -12,6 +12,8 @@ from app.schemas.work import TaskCommentCreate, TaskCreate, TaskUpdate
 
 router = APIRouter(tags=["work"])
 
+ALLOWED_STATUSES = {"backlog", "ready", "in_progress", "review", "done", "blocked"}
+
 
 @router.get("/tasks", response_model=list[Task])
 def list_tasks(project_id: int | None = None, session: Session = Depends(get_session)):
@@ -24,11 +26,20 @@ def list_tasks(project_id: int | None = None, session: Session = Depends(get_ses
 @router.post("/tasks", response_model=Task)
 def create_task(payload: TaskCreate, session: Session = Depends(get_session)):
     task = Task(**payload.model_dump())
+    if task.status not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
     task.updated_at = datetime.utcnow()
     session.add(task)
     session.commit()
     session.refresh(task)
-    log_activity(session, actor_employee_id=task.created_by_employee_id, entity_type="task", entity_id=task.id, verb="created", payload={"project_id": task.project_id, "title": task.title})
+    log_activity(
+        session,
+        actor_employee_id=task.created_by_employee_id,
+        entity_type="task",
+        entity_id=task.id,
+        verb="created",
+        payload={"project_id": task.project_id, "title": task.title},
+    )
     session.commit()
     return task
 
@@ -40,6 +51,8 @@ def update_task(task_id: int, payload: TaskUpdate, session: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Task not found")
 
     data = payload.model_dump(exclude_unset=True)
+    if "status" in data and data["status"] not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
     for k, v in data.items():
         setattr(task, k, v)
     task.updated_at = datetime.utcnow()
