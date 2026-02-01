@@ -4,12 +4,27 @@
  * OpenClaw Agency API
  * OpenAPI spec version: 0.3.0
  */
+import { useQuery } from "@tanstack/react-query";
+import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseQueryOptions,
+  UseQueryResult,
+} from "@tanstack/react-query";
+
 import type {
   HTTPValidationError,
   ListActivitiesActivitiesGetParams,
 } from ".././model";
 
 import { customFetch } from "../../mutator";
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * @summary List Activities
@@ -67,3 +82,156 @@ export const listActivitiesActivitiesGet = async (
     },
   );
 };
+
+export const getListActivitiesActivitiesGetQueryKey = (
+  params?: ListActivitiesActivitiesGetParams,
+) => {
+  return [`/activities`, ...(params ? [params] : [])] as const;
+};
+
+export const getListActivitiesActivitiesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListActivitiesActivitiesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListActivitiesActivitiesGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listActivitiesActivitiesGet>>
+  > = ({ signal }) =>
+    listActivitiesActivitiesGet(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListActivitiesActivitiesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listActivitiesActivitiesGet>>
+>;
+export type ListActivitiesActivitiesGetQueryError = HTTPValidationError;
+
+export function useListActivitiesActivitiesGet<
+  TData = Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: undefined | ListActivitiesActivitiesGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listActivitiesActivitiesGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListActivitiesActivitiesGet<
+  TData = Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListActivitiesActivitiesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listActivitiesActivitiesGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListActivitiesActivitiesGet<
+  TData = Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListActivitiesActivitiesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Activities
+ */
+
+export function useListActivitiesActivitiesGet<
+  TData = Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListActivitiesActivitiesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listActivitiesActivitiesGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListActivitiesActivitiesGetQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

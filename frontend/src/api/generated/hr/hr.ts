@@ -4,6 +4,22 @@
  * OpenClaw Agency API
  * OpenAPI spec version: 0.3.0
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  MutationFunction,
+  QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
+} from "@tanstack/react-query";
+
 import type {
   EmploymentAction,
   EmploymentActionCreate,
@@ -14,6 +30,8 @@ import type {
 } from ".././model";
 
 import { customFetch } from "../../mutator";
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * @summary List Headcount Requests
@@ -45,6 +63,148 @@ export const listHeadcountRequestsHrHeadcountGet = async (
     },
   );
 };
+
+export const getListHeadcountRequestsHrHeadcountGetQueryKey = () => {
+  return [`/hr/headcount`] as const;
+};
+
+export const getListHeadcountRequestsHrHeadcountGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListHeadcountRequestsHrHeadcountGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>
+  > = ({ signal }) =>
+    listHeadcountRequestsHrHeadcountGet({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListHeadcountRequestsHrHeadcountGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>
+>;
+export type ListHeadcountRequestsHrHeadcountGetQueryError = unknown;
+
+export function useListHeadcountRequestsHrHeadcountGet<
+  TData = Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+          TError,
+          Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListHeadcountRequestsHrHeadcountGet<
+  TData = Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+          TError,
+          Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListHeadcountRequestsHrHeadcountGet<
+  TData = Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Headcount Requests
+ */
+
+export function useListHeadcountRequestsHrHeadcountGet<
+  TData = Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listHeadcountRequestsHrHeadcountGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListHeadcountRequestsHrHeadcountGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Create Headcount Request
@@ -91,6 +251,80 @@ export const createHeadcountRequestHrHeadcountPost = async (
   );
 };
 
+export const getCreateHeadcountRequestHrHeadcountPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHeadcountRequestHrHeadcountPost>>,
+    TError,
+    { data: HeadcountRequestCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createHeadcountRequestHrHeadcountPost>>,
+  TError,
+  { data: HeadcountRequestCreate },
+  TContext
+> => {
+  const mutationKey = ["createHeadcountRequestHrHeadcountPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createHeadcountRequestHrHeadcountPost>>,
+    { data: HeadcountRequestCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createHeadcountRequestHrHeadcountPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateHeadcountRequestHrHeadcountPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createHeadcountRequestHrHeadcountPost>>
+>;
+export type CreateHeadcountRequestHrHeadcountPostMutationBody =
+  HeadcountRequestCreate;
+export type CreateHeadcountRequestHrHeadcountPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Create Headcount Request
+ */
+export const useCreateHeadcountRequestHrHeadcountPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createHeadcountRequestHrHeadcountPost>>,
+      TError,
+      { data: HeadcountRequestCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createHeadcountRequestHrHeadcountPost>>,
+  TError,
+  { data: HeadcountRequestCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateHeadcountRequestHrHeadcountPostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Update Headcount Request
  */
@@ -139,6 +373,89 @@ export const updateHeadcountRequestHrHeadcountRequestIdPatch = async (
   );
 };
 
+export const getUpdateHeadcountRequestHrHeadcountRequestIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateHeadcountRequestHrHeadcountRequestIdPatch>
+      >,
+      TError,
+      { requestId: number; data: HeadcountRequestUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<ReturnType<typeof updateHeadcountRequestHrHeadcountRequestIdPatch>>,
+    TError,
+    { requestId: number; data: HeadcountRequestUpdate },
+    TContext
+  > => {
+    const mutationKey = ["updateHeadcountRequestHrHeadcountRequestIdPatch"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateHeadcountRequestHrHeadcountRequestIdPatch>
+      >,
+      { requestId: number; data: HeadcountRequestUpdate }
+    > = (props) => {
+      const { requestId, data } = props ?? {};
+
+      return updateHeadcountRequestHrHeadcountRequestIdPatch(
+        requestId,
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type UpdateHeadcountRequestHrHeadcountRequestIdPatchMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof updateHeadcountRequestHrHeadcountRequestIdPatch>>
+  >;
+export type UpdateHeadcountRequestHrHeadcountRequestIdPatchMutationBody =
+  HeadcountRequestUpdate;
+export type UpdateHeadcountRequestHrHeadcountRequestIdPatchMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Update Headcount Request
+ */
+export const useUpdateHeadcountRequestHrHeadcountRequestIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateHeadcountRequestHrHeadcountRequestIdPatch>
+      >,
+      TError,
+      { requestId: number; data: HeadcountRequestUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateHeadcountRequestHrHeadcountRequestIdPatch>>,
+  TError,
+  { requestId: number; data: HeadcountRequestUpdate },
+  TContext
+> => {
+  return useMutation(
+    getUpdateHeadcountRequestHrHeadcountRequestIdPatchMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary List Employment Actions
  */
@@ -169,6 +486,148 @@ export const listEmploymentActionsHrActionsGet = async (
     },
   );
 };
+
+export const getListEmploymentActionsHrActionsGetQueryKey = () => {
+  return [`/hr/actions`] as const;
+};
+
+export const getListEmploymentActionsHrActionsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListEmploymentActionsHrActionsGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>
+  > = ({ signal }) =>
+    listEmploymentActionsHrActionsGet({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListEmploymentActionsHrActionsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>
+>;
+export type ListEmploymentActionsHrActionsGetQueryError = unknown;
+
+export function useListEmploymentActionsHrActionsGet<
+  TData = Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListEmploymentActionsHrActionsGet<
+  TData = Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListEmploymentActionsHrActionsGet<
+  TData = Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Employment Actions
+ */
+
+export function useListEmploymentActionsHrActionsGet<
+  TData = Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmploymentActionsHrActionsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListEmploymentActionsHrActionsGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Create Employment Action
@@ -212,5 +671,80 @@ export const createEmploymentActionHrActionsPost = async (
       headers: { "Content-Type": "application/json", ...options?.headers },
       body: JSON.stringify(employmentActionCreate),
     },
+  );
+};
+
+export const getCreateEmploymentActionHrActionsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEmploymentActionHrActionsPost>>,
+    TError,
+    { data: EmploymentActionCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEmploymentActionHrActionsPost>>,
+  TError,
+  { data: EmploymentActionCreate },
+  TContext
+> => {
+  const mutationKey = ["createEmploymentActionHrActionsPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEmploymentActionHrActionsPost>>,
+    { data: EmploymentActionCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createEmploymentActionHrActionsPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEmploymentActionHrActionsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEmploymentActionHrActionsPost>>
+>;
+export type CreateEmploymentActionHrActionsPostMutationBody =
+  EmploymentActionCreate;
+export type CreateEmploymentActionHrActionsPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Create Employment Action
+ */
+export const useCreateEmploymentActionHrActionsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createEmploymentActionHrActionsPost>>,
+      TError,
+      { data: EmploymentActionCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createEmploymentActionHrActionsPost>>,
+  TError,
+  { data: EmploymentActionCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateEmploymentActionHrActionsPostMutationOptions(options),
+    queryClient,
   );
 };

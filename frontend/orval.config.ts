@@ -9,7 +9,7 @@ export default defineConfig({
       mode: "tags-split",
       target: "src/api/generated/index.ts",
       schemas: "src/api/generated/model",
-      client: "fetch",
+      client: "react-query",
       prettier: true,
       override: {
         mutator: {

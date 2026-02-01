@@ -4,6 +4,22 @@
  * OpenClaw Agency API
  * OpenAPI spec version: 0.3.0
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  MutationFunction,
+  QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
+} from "@tanstack/react-query";
+
 import type {
   HTTPValidationError,
   ListTaskCommentsTaskCommentsGetParams,
@@ -16,6 +32,8 @@ import type {
 } from ".././model";
 
 import { customFetch } from "../../mutator";
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * @summary List Tasks
@@ -70,6 +88,155 @@ export const listTasksTasksGet = async (
   );
 };
 
+export const getListTasksTasksGetQueryKey = (
+  params?: ListTasksTasksGetParams,
+) => {
+  return [`/tasks`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTasksTasksGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTasksTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTasksTasksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksTasksGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListTasksTasksGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTasksTasksGet>>
+  > = ({ signal }) => listTasksTasksGet(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTasksTasksGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListTasksTasksGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTasksTasksGet>>
+>;
+export type ListTasksTasksGetQueryError = HTTPValidationError;
+
+export function useListTasksTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  params: undefined | ListTasksTasksGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksTasksGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTasksTasksGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTasksTasksGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTasksTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTasksTasksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksTasksGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTasksTasksGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTasksTasksGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTasksTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTasksTasksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksTasksGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Tasks
+ */
+
+export function useListTasksTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListTasksTasksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksTasksGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListTasksTasksGetQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
 /**
  * @summary Create Task
  */
@@ -112,6 +279,78 @@ export const createTaskTasksPost = async (
   });
 };
 
+export const getCreateTaskTasksPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTaskTasksPost>>,
+    TError,
+    { data: TaskCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTaskTasksPost>>,
+  TError,
+  { data: TaskCreate },
+  TContext
+> => {
+  const mutationKey = ["createTaskTasksPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTaskTasksPost>>,
+    { data: TaskCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTaskTasksPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTaskTasksPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTaskTasksPost>>
+>;
+export type CreateTaskTasksPostMutationBody = TaskCreate;
+export type CreateTaskTasksPostMutationError = HTTPValidationError;
+
+/**
+ * @summary Create Task
+ */
+export const useCreateTaskTasksPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createTaskTasksPost>>,
+      TError,
+      { data: TaskCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createTaskTasksPost>>,
+  TError,
+  { data: TaskCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateTaskTasksPostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Update Task
  */
@@ -158,6 +397,78 @@ export const updateTaskTasksTaskIdPatch = async (
   );
 };
 
+export const getUpdateTaskTasksTaskIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTaskTasksTaskIdPatch>>,
+    TError,
+    { taskId: number; data: TaskUpdate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTaskTasksTaskIdPatch>>,
+  TError,
+  { taskId: number; data: TaskUpdate },
+  TContext
+> => {
+  const mutationKey = ["updateTaskTasksTaskIdPatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTaskTasksTaskIdPatch>>,
+    { taskId: number; data: TaskUpdate }
+  > = (props) => {
+    const { taskId, data } = props ?? {};
+
+    return updateTaskTasksTaskIdPatch(taskId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTaskTasksTaskIdPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTaskTasksTaskIdPatch>>
+>;
+export type UpdateTaskTasksTaskIdPatchMutationBody = TaskUpdate;
+export type UpdateTaskTasksTaskIdPatchMutationError = HTTPValidationError;
+
+/**
+ * @summary Update Task
+ */
+export const useUpdateTaskTasksTaskIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateTaskTasksTaskIdPatch>>,
+      TError,
+      { taskId: number; data: TaskUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateTaskTasksTaskIdPatch>>,
+  TError,
+  { taskId: number; data: TaskUpdate },
+  TContext
+> => {
+  return useMutation(
+    getUpdateTaskTasksTaskIdPatchMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Delete Task
  */
@@ -201,6 +512,78 @@ export const deleteTaskTasksTaskIdDelete = async (
   );
 };
 
+export const getDeleteTaskTasksTaskIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTaskTasksTaskIdDelete>>,
+    TError,
+    { taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTaskTasksTaskIdDelete>>,
+  TError,
+  { taskId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteTaskTasksTaskIdDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTaskTasksTaskIdDelete>>,
+    { taskId: number }
+  > = (props) => {
+    const { taskId } = props ?? {};
+
+    return deleteTaskTasksTaskIdDelete(taskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTaskTasksTaskIdDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTaskTasksTaskIdDelete>>
+>;
+
+export type DeleteTaskTasksTaskIdDeleteMutationError = HTTPValidationError;
+
+/**
+ * @summary Delete Task
+ */
+export const useDeleteTaskTasksTaskIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteTaskTasksTaskIdDelete>>,
+      TError,
+      { taskId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTaskTasksTaskIdDelete>>,
+  TError,
+  { taskId: number },
+  TContext
+> => {
+  return useMutation(
+    getDeleteTaskTasksTaskIdDeleteMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary List Task Comments
  */
@@ -258,6 +641,160 @@ export const listTaskCommentsTaskCommentsGet = async (
   );
 };
 
+export const getListTaskCommentsTaskCommentsGetQueryKey = (
+  params?: ListTaskCommentsTaskCommentsGetParams,
+) => {
+  return [`/task-comments`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTaskCommentsTaskCommentsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListTaskCommentsTaskCommentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListTaskCommentsTaskCommentsGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>
+  > = ({ signal }) =>
+    listTaskCommentsTaskCommentsGet(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListTaskCommentsTaskCommentsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>
+>;
+export type ListTaskCommentsTaskCommentsGetQueryError = HTTPValidationError;
+
+export function useListTaskCommentsTaskCommentsGet<
+  TData = Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListTaskCommentsTaskCommentsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTaskCommentsTaskCommentsGet<
+  TData = Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListTaskCommentsTaskCommentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTaskCommentsTaskCommentsGet<
+  TData = Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListTaskCommentsTaskCommentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Task Comments
+ */
+
+export function useListTaskCommentsTaskCommentsGet<
+  TData = Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListTaskCommentsTaskCommentsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTaskCommentsTaskCommentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListTaskCommentsTaskCommentsGetQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
 /**
  * @summary Create Task Comment
  */
@@ -300,5 +837,79 @@ export const createTaskCommentTaskCommentsPost = async (
       headers: { "Content-Type": "application/json", ...options?.headers },
       body: JSON.stringify(taskCommentCreate),
     },
+  );
+};
+
+export const getCreateTaskCommentTaskCommentsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTaskCommentTaskCommentsPost>>,
+    TError,
+    { data: TaskCommentCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTaskCommentTaskCommentsPost>>,
+  TError,
+  { data: TaskCommentCreate },
+  TContext
+> => {
+  const mutationKey = ["createTaskCommentTaskCommentsPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTaskCommentTaskCommentsPost>>,
+    { data: TaskCommentCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTaskCommentTaskCommentsPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTaskCommentTaskCommentsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTaskCommentTaskCommentsPost>>
+>;
+export type CreateTaskCommentTaskCommentsPostMutationBody = TaskCommentCreate;
+export type CreateTaskCommentTaskCommentsPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Create Task Comment
+ */
+export const useCreateTaskCommentTaskCommentsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createTaskCommentTaskCommentsPost>>,
+      TError,
+      { data: TaskCommentCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createTaskCommentTaskCommentsPost>>,
+  TError,
+  { data: TaskCommentCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateTaskCommentTaskCommentsPostMutationOptions(options),
+    queryClient,
   );
 };

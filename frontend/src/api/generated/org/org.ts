@@ -4,6 +4,22 @@
  * OpenClaw Agency API
  * OpenAPI spec version: 0.3.0
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  MutationFunction,
+  QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
+} from "@tanstack/react-query";
+
 import type {
   Department,
   DepartmentCreate,
@@ -15,6 +31,8 @@ import type {
 } from ".././model";
 
 import { customFetch } from "../../mutator";
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * @summary List Departments
@@ -46,6 +64,147 @@ export const listDepartmentsDepartmentsGet = async (
     },
   );
 };
+
+export const getListDepartmentsDepartmentsGetQueryKey = () => {
+  return [`/departments`] as const;
+};
+
+export const getListDepartmentsDepartmentsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDepartmentsDepartmentsGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>
+  > = ({ signal }) =>
+    listDepartmentsDepartmentsGet({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListDepartmentsDepartmentsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>
+>;
+export type ListDepartmentsDepartmentsGetQueryError = unknown;
+
+export function useListDepartmentsDepartmentsGet<
+  TData = Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDepartmentsDepartmentsGet<
+  TData = Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDepartmentsDepartmentsGet<
+  TData = Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Departments
+ */
+
+export function useListDepartmentsDepartmentsGet<
+  TData = Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDepartmentsDepartmentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListDepartmentsDepartmentsGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Create Department
@@ -92,6 +251,78 @@ export const createDepartmentDepartmentsPost = async (
   );
 };
 
+export const getCreateDepartmentDepartmentsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDepartmentDepartmentsPost>>,
+    TError,
+    { data: DepartmentCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDepartmentDepartmentsPost>>,
+  TError,
+  { data: DepartmentCreate },
+  TContext
+> => {
+  const mutationKey = ["createDepartmentDepartmentsPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDepartmentDepartmentsPost>>,
+    { data: DepartmentCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDepartmentDepartmentsPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDepartmentDepartmentsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDepartmentDepartmentsPost>>
+>;
+export type CreateDepartmentDepartmentsPostMutationBody = DepartmentCreate;
+export type CreateDepartmentDepartmentsPostMutationError = HTTPValidationError;
+
+/**
+ * @summary Create Department
+ */
+export const useCreateDepartmentDepartmentsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createDepartmentDepartmentsPost>>,
+      TError,
+      { data: DepartmentCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createDepartmentDepartmentsPost>>,
+  TError,
+  { data: DepartmentCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateDepartmentDepartmentsPostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Update Department
  */
@@ -140,6 +371,85 @@ export const updateDepartmentDepartmentsDepartmentIdPatch = async (
   );
 };
 
+export const getUpdateDepartmentDepartmentsDepartmentIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDepartmentDepartmentsDepartmentIdPatch>>,
+    TError,
+    { departmentId: number; data: DepartmentUpdate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDepartmentDepartmentsDepartmentIdPatch>>,
+  TError,
+  { departmentId: number; data: DepartmentUpdate },
+  TContext
+> => {
+  const mutationKey = ["updateDepartmentDepartmentsDepartmentIdPatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDepartmentDepartmentsDepartmentIdPatch>>,
+    { departmentId: number; data: DepartmentUpdate }
+  > = (props) => {
+    const { departmentId, data } = props ?? {};
+
+    return updateDepartmentDepartmentsDepartmentIdPatch(
+      departmentId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDepartmentDepartmentsDepartmentIdPatchMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof updateDepartmentDepartmentsDepartmentIdPatch>>
+  >;
+export type UpdateDepartmentDepartmentsDepartmentIdPatchMutationBody =
+  DepartmentUpdate;
+export type UpdateDepartmentDepartmentsDepartmentIdPatchMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Update Department
+ */
+export const useUpdateDepartmentDepartmentsDepartmentIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateDepartmentDepartmentsDepartmentIdPatch>>,
+      TError,
+      { departmentId: number; data: DepartmentUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateDepartmentDepartmentsDepartmentIdPatch>>,
+  TError,
+  { departmentId: number; data: DepartmentUpdate },
+  TContext
+> => {
+  return useMutation(
+    getUpdateDepartmentDepartmentsDepartmentIdPatchMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary List Employees
  */
@@ -170,6 +480,146 @@ export const listEmployeesEmployeesGet = async (
     },
   );
 };
+
+export const getListEmployeesEmployeesGetQueryKey = () => {
+  return [`/employees`] as const;
+};
+
+export const getListEmployeesEmployeesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListEmployeesEmployeesGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEmployeesEmployeesGet>>
+  > = ({ signal }) => listEmployeesEmployeesGet({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListEmployeesEmployeesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEmployeesEmployeesGet>>
+>;
+export type ListEmployeesEmployeesGetQueryError = unknown;
+
+export function useListEmployeesEmployeesGet<
+  TData = Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listEmployeesEmployeesGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListEmployeesEmployeesGet<
+  TData = Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listEmployeesEmployeesGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListEmployeesEmployeesGet<
+  TData = Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Employees
+ */
+
+export function useListEmployeesEmployeesGet<
+  TData = Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listEmployeesEmployeesGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListEmployeesEmployeesGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Create Employee
@@ -216,6 +666,78 @@ export const createEmployeeEmployeesPost = async (
   );
 };
 
+export const getCreateEmployeeEmployeesPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEmployeeEmployeesPost>>,
+    TError,
+    { data: EmployeeCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEmployeeEmployeesPost>>,
+  TError,
+  { data: EmployeeCreate },
+  TContext
+> => {
+  const mutationKey = ["createEmployeeEmployeesPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEmployeeEmployeesPost>>,
+    { data: EmployeeCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createEmployeeEmployeesPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEmployeeEmployeesPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEmployeeEmployeesPost>>
+>;
+export type CreateEmployeeEmployeesPostMutationBody = EmployeeCreate;
+export type CreateEmployeeEmployeesPostMutationError = HTTPValidationError;
+
+/**
+ * @summary Create Employee
+ */
+export const useCreateEmployeeEmployeesPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createEmployeeEmployeesPost>>,
+      TError,
+      { data: EmployeeCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createEmployeeEmployeesPost>>,
+  TError,
+  { data: EmployeeCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateEmployeeEmployeesPostMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * @summary Update Employee
  */
@@ -261,5 +783,83 @@ export const updateEmployeeEmployeesEmployeeIdPatch = async (
       headers: { "Content-Type": "application/json", ...options?.headers },
       body: JSON.stringify(employeeUpdate),
     },
+  );
+};
+
+export const getUpdateEmployeeEmployeesEmployeeIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmployeeEmployeesEmployeeIdPatch>>,
+    TError,
+    { employeeId: number; data: EmployeeUpdate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEmployeeEmployeesEmployeeIdPatch>>,
+  TError,
+  { employeeId: number; data: EmployeeUpdate },
+  TContext
+> => {
+  const mutationKey = ["updateEmployeeEmployeesEmployeeIdPatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEmployeeEmployeesEmployeeIdPatch>>,
+    { employeeId: number; data: EmployeeUpdate }
+  > = (props) => {
+    const { employeeId, data } = props ?? {};
+
+    return updateEmployeeEmployeesEmployeeIdPatch(
+      employeeId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEmployeeEmployeesEmployeeIdPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEmployeeEmployeesEmployeeIdPatch>>
+>;
+export type UpdateEmployeeEmployeesEmployeeIdPatchMutationBody = EmployeeUpdate;
+export type UpdateEmployeeEmployeesEmployeeIdPatchMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Update Employee
+ */
+export const useUpdateEmployeeEmployeesEmployeeIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateEmployeeEmployeesEmployeeIdPatch>>,
+      TError,
+      { employeeId: number; data: EmployeeUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateEmployeeEmployeesEmployeeIdPatch>>,
+  TError,
+  { employeeId: number; data: EmployeeUpdate },
+  TContext
+> => {
+  return useMutation(
+    getUpdateEmployeeEmployeesEmployeeIdPatchMutationOptions(options),
+    queryClient,
   );
 };
