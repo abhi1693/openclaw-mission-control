@@ -6,16 +6,18 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
-from app.db.base import Base
-from app.models import task  # noqa: F401
+from sqlmodel import SQLModel
+
+# Import models to register tables in metadata
+from app import models  # noqa: F401
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Use SQLAlchemy models metadata
-target_metadata = Base.metadata
+
+target_metadata = SQLModel.metadata
 
 
 def get_url() -> str:

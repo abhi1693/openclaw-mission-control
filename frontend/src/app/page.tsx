@@ -1,212 +1,147 @@
 "use client";
 
-import {useEffect, useMemo, useState} from "react";
+import { useEffect, useState } from "react";
+import styles from "./_components/Shell.module.css";
+import { apiGet } from "../lib/api";
 
-type TaskStatus = "todo" | "doing" | "done";
+type Activity = {
+  id: number;
+  actor_employee_id: number | null;
+  entity_type: string;
+  entity_id: number | null;
+  verb: string;
+  payload: any;
+  created_at: string;
+};
+
+type Project = { id: number; name: string; status: string };
+
+type Department = { id: number; name: string; head_employee_id: number | null };
+
+type Employee = {
+  id: number;
+  name: string;
+  employee_type: string;
+  department_id: number | null;
+  manager_id: number | null;
+  title: string | null;
+  status: string;
+};
 
 type Task = {
   id: number;
+  project_id: number;
   title: string;
-  description: string | null;
-  status: TaskStatus;
-  assignee: string | null;
+  status: string;
+  assignee_employee_id: number | null;
+  reviewer_employee_id: number | null;
   created_at: string;
-  updated_at: string | null;
+  updated_at: string;
 };
 
-const STATUSES: Array<{key: TaskStatus; label: string}> = [
-  {key: "todo", label: "To do"},
-  {key: "doing", label: "Doing"},
-  {key: "done", label: "Done"},
-];
-
-function apiUrl(path: string) {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not set");
-  return `${base}${path}`;
-}
-
-export default function Home() {
+export default function MissionControlHome() {
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [description, setDescription] = useState("");
-
-  const byStatus = useMemo(() => {
-    const map: Record<TaskStatus, Task[]> = {todo: [], doing: [], done: []};
-    for (const t of tasks) map[t.status].push(t);
-    return map;
-  }, [tasks]);
-
-  async function refresh() {
-    setLoading(true);
+  async function load() {
     setError(null);
     try {
-      const res = await fetch(apiUrl("/tasks"), {cache: "no-store"});
-      if (!res.ok) throw new Error(`Failed to load tasks (${res.status})`);
-      setTasks(await res.json());
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      setError(msg);
-    } finally {
-      setLoading(false);
+      const [a, p, d, e, t] = await Promise.all([
+        apiGet<Activity[]>("/activities?limit=20"),
+        apiGet<Project[]>("/projects"),
+        apiGet<Department[]>("/departments"),
+        apiGet<Employee[]>("/employees"),
+        apiGet<Task[]>("/tasks"),
+      ]);
+      setActivities(a);
+      setProjects(p);
+      setDepartments(d);
+      setEmployees(e);
+      setTasks(t);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
   useEffect(() => {
-    refresh();
+    load();
   }, []);
 
-  async function createTask() {
-    if (!title.trim()) return;
-    setError(null);
-    const payload = {
-      title,
-      description: description.trim() ? description : null,
-      assignee: assignee.trim() ? assignee : null,
-      status: "todo" as const,
-    };
-
-    const res = await fetch(apiUrl("/tasks"), {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      setError(`Failed to create task (${res.status})`);
-      return;
-    }
-
-    setTitle("");
-    setAssignee("");
-    setDescription("");
-    await refresh();
-  }
-
-  async function move(task: Task, status: TaskStatus) {
-    const res = await fetch(apiUrl(`/tasks/${task.id}`), {
-      method: "PATCH",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({status}),
-    });
-    if (!res.ok) {
-      setError(`Failed to update task (${res.status})`);
-      return;
-    }
-    await refresh();
-  }
-
-  async function remove(task: Task) {
-    const res = await fetch(apiUrl(`/tasks/${task.id}`), {method: "DELETE"});
-    if (!res.ok) {
-      setError(`Failed to delete task (${res.status})`);
-      return;
-    }
-    await refresh();
-  }
+  const activeProjects = projects.filter((x) => x.status === "active").length;
+  const activeEmployees = employees.filter((x) => x.status === "active").length;
+  const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
+  const reviewQueue = tasks.filter((t) => t.status === "review").length;
 
   return (
-    <main style={{padding: 24, fontFamily: "ui-sans-serif, system-ui"}}>
-      <header style={{display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16}}>
+    <main>
+      <div className={styles.topbar}>
         <div>
-          <h1 style={{fontSize: 28, fontWeight: 700, margin: 0}}>OpenClaw Agency Board</h1>
-          <p style={{marginTop: 8, color: "#555"}}>
-            Simple Kanban (no auth). Everyone can see who owns what.
+          <h1 className={styles.h1}>Mission Control</h1>
+          <p className={styles.p}>
+            Company dashboard: departments, employees/agents, projects, and work — designed to run like a real org.
           </p>
         </div>
-        <button onClick={refresh} disabled={loading} style={btn()}>Refresh</button>
-      </header>
+        <button className={styles.btn} onClick={load}>
+          Refresh
+        </button>
+      </div>
 
-      <section style={{marginTop: 18, padding: 16, border: "1px solid #eee", borderRadius: 12}}>
-        <h2 style={{margin: 0, fontSize: 16}}>Create task</h2>
-        <div style={{display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginTop: 12}}>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Task title"
-            style={input()}
-          />
-          <input
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-            placeholder="Assignee (e.g. Head: Design)"
-            style={input()}
-          />
+      {error ? (
+        <div className={styles.card} style={{ borderColor: "rgba(176,0,32,0.25)" }}>
+          <div className={styles.cardTitle}>Error</div>
+          <div style={{ color: "#b00020" }}>{error}</div>
         </div>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Description (optional)"
-          style={{...input(), marginTop: 12, minHeight: 80}}
-        />
-        <div style={{display: "flex", gap: 12, marginTop: 12, alignItems: "center"}}>
-          <button onClick={createTask} style={btn("primary")}>Add</button>
-          {error ? <span style={{color: "#b00020"}}>{error}</span> : null}
-        </div>
-      </section>
+      ) : null}
 
-      <section style={{marginTop: 18}}>
-        <div style={{display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14}}>
-          {STATUSES.map((s) => (
-            <div key={s.key} style={{border: "1px solid #eee", borderRadius: 12, padding: 12, background: "#fafafa"}}>
-              <h3 style={{marginTop: 0}}>{s.label} ({byStatus[s.key].length})</h3>
-              <div style={{display: "flex", flexDirection: "column", gap: 10}}>
-                {byStatus[s.key].map((t) => (
-                  <div key={t.id} style={{border: "1px solid #e5e5e5", background: "white", borderRadius: 12, padding: 12}}>
-                    <div style={{display: "flex", justifyContent: "space-between", gap: 12}}>
-                      <div>
-                        <div style={{fontWeight: 650}}>{t.title}</div>
-                        <div style={{fontSize: 13, color: "#666", marginTop: 6}}>
-                          {t.assignee ? <>Owner: <strong>{t.assignee}</strong></> : "Unassigned"}
-                        </div>
-                      </div>
-                      <button onClick={() => remove(t)} style={btn("danger")}>Delete</button>
-                    </div>
-
-                    {t.description ? <p style={{marginTop: 10, color: "#333"}}>{t.description}</p> : null}
-
-                    <div style={{display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap"}}>
-                      {STATUSES.filter((x) => x.key !== t.status).map((x) => (
-                        <button key={x.key} onClick={() => move(t, x.key)} style={btn()}>
-                          Move → {x.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                {byStatus[s.key].length === 0 ? <div style={{color: "#777", fontSize: 13}}>No tasks</div> : null}
+      <div className={styles.grid2} style={{ marginTop: 16 }}>
+        <section className={styles.card}>
+          <div className={styles.cardTitle}>Company Snapshot</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <span className={styles.badge}>Projects: {activeProjects}</span>
+            <span className={styles.badge}>Departments: {departments.length}</span>
+            <span className={styles.badge}>Active people: {activeEmployees}</span>
+            <span className={styles.badge}>In review: {reviewQueue}</span>
+            <span className={styles.badge}>Blocked: {blockedTasks}</span>
+          </div>
+          <div className={styles.list} style={{ marginTop: 12 }}>
+            {projects.slice(0, 6).map((p) => (
+              <div key={p.id} className={styles.item}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ fontWeight: 650 }}>{p.name}</div>
+                  <span className={styles.badge}>{p.status}</span>
+                </div>
+                <div className={styles.mono} style={{ marginTop: 6 }}>
+                  Project ID: {p.id}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+            {projects.length === 0 ? <div className={styles.mono}>No projects yet. Create one in Projects.</div> : null}
+          </div>
+        </section>
+
+        <section className={styles.card}>
+          <div className={styles.cardTitle}>Activity Feed</div>
+          <div className={styles.list}>
+            {activities.map((a) => (
+              <div key={a.id} className={styles.item}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <span style={{ fontWeight: 650 }}>{a.entity_type}</span> · {a.verb}
+                    {a.entity_id != null ? ` #${a.entity_id}` : ""}
+                  </div>
+                  <span className={styles.mono}>{new Date(a.created_at).toLocaleString()}</span>
+                </div>
+                {a.payload ? <div className={styles.mono} style={{ marginTop: 6 }}>{JSON.stringify(a.payload)}</div> : null}
+              </div>
+            ))}
+            {activities.length === 0 ? <div className={styles.mono}>No activity yet.</div> : null}
+          </div>
+        </section>
+      </div>
     </main>
   );
-}
-
-function input(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    outline: "none",
-  };
-}
-
-function btn(kind: "primary" | "danger" | "default" = "default"): React.CSSProperties {
-  const base: React.CSSProperties = {
-    padding: "9px 12px",
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    background: "white",
-    cursor: "pointer",
-  };
-  if (kind === "primary") return {...base, background: "#111", color: "white", borderColor: "#111"};
-  if (kind === "danger") return {...base, background: "#fff", borderColor: "#f2b8b5", color: "#b00020"};
-  return base;
 }

@@ -1,42 +1,13 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+:root{
+  --mc-bg:#f6f4ef;
+  --mc-surface:#ffffff;
+  --mc-border:rgba(15,23,42,0.10);
+  --mc-text:#0f172a;
+  --mc-muted:rgba(15,23,42,0.62);
+  --mc-accent:#2563eb;
+  --mc-font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --mc-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
-}
+html,body{height:100%}
+body{margin:0;color:var(--mc-text);background:var(--mc-bg);font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";}
+*{box-sizing:border-box}
