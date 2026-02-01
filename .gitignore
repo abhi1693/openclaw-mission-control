@@ -1,0 +1,17 @@
+# OS / IDE
+.idea/
+.DS_Store
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.env
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# Logs
+*.log
