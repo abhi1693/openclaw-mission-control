@@ -54,6 +54,9 @@ def list_project_members(project_id: int, session: Session = Depends(get_session
 
 @router.post("/{project_id}/members", response_model=ProjectMember)
 def add_project_member(project_id: int, payload: ProjectMember, session: Session = Depends(get_session)):
+    existing = session.exec(select(ProjectMember).where(ProjectMember.project_id == project_id, ProjectMember.employee_id == payload.employee_id)).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Member already added")
     member = ProjectMember(project_id=project_id, employee_id=payload.employee_id, role=payload.role)
     session.add(member)
     session.commit()

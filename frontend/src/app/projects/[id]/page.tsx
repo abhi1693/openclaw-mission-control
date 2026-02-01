@@ -166,6 +166,9 @@ export default function ProjectDetailPage() {
                 <option key={e.id ?? e.name} value={e.id ?? ""}>{e.name}</option>
               ))}
             </Select>
+            {addMember.error ? (
+              <div className="text-xs text-destructive">{(addMember.error as Error).message}</div>
+            ) : null}
             <ul className="space-y-2">
               {projectMembers.map((m) => (
                 <li key={m.id ?? `${m.project_id}-${m.employee_id}`} className="rounded-md border p-2 text-sm">
@@ -273,7 +276,9 @@ export default function ProjectDetailPage() {
             <ul className="space-y-2">
               {(comments.data ?? []).map((c) => (
                 <li key={String(c.id)} className="rounded-md border p-2 text-sm">
-                  {c.body}
+                  <div className="font-medium">{employeeName(c.author_employee_id)}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</div>
+                  <div className="mt-1">{c.body}</div>
                 </li>
               ))}
               {(comments.data ?? []).length === 0 ? (
