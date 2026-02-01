@@ -15,3 +15,6 @@ frontend/.env.local
 
 # Logs
 *.log
+
+# Local run logs
+.runlogs/
