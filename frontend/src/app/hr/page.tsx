@@ -13,6 +13,9 @@ import {
   useCreateEmploymentActionHrActionsPost,
   useListHeadcountRequestsHrHeadcountGet,
   useListEmploymentActionsHrActionsGet,
+  useListAgentOnboardingHrOnboardingGet,
+  useCreateAgentOnboardingHrOnboardingPost,
+  useUpdateAgentOnboardingHrOnboardingOnboardingIdPatch,
 } from "@/api/generated/hr/hr";
 import { useListDepartmentsDepartmentsGet, useListEmployeesEmployeesGet } from "@/api/generated/org/org";
 
@@ -35,6 +38,14 @@ export default function HRPage() {
   const [actType, setActType] = useState("praise");
   const [actNotes, setActNotes] = useState("");
 
+
+  const [onboardAgentName, setOnboardAgentName] = useState("");
+  const [onboardRole, setOnboardRole] = useState("");
+  const [onboardPrompt, setOnboardPrompt] = useState("");
+  const [onboardCronMs, setOnboardCronMs] = useState("");
+  const [onboardTools, setOnboardTools] = useState("");
+  const [onboardOwnerId, setOnboardOwnerId] = useState<string>("");
+  const [onboardNotes, setOnboardNotes] = useState("");
   const createHeadcount = useCreateHeadcountRequestHrHeadcountPost({
     mutation: {
       onSuccess: () => {
@@ -200,6 +211,100 @@ export default function HRPage() {
             </div>
           </CardContent>
         </Card>
+
+
+      <div className="mt-6 grid gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Agent onboarding</CardTitle>
+            <CardDescription>HR logs prompts, cron, tools, and spawn status (Mission Control only).</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
+              <Input placeholder="Agent name" value={onboardAgentName} onChange={(e) => setOnboardAgentName(e.target.value)} />
+              <Input placeholder="Role/title" value={onboardRole} onChange={(e) => setOnboardRole(e.target.value)} />
+              <Textarea placeholder="Prompt / system instructions" value={onboardPrompt} onChange={(e) => setOnboardPrompt(e.target.value)} />
+              <Input placeholder="Cron interval ms (e.g. 300000)" value={onboardCronMs} onChange={(e) => setOnboardCronMs(e.target.value)} />
+              <Textarea placeholder="Tools/permissions (JSON or text)" value={onboardTools} onChange={(e) => setOnboardTools(e.target.value)} />
+              <Select value={onboardOwnerId} onChange={(e) => setOnboardOwnerId(e.target.value)}>
+                <option value="">Owner (HR)</option>
+                {(employees.data ?? []).map((e) => (
+                  <option key={e.id ?? e.name} value={e.id ?? ""}>{e.name}</option>
+                ))}
+              </Select>
+              <Textarea placeholder="Notes" value={onboardNotes} onChange={(e) => setOnboardNotes(e.target.value)} />
+              <Button
+                onClick={() =>
+                  createOnboarding.mutate({
+                    data: {
+                      agent_name: onboardAgentName,
+                      role_title: onboardRole,
+                      prompt: onboardPrompt,
+                      cron_interval_ms: onboardCronMs ? Number(onboardCronMs) : null,
+                      tools_json: onboardTools.trim() ? onboardTools : null,
+                      owner_hr_id: onboardOwnerId ? Number(onboardOwnerId) : null,
+                      status: "planned",
+                      notes: onboardNotes.trim() ? onboardNotes : null,
+                    },
+                  })
+                }
+                disabled={!onboardAgentName.trim() || !onboardRole.trim() || !onboardPrompt.trim() || createOnboarding.isPending}
+              >
+                Create onboarding
+              </Button>
+            </div>
+            <div>
+              <div className="mb-2 text-sm font-medium">Current onboardings</div>
+              <ul className="space-y-2">
+                {(onboarding.data ?? []).map((o) => (
+                  <li key={String(o.id)} className="rounded-md border p-3 text-sm">
+                    <div className="font-medium">{o.agent_name} · {o.role_title}</div>
+                    <div className="text-xs text-muted-foreground">status: {o.status} · cron: {o.cron_interval_ms ?? "—"}</div>
+                    <div className="mt-2 grid gap-2">
+                      <Select
+                        value={o.status ?? ""}
+                        onChange={(e) =>
+                          updateOnboarding.mutate({ onboardingId: Number(o.id), data: { status: e.target.value || null } })
+                        }
+                      >
+                        <option value="planned">planned</option>
+                        <option value="spawning">spawning</option>
+                        <option value="spawned">spawned</option>
+                        <option value="verified">verified</option>
+                        <option value="blocked">blocked</option>
+                      </Select>
+                      <Input
+                        placeholder="Spawned agent id"
+                        defaultValue={o.spawned_agent_id ?? ""}
+                        onBlur={(e) =>
+                          updateOnboarding.mutate({ onboardingId: Number(o.id), data: { spawned_agent_id: e.currentTarget.value || null } })
+                        }
+                      />
+                      <Input
+                        placeholder="Session key"
+                        defaultValue={o.session_key ?? ""}
+                        onBlur={(e) =>
+                          updateOnboarding.mutate({ onboardingId: Number(o.id), data: { session_key: e.currentTarget.value || null } })
+                        }
+                      />
+                      <Textarea
+                        placeholder="Notes"
+                        defaultValue={o.notes ?? ""}
+                        onBlur={(e) =>
+                          updateOnboarding.mutate({ onboardingId: Number(o.id), data: { notes: e.currentTarget.value || null } })
+                        }
+                      />
+                    </div>
+                  </li>
+                ))}
+                {(onboarding.data ?? []).length === 0 ? (
+                  <li className="text-sm text-muted-foreground">No onboarding records yet.</li>
+                ) : null}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       </div>
     </main>
   );

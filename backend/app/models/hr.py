@@ -33,3 +33,23 @@ class EmploymentAction(SQLModel, table=True):
     notes: str | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AgentOnboarding(SQLModel, table=True):
+    __tablename__ = "agent_onboardings"
+
+    id: int | None = Field(default=None, primary_key=True)
+    agent_name: str
+    role_title: str
+    prompt: str
+    cron_interval_ms: int | None = None
+    tools_json: str | None = None
+    owner_hr_id: int | None = Field(default=None, foreign_key="employees.id")
+
+    status: str = Field(default="planned")  # planned|spawning|spawned|verified|blocked
+    spawned_agent_id: str | None = None
+    session_key: str | None = None
+
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

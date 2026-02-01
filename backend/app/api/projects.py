@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.utils import log_activity
+from app.api.utils import log_activity, get_actor_employee_id
 from app.db.session import get_session
 from app.models.projects import Project, ProjectMember
 from app.schemas.projects import ProjectCreate, ProjectUpdate
@@ -17,18 +17,18 @@ def list_projects(session: Session = Depends(get_session)):
 
 
 @router.post("", response_model=Project)
-def create_project(payload: ProjectCreate, session: Session = Depends(get_session)):
+def create_project(payload: ProjectCreate, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
     proj = Project(**payload.model_dump())
     session.add(proj)
     session.commit()
     session.refresh(proj)
-    log_activity(session, actor_employee_id=None, entity_type="project", entity_id=proj.id, verb="created", payload={"name": proj.name})
+    log_activity(session, actor_employee_id=actor_employee_id, entity_type="project", entity_id=proj.id, verb="created", payload={"name": proj.name})
     session.commit()
     return proj
 
 
 @router.patch("/{project_id}", response_model=Project)
-def update_project(project_id: int, payload: ProjectUpdate, session: Session = Depends(get_session)):
+def update_project(project_id: int, payload: ProjectUpdate, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
     proj = session.get(Project, project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -40,7 +40,7 @@ def update_project(project_id: int, payload: ProjectUpdate, session: Session = D
     session.add(proj)
     session.commit()
     session.refresh(proj)
-    log_activity(session, actor_employee_id=None, entity_type="project", entity_id=proj.id, verb="updated", payload=data)
+    log_activity(session, actor_employee_id=actor_employee_id, entity_type="project", entity_id=proj.id, verb="updated", payload=data)
     session.commit()
     return proj
 
@@ -53,7 +53,7 @@ def list_project_members(project_id: int, session: Session = Depends(get_session
 
 
 @router.post("/{project_id}/members", response_model=ProjectMember)
-def add_project_member(project_id: int, payload: ProjectMember, session: Session = Depends(get_session)):
+def add_project_member(project_id: int, payload: ProjectMember, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
     existing = session.exec(select(ProjectMember).where(ProjectMember.project_id == project_id, ProjectMember.employee_id == payload.employee_id)).first()
     if existing:
         raise HTTPException(status_code=409, detail="Member already added")
@@ -63,7 +63,7 @@ def add_project_member(project_id: int, payload: ProjectMember, session: Session
     session.refresh(member)
     log_activity(
         session,
-        actor_employee_id=None,
+        actor_employee_id=actor_employee_id,
         entity_type="project_member",
         entity_id=member.id,
         verb="added",
@@ -74,7 +74,7 @@ def add_project_member(project_id: int, payload: ProjectMember, session: Session
 
 
 @router.delete("/{project_id}/members/{member_id}")
-def remove_project_member(project_id: int, member_id: int, session: Session = Depends(get_session)):
+def remove_project_member(project_id: int, member_id: int, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
     member = session.get(ProjectMember, member_id)
     if not member or member.project_id != project_id:
         raise HTTPException(status_code=404, detail="Project member not found")
@@ -82,7 +82,7 @@ def remove_project_member(project_id: int, member_id: int, session: Session = De
     session.commit()
     log_activity(
         session,
-        actor_employee_id=None,
+        actor_employee_id=actor_employee_id,
         entity_type="project_member",
         entity_id=member_id,
         verb="removed",
@@ -93,7 +93,7 @@ def remove_project_member(project_id: int, member_id: int, session: Session = De
 
 
 @router.patch("/{project_id}/members/{member_id}", response_model=ProjectMember)
-def update_project_member(project_id: int, member_id: int, payload: ProjectMember, session: Session = Depends(get_session)):
+def update_project_member(project_id: int, member_id: int, payload: ProjectMember, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
     member = session.get(ProjectMember, member_id)
     if not member or member.project_id != project_id:
         raise HTTPException(status_code=404, detail="Project member not found")
@@ -106,7 +106,7 @@ def update_project_member(project_id: int, member_id: int, payload: ProjectMembe
     session.refresh(member)
     log_activity(
         session,
-        actor_employee_id=None,
+        actor_employee_id=actor_employee_id,
         entity_type="project_member",
         entity_id=member.id,
         verb="updated",

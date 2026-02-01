@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import styles from "./Shell.module.css";
 
 const NAV = [
@@ -14,6 +15,16 @@ const NAV = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const [actorId, setActorId] = useState("");
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("actor_employee_id");
+      if (stored) setActorId(stored);
+    } catch {
+      // ignore
+    }
+  }, []);
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
@@ -32,6 +43,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <div className={styles.mono} style={{ marginTop: 16 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Actor ID</div>
+          <input
+            value={actorId}
+            onChange={(e) => {
+              const v = e.target.value;
+              setActorId(v);
+              try {
+                if (v) window.localStorage.setItem("actor_employee_id", v);
+                else window.localStorage.removeItem("actor_employee_id");
+              } catch {
+                // ignore
+              }
+            }}
+            placeholder="e.g. 1"
+            style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #333", background: "transparent" }}
+          />
+        </div>
+
         <div className={styles.mono} style={{ marginTop: "auto" }}>
           Tip: use your machine IP + ports<br />
           <span className={styles.kbd}>:3000</span> UI &nbsp; <span className={styles.kbd}>:8000</span> API

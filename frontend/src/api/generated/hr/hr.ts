@@ -21,6 +21,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AgentOnboarding,
+  AgentOnboardingCreate,
+  AgentOnboardingUpdate,
   EmploymentAction,
   EmploymentActionCreate,
   HTTPValidationError,
@@ -745,6 +748,437 @@ export const useCreateEmploymentActionHrActionsPost = <
 > => {
   return useMutation(
     getCreateEmploymentActionHrActionsPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary List Agent Onboarding
+ */
+export type listAgentOnboardingHrOnboardingGetResponse200 = {
+  data: AgentOnboarding[];
+  status: 200;
+};
+
+export type listAgentOnboardingHrOnboardingGetResponseSuccess =
+  listAgentOnboardingHrOnboardingGetResponse200 & {
+    headers: Headers;
+  };
+export type listAgentOnboardingHrOnboardingGetResponse =
+  listAgentOnboardingHrOnboardingGetResponseSuccess;
+
+export const getListAgentOnboardingHrOnboardingGetUrl = () => {
+  return `/hr/onboarding`;
+};
+
+export const listAgentOnboardingHrOnboardingGet = async (
+  options?: RequestInit,
+): Promise<listAgentOnboardingHrOnboardingGetResponse> => {
+  return customFetch<listAgentOnboardingHrOnboardingGetResponse>(
+    getListAgentOnboardingHrOnboardingGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListAgentOnboardingHrOnboardingGetQueryKey = () => {
+  return [`/hr/onboarding`] as const;
+};
+
+export const getListAgentOnboardingHrOnboardingGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAgentOnboardingHrOnboardingGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>
+  > = ({ signal }) =>
+    listAgentOnboardingHrOnboardingGet({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListAgentOnboardingHrOnboardingGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>
+>;
+export type ListAgentOnboardingHrOnboardingGetQueryError = unknown;
+
+export function useListAgentOnboardingHrOnboardingGet<
+  TData = Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAgentOnboardingHrOnboardingGet<
+  TData = Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAgentOnboardingHrOnboardingGet<
+  TData = Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Agent Onboarding
+ */
+
+export function useListAgentOnboardingHrOnboardingGet<
+  TData = Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentOnboardingHrOnboardingGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListAgentOnboardingHrOnboardingGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create Agent Onboarding
+ */
+export type createAgentOnboardingHrOnboardingPostResponse200 = {
+  data: AgentOnboarding;
+  status: 200;
+};
+
+export type createAgentOnboardingHrOnboardingPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type createAgentOnboardingHrOnboardingPostResponseSuccess =
+  createAgentOnboardingHrOnboardingPostResponse200 & {
+    headers: Headers;
+  };
+export type createAgentOnboardingHrOnboardingPostResponseError =
+  createAgentOnboardingHrOnboardingPostResponse422 & {
+    headers: Headers;
+  };
+
+export type createAgentOnboardingHrOnboardingPostResponse =
+  | createAgentOnboardingHrOnboardingPostResponseSuccess
+  | createAgentOnboardingHrOnboardingPostResponseError;
+
+export const getCreateAgentOnboardingHrOnboardingPostUrl = () => {
+  return `/hr/onboarding`;
+};
+
+export const createAgentOnboardingHrOnboardingPost = async (
+  agentOnboardingCreate: AgentOnboardingCreate,
+  options?: RequestInit,
+): Promise<createAgentOnboardingHrOnboardingPostResponse> => {
+  return customFetch<createAgentOnboardingHrOnboardingPostResponse>(
+    getCreateAgentOnboardingHrOnboardingPostUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(agentOnboardingCreate),
+    },
+  );
+};
+
+export const getCreateAgentOnboardingHrOnboardingPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAgentOnboardingHrOnboardingPost>>,
+    TError,
+    { data: AgentOnboardingCreate },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAgentOnboardingHrOnboardingPost>>,
+  TError,
+  { data: AgentOnboardingCreate },
+  TContext
+> => {
+  const mutationKey = ["createAgentOnboardingHrOnboardingPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAgentOnboardingHrOnboardingPost>>,
+    { data: AgentOnboardingCreate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createAgentOnboardingHrOnboardingPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAgentOnboardingHrOnboardingPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAgentOnboardingHrOnboardingPost>>
+>;
+export type CreateAgentOnboardingHrOnboardingPostMutationBody =
+  AgentOnboardingCreate;
+export type CreateAgentOnboardingHrOnboardingPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Create Agent Onboarding
+ */
+export const useCreateAgentOnboardingHrOnboardingPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createAgentOnboardingHrOnboardingPost>>,
+      TError,
+      { data: AgentOnboardingCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createAgentOnboardingHrOnboardingPost>>,
+  TError,
+  { data: AgentOnboardingCreate },
+  TContext
+> => {
+  return useMutation(
+    getCreateAgentOnboardingHrOnboardingPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary Update Agent Onboarding
+ */
+export type updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse200 = {
+  data: AgentOnboarding;
+  status: 200;
+};
+
+export type updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type updateAgentOnboardingHrOnboardingOnboardingIdPatchResponseSuccess =
+  updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse200 & {
+    headers: Headers;
+  };
+export type updateAgentOnboardingHrOnboardingOnboardingIdPatchResponseError =
+  updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse422 & {
+    headers: Headers;
+  };
+
+export type updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse =
+  | updateAgentOnboardingHrOnboardingOnboardingIdPatchResponseSuccess
+  | updateAgentOnboardingHrOnboardingOnboardingIdPatchResponseError;
+
+export const getUpdateAgentOnboardingHrOnboardingOnboardingIdPatchUrl = (
+  onboardingId: number,
+) => {
+  return `/hr/onboarding/${onboardingId}`;
+};
+
+export const updateAgentOnboardingHrOnboardingOnboardingIdPatch = async (
+  onboardingId: number,
+  agentOnboardingUpdate: AgentOnboardingUpdate,
+  options?: RequestInit,
+): Promise<updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse> => {
+  return customFetch<updateAgentOnboardingHrOnboardingOnboardingIdPatchResponse>(
+    getUpdateAgentOnboardingHrOnboardingOnboardingIdPatchUrl(onboardingId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(agentOnboardingUpdate),
+    },
+  );
+};
+
+export const getUpdateAgentOnboardingHrOnboardingOnboardingIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateAgentOnboardingHrOnboardingOnboardingIdPatch>
+      >,
+      TError,
+      { onboardingId: number; data: AgentOnboardingUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateAgentOnboardingHrOnboardingOnboardingIdPatch>
+    >,
+    TError,
+    { onboardingId: number; data: AgentOnboardingUpdate },
+    TContext
+  > => {
+    const mutationKey = ["updateAgentOnboardingHrOnboardingOnboardingIdPatch"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateAgentOnboardingHrOnboardingOnboardingIdPatch>
+      >,
+      { onboardingId: number; data: AgentOnboardingUpdate }
+    > = (props) => {
+      const { onboardingId, data } = props ?? {};
+
+      return updateAgentOnboardingHrOnboardingOnboardingIdPatch(
+        onboardingId,
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type UpdateAgentOnboardingHrOnboardingOnboardingIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateAgentOnboardingHrOnboardingOnboardingIdPatch>
+    >
+  >;
+export type UpdateAgentOnboardingHrOnboardingOnboardingIdPatchMutationBody =
+  AgentOnboardingUpdate;
+export type UpdateAgentOnboardingHrOnboardingOnboardingIdPatchMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Update Agent Onboarding
+ */
+export const useUpdateAgentOnboardingHrOnboardingOnboardingIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateAgentOnboardingHrOnboardingOnboardingIdPatch>
+      >,
+      TError,
+      { onboardingId: number; data: AgentOnboardingUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateAgentOnboardingHrOnboardingOnboardingIdPatch>
+  >,
+  TError,
+  { onboardingId: number; data: AgentOnboardingUpdate },
+  TContext
+> => {
+  return useMutation(
+    getUpdateAgentOnboardingHrOnboardingOnboardingIdPatchMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.3.0
  */
 
+export * from "./agentOnboarding";
+export * from "./agentOnboardingCreate";
+export * from "./agentOnboardingUpdate";
 export * from "./department";
 export * from "./departmentCreate";
 export * from "./departmentUpdate";

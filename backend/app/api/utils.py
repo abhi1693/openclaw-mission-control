@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from fastapi import Header, HTTPException
 from sqlmodel import Session
 
 from app.models.activity import Activity
@@ -26,3 +27,11 @@ def log_activity(
             payload_json=json.dumps(payload) if payload is not None else None,
         )
     )
+
+
+def get_actor_employee_id(
+    x_actor_employee_id: int | None = Header(default=None, alias="X-Actor-Employee-Id"),
+) -> int:
+    if x_actor_employee_id is None:
+        raise HTTPException(status_code=400, detail="X-Actor-Employee-Id required")
+    return x_actor_employee_id
