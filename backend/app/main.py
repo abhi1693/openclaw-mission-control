@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.activities import router as activities_router
-from app.api.hr import router as hr_router
 from app.api.org import router as org_router
 from app.api.projects import router as projects_router
 from app.api.work import router as work_router
@@ -32,7 +31,6 @@ def on_startup() -> None:
 app.include_router(org_router)
 app.include_router(projects_router)
 app.include_router(work_router)
-app.include_router(hr_router)
 app.include_router(activities_router)
 
 

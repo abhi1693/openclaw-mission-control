@@ -17,12 +17,12 @@ import { useListActivitiesActivitiesGet } from "@/api/generated/activities/activ
 
 export default function Home() {
   const projects = useListProjectsProjectsGet();
-  const projectList = projects.data ?? [];
+  const projectList = projects.data?.status === 200 ? projects.data.data : [];
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = departments.data ?? [];
+  const departmentList = departments.data?.status === 200 ? departments.data.data : [];
   const employees = useListEmployeesEmployeesGet();
   const activities = useListActivitiesActivitiesGet({ limit: 20 });
-  const employeeList = employees.data ?? [];
+  const employeeList = employees.data?.status === 200 ? employees.data.data : [];
   const activityList = normalizeActivities(activities.data);
 
   const [projectName, setProjectName] = useState("");

@@ -9,6 +9,7 @@ export interface TaskComment {
   id?: number | null;
   task_id: number;
   author_employee_id?: number | null;
+  reply_to_comment_id?: number | null;
   body: string;
   created_at?: string;
 }

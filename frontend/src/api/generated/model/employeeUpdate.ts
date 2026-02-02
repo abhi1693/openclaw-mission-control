@@ -12,4 +12,6 @@ export interface EmployeeUpdate {
   manager_id?: number | null;
   title?: string | null;
   status?: string | null;
+  openclaw_session_key?: string | null;
+  notify_enabled?: boolean | null;
 }

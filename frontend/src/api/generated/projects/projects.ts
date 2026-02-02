@@ -204,6 +204,10 @@ export function useListProjectsProjectsGet<
 }
 
 /**
+ * Create a project.
+
+Keep operation atomic: flush to get id, log activity, then commit once.
+Translate DB integrity errors to 409s.
  * @summary Create Project
  */
 export type createProjectProjectsPostResponse200 = {

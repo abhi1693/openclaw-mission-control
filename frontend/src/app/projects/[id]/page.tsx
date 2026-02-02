@@ -46,14 +46,14 @@ export default function ProjectDetailPage() {
   const projectId = Number(params?.id);
 
   const projects = useListProjectsProjectsGet();
-  const projectList = projects.data ?? [];
+  const projectList = projects.data?.status === 200 ? projects.data.data : [];
   const project = projectList.find((p) => p.id === projectId);
 
   const employees = useListEmployeesEmployeesGet();
-  const employeeList = employees.data ?? [];
+  const employeeList = employees.data?.status === 200 ? employees.data.data : [];
 
   const members = useListProjectMembersProjectsProjectIdMembersGet(projectId);
-  const memberList = members.data ?? [];
+  const memberList = members.data?.status === 200 ? members.data.data : [];
   const addMember = useAddProjectMemberProjectsProjectIdMembersPost({
     mutation: { onSuccess: () => members.refetch() },
   });
@@ -65,7 +65,7 @@ export default function ProjectDetailPage() {
   });
 
   const tasks = useListTasksTasksGet({ project_id: projectId });
-  const taskList = tasks.data ?? [];
+  const taskList = tasks.data?.status === 200 ? tasks.data.data : [];
   const createTask = useCreateTaskTasksPost({
     mutation: { onSuccess: () => tasks.refetch() },
   });
@@ -89,7 +89,7 @@ export default function ProjectDetailPage() {
     { task_id: commentTaskId ?? 0 },
     { query: { enabled: Boolean(commentTaskId) } },
   );
-  const commentList = comments.data ?? [];
+  const commentList = comments.data?.status === 200 ? comments.data.data : [];
   const addComment = useCreateTaskCommentTaskCommentsPost({
     mutation: {
       onSuccess: () => {

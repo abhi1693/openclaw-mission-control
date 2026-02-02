@@ -17,7 +17,7 @@ export default function ProjectsPage() {
   const [name, setName] = useState("");
 
   const projects = useListProjectsProjectsGet();
-  const projectList = projects.data ?? [];
+  const projectList = projects.data?.status === 200 ? projects.data.data : [];
   const createProject = useCreateProjectProjectsPost({
     mutation: {
       onSuccess: () => {

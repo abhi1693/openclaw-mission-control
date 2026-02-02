@@ -207,6 +207,10 @@ export function useListDepartmentsDepartmentsGet<
 }
 
 /**
+ * Create a department.
+
+Important: keep the operation atomic. We flush to get dept.id, log the activity,
+then commit once. We also translate common DB integrity errors into 409s.
  * @summary Create Department
  */
 export type createDepartmentDepartmentsPostResponse200 = {
@@ -860,6 +864,302 @@ export const useUpdateEmployeeEmployeesEmployeeIdPatch = <
 > => {
   return useMutation(
     getUpdateEmployeeEmployeesEmployeeIdPatchMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary Provision Employee Agent
+ */
+export type provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse200 =
+  {
+    data: Employee;
+    status: 200;
+  };
+
+export type provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponseSuccess =
+  provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse200 & {
+    headers: Headers;
+  };
+export type provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponseError =
+  provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse422 & {
+    headers: Headers;
+  };
+
+export type provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse =
+  | provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponseSuccess
+  | provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponseError;
+
+export const getProvisionEmployeeAgentEmployeesEmployeeIdProvisionPostUrl = (
+  employeeId: number,
+) => {
+  return `/employees/${employeeId}/provision`;
+};
+
+export const provisionEmployeeAgentEmployeesEmployeeIdProvisionPost = async (
+  employeeId: number,
+  options?: RequestInit,
+): Promise<provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse> => {
+  return customFetch<provisionEmployeeAgentEmployeesEmployeeIdProvisionPostResponse>(
+    getProvisionEmployeeAgentEmployeesEmployeeIdProvisionPostUrl(employeeId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getProvisionEmployeeAgentEmployeesEmployeeIdProvisionPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof provisionEmployeeAgentEmployeesEmployeeIdProvisionPost
+        >
+      >,
+      TError,
+      { employeeId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof provisionEmployeeAgentEmployeesEmployeeIdProvisionPost>
+    >,
+    TError,
+    { employeeId: number },
+    TContext
+  > => {
+    const mutationKey = [
+      "provisionEmployeeAgentEmployeesEmployeeIdProvisionPost",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof provisionEmployeeAgentEmployeesEmployeeIdProvisionPost
+        >
+      >,
+      { employeeId: number }
+    > = (props) => {
+      const { employeeId } = props ?? {};
+
+      return provisionEmployeeAgentEmployeesEmployeeIdProvisionPost(
+        employeeId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ProvisionEmployeeAgentEmployeesEmployeeIdProvisionPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof provisionEmployeeAgentEmployeesEmployeeIdProvisionPost>
+    >
+  >;
+
+export type ProvisionEmployeeAgentEmployeesEmployeeIdProvisionPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Provision Employee Agent
+ */
+export const useProvisionEmployeeAgentEmployeesEmployeeIdProvisionPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof provisionEmployeeAgentEmployeesEmployeeIdProvisionPost
+        >
+      >,
+      TError,
+      { employeeId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof provisionEmployeeAgentEmployeesEmployeeIdProvisionPost>
+  >,
+  TError,
+  { employeeId: number },
+  TContext
+> => {
+  return useMutation(
+    getProvisionEmployeeAgentEmployeesEmployeeIdProvisionPostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * @summary Deprovision Employee Agent
+ */
+export type deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse200 =
+  {
+    data: Employee;
+    status: 200;
+  };
+
+export type deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponseSuccess =
+  deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse200 & {
+    headers: Headers;
+  };
+export type deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponseError =
+  deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse422 & {
+    headers: Headers;
+  };
+
+export type deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse =
+  | deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponseSuccess
+  | deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponseError;
+
+export const getDeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostUrl =
+  (employeeId: number) => {
+    return `/employees/${employeeId}/deprovision`;
+  };
+
+export const deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost =
+  async (
+    employeeId: number,
+    options?: RequestInit,
+  ): Promise<deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse> => {
+    return customFetch<deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostResponse>(
+      getDeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostUrl(
+        employeeId,
+      ),
+      {
+        ...options,
+        method: "POST",
+      },
+    );
+  };
+
+export const getDeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost
+        >
+      >,
+      TError,
+      { employeeId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost
+      >
+    >,
+    TError,
+    { employeeId: number },
+    TContext
+  > => {
+    const mutationKey = [
+      "deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost
+        >
+      >,
+      { employeeId: number }
+    > = (props) => {
+      const { employeeId } = props ?? {};
+
+      return deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost(
+        employeeId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type DeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost
+      >
+    >
+  >;
+
+export type DeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Deprovision Employee Agent
+ */
+export const useDeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost
+        >
+      >,
+      TError,
+      { employeeId: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<
+      typeof deprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPost
+    >
+  >,
+  TError,
+  { employeeId: number },
+  TContext
+> => {
+  return useMutation(
+    getDeprovisionEmployeeAgentEmployeesEmployeeIdDeprovisionPostMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };

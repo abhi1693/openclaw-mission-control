@@ -14,10 +14,10 @@ const STATUSES = ["backlog", "ready", "in_progress", "review", "blocked", "done"
 
 export default function KanbanPage() {
   const projects = useListProjectsProjectsGet();
-  const projectList = projects.data ?? [];
+  const projectList = projects.data?.data ?? [];
 
   const employees = useListEmployeesEmployeesGet();
-  const employeeList = useMemo(() => employees.data ?? [], [employees.data]);
+  const employeeList = useMemo(() => employees.data?.data ?? [], [employees.data]);
 
   const [projectId, setProjectId] = useState<string>("");
   const [assigneeId, setAssigneeId] = useState<string>("");
@@ -35,7 +35,7 @@ export default function KanbanPage() {
       },
     },
   );
-  const taskList = useMemo(() => tasks.data ?? [], [tasks.data]);
+  const taskList = useMemo(() => (tasks.data?.status === 200 ? tasks.data.data : []), [tasks.data]);
 
   const updateTask = useUpdateTaskTasksTaskIdPatch({
     mutation: {
