@@ -6,7 +6,7 @@ import styles from "@/app/_components/Shell.module.css";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { normalizeActivities, normalizeDepartments, normalizeEmployees, normalizeProjects } from "@/lib/normalize";
+import { normalizeActivities } from "@/lib/normalize";
 import { Select } from "@/components/ui/select";
 
 import { useCreateProjectProjectsPost, useListProjectsProjectsGet } from "@/api/generated/projects/projects";
@@ -16,12 +16,12 @@ import { useListActivitiesActivitiesGet } from "@/api/generated/activities/activ
 
 export default function Home() {
   const projects = useListProjectsProjectsGet();
-  const projectList = normalizeProjects(projects.data);
+  const projectList = projects.data ?? [];
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = normalizeDepartments(departments.data);
+  const departmentList = departments.data ?? [];
   const employees = useListEmployeesEmployeesGet();
   const activities = useListActivitiesActivitiesGet({ limit: 20 });
-  const employeeList = normalizeEmployees(employees.data);
+  const employeeList = employees.data ?? [];
   const activityList = normalizeActivities(activities.data);
 
   const [projectName, setProjectName] = useState("");

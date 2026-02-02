@@ -7,7 +7,6 @@ import styles from "@/app/_components/Shell.module.css";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { normalizeProjects } from "@/lib/normalize";
 
 import {
   useCreateProjectProjectsPost,
@@ -18,7 +17,7 @@ export default function ProjectsPage() {
   const [name, setName] = useState("");
 
   const projects = useListProjectsProjectsGet();
-  const projectList = normalizeProjects(projects.data);
+  const projectList = projects.data ?? [];
   const createProject = useCreateProjectProjectsPost({
     mutation: {
       onSuccess: () => {

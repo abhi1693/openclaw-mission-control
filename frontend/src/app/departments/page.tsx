@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { normalizeDepartments, normalizeEmployees } from "@/lib/normalize";
+
 import { Select } from "@/components/ui/select";
 
 import {
@@ -20,10 +20,10 @@ export default function DepartmentsPage() {
   const [headId, setHeadId] = useState<string>("");
 
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = normalizeDepartments(departments.data);
+  const departmentList = departments.data ?? [];
   const employees = useListEmployeesEmployeesGet();
 
-  const employeeList = normalizeEmployees(employees.data);
+  const employeeList = employees.data ?? [];
 
   const createDepartment = useCreateDepartmentDepartmentsPost({
     mutation: {

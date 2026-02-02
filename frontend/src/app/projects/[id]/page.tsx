@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { normalizeEmployees, normalizeProjectMembers, normalizeProjects, normalizeTaskComments, normalizeTasks } from "@/lib/normalize";
+
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -34,14 +34,14 @@ export default function ProjectDetailPage() {
   const projectId = Number(params?.id);
 
   const projects = useListProjectsProjectsGet();
-  const projectList = normalizeProjects(projects.data);
+  const projectList = projects.data ?? [];
   const project = projectList.find((p) => p.id === projectId);
 
   const employees = useListEmployeesEmployeesGet();
-  const employeeList = normalizeEmployees(employees.data);
+  const employeeList = employees.data ?? [];
 
   const members = useListProjectMembersProjectsProjectIdMembersGet(projectId);
-  const memberList = normalizeProjectMembers(members.data);
+  const memberList = members.data ?? [];
   const addMember = useAddProjectMemberProjectsProjectIdMembersPost({
     mutation: { onSuccess: () => members.refetch() },
   });
@@ -53,7 +53,7 @@ export default function ProjectDetailPage() {
   });
 
   const tasks = useListTasksTasksGet({ project_id: projectId });
-  const taskList = normalizeTasks(tasks.data);
+  const taskList = tasks.data ?? [];
   const createTask = useCreateTaskTasksPost({
     mutation: { onSuccess: () => tasks.refetch() },
   });
@@ -76,7 +76,7 @@ export default function ProjectDetailPage() {
     { task_id: commentTaskId ?? 0 },
     { query: { enabled: Boolean(commentTaskId) } },
   );
-  const commentList = normalizeTaskComments(comments.data);
+  const commentList = comments.data ?? [];
   const addComment = useCreateTaskCommentTaskCommentsPost({
     mutation: {
       onSuccess: () => {

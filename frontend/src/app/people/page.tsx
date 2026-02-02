@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { normalizeDepartments, normalizeEmployees } from "@/lib/normalize";
+
 import { Select } from "@/components/ui/select";
 
 import {
@@ -24,8 +24,8 @@ export default function PeoplePage() {
 
   const employees = useListEmployeesEmployeesGet();
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = normalizeDepartments(departments.data);
-  const employeeList = normalizeEmployees(employees.data);
+  const departmentList = departments.data ?? [];
+  const employeeList = employees.data ?? [];
 
   const createEmployee = useCreateEmployeeEmployeesPost({
     mutation: {

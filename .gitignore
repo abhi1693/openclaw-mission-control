@@ -1,20 +1,15 @@
-# OS / IDE
-.idea/
-.DS_Store
-
 # Python
-backend/.venv/
-backend/__pycache__/
-backend/.pytest_cache/
-backend/.env
+__pycache__/
+*.py[cod]
 
-# Node
-frontend/node_modules/
-frontend/.next/
-frontend/.env.local
+# Node / Next
+node_modules/
+.next/
 
-# Logs
-*.log
+# Env
+.env
+.env.local
 
-# Local run logs
+# IDE
+.idea/
 .runlogs/

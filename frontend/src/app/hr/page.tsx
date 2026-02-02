@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { normalizeAgentOnboardings, normalizeDepartments, normalizeEmployees, normalizeEmploymentActions, normalizeHeadcountRequests } from "@/lib/normalize";
+
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -22,16 +22,16 @@ import { useListDepartmentsDepartmentsGet, useListEmployeesEmployeesGet } from "
 
 export default function HRPage() {
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = normalizeDepartments(departments.data);
+  const departmentList = departments.data ?? [];
   const employees = useListEmployeesEmployeesGet();
-  const employeeList = normalizeEmployees(employees.data);
+  const employeeList = employees.data ?? [];
 
   const headcount = useListHeadcountRequestsHrHeadcountGet();
   const actions = useListEmploymentActionsHrActionsGet();
   const onboarding = useListAgentOnboardingHrOnboardingGet();
-  const headcountList = normalizeHeadcountRequests(headcount.data);
-  const actionList = normalizeEmploymentActions(actions.data);
-  const onboardingList = normalizeAgentOnboardings(onboarding.data);
+  const headcountList = headcount.data ?? [];
+  const actionList = actions.data ?? [];
+  const onboardingList = onboarding.data ?? [];
 
   const [hcDeptId, setHcDeptId] = useState<string>("");
   const [hcManagerId, setHcManagerId] = useState<string>("");
