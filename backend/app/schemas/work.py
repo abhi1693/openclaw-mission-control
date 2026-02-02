@@ -24,4 +24,5 @@ class TaskUpdate(SQLModel):
 class TaskCommentCreate(SQLModel):
     task_id: int
     author_employee_id: int | None = None
+    reply_to_comment_id: int | None = None
     body: str

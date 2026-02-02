@@ -82,6 +82,7 @@ export default function ProjectDetailPage() {
   const [reviewerId, setReviewerId] = useState<string>("");
 
   const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
+  const [replyToCommentId, setReplyToCommentId] = useState<number | null>(null);
   const [commentBody, setCommentBody] = useState("");
 
   const comments = useListTaskCommentsTaskCommentsGet(
@@ -94,6 +95,7 @@ export default function ProjectDetailPage() {
       onSuccess: () => {
         comments.refetch();
         setCommentBody("");
+        setReplyToCommentId(null);
       },
     },
   });
@@ -112,6 +114,11 @@ export default function ProjectDetailPage() {
     employeeList.find((e) => e.id === id)?.name ?? "—";
 
   const projectMembers = memberList;
+
+  const commentById = new Map<number, (typeof commentList)[number]>();
+  for (const c of commentList) {
+    if (c.id != null) commentById.set(Number(c.id), c);
+  }
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -258,7 +265,7 @@ export default function ProjectDetailPage() {
                       ))}
                     </div>
                     <div className="mt-2 flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setCommentTaskId(Number(t.id))}>
+                      <Button variant="outline" size="sm" onClick={() => { setCommentTaskId(Number(t.id)); setReplyToCommentId(null); }}>
                         Comments
                       </Button>
                       <Button variant="destructive" size="sm" onClick={() => deleteTask.mutate({ taskId: Number(t.id) })}>
@@ -284,6 +291,19 @@ export default function ProjectDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {addComment.error ? <div className="text-sm text-destructive">{(addComment.error as Error).message}</div> : null}
+            {replyToCommentId ? (
+              <div className="rounded-md border bg-muted/40 p-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-muted-foreground">Replying to comment #{replyToCommentId}</div>
+                  <Button variant="outline" size="sm" onClick={() => setReplyToCommentId(null)}>
+                    Cancel reply
+                  </Button>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                  {commentById.get(replyToCommentId)?.body ?? "—"}
+                </div>
+              </div>
+            ) : null}
             <Textarea
               placeholder="Write a comment"
               value={commentBody}
@@ -297,6 +317,7 @@ export default function ProjectDetailPage() {
                     task_id: Number(commentTaskId),
                     author_employee_id: getActorEmployeeId(),
                     body: commentBody,
+                    reply_to_comment_id: replyToCommentId,
                   },
                 })
               }
@@ -307,9 +328,21 @@ export default function ProjectDetailPage() {
             <ul className="space-y-2">
               {commentList.map((c) => (
                 <li key={String(c.id)} className="rounded-md border p-2 text-sm">
-                  <div className="font-medium">{employeeName(c.author_employee_id)}</div>
-                  <div className="text-xs text-muted-foreground">{(c.created_at ? new Date(c.created_at).toLocaleString() : "—")}</div>
-                  <div className="mt-1">{c.body}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{employeeName(c.author_employee_id)}</div>
+                      <div className="text-xs text-muted-foreground">{(c.created_at ? new Date(c.created_at).toLocaleString() : "—")}</div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setReplyToCommentId(Number(c.id))}>
+                      Reply
+                    </Button>
+                  </div>
+                  {(c.reply_to_comment_id ? (
+                    <div className="mt-2 rounded-md border bg-muted/40 p-2 text-xs">
+                      <div className="text-muted-foreground">Replying to #{c.reply_to_comment_id}: {commentById.get(Number(c.reply_to_comment_id))?.body ?? "—"}</div>
+                    </div>
+                  ) : null)}
+                  <div className="mt-2">{c.body}</div>
                 </li>
               ))}
               {commentList.length === 0 ? (

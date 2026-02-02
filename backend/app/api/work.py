@@ -89,6 +89,12 @@ def create_task_comment(payload: TaskCommentCreate, session: Session = Depends(g
     if payload.author_employee_id is None:
         payload = TaskCommentCreate(**{**payload.model_dump(), "author_employee_id": actor_employee_id})
     c = TaskComment(**payload.model_dump())
+
+    # Validate reply target (must exist + belong to same task)
+    if c.reply_to_comment_id is not None:
+        parent = session.get(TaskComment, c.reply_to_comment_id)
+        if parent is None or parent.task_id != c.task_id:
+            raise HTTPException(status_code=400, detail="Invalid reply_to_comment_id")
     session.add(c)
     session.commit()
     session.refresh(c)

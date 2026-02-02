@@ -30,5 +30,9 @@ class TaskComment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     task_id: int = Field(foreign_key="tasks.id", index=True)
     author_employee_id: int | None = Field(default=None, foreign_key="employees.id")
+
+    # Optional reply threading
+    reply_to_comment_id: int | None = Field(default=None, foreign_key="task_comments.id")
+
     body: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
