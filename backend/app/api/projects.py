@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.api.utils import log_activity, get_actor_employee_id
@@ -17,14 +18,38 @@ def list_projects(session: Session = Depends(get_session)):
 
 
 @router.post("", response_model=Project)
-def create_project(payload: ProjectCreate, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
+def create_project(
+    payload: ProjectCreate,
+    session: Session = Depends(get_session),
+    actor_employee_id: int = Depends(get_actor_employee_id),
+):
+    """Create a project.
+
+    Keep operation atomic: flush to get id, log activity, then commit once.
+    Translate DB integrity errors to 409s.
+    """
+
     proj = Project(**payload.model_dump())
     session.add(proj)
-    session.commit()
+
+    try:
+        session.flush()
+        log_activity(
+            session,
+            actor_employee_id=actor_employee_id,
+            entity_type="project",
+            entity_id=proj.id,
+            verb="created",
+            payload={"name": proj.name},
+        )
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Project already exists or violates constraints")
+
     session.refresh(proj)
-    log_activity(session, actor_employee_id=actor_employee_id, entity_type="project", entity_id=proj.id, verb="created", payload={"name": proj.name})
-    session.commit()
     return proj
+
 
 
 @router.patch("/{project_id}", response_model=Project)
