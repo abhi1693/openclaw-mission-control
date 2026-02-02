@@ -44,15 +44,13 @@ export default function ProjectsPage() {
       <div className={styles.grid2}>
         <div className={styles.card}>
           <div className={styles.cardTitle}>Create project</div>
+          {projects.isLoading ? <div className={styles.mono}>Loading…</div> : null}
+          {projects.error ? <div className={styles.mono}>{(projects.error as Error).message}</div> : null}
           <div className={styles.list}>
-            <Input
-              placeholder="Project name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             <Button
               onClick={() => createProject.mutate({ data: { name, status: "active" } })}
-              disabled={!name.trim() || createProject.isPending}
+              disabled={!name.trim() || createProject.isPending || projects.isFetching}
             >
               Create
             </Button>
