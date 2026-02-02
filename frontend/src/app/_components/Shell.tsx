@@ -8,6 +8,7 @@ import styles from "./Shell.module.css";
 const NAV = [
   { href: "/", label: "Mission Control" },
   { href: "/projects", label: "Projects" },
+  { href: "/kanban", label: "Kanban" },
   { href: "/departments", label: "Departments" },
   { href: "/people", label: "People" },
   { href: "/hr", label: "HR" },
