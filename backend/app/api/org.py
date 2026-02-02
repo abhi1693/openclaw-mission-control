@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.api.utils import get_actor_employee_id, log_activity
+from app.core.urls import public_api_base_url
 from app.db.session import get_session
 from app.integrations.openclaw import OpenClawClient
 from app.models.org import Department, Employee, Team
@@ -18,48 +19,6 @@ from app.schemas.org import (
 )
 
 router = APIRouter(tags=["org"])
-
-
-def _public_api_base_url() -> str:
-    """Return a LAN-reachable base URL for the Mission Control API.
-
-
-    Priority:
-    1) MISSION_CONTROL_BASE_URL env var (recommended)
-    2) First non-loopback IPv4 from `hostname -I`
-
-
-    Never returns localhost/<avoid-loopback> because agents may run on another machine."""
-
-    import os
-    import re
-    import subprocess
-
-    explicit = os.environ.get("MISSION_CONTROL_BASE_URL")
-    if explicit:
-        return explicit.rstrip("/")
-
-    try:
-        out = subprocess.check_output(["bash", "-lc", "hostname -I"], text=True).strip()
-        # pick first RFC1918-ish IPv4, skip docker/loopback
-        ips = re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", out)
-        for ip in ips:
-            if ip.startswith("127."):
-                continue
-            if ip.startswith("172.17."):
-                continue
-            if (
-                ip.startswith("192.168.")
-                or ip.startswith("10.")
-                or ip.startswith("172.16.")
-                or ip.startswith("172.")
-            ):
-                return f"http://{ip}:8000"
-    except Exception:
-        pass
-
-    # Fallback placeholder (should be overridden by env var)
-    return "http://<dev-machine-ip>:8000"
 
 
 def _default_agent_prompt(emp: Employee) -> str:
@@ -76,9 +35,15 @@ def _default_agent_prompt(emp: Employee) -> str:
         f"Your employee_id is {emp.id}.\n"
         f"Title: {title}. Department id: {dept}.\n\n"
         "Mission Control API access (no UI):\n"
-        f"- Base URL: {_public_api_base_url()}\n"
+        f"- Base URL: {public_api_base_url()}\n"
         "- Auth: none. REQUIRED header on ALL write operations: X-Actor-Employee-Id: <your_employee_id>\n"
         f"  Example for you: X-Actor-Employee-Id: {emp.id}\n\n"
+        "How to execute writes from an OpenClaw agent (IMPORTANT):\n"
+        "- Use the exec tool to run curl against the Base URL above.\n"
+        "- Example: start a task\n"
+        "  curl -sS -X PATCH $BASE/tasks/<TASK_ID> -H 'X-Actor-Employee-Id: <your_employee_id>' -H 'Content-Type: application/json' -d '{\"status\":\"in_progress\"}'\n"
+        "- Example: add a progress comment\n"
+        "  curl -sS -X POST $BASE/task-comments -H 'X-Actor-Employee-Id: <your_employee_id>' -H 'Content-Type: application/json' -d '{\"task_id\":<TASK_ID>,\"body\":\"...\"}'\n\n"
         "Common endpoints (JSON):\n"
         "- GET /tasks, POST /tasks\n"
         "- GET /task-comments, POST /task-comments\n"

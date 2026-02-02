@@ -101,14 +101,25 @@ def build_message(ctx: NotifyContext, recipient: Employee) -> str:
         desc_block = f"\n\nDescription:\n{desc}" if desc else ""
 
         # Keep this deterministic: agents already have base URL + header guidance in their prompt.
+        base_url = __import__(
+            "app.core.urls", fromlist=["public_api_base_url"]
+        ).public_api_base_url()
+
         return (
             f"{base}\n\n"
-            "You are the assignee. Start NOW:\n"
-            f"1) PATCH /tasks/{t.id} → status=in_progress (use X-Actor-Employee-Id: {recipient.id})\n"
-            f"2) POST /task-comments → task_id={t.id} with a 1-2 line plan + next action\n"
+            f"Set BASE={base_url}\n\n"
+            "You are the assignee. Start NOW (use the exec tool to run these curl commands):\n"
+            f"1) curl -sS -X PATCH $BASE/tasks/{t.id} -H 'X-Actor-Employee-Id: {recipient.id}' "
+            "-H 'Content-Type: application/json' -d '{\"status\":\"in_progress\"}'\n"
+            f"2) curl -sS -X POST $BASE/task-comments -H 'X-Actor-Employee-Id: {recipient.id}' "
+            f'-H \'Content-Type: application/json\' -d \'{{"task_id":{t.id},"body":"Plan: ... Next: ..."}}\'\n'
             "3) Do the work\n"
-            "4) POST /task-comments → progress updates\n"
-            f"5) When complete: PATCH /tasks/{t.id} → status=done and post a final summary comment"
+            f"4) Post progress updates via POST $BASE/task-comments (same headers)\n"
+            f"5) When complete: curl -sS -X PATCH $BASE/tasks/{t.id} -H 'X-Actor-Employee-Id: {recipient.id}' "
+            "-H 'Content-Type: application/json' -d '{\"status\":\"done\"}' and post a final summary comment"
+            f"-H 'X-Actor-Employee-Id: {recipient.id}' "
+            "-H 'Content-Type: application/json' "
+            '-d \'{"status":"done"}\' and post a final summary comment'
             f"{desc_block}"
         )
 
