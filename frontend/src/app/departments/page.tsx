@@ -20,10 +20,10 @@ export default function DepartmentsPage() {
   const [headId, setHeadId] = useState<string>("");
 
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = departments.data ?? [];
+  const departmentList = departments.data?.status === 200 ? departments.data.data : [];
   const employees = useListEmployeesEmployeesGet();
 
-  const employeeList = employees.data ?? [];
+  const employeeList = employees.data?.status === 200 ? employees.data.data : [];
 
   const createDepartment = useCreateDepartmentDepartmentsPost({
     mutation: {

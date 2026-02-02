@@ -13,4 +13,6 @@ export interface Employee {
   manager_id?: number | null;
   title?: string | null;
   status?: string;
+  openclaw_session_key?: string | null;
+  notify_enabled?: boolean;
 }

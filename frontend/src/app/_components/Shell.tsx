@@ -11,7 +11,6 @@ const NAV = [
   { href: "/kanban", label: "Kanban" },
   { href: "/departments", label: "Departments" },
   { href: "/people", label: "People" },
-  { href: "/hr", label: "HR" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {

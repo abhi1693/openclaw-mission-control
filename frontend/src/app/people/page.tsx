@@ -24,8 +24,8 @@ export default function PeoplePage() {
 
   const employees = useListEmployeesEmployeesGet();
   const departments = useListDepartmentsDepartmentsGet();
-  const departmentList = useMemo(() => departments.data ?? [], [departments.data]);
-  const employeeList = useMemo(() => employees.data ?? [], [employees.data]);
+  const departmentList = useMemo(() => (departments.data?.status === 200 ? departments.data.data : []), [departments.data]);
+  const employeeList = useMemo(() => (employees.data?.status === 200 ? employees.data.data : []), [employees.data]);
 
   const createEmployee = useCreateEmployeeEmployeesPost({
     mutation: {
