@@ -15,6 +15,8 @@ class HeadcountRequestCreate(SQLModel):
 class HeadcountRequestUpdate(SQLModel):
     status: str | None = None
     justification: str | None = None
+    fulfilled_employee_id: int | None = None
+    fulfilled_onboarding_id: int | None = None
 
 
 class EmploymentActionCreate(SQLModel):
@@ -22,6 +24,7 @@ class EmploymentActionCreate(SQLModel):
     issued_by_employee_id: int
     action_type: str
     notes: str | None = None
+    idempotency_key: str | None = None
 
 
 class AgentOnboardingCreate(SQLModel):
@@ -31,6 +34,7 @@ class AgentOnboardingCreate(SQLModel):
     cron_interval_ms: int | None = None
     tools_json: str | None = None
     owner_hr_id: int | None = None
+    employee_id: int | None = None
     status: str = "planned"
     spawned_agent_id: str | None = None
     session_key: str | None = None
@@ -44,6 +48,7 @@ class AgentOnboardingUpdate(SQLModel):
     cron_interval_ms: int | None = None
     tools_json: str | None = None
     owner_hr_id: int | None = None
+    employee_id: int | None = None
     status: str | None = None
     spawned_agent_id: str | None = None
     session_key: str | None = None

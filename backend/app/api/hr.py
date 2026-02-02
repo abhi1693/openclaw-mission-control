@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.utils import log_activity, get_actor_employee_id
 from app.db.session import get_session
@@ -34,6 +35,8 @@ def update_headcount_request(request_id: int, payload: HeadcountRequestUpdate, s
         raise HTTPException(status_code=404, detail="Request not found")
 
     data = payload.model_dump(exclude_unset=True)
+    if data.get("status") == "fulfilled" and getattr(req, "fulfilled_at", None) is None:
+        req.fulfilled_at = datetime.utcnow()
     for k, v in data.items():
         setattr(req, k, v)
 
@@ -51,14 +54,46 @@ def list_employment_actions(session: Session = Depends(get_session)):
 
 
 @router.post("/actions", response_model=EmploymentAction)
-def create_employment_action(payload: EmploymentActionCreate, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
+def create_employment_action(
+    payload: EmploymentActionCreate,
+    session: Session = Depends(get_session),
+    actor_employee_id: int = Depends(get_actor_employee_id),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    # Prefer explicit payload key; header can supply one for retry-safety.
+    if payload.idempotency_key is None and idempotency_key is not None:
+        payload = EmploymentActionCreate(**{**payload.model_dump(), "idempotency_key": idempotency_key})
+
+    if payload.idempotency_key:
+        existing = session.exec(select(EmploymentAction).where(EmploymentAction.idempotency_key == payload.idempotency_key)).first()
+        if existing:
+            return existing
+
     action = EmploymentAction(**payload.model_dump())
     session.add(action)
-    session.commit()
+
+    try:
+        session.flush()
+        log_activity(
+            session,
+            actor_employee_id=actor_employee_id,
+            entity_type="employment_action",
+            entity_id=action.id,
+            verb=action.action_type,
+            payload={"employee_id": action.employee_id},
+        )
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        # if unique constraint on idempotency_key raced
+        if payload.idempotency_key:
+            existing = session.exec(select(EmploymentAction).where(EmploymentAction.idempotency_key == payload.idempotency_key)).first()
+            if existing:
+                return existing
+        raise HTTPException(status_code=409, detail="Employment action violates constraints")
+
     session.refresh(action)
-    log_activity(session, actor_employee_id=actor_employee_id, entity_type="employment_action", entity_id=action.id, verb=action.action_type, payload={"employee_id": action.employee_id})
-    session.commit()
-    return action
+    return EmploymentAction.model_validate(action)
 
 @router.get("/onboarding", response_model=list[AgentOnboarding])
 def list_agent_onboarding(session: Session = Depends(get_session)):
@@ -83,6 +118,8 @@ def update_agent_onboarding(onboarding_id: int, payload: AgentOnboardingUpdate, 
         raise HTTPException(status_code=404, detail="Onboarding record not found")
 
     data = payload.model_dump(exclude_unset=True)
+    if data.get("status") == "fulfilled" and getattr(req, "fulfilled_at", None) is None:
+        req.fulfilled_at = datetime.utcnow()
     for k, v in data.items():
         setattr(item, k, v)
     from datetime import datetime

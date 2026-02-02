@@ -19,6 +19,11 @@ class HeadcountRequest(SQLModel, table=True):
     justification: str | None = None
     status: str = Field(default="submitted")
 
+    # fulfillment linkage (optional)
+    fulfilled_employee_id: int | None = Field(default=None, foreign_key="employees.id")
+    fulfilled_onboarding_id: int | None = Field(default=None, foreign_key="agent_onboardings.id")
+    fulfilled_at: datetime | None = None
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -31,6 +36,9 @@ class EmploymentAction(SQLModel, table=True):
 
     action_type: str  # praise|warning|pip|termination
     notes: str | None = None
+
+    # Optional idempotency key to prevent duplicates on retries
+    idempotency_key: str | None = Field(default=None, index=True, unique=True)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -45,6 +53,9 @@ class AgentOnboarding(SQLModel, table=True):
     cron_interval_ms: int | None = None
     tools_json: str | None = None
     owner_hr_id: int | None = Field(default=None, foreign_key="employees.id")
+
+    # Link to the employee record once created
+    employee_id: int | None = Field(default=None, foreign_key="employees.id")
 
     status: str = Field(default="planned")  # planned|spawning|spawned|verified|blocked
     spawned_agent_id: str | None = None
