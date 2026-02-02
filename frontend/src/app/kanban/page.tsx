@@ -21,10 +21,20 @@ export default function KanbanPage() {
 
   const [projectId, setProjectId] = useState<string>("");
   const [assigneeId, setAssigneeId] = useState<string>("");
+  const [live, setLive] = useState(false);
 
-  const tasks = useListTasksTasksGet({
-    ...(projectId ? { project_id: Number(projectId) } : {}),
-  });
+  const tasks = useListTasksTasksGet(
+    {
+      ...(projectId ? { project_id: Number(projectId) } : {}),
+    },
+    {
+      query: {
+        enabled: true,
+        refetchInterval: live ? 5000 : false,
+        refetchIntervalInBackground: false,
+      },
+    },
+  );
   const taskList = useMemo(() => tasks.data ?? [], [tasks.data]);
 
   const updateTask = useUpdateTaskTasksTaskIdPatch({
@@ -111,6 +121,16 @@ export default function KanbanPage() {
                 </option>
               ))}
             </Select>
+
+            <div className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
+              <div>
+                <div className="font-medium">Live updates</div>
+                <div className="text-xs text-muted-foreground">Auto-refresh tasks every 5s on this page.</div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setLive((v) => !v)}>
+                {live ? "On" : "Off"}
+              </Button>
+            </div>
 
             <div className="text-xs text-muted-foreground">
               Showing {filtered.length} / {taskList.length} tasks
