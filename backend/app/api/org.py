@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.api.utils import log_activity, get_actor_employee_id
@@ -17,14 +18,38 @@ def list_departments(session: Session = Depends(get_session)):
 
 
 @router.post("/departments", response_model=Department)
-def create_department(payload: DepartmentCreate, session: Session = Depends(get_session), actor_employee_id: int = Depends(get_actor_employee_id)):
+def create_department(
+    payload: DepartmentCreate,
+    session: Session = Depends(get_session),
+    actor_employee_id: int = Depends(get_actor_employee_id),
+):
+    """Create a department.
+
+    Important: keep the operation atomic. We flush to get dept.id, log the activity,
+    then commit once. We also translate common DB integrity errors into 409s.
+    """
+
     dept = Department(name=payload.name, head_employee_id=payload.head_employee_id)
     session.add(dept)
-    session.commit()
+
+    try:
+        session.flush()  # assigns dept.id without committing
+        log_activity(
+            session,
+            actor_employee_id=actor_employee_id,
+            entity_type="department",
+            entity_id=dept.id,
+            verb="created",
+            payload={"name": dept.name},
+        )
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Department already exists or violates constraints")
+
     session.refresh(dept)
-    log_activity(session, actor_employee_id=actor_employee_id, entity_type="department", entity_id=dept.id, verb="created", payload={"name": dept.name})
-    session.commit()
     return dept
+
 
 
 @router.patch("/departments/{department_id}", response_model=Department)
