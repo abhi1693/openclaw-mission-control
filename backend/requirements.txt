@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 sqlmodel
 alembic
-psycopg2-binary
+psycopg[binary]
 python-dotenv
 pydantic-settings
 requests
