@@ -10,7 +10,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             retry: 1,
-            refetchOnWindowFocus: false,
+            // Mission Control is a live ops surface; keeping data fresh on focus/reconnect
+            // gives a near-realtime feel without aggressive polling.
+            refetchOnWindowFocus: true,
+            refetchOnReconnect: true,
           },
         },
       })
