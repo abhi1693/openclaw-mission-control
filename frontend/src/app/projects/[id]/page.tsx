@@ -27,6 +27,18 @@ import {
   useUpdateProjectMemberProjectsProjectIdMembersMemberIdPatch,
 } from "@/api/generated/projects/projects";
 
+function getActorEmployeeId(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = window.localStorage.getItem("actor_employee_id");
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 const STATUSES = ["backlog", "ready", "in_progress", "review", "done", "blocked"] as const;
 
 export default function ProjectDetailPage() {
@@ -103,12 +115,22 @@ export default function ProjectDetailPage() {
 
   return (
     <main className="mx-auto max-w-6xl p-6">
+      {!Number.isFinite(projectId) ? (
+        <div className="mb-4 text-sm text-destructive">Invalid project id in URL.</div>
+      ) : null}
+      {projects.isLoading || employees.isLoading || members.isLoading || tasks.isLoading ? (
+        <div className="mb-4 text-sm text-muted-foreground">Loading…</div>
+      ) : null}
+      {projects.error ? <div className="mb-4 text-sm text-destructive">{(projects.error as Error).message}</div> : null}
+      {employees.error ? <div className="mb-4 text-sm text-destructive">{(employees.error as Error).message}</div> : null}
+      {members.error ? <div className="mb-4 text-sm text-destructive">{(members.error as Error).message}</div> : null}
+      {tasks.error ? <div className="mb-4 text-sm text-destructive">{(tasks.error as Error).message}</div> : null}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{project?.name ?? `Project #${projectId}`}</h1>
           <p className="mt-1 text-sm text-muted-foreground">Project detail: staffing + tasks.</p>
         </div>
-        <Button variant="outline" onClick={() => { tasks.refetch(); members.refetch(); }}>
+        <Button variant="outline" onClick={() => { tasks.refetch(); members.refetch(); }} disabled={tasks.isFetching || members.isFetching}>
           Refresh
         </Button>
       </div>
@@ -120,6 +142,7 @@ export default function ProjectDetailPage() {
             <CardDescription>Project-scoped tasks</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {createTask.error ? <div className="text-sm text-destructive">{(createTask.error as Error).message}</div> : null}
             <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
             <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
             <div className="grid grid-cols-2 gap-2">
@@ -183,7 +206,7 @@ export default function ProjectDetailPage() {
                     <div>{employeeName(m.employee_id)}</div>
                     <Button
                       variant="outline"
-                      onClick={() => removeMember.mutate({ projectId, memberId: Number(m.id) })}
+                      onClick={() => { if (m.id == null) return; removeMember.mutate({ projectId, memberId: Number(m.id) }); }}
                     >
                       Remove
                     </Button>
@@ -193,7 +216,7 @@ export default function ProjectDetailPage() {
                       placeholder="Role (e.g., PM, QA, Dev)"
                       defaultValue={m.role ?? ""}
                       onBlur={(e) =>
-                        updateMember.mutate({
+                        m.id == null ? undefined : updateMember.mutate({
                           projectId,
                           memberId: Number(m.id),
                           data: { project_id: projectId, employee_id: m.employee_id, role: e.currentTarget.value || null },
@@ -260,6 +283,7 @@ export default function ProjectDetailPage() {
             <CardDescription>{commentTaskId ? `Task #${commentTaskId}` : "Select a task"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {addComment.error ? <div className="text-sm text-destructive">{(addComment.error as Error).message}</div> : null}
             <Textarea
               placeholder="Write a comment"
               value={commentBody}
@@ -271,7 +295,7 @@ export default function ProjectDetailPage() {
                 addComment.mutate({
                   data: {
                     task_id: Number(commentTaskId),
-                    author_employee_id: null,
+                    author_employee_id: getActorEmployeeId(),
                     body: commentBody,
                   },
                 })
