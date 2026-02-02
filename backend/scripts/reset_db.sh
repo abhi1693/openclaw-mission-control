@@ -5,7 +5,7 @@ DB_NAME=${DB_NAME:-openclaw_agency}
 DB_USER=${DB_USER:-postgres}
 DB_HOST=${DB_HOST:-127.0.0.1}
 DB_PORT=${DB_PORT:-5432}
-DB_PASSWORD=${DB_PASSWORD:-postgres}
+DB_PASSWORD=${DB_PASSWORD:-REDACTED}
 
 cd "$(dirname "$0")/.."
 
