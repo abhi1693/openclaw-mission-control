@@ -108,11 +108,14 @@ def build_provisioning_message(agent: Agent, board: Board, auth_token: str) -> s
         f"Base URL: {base_url}\n"
         f"Auth token: {auth_token}\n\n"
         "Steps:\n"
+        "0) IMPORTANT: Do NOT replace or repurpose the main agent. Keep "
+        f"{context['main_session_key']} unchanged and its workspace intact.\n"
         "1) Create the workspace directory.\n"
         "2) Write the files below with the exact contents.\n"
         "3) Update TOOLS.md if BASE_URL/AUTH_TOKEN must change.\n"
         "4) Leave BOOTSTRAP.md in place; the agent should run it on first start and delete it.\n"
-        "5) Register agent id in OpenClaw so it uses this workspace path.\n\n"
+        "5) Register agent id in OpenClaw so it uses this workspace path "
+        "(never overwrite the main agent session).\n\n"
         "Files:" + file_blocks
     )
 

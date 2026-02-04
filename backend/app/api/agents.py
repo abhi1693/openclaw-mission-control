@@ -107,6 +107,25 @@ def _record_provisioning_failure(session: Session, agent: Agent, error: str) -> 
     )
 
 
+def _record_wakeup_failure(session: Session, agent: Agent, error: str) -> None:
+    record_activity(
+        session,
+        event_type="agent.wakeup.failed",
+        message=f"Wakeup message failed: {error}",
+        agent_id=agent.id,
+    )
+
+
+async def _send_wakeup_message(agent: Agent, config: GatewayConfig) -> None:
+    session_key = agent.openclaw_session_id or _build_session_key(agent.name)
+    message = (
+        f"Hello {agent.name}. Your workspace has been provisioned.\n\n"
+        "Start the agent, run BOOT.md, and if BOOTSTRAP.md exists run it once "
+        "then delete it. Begin heartbeats after startup."
+    )
+    await send_message(message, session_key=session_key, config=config, deliver=True)
+
+
 @router.get("", response_model=list[AgentRead])
 def list_agents(
     session: Session = Depends(get_session),
@@ -150,11 +169,20 @@ async def create_agent(
     session.commit()
     try:
         await send_provisioning_message(agent, board, raw_token)
+        await _send_wakeup_message(agent, config)
+        record_activity(
+            session,
+            event_type="agent.wakeup.sent",
+            message=f"Wakeup message sent to {agent.name}.",
+            agent_id=agent.id,
+        )
     except OpenClawGatewayError as exc:
         _record_provisioning_failure(session, agent, str(exc))
+        _record_wakeup_failure(session, agent, str(exc))
         session.commit()
     except Exception as exc:  # pragma: no cover - unexpected provisioning errors
         _record_provisioning_failure(session, agent, str(exc))
+        _record_wakeup_failure(session, agent, str(exc))
         session.commit()
     return agent
 
@@ -260,11 +288,20 @@ async def heartbeat_or_create_agent(
         session.commit()
         try:
             await send_provisioning_message(agent, board, raw_token)
+            await _send_wakeup_message(agent, config)
+            record_activity(
+                session,
+                event_type="agent.wakeup.sent",
+                message=f"Wakeup message sent to {agent.name}.",
+                agent_id=agent.id,
+            )
         except OpenClawGatewayError as exc:
             _record_provisioning_failure(session, agent, str(exc))
+            _record_wakeup_failure(session, agent, str(exc))
             session.commit()
         except Exception as exc:  # pragma: no cover - unexpected provisioning errors
             _record_provisioning_failure(session, agent, str(exc))
+            _record_wakeup_failure(session, agent, str(exc))
             session.commit()
     elif actor.actor_type == "agent" and actor.agent and actor.agent.id != agent.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
@@ -276,13 +313,22 @@ async def heartbeat_or_create_agent(
         session.refresh(agent)
         try:
             board = _require_board(session, str(agent.board_id) if agent.board_id else None)
-            _require_gateway_config(board)
+            config = _require_gateway_config(board)
             await send_provisioning_message(agent, board, raw_token)
+            await _send_wakeup_message(agent, config)
+            record_activity(
+                session,
+                event_type="agent.wakeup.sent",
+                message=f"Wakeup message sent to {agent.name}.",
+                agent_id=agent.id,
+            )
         except OpenClawGatewayError as exc:
             _record_provisioning_failure(session, agent, str(exc))
+            _record_wakeup_failure(session, agent, str(exc))
             session.commit()
         except Exception as exc:  # pragma: no cover - unexpected provisioning errors
             _record_provisioning_failure(session, agent, str(exc))
+            _record_wakeup_failure(session, agent, str(exc))
             session.commit()
     elif not agent.openclaw_session_id:
         board = _require_board(session, str(agent.board_id) if agent.board_id else None)
