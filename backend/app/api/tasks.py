@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import asyncio
 import json
+import re
 from collections import deque
 from uuid import UUID
 
@@ -46,6 +47,7 @@ TASK_EVENT_TYPES = {
     "task.comment",
 }
 SSE_SEEN_MAX = 2000
+MENTION_PATTERN = re.compile(r"@([A-Za-z][\w-]{0,31})")
 
 
 def validate_task_status(status_value: str) -> None:
@@ -99,6 +101,43 @@ def _parse_since(value: str | None) -> datetime | None:
     if parsed.tzinfo is not None:
         return parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return parsed
+
+
+def _extract_mentions(message: str) -> set[str]:
+    return {match.group(1).lower() for match in MENTION_PATTERN.finditer(message)}
+
+
+def _matches_mention(agent: Agent, mentions: set[str]) -> bool:
+    if not mentions:
+        return False
+    name = (agent.name or "").strip()
+    if not name:
+        return False
+    normalized = name.lower()
+    if normalized in mentions:
+        return True
+    first = normalized.split()[0]
+    return first in mentions
+
+
+def _lead_was_mentioned(
+    session: Session,
+    task: Task,
+    lead: Agent,
+) -> bool:
+    statement = (
+        select(ActivityEvent.message)
+        .where(col(ActivityEvent.task_id) == task.id)
+        .where(col(ActivityEvent.event_type) == "task.comment")
+        .order_by(desc(col(ActivityEvent.created_at)))
+    )
+    for message in session.exec(statement):
+        if not message:
+            continue
+        mentions = _extract_mentions(message)
+        if _matches_mention(lead, mentions):
+            return True
+    return False
 
 
 def _fetch_task_events(
@@ -653,10 +692,13 @@ def create_task_comment(
 ) -> ActivityEvent:
     if actor.actor_type == "agent" and actor.agent:
         if actor.agent.is_board_lead and task.status != "review":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Board leads can only comment during review.",
-            )
+            if not _lead_was_mentioned(session, task, actor.agent):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Board leads can only comment during review or when mentioned."
+                    ),
+                )
         if actor.agent.board_id and task.board_id and actor.agent.board_id != task.board_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     if not payload.message.strip():
@@ -670,28 +712,50 @@ def create_task_comment(
     session.add(event)
     session.commit()
     session.refresh(event)
+    mention_names = _extract_mentions(payload.message)
+    targets: dict[UUID, Agent] = {}
     if task.assigned_agent_id:
-        if (
-            actor.actor_type == "agent"
-            and actor.agent
-            and actor.agent.id == task.assigned_agent_id
-        ):
-            return event
-        agent = session.get(Agent, task.assigned_agent_id)
-        if agent and agent.openclaw_session_id:
-            board = session.get(Board, task.board_id) if task.board_id else None
-            config = _gateway_config(session, board) if board else None
-            if board and config:
-                snippet = payload.message.strip()
-                if len(snippet) > 500:
-                    snippet = f"{snippet[:497]}..."
+        assigned_agent = session.get(Agent, task.assigned_agent_id)
+        if assigned_agent:
+            targets[assigned_agent.id] = assigned_agent
+    if mention_names and task.board_id:
+        statement = select(Agent).where(col(Agent.board_id) == task.board_id)
+        for agent in session.exec(statement):
+            if _matches_mention(agent, mention_names):
+                targets[agent.id] = agent
+    if actor.actor_type == "agent" and actor.agent:
+        targets.pop(actor.agent.id, None)
+    if targets:
+        board = session.get(Board, task.board_id) if task.board_id else None
+        config = _gateway_config(session, board) if board else None
+        if board and config:
+            snippet = payload.message.strip()
+            if len(snippet) > 500:
+                snippet = f"{snippet[:497]}..."
+            actor_name = (
+                actor.agent.name
+                if actor.actor_type == "agent" and actor.agent
+                else "User"
+            )
+            for agent in targets.values():
+                if not agent.openclaw_session_id:
+                    continue
+                mentioned = _matches_mention(agent, mention_names)
+                header = "TASK MENTION" if mentioned else "NEW TASK COMMENT"
+                action_line = (
+                    "You were mentioned in this comment."
+                    if mentioned
+                    else "A new comment was posted on your task."
+                )
                 message = (
-                    "NEW TASK COMMENT\n"
+                    f"{header}\n"
                     f"Board: {board.name}\n"
                     f"Task: {task.title}\n"
-                    f"Task ID: {task.id}\n\n"
+                    f"Task ID: {task.id}\n"
+                    f"From: {actor_name}\n\n"
+                    f"{action_line}\n\n"
                     f"Comment:\n{snippet}\n\n"
-                    "Review and respond in the task thread."
+                    "If you are mentioned but not assigned, reply in the task thread but do not change task status."
                 )
                 try:
                     asyncio.run(

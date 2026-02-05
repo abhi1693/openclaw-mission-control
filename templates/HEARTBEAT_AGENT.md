@@ -23,6 +23,11 @@ If any required input is missing, stop and request a provisioning update.
 - Every status change must have a comment within 30 seconds.
 - Do not claim a new task if you already have one in progress.
 
+## Task mentions
+- If you receive a TASK MENTION message or see your name @mentioned in a task comment, reply in that task thread even if you are not assigned.
+- Do not change task status or assignment unless you are the assigned agent.
+- Keep the reply focused on the mention request.
+
 ## Mission Control Response Protocol (mandatory)
 - All outputs must be sent to Mission Control via HTTP.
 - Always include: `X-Agent-Token: {{ auth_token }}`
