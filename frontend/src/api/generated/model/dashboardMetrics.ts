@@ -10,11 +10,11 @@ import type { DashboardSeriesSet } from "./dashboardSeriesSet";
 import type { DashboardWipSeriesSet } from "./dashboardWipSeriesSet";
 
 export interface DashboardMetrics {
-  range: DashboardMetricsRange;
-  generated_at: string;
-  kpis: DashboardKpis;
-  throughput: DashboardSeriesSet;
   cycle_time: DashboardSeriesSet;
   error_rate: DashboardSeriesSet;
+  generated_at: string;
+  kpis: DashboardKpis;
+  range: DashboardMetricsRange;
+  throughput: DashboardSeriesSet;
   wip: DashboardWipSeriesSet;
 }

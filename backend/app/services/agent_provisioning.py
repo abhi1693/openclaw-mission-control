@@ -29,6 +29,14 @@ IDENTITY_PROFILE_FIELDS = {
     "emoji": "identity_emoji",
 }
 
+EXTRA_IDENTITY_PROFILE_FIELDS = {
+    "autonomy_level": "identity_autonomy_level",
+    "verbosity": "identity_verbosity",
+    "output_format": "identity_output_format",
+    "update_cadence": "identity_update_cadence",
+    "custom_instructions": "identity_custom_instructions",
+}
+
 DEFAULT_GATEWAY_FILES = frozenset(
     {
         "AGENTS.md",
@@ -85,7 +93,8 @@ def _heartbeat_config(agent: Agent) -> dict[str, Any]:
 def _template_env() -> Environment:
     return Environment(
         loader=FileSystemLoader(_templates_root()),
-        autoescape=select_autoescape(default=True),
+        # Render markdown verbatim (HTML escaping makes it harder for agents to read).
+        autoescape=select_autoescape(default=False),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
     )
@@ -95,12 +104,15 @@ def _heartbeat_template_name(agent: Agent) -> str:
     return HEARTBEAT_LEAD_TEMPLATE if agent.is_board_lead else HEARTBEAT_AGENT_TEMPLATE
 
 
-def _workspace_path(agent_name: str, workspace_root: str) -> str:
+def _workspace_path(agent: Agent, workspace_root: str) -> str:
     if not workspace_root:
         raise ValueError("gateway_workspace_root is required")
-    root = workspace_root
-    root = root.rstrip("/")
-    return f"{root}/workspace-{_slugify(agent_name)}"
+    root = workspace_root.rstrip("/")
+    # Use agent key derived from session key when possible. This prevents collisions for
+    # lead agents (session key includes board id) even if multiple boards share the same
+    # display name (e.g. "Lead Agent").
+    key = _agent_key(agent)
+    return f"{root}/workspace-{_slugify(key)}"
 
 
 def _build_context(
@@ -116,7 +128,7 @@ def _build_context(
         raise ValueError("gateway_main_session_key is required")
     agent_id = str(agent.id)
     workspace_root = gateway.workspace_root
-    workspace_path = _workspace_path(agent.name, workspace_root)
+    workspace_path = _workspace_path(agent, workspace_root)
     session_key = agent.openclaw_session_id or ""
     base_url = settings.base_url or "REPLACE_WITH_BASE_URL"
     main_session_key = gateway.main_session_key
@@ -139,6 +151,10 @@ def _build_context(
     identity_context = {
         context_key: normalized_identity.get(field, DEFAULT_IDENTITY_PROFILE[field])
         for field, context_key in IDENTITY_PROFILE_FIELDS.items()
+    }
+    extra_identity_context = {
+        context_key: normalized_identity.get(field, "")
+        for field, context_key in EXTRA_IDENTITY_PROFILE_FIELDS.items()
     }
     preferred_name = (user.preferred_name or "") if user else ""
     if preferred_name:
@@ -167,6 +183,7 @@ def _build_context(
         "user_notes": (user.notes or "") if user else "",
         "user_context": (user.context or "") if user else "",
         **identity_context,
+        **extra_identity_context,
     }
 
 
@@ -197,6 +214,10 @@ def _build_main_context(
         context_key: normalized_identity.get(field, DEFAULT_IDENTITY_PROFILE[field])
         for field, context_key in IDENTITY_PROFILE_FIELDS.items()
     }
+    extra_identity_context = {
+        context_key: normalized_identity.get(field, "")
+        for field, context_key in EXTRA_IDENTITY_PROFILE_FIELDS.items()
+    }
     preferred_name = (user.preferred_name or "") if user else ""
     if preferred_name:
         preferred_name = preferred_name.strip().split()[0]
@@ -215,6 +236,7 @@ def _build_main_context(
         "user_notes": (user.notes or "") if user else "",
         "user_context": (user.context or "") if user else "",
         **identity_context,
+        **extra_identity_context,
     }
 
 
@@ -457,7 +479,7 @@ async def provision_agent(
     await ensure_session(session_key, config=client_config, label=agent.name)
 
     agent_id = _agent_key(agent)
-    workspace_path = _workspace_path(agent.name, gateway.workspace_root)
+    workspace_path = _workspace_path(agent, gateway.workspace_root)
     heartbeat = _heartbeat_config(agent)
     await _patch_gateway_agent_list(agent_id, workspace_path, heartbeat, client_config)
 
@@ -564,5 +586,5 @@ async def cleanup_agent(
 
     workspace_path = entry.get("workspace") if entry else None
     if not workspace_path:
-        workspace_path = _workspace_path(agent.name, gateway.workspace_root)
+        workspace_path = _workspace_path(agent, gateway.workspace_root)
     return workspace_path

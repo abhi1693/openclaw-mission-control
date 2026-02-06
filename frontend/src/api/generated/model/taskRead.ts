@@ -7,16 +7,16 @@
 import type { TaskReadStatus } from "./taskReadStatus";
 
 export interface TaskRead {
-  title: string;
-  description?: string | null;
-  status?: TaskReadStatus;
-  priority?: string;
-  due_at?: string | null;
   assigned_agent_id?: string | null;
-  id: string;
   board_id: string | null;
-  created_by_user_id: string | null;
-  in_progress_at: string | null;
   created_at: string;
+  created_by_user_id: string | null;
+  description?: string | null;
+  due_at?: string | null;
+  id: string;
+  in_progress_at: string | null;
+  priority?: string;
+  status?: TaskReadStatus;
+  title: string;
   updated_at: string;
 }

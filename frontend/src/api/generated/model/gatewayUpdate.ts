@@ -6,10 +6,10 @@
  */
 
 export interface GatewayUpdate {
-  name?: string | null;
-  url?: string | null;
-  token?: string | null;
   main_session_key?: string | null;
-  workspace_root?: string | null;
+  name?: string | null;
   skyll_enabled?: boolean | null;
+  token?: string | null;
+  url?: string | null;
+  workspace_root?: string | null;
 }

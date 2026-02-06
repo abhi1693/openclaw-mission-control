@@ -7,8 +7,8 @@
 import type { BoardOnboardingQuestionOption } from "./boardOnboardingQuestionOption";
 
 export interface BoardOnboardingAgentQuestion {
-  /** @minLength 1 */
-  question: string;
   /** @minItems 1 */
   options: BoardOnboardingQuestionOption[];
+  /** @minLength 1 */
+  question: string;
 }

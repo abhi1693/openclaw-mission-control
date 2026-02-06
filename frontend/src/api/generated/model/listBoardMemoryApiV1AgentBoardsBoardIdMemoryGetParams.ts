@@ -6,6 +6,7 @@
  */
 
 export type ListBoardMemoryApiV1AgentBoardsBoardIdMemoryGetParams = {
+  is_chat?: boolean | null;
   /**
    * @minimum 1
    * @maximum 200

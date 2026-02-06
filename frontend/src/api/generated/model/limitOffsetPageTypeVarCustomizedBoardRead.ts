@@ -8,10 +8,10 @@ import type { BoardRead } from "./boardRead";
 
 export interface LimitOffsetPageTypeVarCustomizedBoardRead {
   items: BoardRead[];
-  /** @minimum 0 */
-  total: number;
   /** @minimum 1 */
   limit: number;
   /** @minimum 0 */
   offset: number;
+  /** @minimum 0 */
+  total: number;
 }

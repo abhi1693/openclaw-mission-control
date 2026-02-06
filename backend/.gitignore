@@ -7,3 +7,6 @@ __pycache__/
 # Generated on demand from uv.lock (single source of truth is pyproject.toml + uv.lock).
 requirements.txt
 requirements-dev.txt
+
+# Generated for orval input (avoid needing a running backend/DB).
+openapi.json

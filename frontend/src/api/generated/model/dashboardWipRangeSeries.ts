@@ -9,7 +9,7 @@ import type { DashboardWipRangeSeriesBucket } from "./dashboardWipRangeSeriesBuc
 import type { DashboardWipRangeSeriesRange } from "./dashboardWipRangeSeriesRange";
 
 export interface DashboardWipRangeSeries {
-  range: DashboardWipRangeSeriesRange;
   bucket: DashboardWipRangeSeriesBucket;
   points: DashboardWipPoint[];
+  range: DashboardWipRangeSeriesRange;
 }

@@ -3,7 +3,8 @@ import { defineConfig } from "orval";
 export default defineConfig({
   api: {
     input: {
-      target: "http://127.0.0.1:8000/openapi.json",
+      target:
+        process.env.ORVAL_INPUT ?? "http://127.0.0.1:8000/openapi.json",
     },
     output: {
       mode: "tags-split",

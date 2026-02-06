@@ -274,296 +274,6 @@ export function useGetOnboardingApiV1BoardsBoardIdOnboardingGet<
 }
 
 /**
- * @summary Start Onboarding
- */
-export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse200 = {
-  data: BoardOnboardingRead;
-  status: 200;
-};
-
-export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseSuccess =
-  startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse200 & {
-    headers: Headers;
-  };
-export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseError =
-  startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse422 & {
-    headers: Headers;
-  };
-
-export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse =
-  | startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseSuccess
-  | startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseError;
-
-export const getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostUrl = (
-  boardId: string,
-) => {
-  return `/api/v1/boards/${boardId}/onboarding/start`;
-};
-
-export const startOnboardingApiV1BoardsBoardIdOnboardingStartPost = async (
-  boardId: string,
-  boardOnboardingStart: BoardOnboardingStart,
-  options?: RequestInit,
-): Promise<startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse> => {
-  return customFetch<startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse>(
-    getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostUrl(boardId),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(boardOnboardingStart),
-    },
-  );
-};
-
-export const getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
-      >,
-      TError,
-      { boardId: string; data: BoardOnboardingStart },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
-    >,
-    TError,
-    { boardId: string; data: BoardOnboardingStart },
-    TContext
-  > => {
-    const mutationKey = [
-      "startOnboardingApiV1BoardsBoardIdOnboardingStartPost",
-    ];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
-      >,
-      { boardId: string; data: BoardOnboardingStart }
-    > = (props) => {
-      const { boardId, data } = props ?? {};
-
-      return startOnboardingApiV1BoardsBoardIdOnboardingStartPost(
-        boardId,
-        data,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type StartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationResult =
-  NonNullable<
-    Awaited<
-      ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
-    >
-  >;
-export type StartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationBody =
-  BoardOnboardingStart;
-export type StartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Start Onboarding
- */
-export const useStartOnboardingApiV1BoardsBoardIdOnboardingStartPost = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
-      >,
-      TError,
-      { boardId: string; data: BoardOnboardingStart },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<
-    ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
-  >,
-  TError,
-  { boardId: string; data: BoardOnboardingStart },
-  TContext
-> => {
-  return useMutation(
-    getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationOptions(
-      options,
-    ),
-    queryClient,
-  );
-};
-/**
- * @summary Answer Onboarding
- */
-export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse200 =
-  {
-    data: BoardOnboardingRead;
-    status: 200;
-  };
-
-export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse422 =
-  {
-    data: HTTPValidationError;
-    status: 422;
-  };
-
-export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseSuccess =
-  answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse200 & {
-    headers: Headers;
-  };
-export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseError =
-  answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse422 & {
-    headers: Headers;
-  };
-
-export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse =
-  | answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseSuccess
-  | answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseError;
-
-export const getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostUrl = (
-  boardId: string,
-) => {
-  return `/api/v1/boards/${boardId}/onboarding/answer`;
-};
-
-export const answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost = async (
-  boardId: string,
-  boardOnboardingAnswer: BoardOnboardingAnswer,
-  options?: RequestInit,
-): Promise<answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse> => {
-  return customFetch<answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse>(
-    getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostUrl(boardId),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(boardOnboardingAnswer),
-    },
-  );
-};
-
-export const getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost
-        >
-      >,
-      TError,
-      { boardId: string; data: BoardOnboardingAnswer },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost>
-    >,
-    TError,
-    { boardId: string; data: BoardOnboardingAnswer },
-    TContext
-  > => {
-    const mutationKey = [
-      "answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost",
-    ];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost
-        >
-      >,
-      { boardId: string; data: BoardOnboardingAnswer }
-    > = (props) => {
-      const { boardId, data } = props ?? {};
-
-      return answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost(
-        boardId,
-        data,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type AnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationResult =
-  NonNullable<
-    Awaited<
-      ReturnType<typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost>
-    >
-  >;
-export type AnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationBody =
-  BoardOnboardingAnswer;
-export type AnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Answer Onboarding
- */
-export const useAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost
-        >
-      >,
-      TError,
-      { boardId: string; data: BoardOnboardingAnswer },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<
-    ReturnType<typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost>
-  >,
-  TError,
-  { boardId: string; data: BoardOnboardingAnswer },
-  TContext
-> => {
-  return useMutation(
-    getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationOptions(
-      options,
-    ),
-    queryClient,
-  );
-};
-/**
  * @summary Agent Onboarding Update
  */
 export type agentOnboardingUpdateApiV1BoardsBoardIdOnboardingAgentPostResponse200 =
@@ -738,6 +448,155 @@ export const useAgentOnboardingUpdateApiV1BoardsBoardIdOnboardingAgentPost = <
   );
 };
 /**
+ * @summary Answer Onboarding
+ */
+export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse200 =
+  {
+    data: BoardOnboardingRead;
+    status: 200;
+  };
+
+export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseSuccess =
+  answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse200 & {
+    headers: Headers;
+  };
+export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseError =
+  answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse422 & {
+    headers: Headers;
+  };
+
+export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse =
+  | answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseSuccess
+  | answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponseError;
+
+export const getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostUrl = (
+  boardId: string,
+) => {
+  return `/api/v1/boards/${boardId}/onboarding/answer`;
+};
+
+export const answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost = async (
+  boardId: string,
+  boardOnboardingAnswer: BoardOnboardingAnswer,
+  options?: RequestInit,
+): Promise<answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse> => {
+  return customFetch<answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse>(
+    getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostUrl(boardId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(boardOnboardingAnswer),
+    },
+  );
+};
+
+export const getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost
+        >
+      >,
+      TError,
+      { boardId: string; data: BoardOnboardingAnswer },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost>
+    >,
+    TError,
+    { boardId: string; data: BoardOnboardingAnswer },
+    TContext
+  > => {
+    const mutationKey = [
+      "answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost
+        >
+      >,
+      { boardId: string; data: BoardOnboardingAnswer }
+    > = (props) => {
+      const { boardId, data } = props ?? {};
+
+      return answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost(
+        boardId,
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type AnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost>
+    >
+  >;
+export type AnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationBody =
+  BoardOnboardingAnswer;
+export type AnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Answer Onboarding
+ */
+export const useAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost
+        >
+      >,
+      TError,
+      { boardId: string; data: BoardOnboardingAnswer },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost>
+  >,
+  TError,
+  { boardId: string; data: BoardOnboardingAnswer },
+  TContext
+> => {
+  return useMutation(
+    getAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
  * @summary Confirm Onboarding
  */
 export type confirmOnboardingApiV1BoardsBoardIdOnboardingConfirmPostResponse200 =
@@ -885,6 +744,147 @@ export const useConfirmOnboardingApiV1BoardsBoardIdOnboardingConfirmPost = <
 > => {
   return useMutation(
     getConfirmOnboardingApiV1BoardsBoardIdOnboardingConfirmPostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * @summary Start Onboarding
+ */
+export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse200 = {
+  data: BoardOnboardingRead;
+  status: 200;
+};
+
+export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseSuccess =
+  startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse200 & {
+    headers: Headers;
+  };
+export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseError =
+  startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse422 & {
+    headers: Headers;
+  };
+
+export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse =
+  | startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseSuccess
+  | startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponseError;
+
+export const getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostUrl = (
+  boardId: string,
+) => {
+  return `/api/v1/boards/${boardId}/onboarding/start`;
+};
+
+export const startOnboardingApiV1BoardsBoardIdOnboardingStartPost = async (
+  boardId: string,
+  boardOnboardingStart: BoardOnboardingStart,
+  options?: RequestInit,
+): Promise<startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse> => {
+  return customFetch<startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse>(
+    getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostUrl(boardId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(boardOnboardingStart),
+    },
+  );
+};
+
+export const getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
+      >,
+      TError,
+      { boardId: string; data: BoardOnboardingStart },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
+    >,
+    TError,
+    { boardId: string; data: BoardOnboardingStart },
+    TContext
+  > => {
+    const mutationKey = [
+      "startOnboardingApiV1BoardsBoardIdOnboardingStartPost",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
+      >,
+      { boardId: string; data: BoardOnboardingStart }
+    > = (props) => {
+      const { boardId, data } = props ?? {};
+
+      return startOnboardingApiV1BoardsBoardIdOnboardingStartPost(
+        boardId,
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type StartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
+    >
+  >;
+export type StartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationBody =
+  BoardOnboardingStart;
+export type StartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Start Onboarding
+ */
+export const useStartOnboardingApiV1BoardsBoardIdOnboardingStartPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
+      >,
+      TError,
+      { boardId: string; data: BoardOnboardingStart },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof startOnboardingApiV1BoardsBoardIdOnboardingStartPost>
+  >,
+  TError,
+  { boardId: string; data: BoardOnboardingStart },
+  TContext
+> => {
+  return useMutation(
+    getStartOnboardingApiV1BoardsBoardIdOnboardingStartPostMutationOptions(
       options,
     ),
     queryClient,

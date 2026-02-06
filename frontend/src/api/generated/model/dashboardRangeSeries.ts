@@ -9,7 +9,7 @@ import type { DashboardRangeSeriesRange } from "./dashboardRangeSeriesRange";
 import type { DashboardSeriesPoint } from "./dashboardSeriesPoint";
 
 export interface DashboardRangeSeries {
-  range: DashboardRangeSeriesRange;
   bucket: DashboardRangeSeriesBucket;
   points: DashboardSeriesPoint[];
+  range: DashboardRangeSeriesRange;
 }

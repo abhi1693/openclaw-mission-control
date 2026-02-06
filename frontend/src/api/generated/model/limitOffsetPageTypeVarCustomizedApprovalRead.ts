@@ -8,10 +8,10 @@ import type { ApprovalRead } from "./approvalRead";
 
 export interface LimitOffsetPageTypeVarCustomizedApprovalRead {
   items: ApprovalRead[];
-  /** @minimum 0 */
-  total: number;
   /** @minimum 1 */
   limit: number;
   /** @minimum 0 */
   offset: number;
+  /** @minimum 0 */
+  total: number;
 }

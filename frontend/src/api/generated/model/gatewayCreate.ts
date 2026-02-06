@@ -6,10 +6,10 @@
  */
 
 export interface GatewayCreate {
-  name: string;
-  url: string;
   main_session_key: string;
-  workspace_root: string;
+  name: string;
   skyll_enabled?: boolean;
   token?: string | null;
+  url: string;
+  workspace_root: string;
 }

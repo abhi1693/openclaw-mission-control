@@ -6,13 +6,13 @@
  */
 
 export interface GatewayRead {
-  name: string;
-  url: string;
-  main_session_key: string;
-  workspace_root: string;
-  skyll_enabled?: boolean;
-  id: string;
-  token?: string | null;
   created_at: string;
+  id: string;
+  main_session_key: string;
+  name: string;
+  skyll_enabled?: boolean;
+  token?: string | null;
   updated_at: string;
+  url: string;
+  workspace_root: string;
 }

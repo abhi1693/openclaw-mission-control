@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { SignInButton, SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
+import { X } from "lucide-react";
 
 import { ApiError } from "@/api/mutator";
 import {
@@ -20,7 +21,7 @@ import { BoardOnboardingChat } from "@/components/BoardOnboardingChat";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -395,7 +396,21 @@ export default function EditBoardPage() {
       </SignedIn>
       </DashboardShell>
       <Dialog open={isOnboardingOpen} onOpenChange={setIsOnboardingOpen}>
-        <DialogContent aria-label="Board onboarding">
+        <DialogContent
+          aria-label="Board onboarding"
+          className="relative"
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <DialogClose asChild>
+            <button
+              type="button"
+              className="absolute right-4 top-4 rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+              aria-label="Close onboarding"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </DialogClose>
           {boardId ? (
             <BoardOnboardingChat
               boardId={boardId}

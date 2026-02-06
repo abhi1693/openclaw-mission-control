@@ -7,6 +7,6 @@
 import type { DashboardWipRangeSeries } from "./dashboardWipRangeSeries";
 
 export interface DashboardWipSeriesSet {
-  primary: DashboardWipRangeSeries;
   comparison: DashboardWipRangeSeries;
+  primary: DashboardWipRangeSeries;
 }

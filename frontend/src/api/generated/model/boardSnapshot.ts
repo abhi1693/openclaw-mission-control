@@ -11,10 +11,10 @@ import type { BoardRead } from "./boardRead";
 import type { TaskCardRead } from "./taskCardRead";
 
 export interface BoardSnapshot {
-  board: BoardRead;
-  tasks: TaskCardRead[];
   agents: AgentRead[];
   approvals: ApprovalRead[];
+  board: BoardRead;
   chat_messages: BoardMemoryRead[];
   pending_approvals_count?: number;
+  tasks: TaskCardRead[];
 }

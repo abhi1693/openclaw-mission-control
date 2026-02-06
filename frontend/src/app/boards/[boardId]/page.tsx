@@ -1751,12 +1751,12 @@ export default function BoardDetailPage() {
           }}
         />
       ) : null}
-      <aside
-        className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[max(760px,45vw)] max-w-[99vw] transform bg-white shadow-2xl transition-transform",
-          isDetailOpen ? "translate-x-0" : "translate-x-full",
-        )}
-      >
+	      <aside
+	        className={cn(
+	          "fixed right-0 top-0 z-50 h-full w-[max(760px,45vw)] max-w-[99vw] transform bg-white shadow-2xl transition-transform",
+	          isDetailOpen ? "transform-none" : "translate-x-full",
+	        )}
+	      >
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
@@ -1963,26 +1963,26 @@ export default function BoardDetailPage() {
                 <p className="text-sm text-slate-500">No comments yet.</p>
               ) : (
                 <div className="space-y-3">
-                  {orderedComments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="rounded-xl border border-slate-200 bg-white p-3"
-                    >
-                      <>
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>
-                          {comment.agent_id
+	                  {orderedComments.map((comment) => (
+	                    <div
+	                      key={comment.id}
+	                      className="rounded-xl border border-slate-200 bg-white p-3 select-none"
+	                    >
+	                      <>
+	                      <div className="flex items-center justify-between text-xs text-slate-500">
+	                        <span>
+	                          {comment.agent_id
                             ? assigneeById.get(comment.agent_id) ?? "Agent"
                             : "Admin"}
                         </span>
-                        <span>{formatCommentTimestamp(comment.created_at)}</span>
-                      </div>
-                      {comment.message?.trim() ? (
-                        <div className="mt-2 select-text cursor-text text-sm text-slate-900 break-words">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkBreaks]}
-                            components={{
-                              ...MARKDOWN_TABLE_COMPONENTS,
+	                        <span>{formatCommentTimestamp(comment.created_at)}</span>
+	                      </div>
+	                      {comment.message?.trim() ? (
+	                        <div className="mt-2 select-text cursor-text text-sm leading-relaxed text-slate-900 break-words">
+	                          <ReactMarkdown
+	                            remarkPlugins={[remarkGfm, remarkBreaks]}
+	                            components={{
+	                              ...MARKDOWN_TABLE_COMPONENTS,
                               p: ({ node: _node, ...props }) => (
                                 <p
                                   className="text-sm text-slate-900 break-words"
@@ -2025,12 +2025,12 @@ export default function BoardDetailPage() {
         </div>
       </aside>
 
-      <aside
-        className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[560px] max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform",
-          isChatOpen ? "translate-x-0" : "translate-x-full",
-        )}
-      >
+	      <aside
+	        className={cn(
+	          "fixed right-0 top-0 z-50 h-full w-[560px] max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform",
+	          isChatOpen ? "transform-none" : "translate-x-full",
+	        )}
+	      >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div>
@@ -2063,23 +2063,23 @@ export default function BoardDetailPage() {
                 </p>
               ) : (
                 chatMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">
-                        {message.source ?? "User"}
+	                  <div
+	                    key={message.id}
+	                    className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 select-none"
+	                  >
+	                    <div className="flex flex-wrap items-center justify-between gap-2">
+	                      <p className="text-sm font-semibold text-slate-900">
+	                        {message.source ?? "User"}
                       </p>
                       <span className="text-xs text-slate-400">
                         {formatTaskTimestamp(message.created_at)}
                       </span>
                     </div>
-                    <div className="mt-2 text-sm text-slate-900">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          ...MARKDOWN_TABLE_COMPONENTS,
+	                    <div className="mt-2 select-text cursor-text text-sm leading-relaxed text-slate-900">
+	                      <ReactMarkdown
+	                        remarkPlugins={[remarkGfm]}
+	                        components={{
+	                          ...MARKDOWN_TABLE_COMPONENTS,
                           p: ({ node: _node, ...props }) => (
                             <p className="mb-2 last:mb-0" {...props} />
                           ),
@@ -2107,12 +2107,12 @@ export default function BoardDetailPage() {
 	        </div>
 	      </aside>
 
-      <aside
-        className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[520px] max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform",
-          isLiveFeedOpen ? "translate-x-0" : "translate-x-full",
-        )}
-      >
+	      <aside
+	        className={cn(
+	          "fixed right-0 top-0 z-50 h-full w-[520px] max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform",
+	          isLiveFeedOpen ? "transform-none" : "translate-x-full",
+	        )}
+	      >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div>
@@ -2140,13 +2140,13 @@ export default function BoardDetailPage() {
             ) : (
               <div className="space-y-3">
                 {orderedLiveFeed.map((comment) => (
-                  <div
-                    key={comment.id}
-                    className="rounded-xl border border-slate-200 bg-white p-3"
-                  >
-                    <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-slate-700">
+	                  <div
+	                    key={comment.id}
+	                    className="rounded-xl border border-slate-200 bg-white p-3 select-none"
+	                  >
+	                    <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+	                      <div className="min-w-0">
+	                        <p className="truncate text-xs font-semibold text-slate-700">
                           {comment.task_id
                             ? taskTitleById.get(comment.task_id) ?? "Task"
                             : "Task"}
@@ -2161,12 +2161,12 @@ export default function BoardDetailPage() {
                         {formatCommentTimestamp(comment.created_at)}
                       </span>
                     </div>
-                    {comment.message?.trim() ? (
-                      <div className="mt-2 text-xs text-slate-900">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            ...MARKDOWN_TABLE_COMPONENTS,
+	                    {comment.message?.trim() ? (
+	                      <div className="mt-2 select-text cursor-text text-xs leading-relaxed text-slate-900">
+	                        <ReactMarkdown
+	                          remarkPlugins={[remarkGfm]}
+	                          components={{
+	                            ...MARKDOWN_TABLE_COMPONENTS,
                             p: ({ node: _node, ...props }) => (
                               <p className="mb-2 last:mb-0" {...props} />
                             ),

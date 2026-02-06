@@ -6,10 +6,10 @@
  */
 
 export interface ActivityEventRead {
-  id: string;
-  event_type: string;
-  message: string | null;
   agent_id: string | null;
-  task_id: string | null;
   created_at: string;
+  event_type: string;
+  id: string;
+  message: string | null;
+  task_id: string | null;
 }

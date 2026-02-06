@@ -7,6 +7,6 @@
 import type { DashboardRangeSeries } from "./dashboardRangeSeries";
 
 export interface DashboardSeriesSet {
-  primary: DashboardRangeSeries;
   comparison: DashboardRangeSeries;
+  primary: DashboardRangeSeries;
 }

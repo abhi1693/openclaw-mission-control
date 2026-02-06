@@ -7,11 +7,11 @@
 import type { TaskCreateStatus } from "./taskCreateStatus";
 
 export interface TaskCreate {
-  title: string;
-  description?: string | null;
-  status?: TaskCreateStatus;
-  priority?: string;
-  due_at?: string | null;
   assigned_agent_id?: string | null;
   created_by_user_id?: string | null;
+  description?: string | null;
+  due_at?: string | null;
+  priority?: string;
+  status?: TaskCreateStatus;
+  title: string;
 }

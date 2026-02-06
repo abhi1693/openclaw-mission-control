@@ -5,8 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface GatewayCommandsResponse {
-  events: string[];
-  methods: string[];
-  protocol_version: number;
-}
+export type BoardOnboardingLeadAgentDraftIdentityProfile = {
+  [key: string]: string;
+} | null;

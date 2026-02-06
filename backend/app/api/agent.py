@@ -227,12 +227,14 @@ async def create_task_comment(
 
 @router.get("/boards/{board_id}/memory", response_model=DefaultLimitOffsetPage[BoardMemoryRead])
 async def list_board_memory(
+    is_chat: bool | None = Query(default=None),
     board: Board = Depends(get_board_or_404),
     session: AsyncSession = Depends(get_session),
     agent_ctx: AgentAuthContext = Depends(get_agent_auth_context),
 ) -> DefaultLimitOffsetPage[BoardMemoryRead]:
     _guard_board_access(agent_ctx, board)
     return await board_memory_api.list_board_memory(
+        is_chat=is_chat,
         board=board,
         session=session,
         actor=_actor(agent_ctx),

@@ -4,16 +4,16 @@
  * Mission Control API
  * OpenAPI spec version: 0.1.0
  */
-import type { BoardOnboardingReadDraftGoal } from "./boardOnboardingReadDraftGoal";
+import type { BoardOnboardingAgentComplete } from "./boardOnboardingAgentComplete";
 import type { BoardOnboardingReadMessages } from "./boardOnboardingReadMessages";
 
 export interface BoardOnboardingRead {
-  id: string;
   board_id: string;
+  created_at: string;
+  draft_goal?: BoardOnboardingAgentComplete | null;
+  id: string;
+  messages?: BoardOnboardingReadMessages;
   session_key: string;
   status: string;
-  messages?: BoardOnboardingReadMessages;
-  draft_goal?: BoardOnboardingReadDraftGoal;
-  created_at: string;
   updated_at: string;
 }

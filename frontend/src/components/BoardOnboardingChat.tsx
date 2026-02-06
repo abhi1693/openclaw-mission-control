@@ -17,18 +17,11 @@ import {
   startOnboardingApiV1BoardsBoardIdOnboardingStartPost,
 } from "@/api/generated/board-onboarding/board-onboarding";
 import type {
+  BoardOnboardingAgentComplete,
   BoardOnboardingRead,
-  BoardOnboardingReadDraftGoal,
   BoardOnboardingReadMessages,
   BoardRead,
 } from "@/api/generated/model";
-
-type BoardDraft = {
-  board_type?: string;
-  objective?: string | null;
-  success_metrics?: Record<string, unknown> | null;
-  target_date?: string | null;
-};
 
 type NormalizedMessage = {
   role: string;
@@ -50,35 +43,6 @@ const normalizeMessages = (
     items.push({ role, content });
   }
   return items.length ? items : null;
-};
-
-const normalizeDraftGoal = (value?: BoardOnboardingReadDraftGoal): BoardDraft | null => {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-
-  const board_type = typeof raw.board_type === "string" ? raw.board_type : undefined;
-  const objective =
-    typeof raw.objective === "string" ? raw.objective : raw.objective === null ? null : undefined;
-  const target_date =
-    typeof raw.target_date === "string"
-      ? raw.target_date
-      : raw.target_date === null
-        ? null
-        : undefined;
-
-  let success_metrics: Record<string, unknown> | null = null;
-  if (raw.success_metrics === null || raw.success_metrics === undefined) {
-    success_metrics = null;
-  } else if (typeof raw.success_metrics === "object") {
-    success_metrics = raw.success_metrics as Record<string, unknown>;
-  }
-
-  return {
-    board_type,
-    objective: objective ?? null,
-    success_metrics,
-    target_date: target_date ?? null,
-  };
 };
 
 type QuestionOption = { id: string; label: string };
@@ -151,7 +115,7 @@ export function BoardOnboardingChat({
     [session?.messages],
   );
   const question = useMemo(() => parseQuestion(normalizedMessages), [normalizedMessages]);
-  const draft = useMemo(() => normalizeDraftGoal(session?.draft_goal), [session?.draft_goal]);
+  const draft: BoardOnboardingAgentComplete | null = session?.draft_goal ?? null;
 
   useEffect(() => {
     setSelectedOptions([]);
@@ -269,18 +233,90 @@ export function BoardOnboardingChat({
           <p className="text-sm text-slate-600">
             Review the lead agent draft and confirm.
           </p>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-            <p className="font-semibold text-slate-900">Objective</p>
-            <p className="text-slate-700">{draft.objective || "—"}</p>
-            <p className="mt-3 font-semibold text-slate-900">Success metrics</p>
-            <pre className="mt-1 whitespace-pre-wrap text-xs text-slate-600">
-              {JSON.stringify(draft.success_metrics ?? {}, null, 2)}
-            </pre>
-            <p className="mt-3 font-semibold text-slate-900">Target date</p>
-            <p className="text-slate-700">{draft.target_date || "—"}</p>
-            <p className="mt-3 font-semibold text-slate-900">Board type</p>
-            <p className="text-slate-700">{draft.board_type || "goal"}</p>
-          </div>
+	          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+	            <p className="font-semibold text-slate-900">Objective</p>
+	            <p className="text-slate-700">{draft.objective || "—"}</p>
+	            <p className="mt-3 font-semibold text-slate-900">Success metrics</p>
+	            <pre className="mt-1 whitespace-pre-wrap text-xs text-slate-600">
+	              {JSON.stringify(draft.success_metrics ?? {}, null, 2)}
+	            </pre>
+	            <p className="mt-3 font-semibold text-slate-900">Target date</p>
+	            <p className="text-slate-700">{draft.target_date || "—"}</p>
+	            <p className="mt-3 font-semibold text-slate-900">Board type</p>
+	            <p className="text-slate-700">{draft.board_type || "goal"}</p>
+	            {draft.user_profile ? (
+	              <>
+	                <p className="mt-4 font-semibold text-slate-900">User profile</p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Preferred name:</span>{" "}
+	                  {draft.user_profile.preferred_name || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Pronouns:</span>{" "}
+	                  {draft.user_profile.pronouns || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Timezone:</span>{" "}
+	                  {draft.user_profile.timezone || "—"}
+	                </p>
+	              </>
+	            ) : null}
+	            {draft.lead_agent ? (
+	              <>
+	                <p className="mt-4 font-semibold text-slate-900">
+	                  Lead agent preferences
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Name:</span>{" "}
+	                  {draft.lead_agent.name || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Role:</span>{" "}
+	                  {draft.lead_agent.identity_profile?.role || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">
+	                    Communication:
+	                  </span>{" "}
+	                  {draft.lead_agent.identity_profile?.communication_style || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Emoji:</span>{" "}
+	                  {draft.lead_agent.identity_profile?.emoji || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Autonomy:</span>{" "}
+	                  {draft.lead_agent.autonomy_level || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">Verbosity:</span>{" "}
+	                  {draft.lead_agent.verbosity || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">
+	                    Output format:
+	                  </span>{" "}
+	                  {draft.lead_agent.output_format || "—"}
+	                </p>
+	                <p className="text-slate-700">
+	                  <span className="font-medium text-slate-900">
+	                    Update cadence:
+	                  </span>{" "}
+	                  {draft.lead_agent.update_cadence || "—"}
+	                </p>
+	                {draft.lead_agent.custom_instructions ? (
+	                  <>
+	                    <p className="mt-3 font-semibold text-slate-900">
+	                      Custom instructions
+	                    </p>
+	                    <pre className="mt-1 whitespace-pre-wrap text-xs text-slate-600">
+	                      {draft.lead_agent.custom_instructions}
+	                    </pre>
+	                  </>
+	                ) : null}
+	              </>
+	            ) : null}
+	          </div>
           <DialogFooter>
             <Button onClick={confirmGoal} disabled={loading}>
               Confirm goal

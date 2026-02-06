@@ -6,12 +6,11 @@
  */
 
 export interface BoardMemoryRead {
-  /** @minLength 1 */
-  content: string;
-  tags?: string[] | null;
-  source?: string | null;
-  id: string;
   board_id: string;
-  is_chat?: boolean;
+  content: string;
   created_at: string;
+  id: string;
+  is_chat?: boolean;
+  source?: string | null;
+  tags?: string[] | null;
 }

@@ -7,19 +7,19 @@
 import type { TaskCardReadStatus } from "./taskCardReadStatus";
 
 export interface TaskCardRead {
-  title: string;
-  description?: string | null;
-  status?: TaskCardReadStatus;
-  priority?: string;
-  due_at?: string | null;
-  assigned_agent_id?: string | null;
-  id: string;
-  board_id: string | null;
-  created_by_user_id: string | null;
-  in_progress_at: string | null;
-  created_at: string;
-  updated_at: string;
-  assignee?: string | null;
   approvals_count?: number;
   approvals_pending_count?: number;
+  assigned_agent_id?: string | null;
+  assignee?: string | null;
+  board_id: string | null;
+  created_at: string;
+  created_by_user_id: string | null;
+  description?: string | null;
+  due_at?: string | null;
+  id: string;
+  in_progress_at: string | null;
+  priority?: string;
+  status?: TaskCardReadStatus;
+  title: string;
+  updated_at: string;
 }

@@ -360,6 +360,122 @@ export const useCreateBoardApiV1BoardsPost = <
   );
 };
 /**
+ * @summary Delete Board
+ */
+export type deleteBoardApiV1BoardsBoardIdDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteBoardApiV1BoardsBoardIdDeleteResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type deleteBoardApiV1BoardsBoardIdDeleteResponseSuccess =
+  deleteBoardApiV1BoardsBoardIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteBoardApiV1BoardsBoardIdDeleteResponseError =
+  deleteBoardApiV1BoardsBoardIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type deleteBoardApiV1BoardsBoardIdDeleteResponse =
+  | deleteBoardApiV1BoardsBoardIdDeleteResponseSuccess
+  | deleteBoardApiV1BoardsBoardIdDeleteResponseError;
+
+export const getDeleteBoardApiV1BoardsBoardIdDeleteUrl = (boardId: string) => {
+  return `/api/v1/boards/${boardId}`;
+};
+
+export const deleteBoardApiV1BoardsBoardIdDelete = async (
+  boardId: string,
+  options?: RequestInit,
+): Promise<deleteBoardApiV1BoardsBoardIdDeleteResponse> => {
+  return customFetch<deleteBoardApiV1BoardsBoardIdDeleteResponse>(
+    getDeleteBoardApiV1BoardsBoardIdDeleteUrl(boardId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteBoardApiV1BoardsBoardIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
+    TError,
+    { boardId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
+  TError,
+  { boardId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteBoardApiV1BoardsBoardIdDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
+    { boardId: string }
+  > = (props) => {
+    const { boardId } = props ?? {};
+
+    return deleteBoardApiV1BoardsBoardIdDelete(boardId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBoardApiV1BoardsBoardIdDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>
+>;
+
+export type DeleteBoardApiV1BoardsBoardIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Delete Board
+ */
+export const useDeleteBoardApiV1BoardsBoardIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
+      TError,
+      { boardId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
+  TError,
+  { boardId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteBoardApiV1BoardsBoardIdDeleteMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * @summary Get Board
  */
 export type getBoardApiV1BoardsBoardIdGetResponse200 = {
@@ -674,122 +790,6 @@ export const useUpdateBoardApiV1BoardsBoardIdPatch = <
 > => {
   return useMutation(
     getUpdateBoardApiV1BoardsBoardIdPatchMutationOptions(options),
-    queryClient,
-  );
-};
-/**
- * @summary Delete Board
- */
-export type deleteBoardApiV1BoardsBoardIdDeleteResponse200 = {
-  data: OkResponse;
-  status: 200;
-};
-
-export type deleteBoardApiV1BoardsBoardIdDeleteResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type deleteBoardApiV1BoardsBoardIdDeleteResponseSuccess =
-  deleteBoardApiV1BoardsBoardIdDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteBoardApiV1BoardsBoardIdDeleteResponseError =
-  deleteBoardApiV1BoardsBoardIdDeleteResponse422 & {
-    headers: Headers;
-  };
-
-export type deleteBoardApiV1BoardsBoardIdDeleteResponse =
-  | deleteBoardApiV1BoardsBoardIdDeleteResponseSuccess
-  | deleteBoardApiV1BoardsBoardIdDeleteResponseError;
-
-export const getDeleteBoardApiV1BoardsBoardIdDeleteUrl = (boardId: string) => {
-  return `/api/v1/boards/${boardId}`;
-};
-
-export const deleteBoardApiV1BoardsBoardIdDelete = async (
-  boardId: string,
-  options?: RequestInit,
-): Promise<deleteBoardApiV1BoardsBoardIdDeleteResponse> => {
-  return customFetch<deleteBoardApiV1BoardsBoardIdDeleteResponse>(
-    getDeleteBoardApiV1BoardsBoardIdDeleteUrl(boardId),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export const getDeleteBoardApiV1BoardsBoardIdDeleteMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
-    TError,
-    { boardId: string },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
-  TError,
-  { boardId: string },
-  TContext
-> => {
-  const mutationKey = ["deleteBoardApiV1BoardsBoardIdDelete"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
-    { boardId: string }
-  > = (props) => {
-    const { boardId } = props ?? {};
-
-    return deleteBoardApiV1BoardsBoardIdDelete(boardId, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteBoardApiV1BoardsBoardIdDeleteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>
->;
-
-export type DeleteBoardApiV1BoardsBoardIdDeleteMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Delete Board
- */
-export const useDeleteBoardApiV1BoardsBoardIdDelete = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
-      TError,
-      { boardId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof deleteBoardApiV1BoardsBoardIdDelete>>,
-  TError,
-  { boardId: string },
-  TContext
-> => {
-  return useMutation(
-    getDeleteBoardApiV1BoardsBoardIdDeleteMutationOptions(options),
     queryClient,
   );
 };

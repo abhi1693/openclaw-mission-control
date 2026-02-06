@@ -7,13 +7,13 @@
 import type { BoardUpdateSuccessMetrics } from "./boardUpdateSuccessMetrics";
 
 export interface BoardUpdate {
-  name?: string | null;
-  slug?: string | null;
-  gateway_id?: string | null;
   board_type?: string | null;
-  objective?: string | null;
-  success_metrics?: BoardUpdateSuccessMetrics;
-  target_date?: string | null;
+  gateway_id?: string | null;
   goal_confirmed?: boolean | null;
   goal_source?: string | null;
+  name?: string | null;
+  objective?: string | null;
+  slug?: string | null;
+  success_metrics?: BoardUpdateSuccessMetrics;
+  target_date?: string | null;
 }
