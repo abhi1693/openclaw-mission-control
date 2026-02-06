@@ -15,10 +15,7 @@ import {
   useUser as clerkUseUser,
 } from "@clerk/nextjs";
 
-import type {
-  SignInButtonProps,
-  SignOutButtonProps,
-} from "@clerk/nextjs";
+import type { ComponentProps } from "react";
 
 export function isClerkEnabled(): boolean {
   // Invariant: Clerk is disabled ONLY when the publishable key is absent.
@@ -38,12 +35,12 @@ export function SignedOut(props: { children: ReactNode }) {
 }
 
 // Keep the same prop surface as Clerk components so call sites don't need edits.
-export function SignInButton(props: SignInButtonProps) {
+export function SignInButton(props: ComponentProps<typeof ClerkSignInButton>) {
   if (!isClerkEnabled()) return null;
   return <ClerkSignInButton {...props} />;
 }
 
-export function SignOutButton(props: SignOutButtonProps) {
+export function SignOutButton(props: ComponentProps<typeof ClerkSignOutButton>) {
   if (!isClerkEnabled()) return null;
   return <ClerkSignOutButton {...props} />;
 }
