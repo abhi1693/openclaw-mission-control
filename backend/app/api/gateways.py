@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.deps import require_admin_auth
 from app.core.agent_tokens import generate_agent_token, hash_agent_token
 from app.core.auth import AuthContext, get_auth_context
 from app.core.time import utcnow
@@ -16,9 +17,15 @@ from app.integrations.openclaw_gateway import OpenClawGatewayError, ensure_sessi
 from app.models.agents import Agent
 from app.models.gateways import Gateway
 from app.schemas.common import OkResponse
-from app.schemas.gateways import GatewayCreate, GatewayRead, GatewayUpdate
+from app.schemas.gateways import (
+    GatewayCreate,
+    GatewayRead,
+    GatewayTemplatesSyncResult,
+    GatewayUpdate,
+)
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.agent_provisioning import DEFAULT_HEARTBEAT_CONFIG, provision_main_agent
+from app.services.template_sync import sync_gateway_templates as sync_gateway_templates_service
 
 router = APIRouter(prefix="/gateways", tags=["gateways"])
 
@@ -184,6 +191,32 @@ async def update_gateway(
         action="update",
     )
     return gateway
+
+
+@router.post("/{gateway_id}/templates/sync", response_model=GatewayTemplatesSyncResult)
+async def sync_gateway_templates(
+    gateway_id: UUID,
+    include_main: bool = Query(default=True),
+    reset_sessions: bool = Query(default=False),
+    rotate_tokens: bool = Query(default=False),
+    force_bootstrap: bool = Query(default=False),
+    board_id: UUID | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+    auth: AuthContext = Depends(require_admin_auth),
+) -> GatewayTemplatesSyncResult:
+    gateway = await session.get(Gateway, gateway_id)
+    if gateway is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gateway not found")
+    return await sync_gateway_templates_service(
+        session,
+        gateway,
+        user=auth.user,
+        include_main=include_main,
+        reset_sessions=reset_sessions,
+        rotate_tokens=rotate_tokens,
+        force_bootstrap=force_bootstrap,
+        board_id=board_id,
+    )
 
 
 @router.delete("/{gateway_id}", response_model=OkResponse)

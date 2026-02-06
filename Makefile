@@ -89,5 +89,10 @@ frontend-build: ## Build frontend (next build)
 api-gen: ## Regenerate TS API client (requires backend running at 127.0.0.1:8000)
 	cd $(FRONTEND_DIR) && npm run api:gen
 
+.PHONY: backend-templates-sync
+backend-templates-sync: ## Sync templates to existing gateway agents (usage: make backend-templates-sync GATEWAY_ID=<uuid> SYNC_ARGS="--reset-sessions")
+	@if [ -z "$(GATEWAY_ID)" ]; then echo "GATEWAY_ID is required (uuid)"; exit 1; fi
+	cd $(BACKEND_DIR) && uv run python scripts/sync_gateway_templates.py --gateway-id "$(GATEWAY_ID)" $(SYNC_ARGS)
+
 .PHONY: check
 check: lint typecheck test build ## Run lint + typecheck + tests + build

@@ -55,7 +55,12 @@ DEFAULT_GATEWAY_FILES = frozenset(
 
 # These files are intended to evolve within the agent workspace. Provision them if missing,
 # but avoid overwriting existing content during updates.
-PRESERVE_AGENT_EDITABLE_FILES = frozenset({"SELF.md", "AUTONOMY.md"})
+#
+# Examples:
+# - SELF.md: evolving identity/preferences
+# - USER.md: human-provided context + lead intake notes
+# - MEMORY.md: curated long-term memory (consolidated)
+PRESERVE_AGENT_EDITABLE_FILES = frozenset({"SELF.md", "USER.md", "MEMORY.md"})
 
 HEARTBEAT_LEAD_TEMPLATE = "HEARTBEAT_LEAD.md"
 HEARTBEAT_AGENT_TEMPLATE = "HEARTBEAT_AGENT.md"

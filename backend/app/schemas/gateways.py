@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import field_validator
-from sqlmodel import SQLModel
+from sqlmodel import Field, SQLModel
 
 
 class GatewayBase(SQLModel):
@@ -52,3 +52,20 @@ class GatewayRead(GatewayBase):
     token: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class GatewayTemplatesSyncError(SQLModel):
+    agent_id: UUID | None = None
+    agent_name: str | None = None
+    board_id: UUID | None = None
+    message: str
+
+
+class GatewayTemplatesSyncResult(SQLModel):
+    gateway_id: UUID
+    include_main: bool
+    reset_sessions: bool
+    agents_updated: int
+    agents_skipped: int
+    main_updated: bool
+    errors: list[GatewayTemplatesSyncError] = Field(default_factory=list)
