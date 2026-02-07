@@ -26,4 +26,3 @@ def test_search_souls_matches_handle_or_slug() -> None:
     ]
     assert search_souls(refs, query="writer", limit=20) == [refs[1]]
     assert search_souls(refs, query="thedaviddias", limit=20) == [refs[0], refs[1]]
-

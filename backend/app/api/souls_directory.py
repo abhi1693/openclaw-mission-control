@@ -71,4 +71,3 @@ async def get_markdown(
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return SoulsDirectoryMarkdownResponse(handle=safe_handle, slug=safe_slug, content=content)
-

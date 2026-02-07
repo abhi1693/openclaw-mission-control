@@ -18,4 +18,3 @@ class SoulsDirectoryMarkdownResponse(BaseModel):
     handle: str
     slug: str
     content: str
-
