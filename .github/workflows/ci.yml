@@ -83,3 +83,45 @@ jobs:
           path: |
             backend/coverage.xml
             frontend/coverage/**
+
+  e2e:
+    # Runs only when a Cypress suite exists in the repo.
+    # This avoids “orphan” e2e tests: as soon as Cypress is added, CI will start running it.
+    if: ${{ hashFiles('**/cypress.config.*') != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: make frontend-sync
+
+      - name: Run Cypress e2e
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_JWKS_URL: ${{ vars.CLERK_JWKS_URL }}
+        run: |
+          echo "Cypress detected (cypress.config.* present)."
+          echo "If this job fails because there is no e2e command yet, add a canonical Makefile target (e.g. 'make frontend-e2e') and call it here."
+          cd frontend
+          npm run e2e
+
+      - name: Upload Cypress artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-artifacts
+          if-no-files-found: ignore
+          path: |
+            frontend/cypress/screenshots/**
+            frontend/cypress/videos/**

@@ -131,6 +131,14 @@ Open http://localhost:3000.
 
 ## Common commands
 
+### CI test suites (canonical commands)
+
+CI (`.github/workflows/ci.yml`) runs these suites on PRs:
+
+- **Backend**: `make backend-coverage` (includes `pytest` + coverage artifacts)
+- **Frontend**: `make frontend-test` (Vitest + coverage)
+- **E2E (Cypress)**: will run automatically when a `cypress.config.*` is added to the repo (job `e2e`).
+
 ### Coverage policy
 
 CI enforces a **scoped 100% coverage gate** (statements + branches) for a small set of unit-testable modules.
