@@ -28,7 +28,8 @@ ENV NODE_ENV=production
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
 
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
+# `public/` is optional in Next.js apps; repo may not have it.
+# Avoid failing the build when the directory is absent.
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/next.config.ts ./next.config.ts

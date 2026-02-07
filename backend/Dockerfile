@@ -20,7 +20,8 @@ ENV PATH="/root/.local/bin:${PATH}"
 FROM base AS deps
 
 # Copy only dependency metadata first for better build caching
-COPY pyproject.toml uv.lock ./
+# NOTE: compose builds backend with repo-root context, so files live under /backend.
+COPY backend/pyproject.toml backend/uv.lock ./
 
 # Create venv and sync deps (including runtime)
 RUN uv sync --frozen --no-dev
