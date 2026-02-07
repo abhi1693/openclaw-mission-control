@@ -10,7 +10,8 @@
     "test": "vitest run --passWithNoTests --coverage",
     "test:watch": "vitest",
     "dev:lan": "next dev --hostname 0.0.0.0 --port 3000",
-    "api:gen": "orval --config ./orval.config.ts"
+    "api:gen": "orval --config ./orval.config.ts",
+    "e2e": "cypress run"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.37.1",

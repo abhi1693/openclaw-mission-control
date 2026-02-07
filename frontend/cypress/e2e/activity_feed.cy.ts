@@ -3,19 +3,35 @@
 describe("/activity feed", () => {
   const apiBase = "**/api/v1";
 
+  const loginEmail = "jane+clerk_test@example.com";
+  const loginOtp = "424242";
+
+  function signInViaClerk() {
+    // Triggers our Clerk modal.
+    cy.get('[data-testid="sign-in-trigger"]').click();
+
+    // Clerk modal: email/identifier step.
+    // (Selectors may need adjustment if Clerk changes markup; we keep them broad.)
+    cy.get('input[name="identifier"], input[type="email"]').first().type(loginEmail);
+    cy.contains('button', /continue|sign in/i).click();
+
+    // OTP step.
+    cy.get('input[name="code"], input[inputmode="numeric"]').first().type(loginOtp);
+    cy.contains('button', /verify|continue|sign in/i).click();
+
+    // Wait for the app to show signed-in UI.
+    cy.contains(/live feed/i).should("be.visible");
+  }
+
   function stubStreamEmpty() {
     // Return a minimal SSE response that ends immediately.
-    cy.intercept(
-      "GET",
-      `${apiBase}/activity/task-comments/stream*`,
-      {
-        statusCode: 200,
-        headers: {
-          "content-type": "text/event-stream",
-        },
-        body: "",
+    cy.intercept("GET", `${apiBase}/activity/task-comments/stream*`, {
+      statusCode: 200,
+      headers: {
+        "content-type": "text/event-stream",
       },
-    ).as("activityStream");
+      body: "",
+    }).as("activityStream");
   }
 
   it("happy path: renders task comment cards", () => {
@@ -57,6 +73,10 @@ describe("/activity feed", () => {
       },
     });
 
+    // Signed-out state should show our sign-in trigger.
+    cy.contains(/sign in to view the feed/i).should("be.visible");
+    signInViaClerk();
+
     cy.wait("@activityList");
 
     cy.contains(/live feed/i).should("be.visible");
@@ -74,6 +94,9 @@ describe("/activity feed", () => {
     stubStreamEmpty();
 
     cy.visit("/activity");
+    cy.contains(/sign in to view the feed/i).should("be.visible");
+    signInViaClerk();
+
     cy.wait("@activityList");
 
     cy.contains(/waiting for new comments/i).should("be.visible");
@@ -88,6 +111,9 @@ describe("/activity feed", () => {
     stubStreamEmpty();
 
     cy.visit("/activity");
+    cy.contains(/sign in to view the feed/i).should("be.visible");
+    signInViaClerk();
+
     cy.wait("@activityList");
 
     // UI uses query.error.message or fallback.

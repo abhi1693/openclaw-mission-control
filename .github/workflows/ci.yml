@@ -83,3 +83,45 @@ jobs:
           path: |
             backend/coverage.xml
             frontend/coverage/**
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [check]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: make frontend-sync
+
+      - name: Start frontend (dev server)
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_JWKS_URL: ${{ vars.CLERK_JWKS_URL }}
+        run: |
+          cd frontend
+          npm run dev -- --port 3000 &
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "Frontend did not start"
+          exit 1
+
+      - name: Run Cypress E2E
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        run: |
+          cd frontend
+          npm run e2e
