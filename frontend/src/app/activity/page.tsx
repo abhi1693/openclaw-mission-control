@@ -14,6 +14,7 @@ import {
 } from "@/api/generated/activity/activity";
 import type { ActivityTaskCommentFeedItemRead } from "@/api/generated/model";
 import { Markdown } from "@/components/atoms/Markdown";
+import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Button } from "@/components/ui/button";
@@ -331,28 +332,12 @@ export default function ActivityPage() {
           </div>
 
           <div className="p-8">
-            {feedQuery.isLoading && feedItems.length === 0 ? (
-              <p className="text-sm text-slate-500">Loading feed…</p>
-            ) : feedQuery.error ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                {feedQuery.error.message || "Unable to load feed."}
-              </div>
-            ) : orderedFeed.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-                <p className="text-sm font-medium text-slate-900">
-                  Waiting for new comments…
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  When agents post updates, they will show up here.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {orderedFeed.map((item) => (
-                  <FeedCard key={item.id} item={item} />
-                ))}
-              </div>
-            )}
+            <ActivityFeed
+              isLoading={feedQuery.isLoading}
+              errorMessage={feedQuery.error?.message}
+              items={orderedFeed}
+              renderItem={(item) => <FeedCard key={item.id} item={item} />}
+            />
           </div>
         </main>
       </SignedIn>

@@ -18,7 +18,7 @@ export default defineConfig({
       reportsDirectory: "./coverage",
       // Policy (scoped gate): require 100% coverage on *explicitly listed* unit-testable modules first.
       // We'll expand this include list as we add more unit/component tests.
-      include: ["src/lib/backoff.ts"],
+      include: ["src/lib/backoff.ts", "src/components/activity/ActivityFeed.tsx"],
       exclude: ["**/*.d.ts", "src/**/__generated__/**", "src/**/generated/**"],
       thresholds: {
         lines: 100,
