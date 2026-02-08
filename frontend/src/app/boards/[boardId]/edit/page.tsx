@@ -333,7 +333,6 @@ export default function EditBoardPage() {
                   Update board settings and gateway.
                 </p>
               </div>
-            )}
             </div>
 
             <div className="p-8">
@@ -347,179 +346,181 @@ export default function EditBoardPage() {
                     onSubmit={handleSubmit}
                     className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
                   >
-                  {resolvedBoardType !== "general" &&
-                  baseBoard &&
-                  !(baseBoard.goal_confirmed ?? false) ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-amber-900">
-                          Goal needs confirmation
-                        </p>
-                        <p className="mt-1 text-xs text-amber-800/80">
-                          Start onboarding to draft an objective and success
-                          metrics.
+                    {resolvedBoardType !== "general" &&
+                    baseBoard &&
+                    !(baseBoard.goal_confirmed ?? false) ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-amber-900">
+                            Goal needs confirmation
+                          </p>
+                          <p className="mt-1 text-xs text-amber-800/80">
+                            Start onboarding to draft an objective and success
+                            metrics.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => setIsOnboardingOpen(true)}
+                          disabled={isLoading || !baseBoard}
+                        >
+                          Start onboarding
+                        </Button>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-900">
+                          Board name <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          value={resolvedName}
+                          onChange={(event) => setName(event.target.value)}
+                          placeholder="Board name"
+                          disabled={isLoading || !baseBoard}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-900">
+                          Gateway <span className="text-red-500">*</span>
+                        </label>
+                        <SearchableSelect
+                          ariaLabel="Select gateway"
+                          value={displayGatewayId}
+                          onValueChange={setGatewayId}
+                          options={gatewayOptions}
+                          placeholder="Select gateway"
+                          searchPlaceholder="Search gateways..."
+                          emptyMessage="No gateways found."
+                          triggerClassName="w-full h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          contentClassName="rounded-xl border border-slate-200 shadow-lg"
+                          itemClassName="px-4 py-3 text-sm text-slate-700 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-900">
+                          Board type
+                        </label>
+                        <Select
+                          value={resolvedBoardType}
+                          onValueChange={setBoardType}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select board type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="goal">Goal</SelectItem>
+                            <SelectItem value="general">General</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-900">
+                          Board group
+                        </label>
+                        <SearchableSelect
+                          ariaLabel="Select board group"
+                          value={resolvedBoardGroupId}
+                          onValueChange={setBoardGroupId}
+                          options={groupOptions}
+                          placeholder="No group"
+                          searchPlaceholder="Search groups..."
+                          emptyMessage="No groups found."
+                          triggerClassName="w-full h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          contentClassName="rounded-xl border border-slate-200 shadow-lg"
+                          itemClassName="px-4 py-3 text-sm text-slate-700 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
+                          disabled={isLoading}
+                        />
+                        <p className="text-xs text-slate-500">
+                          Boards in the same group can share cross-board context
+                          for agents.
                         </p>
                       </div>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => setIsOnboardingOpen(true)}
-                        disabled={isLoading || !baseBoard}
-                      >
-                        Start onboarding
-                      </Button>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-900">
+                          Target date
+                        </label>
+                        <Input
+                          type="date"
+                          value={resolvedTargetDate}
+                          onChange={(event) =>
+                            setTargetDate(event.target.value)
+                          }
+                          disabled={isLoading}
+                        />
+                      </div>
                     </div>
-                  ) : null}
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-900">
-                        Board name <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        value={resolvedName}
-                        onChange={(event) => setName(event.target.value)}
-                        placeholder="Board name"
-                        disabled={isLoading || !baseBoard}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-900">
-                        Gateway <span className="text-red-500">*</span>
-                      </label>
-                      <SearchableSelect
-                        ariaLabel="Select gateway"
-                        value={displayGatewayId}
-                        onValueChange={setGatewayId}
-                        options={gatewayOptions}
-                        placeholder="Select gateway"
-                        searchPlaceholder="Search gateways..."
-                        emptyMessage="No gateways found."
-                        triggerClassName="w-full h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        contentClassName="rounded-xl border border-slate-200 shadow-lg"
-                        itemClassName="px-4 py-3 text-sm text-slate-700 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
-                      />
-                    </div>
-                  </div>
 
-                  <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-900">
-                        Board type
+                        Objective
                       </label>
-                      <Select
-                        value={resolvedBoardType}
-                        onValueChange={setBoardType}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select board type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="goal">Goal</SelectItem>
-                          <SelectItem value="general">General</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Textarea
+                        value={resolvedObjective}
+                        onChange={(event) => setObjective(event.target.value)}
+                        placeholder="What should this board achieve?"
+                        className="min-h-[120px]"
+                        disabled={isLoading}
+                      />
                     </div>
+
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-900">
-                        Board group
+                        Success metrics (JSON)
                       </label>
-                      <SearchableSelect
-                        ariaLabel="Select board group"
-                        value={resolvedBoardGroupId}
-                        onValueChange={setBoardGroupId}
-                        options={groupOptions}
-                        placeholder="No group"
-                        searchPlaceholder="Search groups..."
-                        emptyMessage="No groups found."
-                        triggerClassName="w-full h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        contentClassName="rounded-xl border border-slate-200 shadow-lg"
-                        itemClassName="px-4 py-3 text-sm text-slate-700 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
+                      <Textarea
+                        value={resolvedSuccessMetrics}
+                        onChange={(event) =>
+                          setSuccessMetrics(event.target.value)
+                        }
+                        placeholder='e.g. { "target": "Launch by week 2" }'
+                        className="min-h-[140px] font-mono text-xs"
                         disabled={isLoading}
                       />
                       <p className="text-xs text-slate-500">
-                        Boards in the same group can share cross-board context
-                        for agents.
+                        Add key outcomes so the lead agent can measure progress.
                       </p>
+                      {metricsError ? (
+                        <p className="text-xs text-red-500">{metricsError}</p>
+                      ) : null}
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-900">
-                        Target date
-                      </label>
-                      <Input
-                        type="date"
-                        value={resolvedTargetDate}
-                        onChange={(event) => setTargetDate(event.target.value)}
-                        disabled={isLoading}
-                      />
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-900">
-                      Objective
-                    </label>
-                    <Textarea
-                      value={resolvedObjective}
-                      onChange={(event) => setObjective(event.target.value)}
-                      placeholder="What should this board achieve?"
-                      className="min-h-[120px]"
-                      disabled={isLoading}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-900">
-                      Success metrics (JSON)
-                    </label>
-                    <Textarea
-                      value={resolvedSuccessMetrics}
-                      onChange={(event) =>
-                        setSuccessMetrics(event.target.value)
-                      }
-                      placeholder='e.g. { "target": "Launch by week 2" }'
-                      className="min-h-[140px] font-mono text-xs"
-                      disabled={isLoading}
-                    />
-                    <p className="text-xs text-slate-500">
-                      Add key outcomes so the lead agent can measure progress.
-                    </p>
-                    {metricsError ? (
-                      <p className="text-xs text-red-500">{metricsError}</p>
+                    {gateways.length === 0 ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        <p>
+                          No gateways available. Create one in Gateways to
+                          continue.
+                        </p>
+                      </div>
                     ) : null}
-                  </div>
 
-                  {gateways.length === 0 ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      <p>
-                        No gateways available. Create one in Gateways to
-                        continue.
-                      </p>
+                    {errorMessage ? (
+                      <p className="text-sm text-red-500">{errorMessage}</p>
+                    ) : null}
+
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => router.push(`/boards/${boardId}`)}
+                        disabled={isLoading}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={isLoading || !baseBoard || !isFormReady}
+                      >
+                        {isLoading ? "Saving…" : "Save changes"}
+                      </Button>
                     </div>
-                  ) : null}
-
-                  {errorMessage ? (
-                    <p className="text-sm text-red-500">{errorMessage}</p>
-                  ) : null}
-
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => router.push(`/boards/${boardId}`)}
-                      disabled={isLoading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isLoading || !baseBoard || !isFormReady}
-                    >
-                      {isLoading ? "Saving…" : "Save changes"}
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            )}
+                  </form>
+                </div>
+              )}
             </div>
           </main>
         </SignedIn>
