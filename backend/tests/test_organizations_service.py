@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -304,4 +304,3 @@ async def test_apply_invite_to_member_upgrades_role_and_merges_access_rows(monke
     assert member.role == "admin"
     # should have added a new OrganizationBoardAccess row
     assert any(isinstance(x, OrganizationBoardAccess) for x in session.added)
-
