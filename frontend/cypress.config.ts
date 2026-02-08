@@ -3,7 +3,8 @@ import { clerkSetup } from "@clerk/testing/cypress";
 
 export default defineConfig({
   env: {
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     // Optional overrides.
     CLERK_ORIGIN: process.env.CYPRESS_CLERK_ORIGIN,
     CLERK_TEST_EMAIL: process.env.CYPRESS_CLERK_TEST_EMAIL,

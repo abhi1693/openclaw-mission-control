@@ -24,7 +24,11 @@ from app.models.boards import Board
 from app.models.tasks import Task
 from app.schemas.activity_events import ActivityEventRead, ActivityTaskCommentFeedItemRead
 from app.schemas.pagination import DefaultLimitOffsetPage
-from app.services.organizations import get_active_membership, list_accessible_board_ids
+from app.services.organizations import (
+    OrganizationContext,
+    get_active_membership,
+    list_accessible_board_ids,
+)
 
 router = APIRouter(prefix="/activity", tags=["activity"])
 
@@ -134,7 +138,7 @@ async def list_activity(
 async def list_task_comment_feed(
     board_id: UUID | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> DefaultLimitOffsetPage[ActivityTaskCommentFeedItemRead]:
     statement = (
         select(ActivityEvent, Task, Board, Agent)
@@ -168,7 +172,7 @@ async def stream_task_comment_feed(
     board_id: UUID | None = Query(default=None),
     since: str | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> EventSourceResponse:
     since_dt = _parse_since(since) or utcnow()
     board_ids = await list_accessible_board_ids(session, member=ctx.member, write=False)

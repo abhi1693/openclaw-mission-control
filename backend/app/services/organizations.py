@@ -5,7 +5,8 @@ from typing import Iterable
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import delete, func, or_
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -267,7 +268,7 @@ async def require_board_access(
     return member
 
 
-def board_access_filter(member: OrganizationMember, *, write: bool) -> object:
+def board_access_filter(member: OrganizationMember, *, write: bool) -> ColumnElement[bool]:
     if write and member_all_boards_write(member):
         return col(Board.organization_id) == member.organization_id
     if not write and member_all_boards_read(member):
@@ -330,9 +331,9 @@ async def apply_member_access_update(
     session.add(member)
 
     await session.execute(
-        OrganizationBoardAccess.__table__.delete().where(
+        delete(OrganizationBoardAccess).where(
             col(OrganizationBoardAccess.organization_member_id) == member.id
-        )
+        ),
     )
 
     if update.all_boards_read or update.all_boards_write:
@@ -360,9 +361,9 @@ async def apply_invite_board_access(
     entries: Iterable[OrganizationBoardAccessSpec],
 ) -> None:
     await session.execute(
-        OrganizationInviteBoardAccess.__table__.delete().where(
+        delete(OrganizationInviteBoardAccess).where(
             col(OrganizationInviteBoardAccess.organization_invite_id) == invite.id
-        )
+        ),
     )
     if invite.all_boards_read or invite.all_boards_write:
         return
