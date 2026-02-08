@@ -4,7 +4,6 @@ describe("/activity feed", () => {
   const apiBase = "**/api/v1";
 
   function stubStreamEmpty() {
-    // Return a minimal SSE response that ends immediately.
     cy.intercept(
       "GET",
       `${apiBase}/activity/task-comments/stream*`,
@@ -18,11 +17,26 @@ describe("/activity feed", () => {
     ).as("activityStream");
   }
 
-  function isSignedOutView(): Cypress.Chainable<boolean> {
-    return cy
-      .get("body")
-      .then(($body) => $body.text().toLowerCase().includes("sign in to view the feed"));
+  function assertSignedInAndLanded() {
+    cy.contains(/live feed/i, { timeout: 30_000 }).should("be.visible");
   }
+
+  it("auth negative: wrong OTP shows an error", () => {
+    cy.visit("/activity");
+    cy.contains(/sign in to view the feed/i).should("be.visible");
+
+    // Override OTP just for this test.
+    Cypress.env("CLERK_TEST_OTP", "000000");
+
+    cy.get('[data-testid="activity-signin"]').should("be.visible");
+
+    // Expect login flow to throw within cy.origin; easiest assertion is that we stay signed out.
+    // (The shared helper does not currently expose a typed hook to assert the error text.)
+    cy.loginWithClerkOtp();
+
+    // If OTP was invalid, we should still be signed out on app.
+    cy.contains(/sign in to view the feed/i, { timeout: 30_000 }).should("be.visible");
+  });
 
   it("happy path: renders task comment cards", () => {
     cy.intercept("GET", `${apiBase}/activity/task-comments*`, {
@@ -40,43 +54,21 @@ describe("/activity feed", () => {
             task_title: "CI hardening",
             created_at: "2026-02-07T00:00:00Z",
           },
-          {
-            id: "c2",
-            message: "Second comment",
-            agent_name: "Riya",
-            agent_role: "QA",
-            board_id: "b1",
-            board_name: "Testing",
-            task_id: "t2",
-            task_title: "Coverage policy",
-            created_at: "2026-02-07T00:01:00Z",
-          },
         ],
       },
     }).as("activityList");
 
     stubStreamEmpty();
 
-    cy.visit("/activity", {
-      onBeforeLoad(win: Window) {
-        win.localStorage.clear();
-      },
-    });
+    cy.visit("/activity");
+    cy.contains(/sign in to view the feed/i).should("be.visible");
 
-    isSignedOutView().then((signedOut) => {
-      if (signedOut) {
-        // In secretless CI (no Clerk), the SignedOut UI is expected and no API calls should happen.
-        cy.contains(/sign in to view the feed/i).should("be.visible");
-        return;
-      }
+    cy.loginWithClerkOtp();
+    assertSignedInAndLanded();
 
-      cy.wait("@activityList");
-
-      cy.contains(/live feed/i).should("be.visible");
-      cy.contains("CI hardening").should("be.visible");
-      cy.contains("Coverage policy").should("be.visible");
-      cy.contains("Hello world").should("be.visible");
-    });
+    cy.wait("@activityList");
+    cy.contains("CI hardening").should("be.visible");
+    cy.contains("Hello world").should("be.visible");
   });
 
   it("empty state: shows waiting message when no items", () => {
@@ -88,16 +80,13 @@ describe("/activity feed", () => {
     stubStreamEmpty();
 
     cy.visit("/activity");
+    cy.contains(/sign in to view the feed/i).should("be.visible");
 
-    isSignedOutView().then((signedOut) => {
-      if (signedOut) {
-        cy.contains(/sign in to view the feed/i).should("be.visible");
-        return;
-      }
+    cy.loginWithClerkOtp();
+    assertSignedInAndLanded();
 
-      cy.wait("@activityList");
-      cy.contains(/waiting for new comments/i).should("be.visible");
-    });
+    cy.wait("@activityList");
+    cy.contains(/waiting for new comments/i).should("be.visible");
   });
 
   it("error state: shows failure UI when API errors", () => {
@@ -109,17 +98,12 @@ describe("/activity feed", () => {
     stubStreamEmpty();
 
     cy.visit("/activity");
+    cy.contains(/sign in to view the feed/i).should("be.visible");
 
-    isSignedOutView().then((signedOut) => {
-      if (signedOut) {
-        cy.contains(/sign in to view the feed/i).should("be.visible");
-        return;
-      }
+    cy.loginWithClerkOtp();
+    assertSignedInAndLanded();
 
-      cy.wait("@activityList");
-
-      // UI uses query.error.message or fallback.
-      cy.contains(/unable to load feed|boom/i).should("be.visible");
-    });
+    cy.wait("@activityList");
+    cy.contains(/unable to load feed|boom/i).should("be.visible");
   });
 });

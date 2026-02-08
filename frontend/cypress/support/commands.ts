@@ -6,15 +6,29 @@ type ClerkOtpLoginOptions = {
   otp: string;
 };
 
-function requireEnv(name: string): string {
+function getEnv(name: string, fallback?: string): string {
   const value = Cypress.env(name) as string | undefined;
-  if (!value) {
-    throw new Error(
-      `Missing Cypress env var ${name}. ` +
-        `Set it via CYPRESS_${name}=... in CI/local before running Clerk login tests.`,
-    );
-  }
-  return value;
+  if (value) return value;
+  if (fallback !== undefined) return fallback;
+  throw new Error(
+    `Missing Cypress env var ${name}. ` +
+      `Set it via CYPRESS_${name}=... in CI/local before running Clerk login tests.`,
+  );
+}
+
+function clerkOriginFromPublishableKey(): string {
+  const key = getEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
+
+  // pk_test_<base64(domain$)> OR pk_live_<...>
+  const m = /^pk_(?:test|live)_(.+)$/.exec(key);
+  if (!m) throw new Error(`Unexpected Clerk publishable key format: ${key}`);
+
+  const decoded = atob(m[1]); // e.g. beloved-ghost-73.clerk.accounts.dev$
+  const domain = decoded.replace(/\$$/, "");
+
+  // Some flows redirect to *.accounts.dev (no clerk. subdomain)
+  const normalized = domain.replace(".clerk.accounts.dev", ".accounts.dev");
+  return `https://${normalized}`;
 }
 
 function normalizeOrigin(value: string): string {
@@ -22,62 +36,72 @@ function normalizeOrigin(value: string): string {
     const url = new URL(value);
     return url.origin;
   } catch {
-    // allow providing just an origin-like string
     return value.replace(/\/$/, "");
   }
 }
 
 Cypress.Commands.add("loginWithClerkOtp", () => {
-  const clerkOrigin = normalizeOrigin(requireEnv("CLERK_ORIGIN"));
-  const email = requireEnv("CLERK_TEST_EMAIL");
-  const otp = requireEnv("CLERK_TEST_OTP");
+  const clerkOrigin = normalizeOrigin(
+    getEnv("CLERK_ORIGIN", clerkOriginFromPublishableKey()),
+  );
+  const email = getEnv("CLERK_TEST_EMAIL", "jane+clerk_test@example.com");
+  const otp = getEnv("CLERK_TEST_OTP", "424242");
 
   const opts: ClerkOtpLoginOptions = { clerkOrigin, email, otp };
 
-  // Trigger the modal from the app first.
-  cy.get('[data-testid="activity-signin"]').click({ force: true });
+  // Navigate to a dedicated sign-in route that renders Clerk SignIn top-level.
+  // Cypress cannot reliably drive Clerk modal/iframe flows.
+  cy.visit("/sign-in");
 
-  // The Clerk UI is typically hosted on a different origin (clerk.accounts.dev / clerk.com).
-  // Use cy.origin to drive the UI in Chrome.
-  cy.origin(
-    opts.clerkOrigin,
-    { args: { email: opts.email, otp: opts.otp } },
-    ({ email, otp }) => {
-      // Email / identifier input
-      cy.get('input[type="email"], input[name="identifier"], input[autocomplete="email"]', {
-        timeout: 20_000,
-      })
-        .first()
-        .clear()
-        .type(email, { delay: 10 });
+  // Clerk SignIn can render on our app origin (localhost) or redirect to Clerk-hosted UI,
+  // depending on config/version. Handle both.
+  const fillOtpFlow = (email: string, otp: string) => {
+    cy.get(
+      'input[type="email"], input[name="identifier"], input[autocomplete="email"]',
+      { timeout: 20_000 },
+    )
+      .first()
+      .clear()
+      .type(email, { delay: 10 });
 
-      // Submit / continue
-      cy.get('button[type="submit"], button')
-        .contains(/continue|sign in|send|next/i)
-        .click({ force: true });
+    cy.get('button[type="submit"], button')
+      .contains(/continue|sign in|send|next/i)
+      .click({ force: true });
 
-      // OTP input - Clerk commonly uses autocomplete=one-time-code
-      cy.get('input[autocomplete="one-time-code"], input[name*="code"], input[inputmode="numeric"]', {
-        timeout: 20_000,
-      })
-        .first()
-        .clear()
-        .type(otp, { delay: 10 });
+    cy.get(
+      'input[autocomplete="one-time-code"], input[name*="code"], input[inputmode="numeric"]',
+      { timeout: 20_000 },
+    )
+      .first()
+      .clear()
+      .type(otp, { delay: 10 });
 
-      // Final submit (some flows auto-submit)
-      cy.get("body").then(($body) => {
-        const hasSubmit = $body
-          .find('button[type="submit"], button')
-          .toArray()
-          .some((el) => /verify|continue|sign in|confirm/i.test(el.textContent || ""));
-        if (hasSubmit) {
-          cy.get('button[type="submit"], button')
-            .contains(/verify|continue|sign in|confirm/i)
-            .click({ force: true });
-        }
-      });
-    },
-  );
+    cy.get("body").then(($body) => {
+      const hasSubmit = $body
+        .find('button[type="submit"], button')
+        .toArray()
+        .some((el) => /verify|continue|sign in|confirm/i.test(el.textContent || ""));
+      if (hasSubmit) {
+        cy.get('button[type="submit"], button')
+          .contains(/verify|continue|sign in|confirm/i)
+          .click({ force: true });
+      }
+    });
+  };
+
+  cy.location("origin", { timeout: 20_000 }).then((origin) => {
+    if (origin === opts.clerkOrigin) {
+      cy.origin(
+        opts.clerkOrigin,
+        { args: { email: opts.email, otp: opts.otp } },
+        ({ email, otp }) => {
+          fillOtpFlow(email, otp);
+        },
+      );
+    } else {
+      fillOtpFlow(opts.email, opts.otp);
+    }
+  });
 });
 
 declare global {
@@ -85,12 +109,13 @@ declare global {
   namespace Cypress {
     interface Chainable {
       /**
-       * Logs in via the real Clerk modal using deterministic OTP credentials.
+       * Logs in via the real Clerk SignIn page using deterministic OTP credentials.
        *
-       * Requires env vars:
-       * - CYPRESS_CLERK_ORIGIN (e.g. https://<subdomain>.clerk.accounts.dev)
-       * - CYPRESS_CLERK_TEST_EMAIL
-       * - CYPRESS_CLERK_TEST_OTP
+       * Optional env vars (CYPRESS_*):
+       * - CLERK_ORIGIN (e.g. https://<subdomain>.accounts.dev)
+       * - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (used to derive origin when CLERK_ORIGIN not set)
+       * - CLERK_TEST_EMAIL (default: jane+clerk_test@example.com)
+       * - CLERK_TEST_OTP (default: 424242)
        */
       loginWithClerkOtp(): Chainable<void>;
     }

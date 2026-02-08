@@ -298,7 +298,7 @@ export default function ActivityPage() {
           <div className="rounded-xl border border-slate-200 bg-white px-8 py-6 shadow-sm">
             <p className="text-sm text-slate-600">Sign in to view the feed.</p>
             <SignInButton
-              mode="modal"
+              mode="redirect"
               forceRedirectUrl="/activity"
               signUpForceRedirectUrl="/activity"
             >
