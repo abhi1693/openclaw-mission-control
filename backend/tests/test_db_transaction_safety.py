@@ -59,7 +59,7 @@ async def test_get_session_rolls_back_on_dependency_error(monkeypatch: pytest.Mo
     monkeypatch.setattr(db_session, "async_session_maker", _Maker(ctx))
 
     generator = db_session.get_session()
-    yielded = await anext(generator)
+    yielded = await generator.__anext__()
     assert yielded is fake_session
 
     with pytest.raises(RuntimeError, match="boom"):
