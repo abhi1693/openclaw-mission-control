@@ -26,7 +26,7 @@ from app.schemas.metrics import (
     DashboardWipRangeSeries,
     DashboardWipSeriesSet,
 )
-from app.services.organizations import list_accessible_board_ids
+from app.services.organizations import OrganizationContext, list_accessible_board_ids
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -304,7 +304,7 @@ async def _tasks_in_progress(session: AsyncSession, board_ids: list[UUID]) -> in
 async def dashboard_metrics(
     range: Literal["24h", "7d"] = Query(default="24h"),
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> DashboardMetrics:
     primary = _resolve_range(range)
     comparison = _comparison_range(range)

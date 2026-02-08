@@ -5,7 +5,7 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -168,7 +168,7 @@ async def get_my_membership(
     )
     model = _member_to_read(ctx.member, user)
     model.board_access = [
-        OrganizationBoardAccessRead.model_validate(row, from_attributes=True)  # type: ignore[name-defined]
+        OrganizationBoardAccessRead.model_validate(row, from_attributes=True)
         for row in access_rows
     ]
     return model
@@ -216,7 +216,7 @@ async def get_org_member(
     )
     model = _member_to_read(member, user)
     model.board_access = [
-        OrganizationBoardAccessRead.model_validate(row, from_attributes=True)  # type: ignore[name-defined]
+        OrganizationBoardAccessRead.model_validate(row, from_attributes=True)
         for row in access_rows
     ]
     return model
@@ -351,9 +351,9 @@ async def revoke_org_invite(
     if invite is None or invite.organization_id != ctx.organization.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await session.execute(
-        OrganizationInviteBoardAccess.__table__.delete().where(
+        delete(OrganizationInviteBoardAccess).where(
             col(OrganizationInviteBoardAccess.organization_invite_id) == invite.id
-        )
+        ),
     )
     await session.delete(invite)
     await session.commit()

@@ -43,7 +43,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.view_models import BoardGroupSnapshot, BoardSnapshot
 from app.services.board_group_snapshot import build_board_group_snapshot
 from app.services.board_snapshot import build_board_snapshot
-from app.services.organizations import board_access_filter
+from app.services.organizations import OrganizationContext, board_access_filter
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 
@@ -81,7 +81,7 @@ async def _require_gateway(
 
 async def _require_gateway_for_create(
     payload: BoardCreate,
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
     session: AsyncSession = Depends(get_session),
 ) -> Gateway:
     return await _require_gateway(session, payload.gateway_id, organization_id=ctx.organization.id)
@@ -109,7 +109,7 @@ async def _require_board_group(
 
 async def _require_board_group_for_create(
     payload: BoardCreate,
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
     session: AsyncSession = Depends(get_session),
 ) -> BoardGroup | None:
     if payload.board_group_id is None:
@@ -220,7 +220,7 @@ async def list_boards(
     gateway_id: UUID | None = Query(default=None),
     board_group_id: UUID | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> DefaultLimitOffsetPage[BoardRead]:
     statement = select(Board).where(board_access_filter(ctx.member, write=False))
     if gateway_id is not None:
@@ -237,7 +237,7 @@ async def create_board(
     _gateway: Gateway = Depends(_require_gateway_for_create),
     _board_group: BoardGroup | None = Depends(_require_board_group_for_create),
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> Board:
     data = payload.model_dump()
     data["organization_id"] = ctx.organization.id

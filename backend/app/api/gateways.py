@@ -25,6 +25,7 @@ from app.schemas.gateways import (
 )
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.agent_provisioning import DEFAULT_HEARTBEAT_CONFIG, provision_main_agent
+from app.services.organizations import OrganizationContext
 from app.services.template_sync import sync_gateway_templates as sync_gateway_templates_service
 
 router = APIRouter(prefix="/gateways", tags=["gateways"])
@@ -131,7 +132,7 @@ async def _ensure_main_agent(
 @router.get("", response_model=DefaultLimitOffsetPage[GatewayRead])
 async def list_gateways(
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> DefaultLimitOffsetPage[GatewayRead]:
     statement = (
         select(Gateway)
@@ -146,7 +147,7 @@ async def create_gateway(
     payload: GatewayCreate,
     session: AsyncSession = Depends(get_session),
     auth: AuthContext = Depends(get_auth_context),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> Gateway:
     data = payload.model_dump()
     data["organization_id"] = ctx.organization.id
@@ -162,7 +163,7 @@ async def create_gateway(
 async def get_gateway(
     gateway_id: UUID,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> Gateway:
     gateway = await session.get(Gateway, gateway_id)
     if gateway is None or gateway.organization_id != ctx.organization.id:
@@ -176,7 +177,7 @@ async def update_gateway(
     payload: GatewayUpdate,
     session: AsyncSession = Depends(get_session),
     auth: AuthContext = Depends(get_auth_context),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> Gateway:
     gateway = await session.get(Gateway, gateway_id)
     if gateway is None or gateway.organization_id != ctx.organization.id:
@@ -210,7 +211,7 @@ async def sync_gateway_templates(
     board_id: UUID | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
     auth: AuthContext = Depends(get_auth_context),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> GatewayTemplatesSyncResult:
     gateway = await session.get(Gateway, gateway_id)
     if gateway is None or gateway.organization_id != ctx.organization.id:
@@ -231,7 +232,7 @@ async def sync_gateway_templates(
 async def delete_gateway(
     gateway_id: UUID,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> OkResponse:
     gateway = await session.get(Gateway, gateway_id)
     if gateway is None or gateway.organization_id != ctx.organization.id:

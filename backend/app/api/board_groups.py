@@ -18,6 +18,7 @@ from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board
 from app.models.gateways import Gateway
+from app.models.organization_members import OrganizationMember
 from app.schemas.board_group_heartbeat import (
     BoardGroupHeartbeatApply,
     BoardGroupHeartbeatApplyResult,
@@ -29,6 +30,7 @@ from app.schemas.view_models import BoardGroupSnapshot
 from app.services.agent_provisioning import DEFAULT_HEARTBEAT_CONFIG, sync_gateway_agent_heartbeats
 from app.services.board_group_snapshot import build_group_snapshot
 from app.services.organizations import (
+    OrganizationContext,
     board_access_filter,
     get_member,
     is_org_admin,
@@ -49,7 +51,7 @@ async def _require_group_access(
     session: AsyncSession,
     *,
     group_id: UUID,
-    member,
+    member: OrganizationMember,
     write: bool,
 ) -> BoardGroup:
     group = await session.get(BoardGroup, group_id)
@@ -80,7 +82,7 @@ async def _require_group_access(
 @router.get("", response_model=DefaultLimitOffsetPage[BoardGroupRead])
 async def list_board_groups(
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> DefaultLimitOffsetPage[BoardGroupRead]:
     if member_all_boards_read(ctx.member):
         statement = select(BoardGroup).where(col(BoardGroup.organization_id) == ctx.organization.id)
@@ -100,7 +102,7 @@ async def list_board_groups(
 async def create_board_group(
     payload: BoardGroupCreate,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> BoardGroup:
     data = payload.model_dump()
     if not (data.get("slug") or "").strip():
@@ -113,7 +115,7 @@ async def create_board_group(
 async def get_board_group(
     group_id: UUID,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> BoardGroup:
     return await _require_group_access(session, group_id=group_id, member=ctx.member, write=False)
 
@@ -124,7 +126,7 @@ async def get_board_group_snapshot(
     include_done: bool = False,
     per_board_task_limit: int = 5,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_member),
+    ctx: OrganizationContext = Depends(require_org_member),
 ) -> BoardGroupSnapshot:
     group = await _require_group_access(session, group_id=group_id, member=ctx.member, write=False)
     if per_board_task_limit < 0:
@@ -253,7 +255,7 @@ async def update_board_group(
     payload: BoardGroupUpdate,
     group_id: UUID,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> BoardGroup:
     group = await _require_group_access(session, group_id=group_id, member=ctx.member, write=True)
     updates = payload.model_dump(exclude_unset=True)
@@ -269,7 +271,7 @@ async def update_board_group(
 async def delete_board_group(
     group_id: UUID,
     session: AsyncSession = Depends(get_session),
-    ctx=Depends(require_org_admin),
+    ctx: OrganizationContext = Depends(require_org_admin),
 ) -> OkResponse:
     await _require_group_access(session, group_id=group_id, member=ctx.member, write=True)
 
