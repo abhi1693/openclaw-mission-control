@@ -517,7 +517,7 @@ async def create_agent(
     except OpenClawGatewayError as exc:
         _record_instruction_failure(session, agent, str(exc), "provision")
         await session.commit()
-    except Exception as exc:  # pragma: no cover - unexpected provisioning errors
+    except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
         _record_instruction_failure(session, agent, str(exc), "provision")
         await session.commit()
     main_session_keys = await _get_gateway_main_session_keys(session)
@@ -708,7 +708,7 @@ async def update_agent(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Gateway update failed: {exc}",
         ) from exc
-    except Exception as exc:  # pragma: no cover - unexpected provisioning errors
+    except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
         _record_instruction_failure(session, agent, str(exc), "update")
         await session.commit()
         raise HTTPException(
@@ -838,7 +838,7 @@ async def heartbeat_or_create_agent(
         except OpenClawGatewayError as exc:
             _record_instruction_failure(session, agent, str(exc), "provision")
             await session.commit()
-        except Exception as exc:  # pragma: no cover - unexpected provisioning errors
+        except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
             _record_instruction_failure(session, agent, str(exc), "provision")
             await session.commit()
     else:
@@ -890,7 +890,7 @@ async def heartbeat_or_create_agent(
                 except OpenClawGatewayError as exc:
                     _record_instruction_failure(session, agent, str(exc), "provision")
                     await session.commit()
-                except Exception as exc:  # pragma: no cover - unexpected provisioning errors
+                except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
                     _record_instruction_failure(session, agent, str(exc), "provision")
                     await session.commit()
         elif actor.actor_type == "agent" and actor.agent and actor.agent.id != agent.id:
@@ -957,7 +957,7 @@ async def delete_agent(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Gateway cleanup failed: {exc}",
         ) from exc
-    except Exception as exc:  # pragma: no cover - unexpected cleanup errors
+    except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
         _record_instruction_failure(session, agent, str(exc), "delete")
         await session.commit()
         raise HTTPException(
@@ -1022,7 +1022,7 @@ async def delete_agent(
                 config=client_config,
                 deliver=False,
             )
-    except Exception:
+    except (OSError, OpenClawGatewayError, ValueError):
         # Cleanup request is best-effort; deletion already completed.
         pass
     return OkResponse()
