@@ -85,14 +85,23 @@ jobs:
             frontend/coverage/**
 
   e2e:
-    # Run only when a Cypress suite exists in the repo.
-    if: ${{ hashFiles('**/cypress.config.*') != '' }}
     runs-on: ubuntu-latest
     needs: [check]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Skip E2E when Cypress config is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ls frontend/cypress.config.* >/dev/null 2>&1; then
+            echo "Cypress config found; proceeding"
+          else
+            echo "No Cypress config found; skipping e2e job"
+            exit 0
+          fi
 
       - name: Set up Node
         uses: actions/setup-node@v4
