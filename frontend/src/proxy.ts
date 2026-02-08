@@ -12,12 +12,12 @@ const isClerkEnabled = () =>
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)"]);
 
 export default isClerkEnabled()
-  ? clerkMiddleware((auth, req) => {
+  ? clerkMiddleware(async (auth, req) => {
       if (isPublicRoute(req)) return NextResponse.next();
 
-      // Clerk typings in App Router return SessionAuthWithRedirect.
-      // Use redirectToSignIn() instead of protect(). Keep middleware callback sync.
-      const { userId, redirectToSignIn } = auth();
+      // In middleware, `auth()` resolves to a session/auth context.
+      // Use redirectToSignIn() (instead of protect()) for unauthenticated requests.
+      const { userId, redirectToSignIn } = await auth();
       if (!userId) {
         return redirectToSignIn({ returnBackUrl: req.url });
       }
