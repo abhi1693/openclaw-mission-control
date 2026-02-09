@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Per-agent error entry from a gateway template sync operation.
+ */
 export interface GatewayTemplatesSyncError {
   agent_id?: string | null;
   agent_name?: string | null;

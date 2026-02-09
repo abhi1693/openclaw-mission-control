@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Board access specification used in member/invite mutation payloads.
+ */
 export interface OrganizationBoardAccessSpec {
   board_id: string;
   can_read?: boolean;

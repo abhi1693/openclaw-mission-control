@@ -6,6 +6,9 @@
  */
 import type { BoardUpdateSuccessMetrics } from "./boardUpdateSuccessMetrics";
 
+/**
+ * Payload for partial board updates.
+ */
 export interface BoardUpdate {
   name?: string | null;
   slug?: string | null;

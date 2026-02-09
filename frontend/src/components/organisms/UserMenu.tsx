@@ -12,6 +12,7 @@ import {
   LogOut,
   Plus,
   Server,
+  Settings,
   Trello,
 } from "lucide-react";
 
@@ -22,7 +23,17 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-export function UserMenu({ className }: { className?: string }) {
+type UserMenuProps = {
+  className?: string;
+  displayName?: string;
+  displayEmail?: string;
+};
+
+export function UserMenu({
+  className,
+  displayName: displayNameFromDb,
+  displayEmail: displayEmailFromDb,
+}: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const { user } = useUser();
   const isLocalAuth = !!process.env.NEXT_PUBLIC_LOCAL_AUTH_TOKEN;
@@ -34,13 +45,13 @@ export function UserMenu({ className }: { className?: string }) {
   const avatarUrl = isLocalAuth ? null : (user?.imageUrl ?? null);
   const avatarLabel = isLocalAuth
     ? "L"
-    : (user?.firstName?.[0] ?? user?.username?.[0] ?? "U");
+    : (displayNameFromDb?.slice(0, 1).toUpperCase() ?? user?.firstName?.[0] ?? user?.username?.[0] ?? "U");
   const displayName = isLocalAuth
     ? "Local User"
-    : (user?.fullName ?? user?.firstName ?? user?.username ?? "Account");
+    : (displayNameFromDb ?? user?.fullName ?? user?.firstName ?? user?.username ?? "Account");
   const displayEmail = isLocalAuth
     ? "local@mission-control"
-    : (user?.primaryEmailAddress?.emailAddress ?? "");
+    : (displayEmailFromDb ?? user?.primaryEmailAddress?.emailAddress ?? "");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -148,6 +159,7 @@ export function UserMenu({ className }: { className?: string }) {
               { href: "/activity", label: "Activity", icon: Activity },
               { href: "/agents", label: "Agents", icon: Bot },
               { href: "/gateways", label: "Gateways", icon: Server },
+              { href: "/settings", label: "Settings", icon: Settings },
             ] as const
           ).map((item) => (
             <Link

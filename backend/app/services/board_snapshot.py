@@ -19,6 +19,7 @@ from app.schemas.approvals import ApprovalRead
 from app.schemas.board_memory import BoardMemoryRead
 from app.schemas.boards import BoardRead
 from app.schemas.view_models import BoardSnapshot, TaskCardRead
+from app.services.gateway_agents import gateway_agent_session_key
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_ids_by_task_id,
@@ -47,8 +48,8 @@ def _computed_agent_status(agent: Agent) -> str:
 
 
 async def _gateway_main_session_keys(session: AsyncSession) -> set[str]:
-    keys = (await session.exec(select(Gateway.main_session_key))).all()
-    return {key for key in keys if key}
+    gateways = await Gateway.objects.all().all(session)
+    return {gateway_agent_session_key(gateway) for gateway in gateways}
 
 
 def _agent_to_read(agent: Agent, main_session_keys: set[str]) -> AgentRead:

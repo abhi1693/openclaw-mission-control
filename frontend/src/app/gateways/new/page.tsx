@@ -13,7 +13,6 @@ import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { GatewayForm } from "@/components/gateways/GatewayForm";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import {
-  DEFAULT_MAIN_SESSION_KEY,
   DEFAULT_WORKSPACE_ROOT,
   checkGatewayConnection,
   type GatewayCheckStatus,
@@ -29,9 +28,6 @@ export default function NewGatewayPage() {
   const [name, setName] = useState("");
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
-  const [mainSessionKey, setMainSessionKey] = useState(
-    DEFAULT_MAIN_SESSION_KEY,
-  );
   const [workspaceRoot, setWorkspaceRoot] = useState(DEFAULT_WORKSPACE_ROOT);
 
   const [gatewayUrlError, setGatewayUrlError] = useState<string | null>(null);
@@ -61,7 +57,6 @@ export default function NewGatewayPage() {
   const canSubmit =
     Boolean(name.trim()) &&
     Boolean(gatewayUrl.trim()) &&
-    Boolean(mainSessionKey.trim()) &&
     Boolean(workspaceRoot.trim()) &&
     gatewayCheckStatus === "success";
 
@@ -79,7 +74,6 @@ export default function NewGatewayPage() {
     const { ok, message } = await checkGatewayConnection({
       gatewayUrl,
       gatewayToken,
-      mainSessionKey,
     });
     setGatewayCheckStatus(ok ? "success" : "error");
     setGatewayCheckMessage(message);
@@ -100,10 +94,6 @@ export default function NewGatewayPage() {
       setGatewayCheckMessage(gatewayValidation);
       return;
     }
-    if (!mainSessionKey.trim()) {
-      setError("Main session key is required.");
-      return;
-    }
     if (!workspaceRoot.trim()) {
       setError("Workspace root is required.");
       return;
@@ -115,7 +105,6 @@ export default function NewGatewayPage() {
         name: name.trim(),
         url: gatewayUrl.trim(),
         token: gatewayToken.trim() || null,
-        main_session_key: mainSessionKey.trim(),
         workspace_root: workspaceRoot.trim(),
       },
     });
@@ -136,7 +125,7 @@ export default function NewGatewayPage() {
         name={name}
         gatewayUrl={gatewayUrl}
         gatewayToken={gatewayToken}
-        mainSessionKey={mainSessionKey}
+        mainSessionKey={null}
         workspaceRoot={workspaceRoot}
         gatewayUrlError={gatewayUrlError}
         gatewayCheckStatus={gatewayCheckStatus}
@@ -144,7 +133,6 @@ export default function NewGatewayPage() {
         errorMessage={error}
         isLoading={isLoading}
         canSubmit={canSubmit}
-        mainSessionKeyPlaceholder={DEFAULT_MAIN_SESSION_KEY}
         workspaceRootPlaceholder={DEFAULT_WORKSPACE_ROOT}
         cancelLabel="Cancel"
         submitLabel="Create gateway"
@@ -161,11 +149,6 @@ export default function NewGatewayPage() {
         }}
         onGatewayTokenChange={(next) => {
           setGatewayToken(next);
-          setGatewayCheckStatus("idle");
-          setGatewayCheckMessage(null);
-        }}
-        onMainSessionKeyChange={(next) => {
-          setMainSessionKey(next);
           setGatewayCheckStatus("idle");
           setGatewayCheckMessage(null);
         }}

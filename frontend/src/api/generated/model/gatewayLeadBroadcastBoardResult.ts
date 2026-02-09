@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Per-board result entry for a lead broadcast operation.
+ */
 export interface GatewayLeadBroadcastBoardResult {
   board_id: string;
   lead_agent_id?: string | null;

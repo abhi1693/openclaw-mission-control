@@ -7,13 +7,17 @@
 import type { BoardOnboardingAgentCompleteSuccessMetrics } from "./boardOnboardingAgentCompleteSuccessMetrics";
 import type { BoardOnboardingLeadAgentDraft } from "./boardOnboardingLeadAgentDraft";
 import type { BoardOnboardingUserProfile } from "./boardOnboardingUserProfile";
+import { BoardOnboardingAgentCompleteStatus } from "./boardOnboardingAgentCompleteStatus";
 
+/**
+ * Complete onboarding draft produced by the onboarding assistant.
+ */
 export interface BoardOnboardingAgentComplete {
   board_type: string;
   objective?: string | null;
   success_metrics?: BoardOnboardingAgentCompleteSuccessMetrics;
   target_date?: string | null;
-  status: "complete";
+  status: BoardOnboardingAgentCompleteStatus;
   user_profile?: BoardOnboardingUserProfile | null;
   lead_agent?: BoardOnboardingLeadAgentDraft | null;
 }

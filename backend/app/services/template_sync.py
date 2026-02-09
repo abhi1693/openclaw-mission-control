@@ -31,6 +31,7 @@ from app.services.agent_provisioning import (
     provision_agent,
     provision_main_agent,
 )
+from app.services.gateway_agents import gateway_agent_session_key
 
 _TOOLS_KV_RE = re.compile(r"^(?P<key>[A-Z0-9_]+)=(?P<value>.*)$")
 SESSION_KEY_PARTS_MIN = 2
@@ -520,21 +521,22 @@ async def _sync_main_agent(
     ctx: _SyncContext,
     result: GatewayTemplatesSyncResult,
 ) -> bool:
+    main_session_key = gateway_agent_session_key(ctx.gateway)
     main_agent = (
         await Agent.objects.all()
-        .filter(col(Agent.openclaw_session_id) == ctx.gateway.main_session_key)
+        .filter(col(Agent.openclaw_session_id) == main_session_key)
         .first(ctx.session)
     )
     if main_agent is None:
         _append_sync_error(
             result,
-            message=("Gateway main agent record not found; " "skipping main agent template sync."),
+            message=("Gateway agent record not found; " "skipping gateway agent template sync."),
         )
         return True
     try:
         main_gateway_agent_id = await _gateway_default_agent_id(
             ctx.config,
-            fallback_session_key=ctx.gateway.main_session_key,
+            fallback_session_key=main_session_key,
             backoff=ctx.backoff,
         )
     except TimeoutError as exc:
@@ -544,7 +546,7 @@ async def _sync_main_agent(
         _append_sync_error(
             result,
             agent=main_agent,
-            message="Unable to resolve gateway default agent id for main agent.",
+            message="Unable to resolve gateway agent id.",
         )
         return True
 
@@ -561,7 +563,7 @@ async def _sync_main_agent(
         _append_sync_error(
             result,
             agent=main_agent,
-            message="Skipping main agent: unable to read AUTH_TOKEN from TOOLS.md.",
+            message="Skipping gateway agent: unable to read AUTH_TOKEN from TOOLS.md.",
         )
         return True
     stop_sync = False
@@ -574,6 +576,7 @@ async def _sync_main_agent(
                     gateway=ctx.gateway,
                     auth_token=token,
                     user=ctx.options.user,
+                    session_key=main_session_key,
                     options=ProvisionOptions(
                         action="update",
                         force_bootstrap=ctx.options.force_bootstrap,
@@ -590,7 +593,7 @@ async def _sync_main_agent(
         _append_sync_error(
             result,
             agent=main_agent,
-            message=f"Failed to sync main agent templates: {exc}",
+            message=f"Failed to sync gateway agent templates: {exc}",
         )
     else:
         result.main_updated = True

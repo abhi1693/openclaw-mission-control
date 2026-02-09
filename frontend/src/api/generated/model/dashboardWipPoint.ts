@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Work-in-progress point split by task status buckets.
+ */
 export interface DashboardWipPoint {
   period: string;
   inbox: number;

@@ -47,6 +47,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.view_models import BoardGroupSnapshot, BoardSnapshot
 from app.services.board_group_snapshot import build_board_group_snapshot
 from app.services.board_snapshot import build_board_snapshot
+from app.services.gateway_agents import gateway_agent_session_key
 from app.services.organizations import OrganizationContext, board_access_filter
 
 if TYPE_CHECKING:
@@ -195,11 +196,6 @@ async def _board_gateway(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Board gateway_id is invalid",
         )
-    if not config.main_session_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Gateway main_session_key is required",
-        )
     if not config.url:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -220,7 +216,7 @@ async def _cleanup_agent_on_gateway(
 ) -> None:
     if agent.openclaw_session_id:
         await delete_session(agent.openclaw_session_id, config=client_config)
-    main_session = config.main_session_key
+    main_session = gateway_agent_session_key(config)
     workspace_root = config.workspace_root
     workspace_path = f"{workspace_root.rstrip('/')}/workspace-{_slugify(agent.name)}"
     cleanup_message = (
@@ -234,7 +230,7 @@ async def _cleanup_agent_on_gateway(
         "2) Delete any lingering session artifacts.\n"
         "Reply NO_REPLY."
     )
-    await ensure_session(main_session, config=client_config, label="Main Agent")
+    await ensure_session(main_session, config=client_config, label="Gateway Agent")
     await send_message(
         cleanup_message,
         session_key=main_session,

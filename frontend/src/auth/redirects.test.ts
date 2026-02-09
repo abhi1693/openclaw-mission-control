@@ -13,8 +13,8 @@ describe("resolveSignInRedirectUrl", () => {
     expect(resolveSignInRedirectUrl(null)).toBe("/boards");
   });
 
-  it("defaults to /dashboard when no env fallback is set", () => {
-    expect(resolveSignInRedirectUrl(null)).toBe("/dashboard");
+  it("defaults to /onboarding when no env fallback is set", () => {
+    expect(resolveSignInRedirectUrl(null)).toBe("/onboarding");
   });
 
   it("allows safe relative paths", () => {

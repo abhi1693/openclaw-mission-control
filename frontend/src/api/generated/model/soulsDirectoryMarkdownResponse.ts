@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Response payload containing rendered markdown for a soul.
+ */
 export interface SoulsDirectoryMarkdownResponse {
   handle: string;
   slug: string;

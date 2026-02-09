@@ -66,6 +66,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List boards visible to the authenticated agent.
  * @summary List Boards
  */
 export type listBoardsApiV1AgentBoardsGetResponse200 = {
@@ -276,6 +277,7 @@ export function useListBoardsApiV1AgentBoardsGet<
 }
 
 /**
+ * Return a board if the authenticated agent can access it.
  * @summary Get Board
  */
 export type getBoardApiV1AgentBoardsBoardIdGetResponse200 = {
@@ -478,6 +480,7 @@ export function useGetBoardApiV1AgentBoardsBoardIdGet<
 }
 
 /**
+ * List agents, optionally filtered to a board.
  * @summary List Agents
  */
 export type listAgentsApiV1AgentAgentsGetResponse200 = {
@@ -688,6 +691,7 @@ export function useListAgentsApiV1AgentAgentsGet<
 }
 
 /**
+ * Create an agent on the caller's board.
  * @summary Create Agent
  */
 export type createAgentApiV1AgentAgentsPostResponse200 = {
@@ -805,6 +809,7 @@ export const useCreateAgentApiV1AgentAgentsPost = <
   );
 };
 /**
+ * List tasks on a board with optional status and assignment filters.
  * @summary List Tasks
  */
 export type listTasksApiV1AgentBoardsBoardIdTasksGetResponse200 = {
@@ -1037,6 +1042,7 @@ export function useListTasksApiV1AgentBoardsBoardIdTasksGet<
 }
 
 /**
+ * Create a task on the board as the lead agent.
  * @summary Create Task
  */
 export type createTaskApiV1AgentBoardsBoardIdTasksPostResponse200 = {
@@ -1163,6 +1169,7 @@ export const useCreateTaskApiV1AgentBoardsBoardIdTasksPost = <
   );
 };
 /**
+ * Update a task after board-level access checks.
  * @summary Update Task
  */
 export type updateTaskApiV1AgentBoardsBoardIdTasksTaskIdPatchResponse200 = {
@@ -1303,6 +1310,7 @@ export const useUpdateTaskApiV1AgentBoardsBoardIdTasksTaskIdPatch = <
   );
 };
 /**
+ * List comments for a task visible to the authenticated agent.
  * @summary List Task Comments
  */
 export type listTaskCommentsApiV1AgentBoardsBoardIdTasksTaskIdCommentsGetResponse200 =
@@ -1636,6 +1644,7 @@ export function useListTaskCommentsApiV1AgentBoardsBoardIdTasksTaskIdCommentsGet
 }
 
 /**
+ * Create a task comment on behalf of the authenticated agent.
  * @summary Create Task Comment
  */
 export type createTaskCommentApiV1AgentBoardsBoardIdTasksTaskIdCommentsPostResponse200 =
@@ -1795,6 +1804,7 @@ export const useCreateTaskCommentApiV1AgentBoardsBoardIdTasksTaskIdCommentsPost 
     );
   };
 /**
+ * List board memory entries with optional chat filtering.
  * @summary List Board Memory
  */
 export type listBoardMemoryApiV1AgentBoardsBoardIdMemoryGetResponse200 = {
@@ -2057,6 +2067,7 @@ export function useListBoardMemoryApiV1AgentBoardsBoardIdMemoryGet<
 }
 
 /**
+ * Create a board memory entry.
  * @summary Create Board Memory
  */
 export type createBoardMemoryApiV1AgentBoardsBoardIdMemoryPostResponse200 = {
@@ -2196,6 +2207,7 @@ export const useCreateBoardMemoryApiV1AgentBoardsBoardIdMemoryPost = <
   );
 };
 /**
+ * List approvals for a board.
  * @summary List Approvals
  */
 export type listApprovalsApiV1AgentBoardsBoardIdApprovalsGetResponse200 = {
@@ -2463,6 +2475,7 @@ export function useListApprovalsApiV1AgentBoardsBoardIdApprovalsGet<
 }
 
 /**
+ * Create a board approval request.
  * @summary Create Approval
  */
 export type createApprovalApiV1AgentBoardsBoardIdApprovalsPostResponse200 = {
@@ -2602,6 +2615,7 @@ export const useCreateApprovalApiV1AgentBoardsBoardIdApprovalsPost = <
   );
 };
 /**
+ * Apply onboarding updates for a board.
  * @summary Update Onboarding
  */
 export type updateOnboardingApiV1AgentBoardsBoardIdOnboardingPostResponse200 = {
@@ -2763,6 +2777,7 @@ export const useUpdateOnboardingApiV1AgentBoardsBoardIdOnboardingPost = <
   );
 };
 /**
+ * Send a direct nudge message to a board agent.
  * @summary Nudge Agent
  */
 export type nudgeAgentApiV1AgentBoardsBoardIdAgentsAgentIdNudgePostResponse200 =
@@ -2918,6 +2933,7 @@ export const useNudgeAgentApiV1AgentBoardsBoardIdAgentsAgentIdNudgePost = <
   );
 };
 /**
+ * Record heartbeat status for the authenticated agent.
  * @summary Agent Heartbeat
  */
 export type agentHeartbeatApiV1AgentHeartbeatPostResponse200 = {
@@ -3037,6 +3053,7 @@ export const useAgentHeartbeatApiV1AgentHeartbeatPost = <
   );
 };
 /**
+ * Fetch the target agent's SOUL.md content from the gateway.
  * @summary Get Agent Soul
  */
 export type getAgentSoulApiV1AgentBoardsBoardIdAgentsAgentIdSoulGetResponse200 =
@@ -3320,6 +3337,7 @@ export function useGetAgentSoulApiV1AgentBoardsBoardIdAgentsAgentIdSoulGet<
 }
 
 /**
+ * Update an agent's SOUL.md content in DB and gateway.
  * @summary Update Agent Soul
  */
 export type updateAgentSoulApiV1AgentBoardsBoardIdAgentsAgentIdSoulPutResponse200 =
@@ -3480,6 +3498,7 @@ export const useUpdateAgentSoulApiV1AgentBoardsBoardIdAgentsAgentIdSoulPut = <
   );
 };
 /**
+ * Route a lead's ask-user request through the dedicated gateway agent.
  * @summary Ask User Via Gateway Main
  */
 export type askUserViaGatewayMainApiV1AgentBoardsBoardIdGatewayMainAskUserPostResponse200 =
@@ -3636,6 +3655,7 @@ export const useAskUserViaGatewayMainApiV1AgentBoardsBoardIdGatewayMainAskUserPo
     );
   };
 /**
+ * Send a gateway-main message to a single board lead agent.
  * @summary Message Gateway Board Lead
  */
 export type messageGatewayBoardLeadApiV1AgentGatewayBoardsBoardIdLeadMessagePostResponse200 =
@@ -3792,6 +3812,7 @@ export const useMessageGatewayBoardLeadApiV1AgentGatewayBoardsBoardIdLeadMessage
     );
   };
 /**
+ * Broadcast a gateway-main message to multiple board leads.
  * @summary Broadcast Gateway Lead Message
  */
 export type broadcastGatewayLeadMessageApiV1AgentGatewayLeadsBroadcastPostResponse200 =

@@ -6,6 +6,9 @@
  */
 import type { OrganizationBoardAccessSpec } from "./organizationBoardAccessSpec";
 
+/**
+ * Payload for creating an organization invite.
+ */
 export interface OrganizationInviteCreate {
   invited_email: string;
   role?: string;

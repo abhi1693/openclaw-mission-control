@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Embedded user fields included in organization member payloads.
+ */
 export interface OrganizationUserRead {
   id: string;
   email?: string | null;

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Nudge message payload for pinging an agent.
+ */
 export interface AgentNudge {
   /** @minLength 1 */
   message: string;

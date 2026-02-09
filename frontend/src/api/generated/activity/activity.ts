@@ -31,6 +31,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List activity events visible to the calling actor.
  * @summary List Activity
  */
 export type listActivityApiV1ActivityGetResponse200 = {
@@ -241,6 +242,7 @@ export function useListActivityApiV1ActivityGet<
 }
 
 /**
+ * List task-comment feed items for accessible boards.
  * @summary List Task Comment Feed
  */
 export type listTaskCommentFeedApiV1ActivityTaskCommentsGetResponse200 = {
@@ -489,6 +491,7 @@ export function useListTaskCommentFeedApiV1ActivityTaskCommentsGet<
 }
 
 /**
+ * Stream task-comment events for accessible boards.
  * @summary Stream Task Comment Feed
  */
 export type streamTaskCommentFeedApiV1ActivityTaskCommentsStreamGetResponse200 =

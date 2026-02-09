@@ -8,6 +8,9 @@ import type { ApprovalReadPayload } from "./approvalReadPayload";
 import type { ApprovalReadRubricScores } from "./approvalReadRubricScores";
 import type { ApprovalReadStatus } from "./approvalReadStatus";
 
+/**
+ * Approval payload returned from read endpoints.
+ */
 export interface ApprovalRead {
   action_type: string;
   task_id?: string | null;

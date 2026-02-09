@@ -39,6 +39,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List agents visible to the active organization admin.
  * @summary List Agents
  */
 export type listAgentsApiV1AgentsGetResponse200 = {
@@ -246,6 +247,7 @@ export function useListAgentsApiV1AgentsGet<
 }
 
 /**
+ * Create and provision an agent.
  * @summary Create Agent
  */
 export type createAgentApiV1AgentsPostResponse200 = {
@@ -363,6 +365,7 @@ export const useCreateAgentApiV1AgentsPost = <
   );
 };
 /**
+ * Stream agent updates as SSE events.
  * @summary Stream Agents
  */
 export type streamAgentsApiV1AgentsStreamGetResponse200 = {
@@ -574,6 +577,7 @@ export function useStreamAgentsApiV1AgentsStreamGet<
 }
 
 /**
+ * Get a single agent by id.
  * @summary Get Agent
  */
 export type getAgentApiV1AgentsAgentIdGetResponse200 = {
@@ -773,6 +777,7 @@ export function useGetAgentApiV1AgentsAgentIdGet<
 }
 
 /**
+ * Update agent metadata and optionally reprovision.
  * @summary Update Agent
  */
 export type updateAgentApiV1AgentsAgentIdPatchResponse200 = {
@@ -933,6 +938,7 @@ export const useUpdateAgentApiV1AgentsAgentIdPatch = <
   );
 };
 /**
+ * Delete an agent and clean related task state.
  * @summary Delete Agent
  */
 export type deleteAgentApiV1AgentsAgentIdDeleteResponse200 = {
@@ -1049,6 +1055,7 @@ export const useDeleteAgentApiV1AgentsAgentIdDelete = <
   );
 };
 /**
+ * Record a heartbeat for a specific agent.
  * @summary Heartbeat Agent
  */
 export type heartbeatAgentApiV1AgentsAgentIdHeartbeatPostResponse200 = {
@@ -1176,6 +1183,7 @@ export const useHeartbeatAgentApiV1AgentsAgentIdHeartbeatPost = <
   );
 };
 /**
+ * Heartbeat an existing agent or create/provision one if needed.
  * @summary Heartbeat Or Create Agent
  */
 export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse200 = {

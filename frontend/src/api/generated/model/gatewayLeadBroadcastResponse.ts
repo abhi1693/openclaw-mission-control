@@ -6,6 +6,9 @@
  */
 import type { GatewayLeadBroadcastBoardResult } from "./gatewayLeadBroadcastBoardResult";
 
+/**
+ * Aggregate response for a lead broadcast operation.
+ */
 export interface GatewayLeadBroadcastResponse {
   ok?: boolean;
   sent?: number;

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Task comment payload returned from read endpoints.
+ */
 export interface TaskCommentRead {
   id: string;
   message: string | null;

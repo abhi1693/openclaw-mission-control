@@ -29,6 +29,8 @@ curl -s -X POST "$BASE_URL/api/v1/agent/heartbeat" \
   -H "Content-Type: application/json" \
   -d '{"name": "'$AGENT_NAME'", "status": "online"}'
 ```
+- If check-in fails due to 5xx/network, stop and retry next heartbeat.
+- During that failure window, do **not** write memory updates (`MEMORY.md`, `SELF.md`, daily memory files).
 
 ## Memory Maintenance (every 2-3 days)
 1) Read recent `memory/YYYY-MM-DD.md` files.
@@ -39,3 +41,11 @@ curl -s -X POST "$BASE_URL/api/v1/agent/heartbeat" \
 ## Common mistakes (avoid)
 - Posting updates in OpenClaw chat.
 - Claiming board tasks without instruction.
+
+## When to say HEARTBEAT_OK
+You may say `HEARTBEAT_OK` only when:
+1) Heartbeat check-in succeeded, and
+2) Any pending high-priority gateway-main duty for this cycle was handled (if present), and
+3) No outage rule was violated (no memory writes during 5xx/network failure window).
+
+Do **not** say `HEARTBEAT_OK` if check-in failed.

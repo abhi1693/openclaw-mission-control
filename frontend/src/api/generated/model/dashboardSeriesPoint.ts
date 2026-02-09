@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Single numeric time-series point.
+ */
 export interface DashboardSeriesPoint {
   period: string;
   value: number;

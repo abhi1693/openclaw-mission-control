@@ -6,6 +6,9 @@
  */
 import type { TaskCardReadStatus } from "./taskCardReadStatus";
 
+/**
+ * Task read model enriched with assignee and approval counters.
+ */
 export interface TaskCardRead {
   title: string;
   description?: string | null;

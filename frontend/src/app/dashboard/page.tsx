@@ -247,7 +247,7 @@ export default function DashboardPage() {
     dashboardMetricsApiV1MetricsDashboardGetResponse,
     ApiError
   >(
-    { range: "24h" },
+    { range_key: "24h" },
     {
       query: {
         enabled: Boolean(isSignedIn),

@@ -245,11 +245,22 @@ export default function EditAgentPage() {
     }
     setError(null);
 
+    const existingHeartbeat =
+      loadedAgent.heartbeat_config &&
+      typeof loadedAgent.heartbeat_config === "object"
+        ? (loadedAgent.heartbeat_config as Record<string, unknown>)
+        : {};
+
     const payload: AgentUpdate = {
       name: trimmed,
       heartbeat_config: {
+        ...existingHeartbeat,
         every: resolvedHeartbeatEvery.trim() || "10m",
         target: resolvedHeartbeatTarget,
+        includeReasoning:
+          typeof existingHeartbeat.includeReasoning === "boolean"
+            ? existingHeartbeat.includeReasoning
+            : false,
       } as unknown as Record<string, unknown>,
       identity_profile: mergeIdentityProfile(
         loadedAgent.identity_profile,

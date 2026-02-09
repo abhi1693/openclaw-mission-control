@@ -21,7 +21,6 @@ class GatewayResolveQuery(SQLModel):
     board_id: str | None = None
     gateway_url: str | None = None
     gateway_token: str | None = None
-    gateway_main_session_key: str | None = None
 
 
 class GatewaysStatusResponse(SQLModel):

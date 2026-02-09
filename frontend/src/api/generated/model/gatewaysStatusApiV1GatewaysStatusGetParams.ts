@@ -9,5 +9,4 @@ export type GatewaysStatusApiV1GatewaysStatusGetParams = {
   board_id?: string | null;
   gateway_url?: string | null;
   gateway_token?: string | null;
-  gateway_main_session_key?: string | null;
 };

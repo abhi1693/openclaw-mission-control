@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import col
@@ -34,6 +34,7 @@ from app.services.agent_provisioning import (
     ProvisionOptions,
     provision_main_agent,
 )
+from app.services.gateway_agents import gateway_agent_session_key, gateway_agent_session_key_for_id
 from app.services.template_sync import GatewayTemplateSyncOptions
 from app.services.template_sync import sync_gateway_templates as sync_gateway_templates_service
 
@@ -85,7 +86,7 @@ SYNC_QUERY_DEP = Depends(_template_sync_query)
 
 
 def _main_agent_name(gateway: Gateway) -> str:
-    return f"{gateway.name} Main"
+    return f"{gateway.name} Gateway Agent"
 
 
 async def _require_gateway(
@@ -113,6 +114,15 @@ async def _find_main_agent(
     previous_name: str | None = None,
     previous_session_key: str | None = None,
 ) -> Agent | None:
+    preferred_session_key = gateway_agent_session_key(gateway)
+    if preferred_session_key:
+        agent = await Agent.objects.filter_by(
+            openclaw_session_id=preferred_session_key,
+        ).first(
+            session,
+        )
+        if agent:
+            return agent
     if gateway.main_session_key:
         agent = await Agent.objects.filter_by(
             openclaw_session_id=gateway.main_session_key,
@@ -147,8 +157,13 @@ async def _ensure_main_agent(
     previous: tuple[str | None, str | None] | None = None,
     action: str = "provision",
 ) -> Agent | None:
-    if not gateway.url or not gateway.main_session_key:
+    if not gateway.url:
         return None
+    session_key = gateway_agent_session_key(gateway)
+    if gateway.main_session_key != session_key:
+        gateway.main_session_key = session_key
+        gateway.updated_at = utcnow()
+        session.add(gateway)
     agent = await _find_main_agent(
         session,
         gateway,
@@ -161,17 +176,17 @@ async def _ensure_main_agent(
             status="provisioning",
             board_id=None,
             is_board_lead=False,
-            openclaw_session_id=gateway.main_session_key,
+            openclaw_session_id=session_key,
             heartbeat_config=DEFAULT_HEARTBEAT_CONFIG.copy(),
             identity_profile={
-                "role": "Main Agent",
+                "role": "Gateway Agent",
                 "communication_style": "direct, concise, practical",
                 "emoji": ":compass:",
             },
         )
         session.add(agent)
     agent.name = _main_agent_name(gateway)
-    agent.openclaw_session_id = gateway.main_session_key
+    agent.openclaw_session_id = session_key
     raw_token = generate_agent_token()
     agent.agent_token_hash = hash_agent_token(raw_token)
     agent.provision_requested_at = utcnow()
@@ -189,11 +204,12 @@ async def _ensure_main_agent(
                 gateway=gateway,
                 auth_token=raw_token,
                 user=auth.user,
+                session_key=session_key,
                 options=ProvisionOptions(action=action),
             ),
         )
         await ensure_session(
-            gateway.main_session_key,
+            session_key,
             config=GatewayClientConfig(url=gateway.url, token=gateway.token),
             label=agent.name,
         )
@@ -204,7 +220,7 @@ async def _ensure_main_agent(
                 "If BOOTSTRAP.md exists, run it once then delete it. "
                 "Begin heartbeats after startup."
             ),
-            session_key=gateway.main_session_key,
+            session_key=session_key,
             config=GatewayClientConfig(url=gateway.url, token=gateway.token),
             deliver=True,
         )
@@ -237,7 +253,10 @@ async def create_gateway(
 ) -> Gateway:
     """Create a gateway and provision or refresh its main agent."""
     data = payload.model_dump()
+    gateway_id = uuid4()
+    data["id"] = gateway_id
     data["organization_id"] = ctx.organization.id
+    data["main_session_key"] = gateway_agent_session_key_for_id(gateway_id)
     gateway = await crud.create(session, Gateway, **data)
     await _ensure_main_agent(session, gateway, auth, action="provision")
     return gateway

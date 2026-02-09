@@ -10,6 +10,9 @@ import type { BoardMemoryRead } from "./boardMemoryRead";
 import type { BoardRead } from "./boardRead";
 import type { TaskCardRead } from "./taskCardRead";
 
+/**
+ * Aggregated board payload used by board snapshot endpoints.
+ */
 export interface BoardSnapshot {
   board: BoardRead;
   tasks: TaskCardRead[];

@@ -6,6 +6,9 @@
  */
 import type { SoulsDirectorySoulRef } from "./soulsDirectorySoulRef";
 
+/**
+ * Response wrapper for directory search results.
+ */
 export interface SoulsDirectorySearchResponse {
   items: SoulsDirectorySoulRef[];
 }

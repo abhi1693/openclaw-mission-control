@@ -7,6 +7,9 @@
 import type { AgentUpdateHeartbeatConfig } from "./agentUpdateHeartbeatConfig";
 import type { AgentUpdateIdentityProfile } from "./agentUpdateIdentityProfile";
 
+/**
+ * Payload for patching an existing agent.
+ */
 export interface AgentUpdate {
   board_id?: string | null;
   is_gateway_main?: boolean | null;

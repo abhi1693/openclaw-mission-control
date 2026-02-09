@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for creating a gateway configuration.
+ */
 export interface GatewayCreate {
   name: string;
   url: string;
-  main_session_key: string;
   workspace_root: string;
   token?: string | null;
 }

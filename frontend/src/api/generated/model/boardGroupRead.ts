@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Board-group payload returned from read endpoints.
+ */
 export interface BoardGroupRead {
   name: string;
   slug: string;

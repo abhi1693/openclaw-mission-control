@@ -35,6 +35,7 @@ from app.schemas.gateway_api import (
     GatewaySessionsResponse,
     GatewaysStatusResponse,
 )
+from app.services.gateway_agents import gateway_agent_session_key
 from app.services.organizations import OrganizationContext, require_board_access
 
 if TYPE_CHECKING:
@@ -47,11 +48,18 @@ SESSION_DEP = Depends(get_session)
 AUTH_DEP = Depends(get_auth_context)
 ORG_ADMIN_DEP = Depends(require_org_admin)
 BOARD_ID_QUERY = Query(default=None)
-RESOLVE_QUERY_DEP = Depends()
 
 
-def _query_to_resolve_input(params: GatewayResolveQuery) -> GatewayResolveQuery:
-    return params
+def _query_to_resolve_input(
+    board_id: str | None = Query(default=None),
+    gateway_url: str | None = Query(default=None),
+    gateway_token: str | None = Query(default=None),
+) -> GatewayResolveQuery:
+    return GatewayResolveQuery(
+        board_id=board_id,
+        gateway_url=gateway_url,
+        gateway_token=gateway_token,
+    )
 
 
 RESOLVE_INPUT_DEP = Depends(_query_to_resolve_input)
@@ -81,7 +89,7 @@ async def _resolve_gateway(
         return (
             None,
             GatewayClientConfig(url=params.gateway_url, token=params.gateway_token),
-            params.gateway_main_session_key,
+            None,
         )
     if not params.board_id:
         raise HTTPException(
@@ -115,7 +123,7 @@ async def _resolve_gateway(
     return (
         board,
         GatewayClientConfig(url=gateway.url, token=gateway.token),
-        gateway.main_session_key,
+        gateway_agent_session_key(gateway),
     )
 
 
@@ -167,7 +175,7 @@ async def gateways_status(
                 ensured = await ensure_session(
                     main_session,
                     config=config,
-                    label="Main Agent",
+                    label="Gateway Agent",
                 )
                 if isinstance(ensured, dict):
                     main_session_entry = ensured.get("entry") or ensured
@@ -224,7 +232,7 @@ async def list_gateway_sessions(
             ensured = await ensure_session(
                 main_session,
                 config=config,
-                label="Main Agent",
+                label="Gateway Agent",
             )
             if isinstance(ensured, dict):
                 main_session_entry = ensured.get("entry") or ensured
@@ -256,7 +264,7 @@ async def _with_main_session(
     if not main_session or any(item.get("key") == main_session for item in sessions_list):
         return sessions_list
     try:
-        await ensure_session(main_session, config=config, label="Main Agent")
+        await ensure_session(main_session, config=config, label="Gateway Agent")
         return await _list_sessions(config)
     except OpenClawGatewayError:
         return sessions_list
@@ -300,7 +308,7 @@ async def get_gateway_session(
             ensured = await ensure_session(
                 main_session,
                 config=config,
-                label="Main Agent",
+                label="Gateway Agent",
             )
             if isinstance(ensured, dict):
                 session_entry = ensured.get("entry") or ensured
@@ -360,7 +368,7 @@ async def send_gateway_session_message(
     await require_board_access(session, user=auth.user, board=board, write=True)
     try:
         if main_session and session_id == main_session:
-            await ensure_session(main_session, config=config, label="Main Agent")
+            await ensure_session(main_session, config=config, label="Gateway Agent")
         await send_message(payload.content, session_key=session_id, config=config)
     except OpenClawGatewayError as exc:
         raise HTTPException(

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for creating a task comment.
+ */
 export interface TaskCommentCreate {
   /** @minLength 1 */
   message: string;

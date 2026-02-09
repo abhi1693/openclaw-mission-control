@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Board access payload returned from read endpoints.
+ */
 export interface OrganizationBoardAccessRead {
   id: string;
   board_id: string;

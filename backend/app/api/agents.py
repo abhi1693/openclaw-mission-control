@@ -49,6 +49,7 @@ from app.services.agent_provisioning import (
     provision_agent,
     provision_main_agent,
 )
+from app.services.gateway_agents import gateway_agent_session_key
 from app.services.organizations import (
     OrganizationContext,
     get_active_membership,
@@ -178,11 +179,6 @@ async def _require_gateway(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Board gateway_id is invalid",
         )
-    if not gateway.main_session_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Gateway main_session_key is required",
-        )
     if not gateway.url:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -206,8 +202,8 @@ def _gateway_client_config(gateway: Gateway) -> GatewayClientConfig:
 
 
 async def _get_gateway_main_session_keys(session: AsyncSession) -> set[str]:
-    keys = (await session.exec(select(Gateway.main_session_key))).all()
-    return {key for key in keys if key}
+    gateways = await Gateway.objects.all().all(session)
+    return {gateway_agent_session_key(gateway) for gateway in gateways}
 
 
 def _is_gateway_main(agent: Agent, main_session_keys: set[str]) -> bool:
@@ -249,7 +245,11 @@ async def _find_gateway_for_main_session(
 ) -> Gateway | None:
     if not session_key:
         return None
-    return await Gateway.objects.filter_by(main_session_key=session_key).first(session)
+    gateways = await Gateway.objects.all().all(session)
+    for gateway in gateways:
+        if gateway_agent_session_key(gateway) == session_key:
+            return gateway
+    return None
 
 
 async def _ensure_gateway_session(
@@ -605,7 +605,7 @@ async def _apply_agent_update_mutations(
         gateway_for_main, _ = await _require_gateway(session, board_for_main)
         updates["board_id"] = None
         agent.is_board_lead = False
-        agent.openclaw_session_id = gateway_for_main.main_session_key
+        agent.openclaw_session_id = gateway_agent_session_key(gateway_for_main)
         main_gateway = gateway_for_main
     elif make_main is not None:
         agent.openclaw_session_id = None
@@ -639,12 +639,7 @@ async def _resolve_agent_update_target(
         if gateway_for_main is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Main agent requires a gateway main_session_key",
-            )
-        if not gateway_for_main.main_session_key:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Gateway main_session_key is required",
+                detail="Gateway agent requires a gateway configuration",
             )
         return _AgentUpdateProvisionTarget(
             is_main_agent=True,
@@ -654,11 +649,6 @@ async def _resolve_agent_update_target(
         )
 
     if make_main is None and agent.board_id is None and main_gateway is not None:
-        if not main_gateway.main_session_key:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Gateway main_session_key is required",
-            )
         return _AgentUpdateProvisionTarget(
             is_main_agent=True,
             board=None,
@@ -723,6 +713,7 @@ async def _provision_updated_agent(
                     gateway=request.target.gateway,
                     auth_token=request.raw_token,
                     user=request.user,
+                    session_key=agent.openclaw_session_id,
                     options=ProvisionOptions(
                         action="update",
                         force_bootstrap=request.force_bootstrap,
@@ -970,13 +961,15 @@ async def list_agents(
     else:
         base_filter: ColumnElement[bool] = col(Agent.board_id).in_(board_ids)
         if is_org_admin(ctx.member):
-            gateway_keys = select(Gateway.main_session_key).where(
-                col(Gateway.organization_id) == ctx.organization.id,
-            )
-            base_filter = or_(
-                base_filter,
-                col(Agent.openclaw_session_id).in_(gateway_keys),
-            )
+            gateways = await Gateway.objects.filter_by(
+                organization_id=ctx.organization.id,
+            ).all(session)
+            gateway_keys = [gateway_agent_session_key(gateway) for gateway in gateways]
+            if gateway_keys:
+                base_filter = or_(
+                    base_filter,
+                    col(Agent.openclaw_session_id).in_(gateway_keys),
+                )
         statement = select(Agent).where(base_filter)
     if board_id is not None:
         statement = statement.where(col(Agent.board_id) == board_id)
@@ -1309,9 +1302,9 @@ async def delete_agent(
     await session.delete(agent)
     await session.commit()
 
-    # Always ask the main agent to confirm workspace cleanup.
+    # Always ask the gateway agent to confirm workspace cleanup.
     try:
-        main_session = gateway.main_session_key
+        main_session = gateway_agent_session_key(gateway)
         if main_session and workspace_path:
             cleanup_message = (
                 "Cleanup request for deleted agent.\n\n"
@@ -1322,7 +1315,7 @@ async def delete_agent(
                 "1) Remove the workspace directory.\n"
                 "2) Reply NO_REPLY.\n"
             )
-            await ensure_session(main_session, config=client_config, label="Main Agent")
+            await ensure_session(main_session, config=client_config, label="Gateway Agent")
             await send_message(
                 cleanup_message,
                 session_key=main_session,

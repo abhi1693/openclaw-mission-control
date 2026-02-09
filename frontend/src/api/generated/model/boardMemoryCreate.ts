@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for creating a board memory entry.
+ */
 export interface BoardMemoryCreate {
   /** @minLength 1 */
   content: string;

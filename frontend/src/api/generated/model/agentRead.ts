@@ -7,6 +7,9 @@
 import type { AgentReadHeartbeatConfig } from "./agentReadHeartbeatConfig";
 import type { AgentReadIdentityProfile } from "./agentReadIdentityProfile";
 
+/**
+ * Public agent representation returned by the API.
+ */
 export interface AgentRead {
   board_id?: string | null;
   /** @minLength 1 */

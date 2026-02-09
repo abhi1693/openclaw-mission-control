@@ -43,12 +43,14 @@ class _FakeExecResult:
 class _FakeSession:
     exec_results: list[Any]
     get_results: dict[tuple[type[Any], Any], Any] = field(default_factory=dict)
+    commit_side_effects: list[Exception] = field(default_factory=list)
 
     added: list[Any] = field(default_factory=list)
     added_all: list[list[Any]] = field(default_factory=list)
     executed: list[Any] = field(default_factory=list)
 
     committed: int = 0
+    rolled_back: int = 0
     flushed: int = 0
     refreshed: list[Any] = field(default_factory=list)
 
@@ -71,7 +73,13 @@ class _FakeSession:
         self.added_all.append(values)
 
     async def commit(self) -> None:
+        if self.commit_side_effects:
+            effect = self.commit_side_effects.pop(0)
+            raise effect
         self.committed += 1
+
+    async def rollback(self) -> None:
+        self.rolled_back += 1
 
     async def flush(self) -> None:
         self.flushed += 1
@@ -132,7 +140,7 @@ async def test_ensure_member_for_user_returns_existing_membership(
 
     monkeypatch.setattr(organizations, "get_active_membership", _fake_get_active)
 
-    session = _FakeSession(exec_results=[])
+    session = _FakeSession(exec_results=[_FakeExecResult()])
     out = await organizations.ensure_member_for_user(session, user)
     assert out is existing
 
@@ -156,6 +164,9 @@ async def test_ensure_member_for_user_accepts_pending_invite(
     async def _fake_find(_session: Any, _email: str) -> OrganizationInvite:
         return invite
 
+    async def _fake_get_first(_session: Any, _user_id: Any) -> None:
+        return None
+
     accepted = OrganizationMember(
         organization_id=org_id,
         user_id=user.id,
@@ -172,39 +183,72 @@ async def test_ensure_member_for_user_accepts_pending_invite(
         return accepted
 
     monkeypatch.setattr(organizations, "get_active_membership", _fake_get_active)
+    monkeypatch.setattr(organizations, "get_first_membership", _fake_get_first)
     monkeypatch.setattr(organizations, "_find_pending_invite", _fake_find)
     monkeypatch.setattr(organizations, "accept_invite", _fake_accept)
 
-    session = _FakeSession(exec_results=[])
+    session = _FakeSession(exec_results=[_FakeExecResult()])
     out = await organizations.ensure_member_for_user(session, user)
     assert out is accepted
 
 
 @pytest.mark.asyncio
-async def test_ensure_member_for_user_creates_default_org_and_first_owner(
+async def test_ensure_member_for_user_creates_personal_org_and_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = User(clerk_user_id="u1", email=None)
-    org = Organization(id=uuid4(), name=organizations.DEFAULT_ORG_NAME)
 
     async def _fake_get_active(_session: Any, _user: User) -> None:
         return None
 
-    async def _fake_ensure_default(_session: Any) -> Organization:
-        return org
+    async def _fake_get_first(_session: Any, _user_id: Any) -> None:
+        return None
 
     monkeypatch.setattr(organizations, "get_active_membership", _fake_get_active)
-    monkeypatch.setattr(organizations, "ensure_default_org", _fake_ensure_default)
+    monkeypatch.setattr(organizations, "get_first_membership", _fake_get_first)
 
-    # member_count query returns 0 -> first member becomes owner
-    session = _FakeSession(exec_results=[_FakeExecResult(one_value=0)])
+    session = _FakeSession(exec_results=[_FakeExecResult()])
 
     out = await organizations.ensure_member_for_user(session, user)
-    assert out.organization_id == org.id
     assert out.user_id == user.id
     assert out.role == "owner"
     assert out.all_boards_read is True
     assert out.all_boards_write is True
+    assert out.organization_id == user.active_organization_id
+    assert any(
+        isinstance(item, Organization) and item.id == out.organization_id for item in session.added
+    )
+    assert session.committed == 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_member_for_user_reuses_existing_membership_after_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = User(clerk_user_id="u1")
+    org = Organization(id=uuid4(), name=organizations.DEFAULT_ORG_NAME)
+    existing = OrganizationMember(
+        organization_id=org.id,
+        user_id=user.id,
+        role="member",
+    )
+
+    async def _fake_get_active(_session: Any, _user: User) -> None:
+        return None
+
+    async def _fake_get_first(
+        _session: Any,
+        _user_id: Any,
+    ) -> OrganizationMember | None:
+        return existing
+
+    monkeypatch.setattr(organizations, "get_active_membership", _fake_get_active)
+    monkeypatch.setattr(organizations, "get_first_membership", _fake_get_first)
+
+    session = _FakeSession(exec_results=[_FakeExecResult()])
+
+    out = await organizations.ensure_member_for_user(session, user)
+    assert out is existing
     assert user.active_organization_id == org.id
     assert session.committed == 1
 

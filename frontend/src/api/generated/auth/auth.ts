@@ -19,6 +19,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Return the authenticated user profile from token claims.
  * @summary Bootstrap User
  */
 export type bootstrapUserApiV1AuthBootstrapPostResponse200 = {

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for creating a board group.
+ */
 export interface BoardGroupCreate {
   name: string;
   slug: string;

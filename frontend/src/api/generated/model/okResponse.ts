@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Standard success response payload.
+ */
 export interface OkResponse {
   ok?: boolean;
 }

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Response payload for a lead-message dispatch attempt.
+ */
 export interface GatewayLeadMessageResponse {
   ok?: boolean;
   board_id: string;

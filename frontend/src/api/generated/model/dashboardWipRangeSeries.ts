@@ -8,6 +8,9 @@ import type { DashboardWipPoint } from "./dashboardWipPoint";
 import type { DashboardWipRangeSeriesBucket } from "./dashboardWipRangeSeriesBucket";
 import type { DashboardWipRangeSeriesRange } from "./dashboardWipRangeSeriesRange";
 
+/**
+ * WIP series payload for a single range/bucket combination.
+ */
 export interface DashboardWipRangeSeries {
   range: DashboardWipRangeSeriesRange;
   bucket: DashboardWipRangeSeriesBucket;

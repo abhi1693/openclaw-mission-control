@@ -6,6 +6,9 @@
  */
 import type { BoardOnboardingLeadAgentDraftIdentityProfile } from "./boardOnboardingLeadAgentDraftIdentityProfile";
 
+/**
+ * Editable lead-agent draft configuration.
+ */
 export interface BoardOnboardingLeadAgentDraft {
   name?: string | null;
   identity_profile?: BoardOnboardingLeadAgentDraftIdentityProfile;

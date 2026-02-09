@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Request payload for heartbeat policy updates.
+ */
 export interface BoardGroupHeartbeatApply {
   every: string;
   target?: string | null;

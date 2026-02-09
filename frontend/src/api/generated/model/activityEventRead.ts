@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Serialized activity event payload returned by activity endpoints.
+ */
 export interface ActivityEventRead {
   id: string;
   event_type: string;

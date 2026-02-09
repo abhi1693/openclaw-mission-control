@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Request payload for sending a message into a gateway session.
+ */
 export interface GatewaySessionMessageRequest {
   /** @minLength 1 */
   content: string;

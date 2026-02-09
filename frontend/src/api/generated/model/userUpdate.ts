@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for partial user profile updates.
+ */
 export interface UserUpdate {
   name?: string | null;
   preferred_name?: string | null;

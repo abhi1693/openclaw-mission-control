@@ -16,7 +16,6 @@ class GatewayBase(SQLModel):
 
     name: str
     url: str
-    main_session_key: str
     workspace_root: str
 
 
@@ -43,7 +42,6 @@ class GatewayUpdate(SQLModel):
     name: str | None = None
     url: str | None = None
     token: str | None = None
-    main_session_key: str | None = None
     workspace_root: str | None = None
 
     @field_validator("token", mode="before")
@@ -64,6 +62,7 @@ class GatewayRead(GatewayBase):
     id: UUID
     organization_id: UUID
     token: str | None = None
+    main_session_key: str
     created_at: datetime
     updated_at: datetime
 

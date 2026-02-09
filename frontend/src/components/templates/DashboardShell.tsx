@@ -2,17 +2,47 @@
 
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
-import { SignedIn, useUser } from "@/auth/clerk";
+import { SignedIn, useAuth } from "@/auth/clerk";
 
+import { ApiError } from "@/api/mutator";
+import {
+  type getMeApiV1UsersMeGetResponse,
+  useGetMeApiV1UsersMeGet,
+} from "@/api/generated/users/users";
 import { BrandMark } from "@/components/atoms/BrandMark";
 import { OrgSwitcher } from "@/components/organisms/OrgSwitcher";
 import { UserMenu } from "@/components/organisms/UserMenu";
+import { isOnboardingComplete } from "@/lib/onboarding";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
-  const { user } = useUser();
-  const displayName =
-    user?.fullName ?? user?.firstName ?? user?.username ?? "Operator";
+  const router = useRouter();
+  const pathname = usePathname();
+  const { isSignedIn } = useAuth();
+  const isOnboardingPath = pathname === "/onboarding";
+
+  const meQuery = useGetMeApiV1UsersMeGet<
+    getMeApiV1UsersMeGetResponse,
+    ApiError
+  >({
+    query: {
+      enabled: Boolean(isSignedIn) && !isOnboardingPath,
+      retry: false,
+      refetchOnMount: "always",
+    },
+  });
+  const profile = meQuery.data?.status === 200 ? meQuery.data.data : null;
+  const displayName = profile?.name ?? profile?.preferred_name ?? "Operator";
+  const displayEmail = profile?.email ?? "";
+
+  useEffect(() => {
+    if (!isSignedIn || isOnboardingPath) return;
+    if (!profile) return;
+    if (!isOnboardingComplete(profile)) {
+      router.replace("/onboarding");
+    }
+  }, [isOnboardingPath, isSignedIn, profile, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -60,7 +90,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 </p>
                 <p className="text-xs text-slate-500">Operator</p>
               </div>
-              <UserMenu />
+              <UserMenu displayName={displayName} displayEmail={displayEmail} />
             </div>
           </SignedIn>
         </div>

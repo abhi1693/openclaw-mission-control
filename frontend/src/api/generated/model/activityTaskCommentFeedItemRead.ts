@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Denormalized task-comment feed item enriched with task and board fields.
+ */
 export interface ActivityTaskCommentFeedItemRead {
   id: string;
   created_at: string;

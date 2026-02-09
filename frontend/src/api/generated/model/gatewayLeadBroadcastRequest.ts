@@ -6,6 +6,9 @@
  */
 import type { GatewayLeadBroadcastRequestKind } from "./gatewayLeadBroadcastRequestKind";
 
+/**
+ * Request payload for broadcasting a message to multiple board leads.
+ */
 export interface GatewayLeadBroadcastRequest {
   kind?: GatewayLeadBroadcastRequestKind;
   correlation_id?: string | null;

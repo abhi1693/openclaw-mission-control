@@ -36,6 +36,7 @@ from app.schemas.board_onboarding import (
 )
 from app.schemas.boards import BoardRead
 from app.services.board_leads import LeadAgentOptions, LeadAgentRequest, ensure_board_lead_agent
+from app.services.gateway_agents import gateway_agent_session_key
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -60,7 +61,7 @@ async def _gateway_config(
     if not board.gateway_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
     gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url or not gateway.main_session_key:
+    if gateway is None or not gateway.url:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
     return gateway, GatewayClientConfig(url=gateway.url, token=gateway.token)
 
@@ -168,7 +169,7 @@ async def start_onboarding(
     board: Board = BOARD_USER_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
 ) -> BoardOnboardingSession:
-    """Start onboarding and send instructions to the gateway main agent."""
+    """Start onboarding and send instructions to the gateway agent."""
     onboarding = (
         await BoardOnboardingSession.objects.filter_by(board_id=board.id)
         .filter(col(BoardOnboardingSession.status) == "active")
@@ -178,12 +179,12 @@ async def start_onboarding(
         return onboarding
 
     gateway, config = await _gateway_config(session, board)
-    session_key = gateway.main_session_key
+    session_key = gateway_agent_session_key(gateway)
     base_url = settings.base_url or "http://localhost:8000"
     prompt = (
         "BOARD ONBOARDING REQUEST\n\n"
         f"Board Name: {board.name}\n"
-        "You are the main agent. Ask the user 6-10 focused questions total:\n"
+        "You are the gateway agent. Ask the user 6-10 focused questions total:\n"
         "- 3-6 questions to clarify the board goal.\n"
         "- 1 question to choose a unique name for the board lead agent "
         "(first-name style).\n"
@@ -246,7 +247,7 @@ async def start_onboarding(
     )
 
     try:
-        await ensure_session(session_key, config=config, label="Main Agent")
+        await ensure_session(session_key, config=config, label="Gateway Agent")
         await send_message(
             prompt,
             session_key=session_key,
@@ -279,7 +280,7 @@ async def answer_onboarding(
     board: Board = BOARD_USER_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
 ) -> BoardOnboardingSession:
-    """Send a user onboarding answer to the gateway main agent."""
+    """Send a user onboarding answer to the gateway agent."""
     onboarding = (
         await BoardOnboardingSession.objects.filter_by(board_id=board.id)
         .order_by(col(BoardOnboardingSession.updated_at).desc())
@@ -299,7 +300,7 @@ async def answer_onboarding(
     )
 
     try:
-        await ensure_session(onboarding.session_key, config=config, label="Main Agent")
+        await ensure_session(onboarding.session_key, config=config, label="Gateway Agent")
         await send_message(
             answer_text,
             session_key=onboarding.session_key,
@@ -327,7 +328,7 @@ async def agent_onboarding_update(
     session: AsyncSession = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> BoardOnboardingSession:
-    """Store onboarding updates submitted by the gateway main agent."""
+    """Store onboarding updates submitted by the gateway agent."""
     if actor.actor_type != "agent" or actor.agent is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     agent = actor.agent
@@ -338,9 +339,8 @@ async def agent_onboarding_update(
         gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
         if (
             gateway
-            and gateway.main_session_key
             and agent.openclaw_session_id
-            and agent.openclaw_session_id != gateway.main_session_key
+            and agent.openclaw_session_id != gateway_agent_session_key(gateway)
         ):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 

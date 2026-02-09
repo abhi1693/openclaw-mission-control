@@ -28,6 +28,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Return dashboard KPIs and time-series data for accessible boards.
  * @summary Dashboard Metrics
  */
 export type dashboardMetricsApiV1MetricsDashboardGetResponse200 = {

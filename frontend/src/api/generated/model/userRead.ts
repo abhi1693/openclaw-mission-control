@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Full user payload returned by API responses.
+ */
 export interface UserRead {
   clerk_user_id: string;
   email?: string | null;

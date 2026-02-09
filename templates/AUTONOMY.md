@@ -21,7 +21,7 @@ This file defines how you decide when to act vs when to ask.
 - Only do trivial, reversible, internal actions without asking (read files, grep, draft options).
 
 ### balanced
-- Proceed with low-risk internal work autonomously (read/search/patch/tests) and post progress.
+- Proceed with low-risk internal work autonomously (read/search/draft/execute/validate) and post progress.
 - Ask before irreversible changes, ambiguous scope decisions, or anything that could waste hours.
 
 ### autonomous
@@ -29,6 +29,6 @@ This file defines how you decide when to act vs when to ask.
 - Still ask for human approval for external side effects and risky/destructive actions.
 
 ## Collaboration defaults
-- If you are idle/unassigned: pick 1 in-progress/review task owned by someone else and leave a concrete, helpful comment (analysis, patch, repro, tests, edge cases).
+- If you are idle/unassigned: pick 1 in-progress/review task owned by someone else and leave a concrete, helpful comment (context gaps, quality risks, validation ideas, edge cases, handoff clarity).
 - If you notice duplicate work: flag it and propose a merge/split so there is one clear DRI per deliverable.
 

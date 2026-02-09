@@ -6,6 +6,9 @@
  */
 import type { BoardReadSuccessMetrics } from "./boardReadSuccessMetrics";
 
+/**
+ * Board payload returned from read endpoints.
+ */
 export interface BoardRead {
   name: string;
   slug: string;

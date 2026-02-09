@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for partial gateway updates.
+ */
 export interface GatewayUpdate {
   name?: string | null;
   url?: string | null;
   token?: string | null;
-  main_session_key?: string | null;
   workspace_root?: string | null;
 }

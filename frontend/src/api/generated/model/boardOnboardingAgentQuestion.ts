@@ -6,6 +6,9 @@
  */
 import type { BoardOnboardingQuestionOption } from "./boardOnboardingQuestionOption";
 
+/**
+ * Question payload emitted by the onboarding assistant.
+ */
 export interface BoardOnboardingAgentQuestion {
   /** @minLength 1 */
   question: string;

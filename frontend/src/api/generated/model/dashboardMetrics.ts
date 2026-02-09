@@ -9,6 +9,9 @@ import type { DashboardMetricsRange } from "./dashboardMetricsRange";
 import type { DashboardSeriesSet } from "./dashboardSeriesSet";
 import type { DashboardWipSeriesSet } from "./dashboardWipSeriesSet";
 
+/**
+ * Complete dashboard metrics response payload.
+ */
 export interface DashboardMetrics {
   range: DashboardMetricsRange;
   generated_at: string;

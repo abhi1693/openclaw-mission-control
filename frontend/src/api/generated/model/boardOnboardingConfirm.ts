@@ -6,6 +6,9 @@
  */
 import type { BoardOnboardingConfirmSuccessMetrics } from "./boardOnboardingConfirmSuccessMetrics";
 
+/**
+ * Payload used to confirm generated onboarding draft fields.
+ */
 export interface BoardOnboardingConfirm {
   board_type: string;
   objective?: string | null;

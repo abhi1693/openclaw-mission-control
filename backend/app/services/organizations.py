@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 from sqlmodel import col, select
 
 from app.core.time import utcnow
@@ -46,23 +46,6 @@ class OrganizationContext:
 def is_org_admin(member: OrganizationMember) -> bool:
     """Return whether a member has admin-level organization privileges."""
     return member.role in ADMIN_ROLES
-
-
-async def get_default_org(session: AsyncSession) -> Organization | None:
-    """Return the default personal organization if it exists."""
-    return await Organization.objects.filter_by(name=DEFAULT_ORG_NAME).first(session)
-
-
-async def ensure_default_org(session: AsyncSession) -> Organization:
-    """Ensure and return the default personal organization."""
-    org = await get_default_org(session)
-    if org is not None:
-        return org
-    org = Organization(name=DEFAULT_ORG_NAME, created_at=utcnow(), updated_at=utcnow())
-    session.add(org)
-    await session.commit()
-    await session.refresh(org)
-    return org
 
 
 async def get_member(
@@ -216,31 +199,39 @@ async def ensure_member_for_user(
     if existing is not None:
         return existing
 
+    # Serialize first-time provisioning per user to avoid concurrent duplicate org/member creation.
+    await session.exec(
+        select(User.id).where(col(User.id) == user.id).with_for_update(),
+    )
+
+    existing_member = await get_first_membership(session, user.id)
+    if existing_member is not None:
+        if user.active_organization_id != existing_member.organization_id:
+            user.active_organization_id = existing_member.organization_id
+            session.add(user)
+            await session.commit()
+        return existing_member
+
     if user.email:
         invite = await _find_pending_invite(session, user.email)
         if invite is not None:
             return await accept_invite(session, invite, user)
 
-    org = await ensure_default_org(session)
     now = utcnow()
-    member_count = (
-        await session.exec(
-            select(func.count()).where(
-                col(OrganizationMember.organization_id) == org.id,
-            ),
-        )
-    ).one()
-    is_first = int(member_count or 0) == 0
+    org = Organization(name=DEFAULT_ORG_NAME, created_at=now, updated_at=now)
+    session.add(org)
+    await session.flush()
+    org_id = org.id
     member = OrganizationMember(
-        organization_id=org.id,
+        organization_id=org_id,
         user_id=user.id,
-        role="owner" if is_first else "member",
-        all_boards_read=is_first,
-        all_boards_write=is_first,
+        role="owner",
+        all_boards_read=True,
+        all_boards_write=True,
         created_at=now,
         updated_at=now,
     )
-    user.active_organization_id = org.id
+    user.active_organization_id = org_id
     session.add(user)
     session.add(member)
     await session.commit()

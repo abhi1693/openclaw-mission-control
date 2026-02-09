@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for updating an agent SOUL document.
+ */
 export interface SoulUpdateRequest {
   content: string;
   source_url?: string | null;

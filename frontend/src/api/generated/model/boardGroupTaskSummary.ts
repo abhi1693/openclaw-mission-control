@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Task summary row used inside board-group snapshot responses.
+ */
 export interface BoardGroupTaskSummary {
   id: string;
   board_id: string;

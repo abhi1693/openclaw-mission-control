@@ -18,7 +18,6 @@ import type { GatewayUpdate } from "@/api/generated/model";
 import { GatewayForm } from "@/components/gateways/GatewayForm";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import {
-  DEFAULT_MAIN_SESSION_KEY,
   DEFAULT_WORKSPACE_ROOT,
   checkGatewayConnection,
   type GatewayCheckStatus,
@@ -39,9 +38,6 @@ export default function EditGatewayPage() {
   const [name, setName] = useState<string | undefined>(undefined);
   const [gatewayUrl, setGatewayUrl] = useState<string | undefined>(undefined);
   const [gatewayToken, setGatewayToken] = useState<string | undefined>(
-    undefined,
-  );
-  const [mainSessionKey, setMainSessionKey] = useState<string | undefined>(
     undefined,
   );
   const [workspaceRoot, setWorkspaceRoot] = useState<string | undefined>(
@@ -86,10 +82,7 @@ export default function EditGatewayPage() {
   const resolvedName = name ?? loadedGateway?.name ?? "";
   const resolvedGatewayUrl = gatewayUrl ?? loadedGateway?.url ?? "";
   const resolvedGatewayToken = gatewayToken ?? loadedGateway?.token ?? "";
-  const resolvedMainSessionKey =
-    mainSessionKey ??
-    loadedGateway?.main_session_key ??
-    DEFAULT_MAIN_SESSION_KEY;
+  const resolvedMainSessionKey = loadedGateway?.main_session_key ?? null;
   const resolvedWorkspaceRoot =
     workspaceRoot ?? loadedGateway?.workspace_root ?? DEFAULT_WORKSPACE_ROOT;
 
@@ -99,7 +92,6 @@ export default function EditGatewayPage() {
   const canSubmit =
     Boolean(resolvedName.trim()) &&
     Boolean(resolvedGatewayUrl.trim()) &&
-    Boolean(resolvedMainSessionKey.trim()) &&
     Boolean(resolvedWorkspaceRoot.trim()) &&
     gatewayCheckStatus === "success";
 
@@ -117,7 +109,6 @@ export default function EditGatewayPage() {
     const { ok, message } = await checkGatewayConnection({
       gatewayUrl: resolvedGatewayUrl,
       gatewayToken: resolvedGatewayToken,
-      mainSessionKey: resolvedMainSessionKey,
     });
     setGatewayCheckStatus(ok ? "success" : "error");
     setGatewayCheckMessage(message);
@@ -138,10 +129,6 @@ export default function EditGatewayPage() {
       setGatewayCheckMessage(gatewayValidation);
       return;
     }
-    if (!resolvedMainSessionKey.trim()) {
-      setError("Main session key is required.");
-      return;
-    }
     if (!resolvedWorkspaceRoot.trim()) {
       setError("Workspace root is required.");
       return;
@@ -153,7 +140,6 @@ export default function EditGatewayPage() {
       name: resolvedName.trim(),
       url: resolvedGatewayUrl.trim(),
       token: resolvedGatewayToken.trim() || null,
-      main_session_key: resolvedMainSessionKey.trim(),
       workspace_root: resolvedWorkspaceRoot.trim(),
     };
 
@@ -187,7 +173,6 @@ export default function EditGatewayPage() {
         errorMessage={errorMessage}
         isLoading={isLoading}
         canSubmit={canSubmit}
-        mainSessionKeyPlaceholder={DEFAULT_MAIN_SESSION_KEY}
         workspaceRootPlaceholder={DEFAULT_WORKSPACE_ROOT}
         cancelLabel="Back"
         submitLabel="Save changes"
@@ -204,11 +189,6 @@ export default function EditGatewayPage() {
         }}
         onGatewayTokenChange={(next) => {
           setGatewayToken(next);
-          setGatewayCheckStatus("idle");
-          setGatewayCheckMessage(null);
-        }}
-        onMainSessionKeyChange={(next) => {
-          setMainSessionKey(next);
           setGatewayCheckStatus("idle");
           setGatewayCheckMessage(null);
         }}

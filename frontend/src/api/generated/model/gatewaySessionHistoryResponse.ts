@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Gateway session history response payload.
+ */
 export interface GatewaySessionHistoryResponse {
   history: unknown[];
 }

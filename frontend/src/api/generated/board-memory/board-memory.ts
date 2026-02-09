@@ -34,6 +34,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List board memory entries, optionally filtering chat entries.
  * @summary List Board Memory
  */
 export type listBoardMemoryApiV1BoardsBoardIdMemoryGetResponse200 = {
@@ -281,6 +282,7 @@ export function useListBoardMemoryApiV1BoardsBoardIdMemoryGet<
 }
 
 /**
+ * Create a board memory entry and notify chat targets when needed.
  * @summary Create Board Memory
  */
 export type createBoardMemoryApiV1BoardsBoardIdMemoryPostResponse200 = {
@@ -408,6 +410,7 @@ export const useCreateBoardMemoryApiV1BoardsBoardIdMemoryPost = <
   );
 };
 /**
+ * Stream board memory events over server-sent events.
  * @summary Stream Board Memory
  */
 export type streamBoardMemoryApiV1BoardsBoardIdMemoryStreamGetResponse200 = {

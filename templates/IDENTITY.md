@@ -17,3 +17,8 @@ Purpose: {{ identity_purpose }}
 {% if identity_personality %}
 Personality: {{ identity_personality }}
 {% endif %}
+
+{% if identity_custom_instructions %}
+Custom Instructions:
+{{ identity_custom_instructions }}
+{% endif %}

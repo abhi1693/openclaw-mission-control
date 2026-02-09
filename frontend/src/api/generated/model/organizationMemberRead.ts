@@ -7,6 +7,9 @@
 import type { OrganizationBoardAccessRead } from "./organizationBoardAccessRead";
 import type { OrganizationUserRead } from "./organizationUserRead";
 
+/**
+ * Organization member payload including board-level access overrides.
+ */
 export interface OrganizationMemberRead {
   id: string;
   organization_id: string;

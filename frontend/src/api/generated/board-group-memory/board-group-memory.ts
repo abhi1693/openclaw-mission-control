@@ -36,6 +36,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List board-group memory entries for a specific group.
  * @summary List Board Group Memory
  */
 export type listBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryGetResponse200 = {
@@ -328,6 +329,7 @@ export function useListBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryGet<
 }
 
 /**
+ * Create a board-group memory entry and notify chat recipients.
  * @summary Create Board Group Memory
  */
 export type createBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryPostResponse200 =
@@ -477,6 +479,7 @@ export const useCreateBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryPost = <
   );
 };
 /**
+ * Stream memory entries for a board group via server-sent events.
  * @summary Stream Board Group Memory
  */
 export type streamBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryStreamGetResponse200 =
@@ -798,6 +801,7 @@ export function useStreamBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryStreamGet<
 }
 
 /**
+ * List memory entries for the board's linked group.
  * @summary List Board Group Memory For Board
  */
 export type listBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryGetResponse200 =
@@ -1119,6 +1123,7 @@ export function useListBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryGet<
 }
 
 /**
+ * Create a group memory entry from a board context and notify recipients.
  * @summary Create Board Group Memory For Board
  */
 export type createBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryPostResponse200 =
@@ -1275,6 +1280,7 @@ export const useCreateBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryPost 
     );
   };
 /**
+ * Stream memory entries for the board's linked group.
  * @summary Stream Board Group Memory For Board
  */
 export type streamBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryStreamGetResponse200 =

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Heartbeat payload used to create an agent lazily.
+ */
 export interface AgentHeartbeatCreate {
   status?: string | null;
   /** @minLength 1 */

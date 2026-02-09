@@ -48,6 +48,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Return gateway connectivity and session status.
  * @summary Gateways Status
  */
 export type gatewaysStatusApiV1GatewaysStatusGetResponse200 = {
@@ -260,6 +261,7 @@ export function useGatewaysStatusApiV1GatewaysStatusGet<
 }
 
 /**
+ * List sessions for a gateway associated with a board.
  * @summary List Gateway Sessions
  */
 export type listGatewaySessionsApiV1GatewaysSessionsGetResponse200 = {
@@ -492,6 +494,7 @@ export function useListGatewaySessionsApiV1GatewaysSessionsGet<
 }
 
 /**
+ * Get a specific gateway session by key.
  * @summary Get Gateway Session
  */
 export type getGatewaySessionApiV1GatewaysSessionsSessionIdGetResponse200 = {
@@ -774,6 +777,7 @@ export function useGetGatewaySessionApiV1GatewaysSessionsSessionIdGet<
 }
 
 /**
+ * Fetch chat history for a gateway session.
  * @summary Get Session History
  */
 export type getSessionHistoryApiV1GatewaysSessionsSessionIdHistoryGetResponse200 =
@@ -1081,6 +1085,7 @@ export function useGetSessionHistoryApiV1GatewaysSessionsSessionIdHistoryGet<
 }
 
 /**
+ * Send a message into a specific gateway session.
  * @summary Send Gateway Session Message
  */
 export type sendGatewaySessionMessageApiV1GatewaysSessionsSessionIdMessagePostResponse200 =
@@ -1278,6 +1283,7 @@ export const useSendGatewaySessionMessageApiV1GatewaysSessionsSessionIdMessagePo
     );
   };
 /**
+ * Return supported gateway protocol methods and events.
  * @summary Gateway Commands
  */
 export type gatewayCommandsApiV1GatewaysCommandsGetResponse200 = {
@@ -1452,6 +1458,7 @@ export function useGatewayCommandsApiV1GatewaysCommandsGet<
 }
 
 /**
+ * List gateways for the caller's organization.
  * @summary List Gateways
  */
 export type listGatewaysApiV1GatewaysGetResponse200 = {
@@ -1662,6 +1669,7 @@ export function useListGatewaysApiV1GatewaysGet<
 }
 
 /**
+ * Create a gateway and provision or refresh its main agent.
  * @summary Create Gateway
  */
 export type createGatewayApiV1GatewaysPostResponse200 = {
@@ -1779,6 +1787,7 @@ export const useCreateGatewayApiV1GatewaysPost = <
   );
 };
 /**
+ * Return one gateway by id for the caller's organization.
  * @summary Get Gateway
  */
 export type getGatewayApiV1GatewaysGatewayIdGetResponse200 = {
@@ -1986,6 +1995,7 @@ export function useGetGatewayApiV1GatewaysGatewayIdGet<
 }
 
 /**
+ * Patch a gateway and refresh the main-agent provisioning state.
  * @summary Update Gateway
  */
 export type updateGatewayApiV1GatewaysGatewayIdPatchResponse200 = {
@@ -2113,6 +2123,7 @@ export const useUpdateGatewayApiV1GatewaysGatewayIdPatch = <
   );
 };
 /**
+ * Delete a gateway in the caller's organization.
  * @summary Delete Gateway
  */
 export type deleteGatewayApiV1GatewaysGatewayIdDeleteResponse200 = {
@@ -2232,6 +2243,7 @@ export const useDeleteGatewayApiV1GatewaysGatewayIdDelete = <
   );
 };
 /**
+ * Sync templates for a gateway and optionally rotate runtime settings.
  * @summary Sync Gateway Templates
  */
 export type syncGatewayTemplatesApiV1GatewaysGatewayIdTemplatesSyncPostResponse200 =

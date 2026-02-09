@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Request payload for asking the end user via a main gateway agent.
+ */
 export interface GatewayMainAskUserRequest {
   correlation_id?: string | null;
   /** @minLength 1 */

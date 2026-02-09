@@ -6,6 +6,9 @@
  */
 import type { BlockedTaskDetail } from "./blockedTaskDetail";
 
+/**
+ * Top-level blocked-task error response envelope.
+ */
 export interface BlockedTaskError {
   detail: BlockedTaskDetail;
 }

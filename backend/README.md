@@ -71,7 +71,9 @@ A starter file exists at `backend/.env.example`.
 
 Clerk is used for user authentication (optional for local/self-host in many setups).
 
-- `CLERK_JWKS_URL` (string)
+- `CLERK_SECRET_KEY` (required)
+  - Used to fetch user profile fields (email/name) from Clerk when JWT claims are minimal.
+- `CLERK_API_URL` (default: `https://api.clerk.com`)
 - `CLERK_VERIFY_IAT` (default: `true`)
 - `CLERK_LEEWAY` (default: `10.0`)
 

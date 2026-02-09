@@ -1,6 +1,5 @@
 import { gatewaysStatusApiV1GatewaysStatusGet } from "@/api/generated/gateways/gateways";
 
-export const DEFAULT_MAIN_SESSION_KEY = "agent:main:main";
 export const DEFAULT_WORKSPACE_ROOT = "~/.openclaw";
 
 export type GatewayCheckStatus = "idle" | "checking" | "success" | "error";
@@ -25,7 +24,6 @@ export const validateGatewayUrl = (value: string) => {
 export async function checkGatewayConnection(params: {
   gatewayUrl: string;
   gatewayToken: string;
-  mainSessionKey: string;
 }): Promise<{ ok: boolean; message: string }> {
   try {
     const requestParams: Record<string, string> = {
@@ -33,9 +31,6 @@ export async function checkGatewayConnection(params: {
     };
     if (params.gatewayToken.trim()) {
       requestParams.gateway_token = params.gatewayToken.trim();
-    }
-    if (params.mainSessionKey.trim()) {
-      requestParams.gateway_main_session_key = params.mainSessionKey.trim();
     }
 
     const response = await gatewaysStatusApiV1GatewaysStatusGet(requestParams);

@@ -8,6 +8,9 @@ import type { ApprovalCreatePayload } from "./approvalCreatePayload";
 import type { ApprovalCreateRubricScores } from "./approvalCreateRubricScores";
 import type { ApprovalCreateStatus } from "./approvalCreateStatus";
 
+/**
+ * Payload for creating a new approval request.
+ */
 export interface ApprovalCreate {
   action_type: string;
   task_id?: string | null;

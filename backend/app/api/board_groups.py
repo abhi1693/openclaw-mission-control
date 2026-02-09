@@ -230,9 +230,9 @@ def _update_agent_heartbeat(
     payload: BoardGroupHeartbeatApply,
 ) -> None:
     raw = agent.heartbeat_config
-    heartbeat: dict[str, Any] = (
-        dict(raw) if isinstance(raw, dict) else DEFAULT_HEARTBEAT_CONFIG.copy()
-    )
+    heartbeat: dict[str, Any] = DEFAULT_HEARTBEAT_CONFIG.copy()
+    if isinstance(raw, dict):
+        heartbeat.update(raw)
     heartbeat["every"] = payload.every
     if payload.target is not None:
         heartbeat["target"] = payload.target

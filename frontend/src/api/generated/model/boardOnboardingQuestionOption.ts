@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Selectable option for an onboarding question.
+ */
 export interface BoardOnboardingQuestionOption {
   /** @minLength 1 */
   id: string;

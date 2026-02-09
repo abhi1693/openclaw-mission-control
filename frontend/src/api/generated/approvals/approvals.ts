@@ -35,6 +35,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List approvals for a board, optionally filtering by status.
  * @summary List Approvals
  */
 export type listApprovalsApiV1BoardsBoardIdApprovalsGetResponse200 = {
@@ -287,6 +288,7 @@ export function useListApprovalsApiV1BoardsBoardIdApprovalsGet<
 }
 
 /**
+ * Create an approval for a board.
  * @summary Create Approval
  */
 export type createApprovalApiV1BoardsBoardIdApprovalsPostResponse200 = {
@@ -414,6 +416,7 @@ export const useCreateApprovalApiV1BoardsBoardIdApprovalsPost = <
   );
 };
 /**
+ * Stream approval updates for a board using server-sent events.
  * @summary Stream Approvals
  */
 export type streamApprovalsApiV1BoardsBoardIdApprovalsStreamGetResponse200 = {
@@ -696,6 +699,7 @@ export function useStreamApprovalsApiV1BoardsBoardIdApprovalsStreamGet<
 }
 
 /**
+ * Update an approval's status and resolution timestamp.
  * @summary Update Approval
  */
 export type updateApprovalApiV1BoardsBoardIdApprovalsApprovalIdPatchResponse200 =

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Topline dashboard KPI summary values.
+ */
 export interface DashboardKpis {
   active_agents: number;
   tasks_in_progress: number;

@@ -142,6 +142,7 @@ export default function NewAgentPage() {
         heartbeat_config: {
           every: heartbeatEvery.trim() || "10m",
           target: heartbeatTarget,
+          includeReasoning: false,
         },
         identity_profile: normalizeIdentityProfile(
           identityProfile,

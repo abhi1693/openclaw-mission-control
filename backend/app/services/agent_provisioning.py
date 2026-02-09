@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from app.core.config import settings
 from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
 from app.integrations.openclaw_gateway import OpenClawGatewayError, ensure_session, openclaw_call
+from app.services.gateway_agents import gateway_agent_session_key
 
 if TYPE_CHECKING:
     from app.models.agents import Agent
@@ -23,7 +24,18 @@ if TYPE_CHECKING:
     from app.models.gateways import Gateway
     from app.models.users import User
 
-DEFAULT_HEARTBEAT_CONFIG = {"every": "10m", "target": "none"}
+DEFAULT_HEARTBEAT_CONFIG: dict[str, Any] = {
+    "every": "10m",
+    "target": "none",
+    # Keep heartbeat delivery concise by default.
+    "includeReasoning": False,
+}
+DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY: dict[str, bool] = {
+    # Suppress routine HEARTBEAT_OK delivery by default.
+    "showOk": False,
+    "showAlerts": True,
+    "useIndicator": True,
+}
 DEFAULT_IDENTITY_PROFILE = {
     "role": "Generalist",
     "communication_style": "direct, concise, practical",
@@ -52,6 +64,7 @@ DEFAULT_GATEWAY_FILES = frozenset(
     {
         "AGENTS.md",
         "SOUL.md",
+        "TASK_SOUL.md",
         "SELF.md",
         "AUTONOMY.md",
         "TOOLS.md",
@@ -71,7 +84,7 @@ DEFAULT_GATEWAY_FILES = frozenset(
 # - SELF.md: evolving identity/preferences
 # - USER.md: human-provided context + lead intake notes
 # - MEMORY.md: curated long-term memory (consolidated)
-PRESERVE_AGENT_EDITABLE_FILES = frozenset({"SELF.md", "USER.md", "MEMORY.md"})
+PRESERVE_AGENT_EDITABLE_FILES = frozenset({"SELF.md", "USER.md", "MEMORY.md", "TASK_SOUL.md"})
 
 HEARTBEAT_LEAD_TEMPLATE = "HEARTBEAT_LEAD.md"
 HEARTBEAT_AGENT_TEMPLATE = "HEARTBEAT_AGENT.md"
@@ -112,6 +125,7 @@ class MainAgentProvisionRequest:
     gateway: Gateway
     auth_token: str
     user: User | None
+    session_key: str | None = None
     options: ProvisionOptions = field(default_factory=ProvisionOptions)
 
 
@@ -198,9 +212,31 @@ def _agent_key(agent: Agent) -> str:
 
 
 def _heartbeat_config(agent: Agent) -> dict[str, Any]:
-    if agent.heartbeat_config:
-        return agent.heartbeat_config
-    return DEFAULT_HEARTBEAT_CONFIG.copy()
+    merged = DEFAULT_HEARTBEAT_CONFIG.copy()
+    if isinstance(agent.heartbeat_config, dict):
+        merged.update(agent.heartbeat_config)
+    return merged
+
+
+def _channel_heartbeat_visibility_patch(config_data: dict[str, Any]) -> dict[str, Any] | None:
+    channels = config_data.get("channels")
+    if not isinstance(channels, dict):
+        return {"defaults": {"heartbeat": DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.copy()}}
+    defaults = channels.get("defaults")
+    if not isinstance(defaults, dict):
+        return {"defaults": {"heartbeat": DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.copy()}}
+    heartbeat = defaults.get("heartbeat")
+    if not isinstance(heartbeat, dict):
+        return {"defaults": {"heartbeat": DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.copy()}}
+    merged = dict(heartbeat)
+    changed = False
+    for key, value in DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.items():
+        if key not in merged:
+            merged[key] = value
+            changed = True
+    if not changed:
+        return None
+    return {"defaults": {"heartbeat": merged}}
 
 
 def _template_env() -> Environment:
@@ -273,15 +309,12 @@ def _build_context(
     if not gateway.workspace_root:
         msg = "gateway_workspace_root is required"
         raise ValueError(msg)
-    if not gateway.main_session_key:
-        msg = "gateway_main_session_key is required"
-        raise ValueError(msg)
     agent_id = str(agent.id)
     workspace_root = gateway.workspace_root
     workspace_path = _workspace_path(agent, workspace_root)
     session_key = agent.openclaw_session_id or ""
     base_url = settings.base_url or "REPLACE_WITH_BASE_URL"
-    main_session_key = gateway.main_session_key
+    main_session_key = gateway_agent_session_key(gateway)
     identity_profile: dict[str, Any] = {}
     if isinstance(agent.identity_profile, dict):
         identity_profile = agent.identity_profile
@@ -377,7 +410,7 @@ def _build_main_context(
         "session_key": agent.openclaw_session_id or "",
         "base_url": base_url,
         "auth_token": auth_token,
-        "main_session_key": gateway.main_session_key or "",
+        "main_session_key": gateway_agent_session_key(gateway),
         "workspace_root": gateway.workspace_root or "",
         "user_name": (user.name or "") if user else "",
         "user_preferred_name": preferred_name,
@@ -561,7 +594,10 @@ async def _patch_gateway_agent_list(
             {"id": agent_id, "workspace": workspace_path, "heartbeat": heartbeat},
         )
 
-    patch = {"agents": {"list": new_list}}
+    patch: dict[str, Any] = {"agents": {"list": new_list}}
+    channels_patch = _channel_heartbeat_visibility_patch(data)
+    if channels_patch is not None:
+        patch["channels"] = channels_patch
     params = {"raw": json.dumps(patch)}
     if base_hash:
         params["baseHash"] = base_hash
@@ -570,7 +606,7 @@ async def _patch_gateway_agent_list(
 
 async def _gateway_config_agent_list(
     config: GatewayClientConfig,
-) -> tuple[str | None, list[object]]:
+) -> tuple[str | None, list[object], dict[str, Any]]:
     cfg = await openclaw_call("config.get", config=config)
     if not isinstance(cfg, dict):
         msg = "config.get returned invalid payload"
@@ -586,7 +622,7 @@ async def _gateway_config_agent_list(
     if not isinstance(agents_list, list):
         msg = "config agents.list is not a list"
         raise OpenClawGatewayError(msg)
-    return cfg.get("hash"), agents_list
+    return cfg.get("hash"), agents_list, data
 
 
 def _heartbeat_entry_map(
@@ -643,11 +679,14 @@ async def patch_gateway_agent_heartbeats(
         msg = "Gateway url is required"
         raise OpenClawGatewayError(msg)
     config = GatewayClientConfig(url=gateway.url, token=gateway.token)
-    base_hash, raw_list = await _gateway_config_agent_list(config)
+    base_hash, raw_list, config_data = await _gateway_config_agent_list(config)
     entry_by_id = _heartbeat_entry_map(entries)
     new_list = _updated_agent_list(raw_list, entry_by_id)
 
-    patch = {"agents": {"list": new_list}}
+    patch: dict[str, Any] = {"agents": {"list": new_list}}
+    channels_patch = _channel_heartbeat_visibility_patch(config_data)
+    if channels_patch is not None:
+        patch["channels"] = channels_patch
     params = {"raw": json.dumps(patch)}
     if base_hash:
         params["baseHash"] = base_hash
@@ -830,20 +869,30 @@ async def provision_main_agent(
     gateway = request.gateway
     if not gateway.url:
         return
-    if not gateway.main_session_key:
-        msg = "gateway main_session_key is required"
+    session_key = (request.session_key or gateway.main_session_key or "").strip()
+    if not session_key:
+        msg = "gateway main agent session_key is required"
         raise ValueError(msg)
     client_config = GatewayClientConfig(url=gateway.url, token=gateway.token)
     await ensure_session(
-        gateway.main_session_key,
+        session_key,
         config=client_config,
-        label="Main Agent",
+        label=agent.name or "Gateway Agent",
     )
 
-    agent_id = await _gateway_default_agent_id(
-        client_config,
-        fallback_session_key=gateway.main_session_key,
-    )
+    agent_id = _agent_id_from_session_key(session_key)
+    if agent_id:
+        if not gateway.workspace_root:
+            msg = "gateway_workspace_root is required"
+            raise ValueError(msg)
+        workspace_path = _workspace_path(agent, gateway.workspace_root)
+        heartbeat = _heartbeat_config(agent)
+        await _patch_gateway_agent_list(agent_id, workspace_path, heartbeat, client_config)
+    else:
+        agent_id = await _gateway_default_agent_id(
+            client_config,
+            fallback_session_key=session_key,
+        )
     if not agent_id:
         msg = "Unable to resolve gateway main agent id"
         raise OpenClawGatewayError(msg)
@@ -872,7 +921,7 @@ async def provision_main_agent(
         client_config=client_config,
     )
     if request.options.reset_session:
-        await _reset_session(gateway.main_session_key, client_config)
+        await _reset_session(session_key, client_config)
 
 
 async def cleanup_agent(

@@ -6,6 +6,9 @@
  */
 import type { OrganizationBoardAccessSpec } from "./organizationBoardAccessSpec";
 
+/**
+ * Payload for replacing organization member access permissions.
+ */
 export interface OrganizationMemberAccessUpdate {
   all_boards_read?: boolean;
   all_boards_write?: boolean;

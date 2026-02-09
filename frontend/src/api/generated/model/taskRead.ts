@@ -6,6 +6,9 @@
  */
 import type { TaskReadStatus } from "./taskReadStatus";
 
+/**
+ * Task payload returned from read endpoints.
+ */
 export interface TaskRead {
   title: string;
   description?: string | null;

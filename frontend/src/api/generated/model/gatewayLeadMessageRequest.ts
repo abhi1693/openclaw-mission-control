@@ -6,6 +6,9 @@
  */
 import type { GatewayLeadMessageRequestKind } from "./gatewayLeadMessageRequestKind";
 
+/**
+ * Request payload for sending a message to a board lead agent.
+ */
 export interface GatewayLeadMessageRequest {
   kind?: GatewayLeadMessageRequestKind;
   correlation_id?: string | null;

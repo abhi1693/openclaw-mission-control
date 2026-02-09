@@ -6,6 +6,9 @@
  */
 import type { TaskCreateStatus } from "./taskCreateStatus";
 
+/**
+ * Payload for creating a task.
+ */
 export interface TaskCreate {
   title: string;
   description?: string | null;

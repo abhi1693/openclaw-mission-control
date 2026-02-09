@@ -39,6 +39,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List board groups in the active organization.
  * @summary List Board Groups
  */
 export type listBoardGroupsApiV1BoardGroupsGetResponse200 = {
@@ -250,6 +251,7 @@ export function useListBoardGroupsApiV1BoardGroupsGet<
 }
 
 /**
+ * Create a board group in the active organization.
  * @summary Create Board Group
  */
 export type createBoardGroupApiV1BoardGroupsPostResponse200 = {
@@ -368,6 +370,7 @@ export const useCreateBoardGroupApiV1BoardGroupsPost = <
   );
 };
 /**
+ * Get a board group by id.
  * @summary Get Board Group
  */
 export type getBoardGroupApiV1BoardGroupsGroupIdGetResponse200 = {
@@ -576,6 +579,7 @@ export function useGetBoardGroupApiV1BoardGroupsGroupIdGet<
 }
 
 /**
+ * Update a board group.
  * @summary Update Board Group
  */
 export type updateBoardGroupApiV1BoardGroupsGroupIdPatchResponse200 = {
@@ -703,6 +707,7 @@ export const useUpdateBoardGroupApiV1BoardGroupsGroupIdPatch = <
   );
 };
 /**
+ * Delete a board group.
  * @summary Delete Board Group
  */
 export type deleteBoardGroupApiV1BoardGroupsGroupIdDeleteResponse200 = {
@@ -825,6 +830,7 @@ export const useDeleteBoardGroupApiV1BoardGroupsGroupIdDelete = <
   );
 };
 /**
+ * Get a snapshot across boards in a group.
  * @summary Get Board Group Snapshot
  */
 export type getBoardGroupSnapshotApiV1BoardGroupsGroupIdSnapshotGetResponse200 =
@@ -1127,6 +1133,7 @@ export function useGetBoardGroupSnapshotApiV1BoardGroupsGroupIdSnapshotGet<
 }
 
 /**
+ * Apply heartbeat settings to agents in a board group.
  * @summary Apply Board Group Heartbeat
  */
 export type applyBoardGroupHeartbeatApiV1BoardGroupsGroupIdHeartbeatPostResponse200 =

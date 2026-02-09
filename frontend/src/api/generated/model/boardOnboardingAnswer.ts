@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * User answer payload for a single onboarding question.
+ */
 export interface BoardOnboardingAnswer {
   /** @minLength 1 */
   answer: string;

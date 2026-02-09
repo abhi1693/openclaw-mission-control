@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for mutating approval status.
+ */
 export interface ApprovalUpdate {
   status?: "pending" | "approved" | "rejected" | null;
 }

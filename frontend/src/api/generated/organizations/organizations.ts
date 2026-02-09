@@ -26,6 +26,7 @@ import type {
   LimitOffsetPageTypeVarCustomizedOrganizationMemberRead,
   ListOrgInvitesApiV1OrganizationsMeInvitesGetParams,
   ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  OkResponse,
   OrganizationActiveUpdate,
   OrganizationCreate,
   OrganizationInviteAccept,
@@ -43,6 +44,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Create an organization and assign the caller as owner.
  * @summary Create Organization
  */
 export type createOrganizationApiV1OrganizationsPostResponse200 = {
@@ -163,6 +165,7 @@ export const useCreateOrganizationApiV1OrganizationsPost = <
   );
 };
 /**
+ * List organizations where the current user is a member.
  * @summary List My Organizations
  */
 export type listMyOrganizationsApiV1OrganizationsMeListGetResponse200 = {
@@ -369,6 +372,7 @@ export function useListMyOrganizationsApiV1OrganizationsMeListGet<
 }
 
 /**
+ * Set the caller's active organization.
  * @summary Set Active Org
  */
 export type setActiveOrgApiV1OrganizationsMeActivePatchResponse200 = {
@@ -489,6 +493,7 @@ export const useSetActiveOrgApiV1OrganizationsMeActivePatch = <
   );
 };
 /**
+ * Return the caller's active organization.
  * @summary Get My Org
  */
 export type getMyOrgApiV1OrganizationsMeGetResponse200 = {
@@ -661,6 +666,109 @@ export function useGetMyOrgApiV1OrganizationsMeGet<
 }
 
 /**
+ * Delete the active organization and related entities.
+ * @summary Delete My Org
+ */
+export type deleteMyOrgApiV1OrganizationsMeDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteMyOrgApiV1OrganizationsMeDeleteResponseSuccess =
+  deleteMyOrgApiV1OrganizationsMeDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteMyOrgApiV1OrganizationsMeDeleteResponse =
+  deleteMyOrgApiV1OrganizationsMeDeleteResponseSuccess;
+
+export const getDeleteMyOrgApiV1OrganizationsMeDeleteUrl = () => {
+  return `/api/v1/organizations/me`;
+};
+
+export const deleteMyOrgApiV1OrganizationsMeDelete = async (
+  options?: RequestInit,
+): Promise<deleteMyOrgApiV1OrganizationsMeDeleteResponse> => {
+  return customFetch<deleteMyOrgApiV1OrganizationsMeDeleteResponse>(
+    getDeleteMyOrgApiV1OrganizationsMeDeleteUrl(),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["deleteMyOrgApiV1OrganizationsMeDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+    void
+  > = () => {
+    return deleteMyOrgApiV1OrganizationsMeDelete(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMyOrgApiV1OrganizationsMeDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>
+>;
+
+export type DeleteMyOrgApiV1OrganizationsMeDeleteMutationError = unknown;
+
+/**
+ * @summary Delete My Org
+ */
+export const useDeleteMyOrgApiV1OrganizationsMeDelete = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+      TError,
+      void,
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(
+    getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * Get the caller's membership record in the active organization.
  * @summary Get My Membership
  */
 export type getMyMembershipApiV1OrganizationsMeMemberGetResponse200 = {
@@ -862,6 +970,7 @@ export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
 }
 
 /**
+ * List members for the active organization.
  * @summary List Org Members
  */
 export type listOrgMembersApiV1OrganizationsMeMembersGetResponse200 = {
@@ -1110,6 +1219,7 @@ export function useListOrgMembersApiV1OrganizationsMeMembersGet<
 }
 
 /**
+ * Get a specific organization member by id.
  * @summary Get Org Member
  */
 export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse200 = {
@@ -1365,6 +1475,7 @@ export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
 }
 
 /**
+ * Update a member's role in the organization.
  * @summary Update Org Member
  */
 export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse200 =
@@ -1514,6 +1625,156 @@ export const useUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch = <
   );
 };
 /**
+ * Remove a member from the active organization.
+ * @summary Remove Org Member
+ */
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse200 =
+  {
+    data: OkResponse;
+    status: 200;
+  };
+
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseSuccess =
+  removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseError =
+  removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse =
+  | removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseSuccess
+  | removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseError;
+
+export const getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteUrl = (
+  memberId: string,
+) => {
+  return `/api/v1/organizations/me/members/${memberId}`;
+};
+
+export const removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete = async (
+  memberId: string,
+  options?: RequestInit,
+): Promise<removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse> => {
+  return customFetch<removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse>(
+    getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteUrl(memberId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+        >
+      >,
+      TError,
+      { memberId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+      >
+    >,
+    TError,
+    { memberId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+        >
+      >,
+      { memberId: string }
+    > = (props) => {
+      const { memberId } = props ?? {};
+
+      return removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete(
+        memberId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type RemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+      >
+    >
+  >;
+
+export type RemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Remove Org Member
+ */
+export const useRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+        >
+      >,
+      TError,
+      { memberId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete>
+  >,
+  TError,
+  { memberId: string },
+  TContext
+> => {
+  return useMutation(
+    getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * Update board-level access settings for a member.
  * @summary Update Member Access
  */
 export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse200 =
@@ -1670,6 +1931,7 @@ export const useUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut =
     );
   };
 /**
+ * List pending invites for the active organization.
  * @summary List Org Invites
  */
 export type listOrgInvitesApiV1OrganizationsMeInvitesGetResponse200 = {
@@ -1918,6 +2180,7 @@ export function useListOrgInvitesApiV1OrganizationsMeInvitesGet<
 }
 
 /**
+ * Create an organization invite for an email address.
  * @summary Create Org Invite
  */
 export type createOrgInviteApiV1OrganizationsMeInvitesPostResponse200 = {
@@ -2045,6 +2308,7 @@ export const useCreateOrgInviteApiV1OrganizationsMeInvitesPost = <
   );
 };
 /**
+ * Revoke a pending invite from the active organization.
  * @summary Revoke Org Invite
  */
 export type revokeOrgInviteApiV1OrganizationsMeInvitesInviteIdDeleteResponse200 =
@@ -2193,6 +2457,7 @@ export const useRevokeOrgInviteApiV1OrganizationsMeInvitesInviteIdDelete = <
   );
 };
 /**
+ * Accept an invite and return resulting membership.
  * @summary Accept Org Invite
  */
 export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse200 = {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     local_auth_token: str = ""
 
     # Clerk auth (auth only; roles stored in DB)
-    clerk_jwks_url: str = ""
+    clerk_secret_key: str = Field(min_length=1)
+    clerk_api_url: str = "https://api.clerk.com"
     clerk_verify_iat: bool = True
     clerk_leeway: float = 10.0
 
@@ -56,6 +57,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _defaults(self) -> Self:
+        if not self.clerk_secret_key.strip():
+            raise ValueError("CLERK_SECRET_KEY must be set and non-empty.")
         # In dev, default to applying Alembic migrations at startup to avoid
         # schema drift (e.g. missing newly-added columns).
         if "db_auto_migrate" not in self.model_fields_set and self.environment == "dev":

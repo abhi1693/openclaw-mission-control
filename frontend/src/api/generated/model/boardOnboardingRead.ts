@@ -7,6 +7,9 @@
 import type { BoardOnboardingAgentComplete } from "./boardOnboardingAgentComplete";
 import type { BoardOnboardingReadMessages } from "./boardOnboardingReadMessages";
 
+/**
+ * Stored onboarding session state returned by API endpoints.
+ */
 export interface BoardOnboardingRead {
   id: string;
   board_id: string;

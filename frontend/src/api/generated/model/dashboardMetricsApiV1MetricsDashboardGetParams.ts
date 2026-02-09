@@ -4,8 +4,8 @@
  * Mission Control API
  * OpenAPI spec version: 0.1.0
  */
-import type { DashboardMetricsApiV1MetricsDashboardGetRange } from "./dashboardMetricsApiV1MetricsDashboardGetRange";
+import type { DashboardMetricsApiV1MetricsDashboardGetRangeKey } from "./dashboardMetricsApiV1MetricsDashboardGetRangeKey";
 
 export type DashboardMetricsApiV1MetricsDashboardGetParams = {
-  range?: DashboardMetricsApiV1MetricsDashboardGetRange;
+  range_key?: DashboardMetricsApiV1MetricsDashboardGetRangeKey;
 };

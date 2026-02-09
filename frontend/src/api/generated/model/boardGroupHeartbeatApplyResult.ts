@@ -6,6 +6,9 @@
  */
 import type { BoardGroupHeartbeatApplyResultRequested } from "./boardGroupHeartbeatApplyResultRequested";
 
+/**
+ * Result payload describing agents updated by a heartbeat request.
+ */
 export interface BoardGroupHeartbeatApplyResult {
   board_group_id: string;
   requested: BoardGroupHeartbeatApplyResultRequested;

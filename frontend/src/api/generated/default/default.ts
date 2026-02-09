@@ -28,6 +28,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Lightweight liveness probe endpoint.
  * @summary Health
  */
 export type healthHealthGetResponse200 = {
@@ -189,6 +190,7 @@ export function useHealthHealthGet<
 }
 
 /**
+ * Alias liveness probe endpoint for platform compatibility.
  * @summary Healthz
  */
 export type healthzHealthzGetResponse200 = {
@@ -354,6 +356,7 @@ export function useHealthzHealthzGet<
 }
 
 /**
+ * Readiness probe endpoint for service orchestration checks.
  * @summary Readyz
  */
 export type readyzReadyzGetResponse200 = {

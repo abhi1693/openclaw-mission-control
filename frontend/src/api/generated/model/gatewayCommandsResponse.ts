@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Gateway command catalog and protocol metadata.
+ */
 export interface GatewayCommandsResponse {
   protocol_version: number;
   methods: string[];

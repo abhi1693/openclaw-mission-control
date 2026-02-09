@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Start signal for initializing onboarding conversation.
+ */
 export interface BoardOnboardingStart {
   [key: string]: unknown;
 }

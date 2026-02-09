@@ -8,6 +8,9 @@ import type { DashboardRangeSeriesBucket } from "./dashboardRangeSeriesBucket";
 import type { DashboardRangeSeriesRange } from "./dashboardRangeSeriesRange";
 import type { DashboardSeriesPoint } from "./dashboardSeriesPoint";
 
+/**
+ * Series payload for a single range/bucket combination.
+ */
 export interface DashboardRangeSeries {
   range: DashboardRangeSeriesRange;
   bucket: DashboardRangeSeriesBucket;

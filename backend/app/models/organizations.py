@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import UniqueConstraint
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -18,7 +17,6 @@ class Organization(QueryModel, table=True):
     """Top-level organization tenant record."""
 
     __tablename__ = "organizations"  # pyright: ignore[reportAssignmentType]
-    __table_args__ = (UniqueConstraint("name", name="uq_organizations_name"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)

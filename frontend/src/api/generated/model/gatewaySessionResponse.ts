@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Single gateway session response payload.
+ */
 export interface GatewaySessionResponse {
   session: unknown;
 }

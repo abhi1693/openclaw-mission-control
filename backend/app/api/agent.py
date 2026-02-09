@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import SQLModel, col, select
@@ -56,6 +57,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
 from app.services.board_leads import LeadAgentOptions, LeadAgentRequest, ensure_board_lead_agent
+from app.services.gateway_agents import gateway_agent_session_key, parse_gateway_agent_session_key
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_status_by_id,
@@ -64,7 +66,6 @@ from app.services.task_dependencies import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from uuid import UUID
 
     from fastapi_pagination.limit_offset import LimitOffsetPage
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -177,13 +178,22 @@ async def _require_gateway_main(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Agent missing session key",
         )
-    gateway = await Gateway.objects.filter_by(main_session_key=session_key).first(
-        session,
-    )
+    gateway_id = parse_gateway_agent_session_key(session_key)
+    if gateway_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the dedicated gateway agent may call this endpoint.",
+        )
+    gateway = await Gateway.objects.by_id(gateway_id).first(session)
     if gateway is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the gateway main agent may call this endpoint.",
+            detail="Only the dedicated gateway agent may call this endpoint.",
+        )
+    if gateway_agent_session_key(gateway) != session_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the dedicated gateway agent may call this endpoint.",
         )
     if not gateway.url:
         raise HTTPException(
@@ -729,7 +739,7 @@ async def ask_user_via_gateway_main(
     session: AsyncSession = SESSION_DEP,
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
 ) -> GatewayMainAskUserResponse:
-    """Route a lead's ask-user request through the gateway main agent."""
+    """Route a lead's ask-user request through the dedicated gateway agent."""
     import json
 
     _guard_board_access(agent_ctx, board)
@@ -747,11 +757,11 @@ async def ask_user_via_gateway_main(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Gateway is not configured for this board",
         )
-    main_session_key = (gateway.main_session_key or "").strip()
+    main_session_key = gateway_agent_session_key(gateway)
     if not main_session_key:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Gateway main session key is required",
+            detail="Gateway agent session key is required",
         )
     config = GatewayClientConfig(url=gateway.url, token=gateway.token)
 
@@ -785,13 +795,8 @@ async def ask_user_via_gateway_main(
     )
 
     try:
-        await ensure_session(main_session_key, config=config, label="Main Agent")
-        await send_message(
-            message,
-            session_key=main_session_key,
-            config=config,
-            deliver=True,
-        )
+        await ensure_session(main_session_key, config=config, label="Gateway Agent")
+        await send_message(message, session_key=main_session_key, config=config, deliver=True)
     except OpenClawGatewayError as exc:
         record_activity(
             session,
@@ -808,7 +813,7 @@ async def ask_user_via_gateway_main(
     record_activity(
         session,
         event_type="gateway.lead.ask_user.sent",
-        message=f"Lead requested user info via gateway main for board: {board.name}.",
+        message=f"Lead requested user info via gateway agent for board: {board.name}.",
         agent_id=agent_ctx.agent.id,
     )
 
@@ -871,7 +876,7 @@ async def message_gateway_board_lead(
         f"From agent: {agent_ctx.agent.name}\n"
         f"{correlation_line}\n"
         f"{payload.content.strip()}\n\n"
-        "Reply to the gateway main by writing a NON-chat memory item on this board:\n"
+        "Reply to the gateway agent by writing a NON-chat memory item on this board:\n"
         f"POST {base_url}/api/v1/agent/boards/{board.id}/memory\n"
         f'Body: {{"content":"...","tags":{tags_json},"source":"{reply_source}"}}\n'
         "Do NOT reply in OpenClaw chat."
@@ -964,7 +969,7 @@ async def broadcast_gateway_lead_message(
                 f"From agent: {agent_ctx.agent.name}\n"
                 f"{correlation_line}\n"
                 f"{payload.content.strip()}\n\n"
-                "Reply to the gateway main by writing a NON-chat memory item "
+                "Reply to the gateway agent by writing a NON-chat memory item "
                 "on this board:\n"
                 f"POST {base_url}/api/v1/agent/boards/{target_board.id}/memory\n"
                 f'Body: {{"content":"...","tags":{tags_json},'

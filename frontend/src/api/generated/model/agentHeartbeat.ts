@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Heartbeat status payload sent by agents.
+ */
 export interface AgentHeartbeat {
   status?: string | null;
 }

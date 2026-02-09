@@ -38,6 +38,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * List boards visible to the current organization member.
  * @summary List Boards
  */
 export type listBoardsApiV1BoardsGetResponse200 = {
@@ -245,6 +246,7 @@ export function useListBoardsApiV1BoardsGet<
 }
 
 /**
+ * Create a board in the active organization.
  * @summary Create Board
  */
 export type createBoardApiV1BoardsPostResponse200 = {
@@ -362,6 +364,7 @@ export const useCreateBoardApiV1BoardsPost = <
   );
 };
 /**
+ * Get a board by id.
  * @summary Get Board
  */
 export type getBoardApiV1BoardsBoardIdGetResponse200 = {
@@ -561,6 +564,7 @@ export function useGetBoardApiV1BoardsBoardIdGet<
 }
 
 /**
+ * Update mutable board properties.
  * @summary Update Board
  */
 export type updateBoardApiV1BoardsBoardIdPatchResponse200 = {
@@ -680,6 +684,7 @@ export const useUpdateBoardApiV1BoardsBoardIdPatch = <
   );
 };
 /**
+ * Delete a board and all dependent records.
  * @summary Delete Board
  */
 export type deleteBoardApiV1BoardsBoardIdDeleteResponse200 = {
@@ -796,6 +801,7 @@ export const useDeleteBoardApiV1BoardsBoardIdDelete = <
   );
 };
 /**
+ * Get a board snapshot view model.
  * @summary Get Board Snapshot
  */
 export type getBoardSnapshotApiV1BoardsBoardIdSnapshotGetResponse200 = {
@@ -1034,6 +1040,7 @@ export function useGetBoardSnapshotApiV1BoardsBoardIdSnapshotGet<
 }
 
 /**
+ * Get a grouped snapshot across related boards.
  * @summary Get Board Group Snapshot
  */
 export type getBoardGroupSnapshotApiV1BoardsBoardIdGroupSnapshotGetResponse200 =

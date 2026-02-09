@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Organization list row for current user memberships.
+ */
 export interface OrganizationListItem {
   id: string;
   name: string;

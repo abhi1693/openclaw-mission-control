@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Serialized board-group memory entry returned from read endpoints.
+ */
 export interface BoardGroupMemoryRead {
   id: string;
   board_group_id: string;

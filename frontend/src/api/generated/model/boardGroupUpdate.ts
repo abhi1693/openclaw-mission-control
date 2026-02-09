@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for partial board-group updates.
+ */
 export interface BoardGroupUpdate {
   name?: string | null;
   slug?: string | null;

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for accepting an organization invite token.
+ */
 export interface OrganizationInviteAccept {
   token: string;
 }

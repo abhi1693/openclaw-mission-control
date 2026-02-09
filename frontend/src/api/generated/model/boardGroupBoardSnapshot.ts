@@ -8,6 +8,9 @@ import type { BoardGroupBoardSnapshotTaskCounts } from "./boardGroupBoardSnapsho
 import type { BoardGroupTaskSummary } from "./boardGroupTaskSummary";
 import type { BoardRead } from "./boardRead";
 
+/**
+ * Board-level rollup embedded within a board-group snapshot.
+ */
 export interface BoardGroupBoardSnapshot {
   board: BoardRead;
   task_counts?: BoardGroupBoardSnapshotTaskCounts;

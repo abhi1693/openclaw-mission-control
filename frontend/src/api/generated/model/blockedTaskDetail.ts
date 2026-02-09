@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Error detail payload listing blocking dependency task identifiers.
+ */
 export interface BlockedTaskDetail {
   message: string;
   blocked_by_task_ids?: string[];

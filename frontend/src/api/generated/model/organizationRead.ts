@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Organization payload returned by read endpoints.
+ */
 export interface OrganizationRead {
   id: string;
   name: string;

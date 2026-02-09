@@ -6,6 +6,18 @@ import ActivityPage from "./page";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/activity",
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
+
 vi.mock("next/link", () => {
   type LinkProps = React.PropsWithChildren<{
     href: string | { pathname?: string };

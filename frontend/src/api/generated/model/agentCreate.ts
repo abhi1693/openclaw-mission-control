@@ -7,6 +7,9 @@
 import type { AgentCreateHeartbeatConfig } from "./agentCreateHeartbeatConfig";
 import type { AgentCreateIdentityProfile } from "./agentCreateIdentityProfile";
 
+/**
+ * Payload for creating a new agent.
+ */
 export interface AgentCreate {
   board_id?: string | null;
   /** @minLength 1 */

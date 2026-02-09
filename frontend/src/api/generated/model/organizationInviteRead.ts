@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Organization invite payload returned from read endpoints.
+ */
 export interface OrganizationInviteRead {
   id: string;
   organization_id: string;

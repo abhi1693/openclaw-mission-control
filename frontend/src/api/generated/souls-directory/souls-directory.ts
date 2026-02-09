@@ -29,6 +29,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Search souls-directory entries by handle/slug query text.
  * @summary Search
  */
 export type searchApiV1SoulsDirectorySearchGetResponse200 = {
@@ -243,6 +244,7 @@ export function useSearchApiV1SoulsDirectorySearchGet<
 }
 
 /**
+ * Fetch markdown content for a validated souls-directory handle and slug.
  * @summary Get Markdown
  */
 export type getMarkdownApiV1SoulsDirectoryHandleSlugGetResponse200 = {
@@ -480,6 +482,7 @@ export function useGetMarkdownApiV1SoulsDirectoryHandleSlugGet<
 }
 
 /**
+ * Fetch markdown content for a validated souls-directory handle and slug.
  * @summary Get Markdown
  */
 export type getMarkdownApiV1SoulsDirectoryHandleSlugMdGetResponse200 = {

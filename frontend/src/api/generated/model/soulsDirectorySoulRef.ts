@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Reference metadata for a soul entry in the directory index.
+ */
 export interface SoulsDirectorySoulRef {
   handle: string;
   slug: string;

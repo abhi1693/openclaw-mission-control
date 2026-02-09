@@ -20,17 +20,12 @@ import {
   useGetMeApiV1UsersMeGet,
   useUpdateMeApiV1UsersMePatch,
 } from "@/api/generated/users/users";
-import type { UserRead } from "@/api/generated/model";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SearchableSelect from "@/components/ui/searchable-select";
-
-const isCompleteProfile = (profile: UserRead | null | undefined) => {
-  if (!profile) return false;
-  const resolvedName = profile.preferred_name?.trim() || profile.name?.trim();
-  return Boolean(resolvedName) && Boolean(profile.timezone?.trim());
-};
+import { isOnboardingComplete } from "@/lib/onboarding";
+import { getSupportedTimezones } from "@/lib/timezones";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -82,30 +77,7 @@ export default function OnboardingPage() {
     [resolvedName, resolvedTimezone],
   );
 
-  const timezones = useMemo(() => {
-    if (typeof Intl !== "undefined" && "supportedValuesOf" in Intl) {
-      return (
-        Intl as typeof Intl & { supportedValuesOf: (key: string) => string[] }
-      )
-        .supportedValuesOf("timeZone")
-        .sort();
-    }
-    return [
-      "America/Los_Angeles",
-      "America/Denver",
-      "America/Chicago",
-      "America/New_York",
-      "America/Sao_Paulo",
-      "Europe/London",
-      "Europe/Berlin",
-      "Europe/Paris",
-      "Asia/Dubai",
-      "Asia/Kolkata",
-      "Asia/Singapore",
-      "Asia/Tokyo",
-      "Australia/Sydney",
-    ];
-  }, []);
+  const timezones = useMemo(() => getSupportedTimezones(), []);
 
   const timezoneOptions = useMemo(
     () => timezones.map((tz) => ({ value: tz, label: tz })),
@@ -113,7 +85,7 @@ export default function OnboardingPage() {
   );
 
   useEffect(() => {
-    if (profile && isCompleteProfile(profile)) {
+    if (profile && isOnboardingComplete(profile)) {
       router.replace("/dashboard");
     }
   }, [profile, router]);

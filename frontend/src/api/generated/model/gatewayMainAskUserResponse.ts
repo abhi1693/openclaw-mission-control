@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Response payload for user-question dispatch via gateway main agent.
+ */
 export interface GatewayMainAskUserResponse {
   ok?: boolean;
   board_id: string;

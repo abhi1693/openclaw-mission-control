@@ -36,6 +36,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Get the latest onboarding session for a board.
  * @summary Get Onboarding
  */
 export type getOnboardingApiV1BoardsBoardIdOnboardingGetResponse200 = {
@@ -274,6 +275,7 @@ export function useGetOnboardingApiV1BoardsBoardIdOnboardingGet<
 }
 
 /**
+ * Start onboarding and send instructions to the gateway agent.
  * @summary Start Onboarding
  */
 export type startOnboardingApiV1BoardsBoardIdOnboardingStartPostResponse200 = {
@@ -415,6 +417,7 @@ export const useStartOnboardingApiV1BoardsBoardIdOnboardingStartPost = <
   );
 };
 /**
+ * Send a user onboarding answer to the gateway agent.
  * @summary Answer Onboarding
  */
 export type answerOnboardingApiV1BoardsBoardIdOnboardingAnswerPostResponse200 =
@@ -564,6 +567,7 @@ export const useAnswerOnboardingApiV1BoardsBoardIdOnboardingAnswerPost = <
   );
 };
 /**
+ * Store onboarding updates submitted by the gateway agent.
  * @summary Agent Onboarding Update
  */
 export type agentOnboardingUpdateApiV1BoardsBoardIdOnboardingAgentPostResponse200 =
@@ -738,6 +742,7 @@ export const useAgentOnboardingUpdateApiV1BoardsBoardIdOnboardingAgentPost = <
   );
 };
 /**
+ * Confirm onboarding results and provision the board lead agent.
  * @summary Confirm Onboarding
  */
 export type confirmOnboardingApiV1BoardsBoardIdOnboardingConfirmPostResponse200 =

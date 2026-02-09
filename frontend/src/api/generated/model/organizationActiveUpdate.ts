@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for switching the active organization context.
+ */
 export interface OrganizationActiveUpdate {
   organization_id: string;
 }

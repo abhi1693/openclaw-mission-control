@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Gateway sessions list response payload.
+ */
 export interface GatewaySessionsResponse {
   sessions: unknown[];
   main_session_key?: string | null;

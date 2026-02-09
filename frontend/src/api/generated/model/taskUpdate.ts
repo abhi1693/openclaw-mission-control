@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Payload for partial task updates.
+ */
 export interface TaskUpdate {
   title?: string | null;
   description?: string | null;

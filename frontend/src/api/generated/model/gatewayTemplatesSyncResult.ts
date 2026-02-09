@@ -6,6 +6,9 @@
  */
 import type { GatewayTemplatesSyncError } from "./gatewayTemplatesSyncError";
 
+/**
+ * Summary payload returned by gateway template sync endpoints.
+ */
 export interface GatewayTemplatesSyncResult {
   gateway_id: string;
   include_main: boolean;

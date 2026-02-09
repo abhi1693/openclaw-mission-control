@@ -41,6 +41,7 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Stream task and task-comment events as SSE payloads.
  * @summary Stream Tasks
  */
 export type streamTasksApiV1BoardsBoardIdTasksStreamGetResponse200 = {
@@ -293,6 +294,7 @@ export function useStreamTasksApiV1BoardsBoardIdTasksStreamGet<
 }
 
 /**
+ * List board tasks with optional status and assignment filters.
  * @summary List Tasks
  */
 export type listTasksApiV1BoardsBoardIdTasksGetResponse200 = {
@@ -524,6 +526,7 @@ export function useListTasksApiV1BoardsBoardIdTasksGet<
 }
 
 /**
+ * Create a task and initialize dependency rows.
  * @summary Create Task
  */
 export type createTaskApiV1BoardsBoardIdTasksPostResponse200 = {
@@ -653,6 +656,7 @@ export const useCreateTaskApiV1BoardsBoardIdTasksPost = <
   );
 };
 /**
+ * Update task status, assignment, comment, and dependency state.
  * @summary Update Task
  */
 export type updateTaskApiV1BoardsBoardIdTasksTaskIdPatchResponse200 = {
@@ -791,6 +795,7 @@ export const useUpdateTaskApiV1BoardsBoardIdTasksTaskIdPatch = <
   );
 };
 /**
+ * Delete a task and related records.
  * @summary Delete Task
  */
 export type deleteTaskApiV1BoardsBoardIdTasksTaskIdDeleteResponse200 = {
@@ -916,6 +921,7 @@ export const useDeleteTaskApiV1BoardsBoardIdTasksTaskIdDelete = <
   );
 };
 /**
+ * List comments for a task in chronological order.
  * @summary List Task Comments
  */
 export type listTaskCommentsApiV1BoardsBoardIdTasksTaskIdCommentsGetResponse200 =
@@ -1235,6 +1241,7 @@ export function useListTaskCommentsApiV1BoardsBoardIdTasksTaskIdCommentsGet<
 }
 
 /**
+ * Create a task comment and notify relevant agents.
  * @summary Create Task Comment
  */
 export type createTaskCommentApiV1BoardsBoardIdTasksTaskIdCommentsPostResponse200 =

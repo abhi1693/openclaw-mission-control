@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Aggregated gateway status response including session metadata.
+ */
 export interface GatewaysStatusResponse {
   connected: boolean;
   gateway_url: string;
