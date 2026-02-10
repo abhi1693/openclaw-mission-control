@@ -25,17 +25,16 @@ from app.core.config import settings
 from app.core.time import utcnow
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
-from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
-from app.integrations.openclaw_gateway import OpenClawGatewayError, ensure_session, send_message
+from app.integrations.openclaw_gateway import OpenClawGatewayError
 from app.models.agents import Agent
 from app.models.board_group_memory import BoardGroupMemory
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board
-from app.models.gateways import Gateway
 from app.models.users import User
 from app.schemas.board_group_memory import BoardGroupMemoryCreate, BoardGroupMemoryRead
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.mentions import extract_mentions, matches_agent_mention
+from app.services.openclaw import optional_gateway_config_for_board, send_gateway_agent_message
 from app.services.organizations import (
     is_org_admin,
     list_accessible_board_ids,
@@ -93,30 +92,6 @@ def _serialize_memory(memory: BoardGroupMemory) -> dict[str, object]:
         memory,
         from_attributes=True,
     ).model_dump(mode="json")
-
-
-async def _gateway_config(
-    session: AsyncSession,
-    board: Board,
-) -> GatewayClientConfig | None:
-    if board.gateway_id is None:
-        return None
-    gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url:
-        return None
-    return GatewayClientConfig(url=gateway.url, token=gateway.token)
-
-
-async def _send_agent_message(
-    *,
-    session_key: str,
-    config: GatewayClientConfig,
-    agent_name: str,
-    message: str,
-    deliver: bool = False,
-) -> None:
-    await ensure_session(session_key, config=config, label=agent_name)
-    await send_message(message, session_key=session_key, config=config, deliver=deliver)
 
 
 async def _fetch_memory_events(
@@ -249,7 +224,7 @@ async def _notify_group_target(
     board = context.board_by_id.get(board_id)
     if board is None:
         return
-    config = await _gateway_config(context.session, board)
+    config = await optional_gateway_config_for_board(context.session, board)
     if config is None:
         return
     header = _group_header(
@@ -266,7 +241,7 @@ async def _notify_group_target(
         'Body: {"content":"...","tags":["chat"]}'
     )
     try:
-        await _send_agent_message(
+        await send_gateway_agent_message(
             session_key=session_key,
             config=config,
             agent_name=agent.name,

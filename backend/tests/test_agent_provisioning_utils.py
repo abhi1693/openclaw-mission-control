@@ -7,11 +7,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.services import agent_provisioning
-from app.services.gateway_agents import (
-    gateway_agent_session_key_for_id,
-    gateway_openclaw_agent_id_for_id,
-)
+from app.services.openclaw import GatewayAgentIdentity
+from app.services.openclaw import provisioning as agent_provisioning
 
 
 def test_slugify_normalizes_and_trims():
@@ -81,7 +78,7 @@ class _GatewayStub:
 @pytest.mark.asyncio
 async def test_provision_main_agent_uses_dedicated_openclaw_agent_id(monkeypatch):
     gateway_id = uuid4()
-    session_key = gateway_agent_session_key_for_id(gateway_id)
+    session_key = GatewayAgentIdentity.session_key_for_id(gateway_id)
     gateway = _GatewayStub(
         id=gateway_id,
         name="Acme",
@@ -149,6 +146,6 @@ async def test_provision_main_agent_uses_dedicated_openclaw_agent_id(monkeypatch
         ),
     )
 
-    expected_agent_id = gateway_openclaw_agent_id_for_id(gateway_id)
+    expected_agent_id = GatewayAgentIdentity.openclaw_agent_id_for_id(gateway_id)
     assert captured["patched_agent_id"] == expected_agent_id
     assert captured["files_index_agent_id"] == expected_agent_id

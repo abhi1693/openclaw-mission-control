@@ -18,7 +18,7 @@ async def run() -> None:
     from app.models.boards import Board
     from app.models.gateways import Gateway
     from app.models.users import User
-    from app.services.gateway_agents import gateway_agent_session_key
+    from app.services.openclaw import GatewayAgentIdentity
 
     await init_db()
     async with async_session_maker() as session:
@@ -30,7 +30,7 @@ async def run() -> None:
             main_session_key="placeholder",
             workspace_root=str(demo_workspace_root),
         )
-        gateway.main_session_key = gateway_agent_session_key(gateway)
+        gateway.main_session_key = GatewayAgentIdentity.session_key(gateway)
         session.add(gateway)
         await session.commit()
         await session.refresh(gateway)

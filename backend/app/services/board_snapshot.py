@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import case, func
 from sqlmodel import col, select
 
-from app.core.time import utcnow
 from app.models.agents import Agent
 from app.models.approvals import Approval
 from app.models.board_memory import BoardMemory
 from app.models.tasks import Task
-from app.schemas.agents import AgentRead
 from app.schemas.approvals import ApprovalRead
 from app.schemas.board_memory import BoardMemoryRead
 from app.schemas.boards import BoardRead
 from app.schemas.view_models import BoardSnapshot, TaskCardRead
+from app.services.openclaw import AgentLifecycleService
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_ids_by_task_id,
@@ -30,31 +28,6 @@ if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
     from app.models.boards import Board
-
-OFFLINE_AFTER = timedelta(minutes=10)
-
-
-def _computed_agent_status(agent: Agent) -> str:
-    now = utcnow()
-    if agent.status in {"deleting", "updating"}:
-        return agent.status
-    if agent.last_seen_at is None:
-        return "provisioning"
-    if now - agent.last_seen_at > OFFLINE_AFTER:
-        return "offline"
-    return agent.status
-
-
-def _agent_to_read(agent: Agent) -> AgentRead:
-    model = AgentRead.model_validate(agent, from_attributes=True)
-    computed_status = _computed_agent_status(agent)
-    is_gateway_main = agent.gateway_id is not None and agent.board_id is None
-    return model.model_copy(
-        update={
-            "status": computed_status,
-            "is_gateway_main": is_gateway_main,
-        },
-    )
 
 
 def _memory_to_read(memory: BoardMemory) -> BoardMemoryRead:
@@ -125,7 +98,10 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
         .order_by(col(Agent.created_at).desc())
         .all(session)
     )
-    agent_reads = [_agent_to_read(agent) for agent in agents]
+    agent_reads = [
+        AgentLifecycleService.to_agent_read(AgentLifecycleService.with_computed_status(agent))
+        for agent in agents
+    ]
     agent_name_by_id = {agent.id: agent.name for agent in agents}
 
     pending_approvals_count = int(

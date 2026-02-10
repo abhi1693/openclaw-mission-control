@@ -24,13 +24,13 @@ from app.core.time import utcnow
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
 from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
-from app.integrations.openclaw_gateway import OpenClawGatewayError, ensure_session, send_message
+from app.integrations.openclaw_gateway import OpenClawGatewayError
 from app.models.agents import Agent
 from app.models.board_memory import BoardMemory
-from app.models.gateways import Gateway
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.mentions import extract_mentions, matches_agent_mention
+from app.services.openclaw import optional_gateway_config_for_board, send_gateway_agent_message
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -75,30 +75,6 @@ def _serialize_memory(memory: BoardMemory) -> dict[str, object]:
     ).model_dump(mode="json")
 
 
-async def _gateway_config(
-    session: AsyncSession,
-    board: Board,
-) -> GatewayClientConfig | None:
-    if board.gateway_id is None:
-        return None
-    gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url:
-        return None
-    return GatewayClientConfig(url=gateway.url, token=gateway.token)
-
-
-async def _send_agent_message(
-    *,
-    session_key: str,
-    config: GatewayClientConfig,
-    agent_name: str,
-    message: str,
-    deliver: bool = False,
-) -> None:
-    await ensure_session(session_key, config=config, label=agent_name)
-    await send_message(message, session_key=session_key, config=config, deliver=deliver)
-
-
 async def _fetch_memory_events(
     session: AsyncSession,
     board_id: UUID,
@@ -138,7 +114,7 @@ async def _send_control_command(
         if not agent.openclaw_session_id:
             continue
         try:
-            await _send_agent_message(
+            await send_gateway_agent_message(
                 session_key=agent.openclaw_session_id,
                 config=config,
                 agent_name=agent.name,
@@ -184,7 +160,7 @@ async def _notify_chat_targets(
 ) -> None:
     if not memory.content:
         return
-    config = await _gateway_config(session, board)
+    config = await optional_gateway_config_for_board(session, board)
     if config is None:
         return
 
@@ -230,7 +206,7 @@ async def _notify_chat_targets(
             'Body: {"content":"...","tags":["chat"]}'
         )
         try:
-            await _send_agent_message(
+            await send_gateway_agent_message(
                 session_key=agent.openclaw_session_id,
                 config=config,
                 agent_name=agent.name,

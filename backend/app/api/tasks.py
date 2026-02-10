@@ -29,12 +29,11 @@ from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
 from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
-from app.integrations.openclaw_gateway import OpenClawGatewayError, ensure_session, send_message
+from app.integrations.openclaw_gateway import OpenClawGatewayError
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.approvals import Approval
 from app.models.boards import Board
-from app.models.gateways import Gateway
 from app.models.task_dependencies import TaskDependency
 from app.models.task_fingerprints import TaskFingerprint
 from app.models.tasks import Task
@@ -44,6 +43,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
 from app.services.mentions import extract_mentions, matches_agent_mention
+from app.services.openclaw import optional_gateway_config_for_board, send_gateway_agent_message
 from app.services.organizations import require_board_access
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
@@ -301,26 +301,19 @@ def _serialize_comment(event: ActivityEvent) -> dict[str, object]:
     return TaskCommentRead.model_validate(event).model_dump(mode="json")
 
 
-async def _gateway_config(
-    session: AsyncSession,
-    board: Board,
-) -> GatewayClientConfig | None:
-    if not board.gateway_id:
-        return None
-    gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url:
-        return None
-    return GatewayClientConfig(url=gateway.url, token=gateway.token)
-
-
 async def _send_lead_task_message(
     *,
     session_key: str,
     config: GatewayClientConfig,
     message: str,
 ) -> None:
-    await ensure_session(session_key, config=config, label="Lead Agent")
-    await send_message(message, session_key=session_key, config=config, deliver=False)
+    await send_gateway_agent_message(
+        session_key=session_key,
+        config=config,
+        agent_name="Lead Agent",
+        message=message,
+        deliver=False,
+    )
 
 
 async def _send_agent_task_message(
@@ -330,8 +323,13 @@ async def _send_agent_task_message(
     agent_name: str,
     message: str,
 ) -> None:
-    await ensure_session(session_key, config=config, label=agent_name)
-    await send_message(message, session_key=session_key, config=config, deliver=False)
+    await send_gateway_agent_message(
+        session_key=session_key,
+        config=config,
+        agent_name=agent_name,
+        message=message,
+        deliver=False,
+    )
 
 
 async def _notify_agent_on_task_assign(
@@ -343,7 +341,7 @@ async def _notify_agent_on_task_assign(
 ) -> None:
     if not agent.openclaw_session_id:
         return
-    config = await _gateway_config(session, board)
+    config = await optional_gateway_config_for_board(session, board)
     if config is None:
         return
     description = _truncate_snippet(task.description or "")
@@ -415,7 +413,7 @@ async def _notify_lead_on_task_create(
     )
     if lead is None or not lead.openclaw_session_id:
         return
-    config = await _gateway_config(session, board)
+    config = await optional_gateway_config_for_board(session, board)
     if config is None:
         return
     description = _truncate_snippet(task.description or "")
@@ -470,7 +468,7 @@ async def _notify_lead_on_task_unassigned(
     )
     if lead is None or not lead.openclaw_session_id:
         return
-    config = await _gateway_config(session, board)
+    config = await optional_gateway_config_for_board(session, board)
     if config is None:
         return
     description = _truncate_snippet(task.description or "")
@@ -1029,7 +1027,7 @@ async def _notify_task_comment_targets(
         if request.task.board_id
         else None
     )
-    config = await _gateway_config(session, board) if board else None
+    config = await optional_gateway_config_for_board(session, board) if board else None
     if not board or not config:
         return
 

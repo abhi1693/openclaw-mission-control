@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
@@ -21,13 +20,7 @@ from app.core.time import utcnow
 from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import get_session
-from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
-from app.integrations.openclaw_gateway import (
-    OpenClawGatewayError,
-    delete_session,
-    ensure_session,
-    send_message,
-)
+from app.integrations.openclaw_gateway import OpenClawGatewayError
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.approvals import Approval
@@ -47,7 +40,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.view_models import BoardGroupSnapshot, BoardSnapshot
 from app.services.board_group_snapshot import build_board_group_snapshot
 from app.services.board_snapshot import build_board_snapshot
-from app.services.gateway_agents import gateway_agent_session_key
+from app.services.openclaw import cleanup_agent
 from app.services.organizations import OrganizationContext, board_access_filter
 
 if TYPE_CHECKING:
@@ -56,7 +49,6 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 
-AGENT_SESSION_PREFIX = "agent"
 SESSION_DEP = Depends(get_session)
 ORG_ADMIN_DEP = Depends(require_org_admin)
 ORG_MEMBER_DEP = Depends(require_org_member)
@@ -68,15 +60,6 @@ BOARD_GROUP_ID_QUERY = Query(default=None)
 INCLUDE_SELF_QUERY = Query(default=False)
 INCLUDE_DONE_QUERY = Query(default=False)
 PER_BOARD_TASK_LIMIT_QUERY = Query(default=5, ge=0, le=100)
-
-
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or uuid4().hex
-
-
-def _build_session_key(agent_name: str) -> str:
-    return f"{AGENT_SESSION_PREFIX}:{_slugify(agent_name)}:main"
 
 
 async def _require_gateway(
@@ -187,9 +170,9 @@ async def _apply_board_update(
 async def _board_gateway(
     session: AsyncSession,
     board: Board,
-) -> tuple[Gateway | None, GatewayClientConfig | None]:
+) -> Gateway | None:
     if not board.gateway_id:
-        return None, None
+        return None
     config = await Gateway.objects.by_id(board.gateway_id).first(session)
     if config is None:
         raise HTTPException(
@@ -206,37 +189,7 @@ async def _board_gateway(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Gateway workspace_root is required",
         )
-    return config, GatewayClientConfig(url=config.url, token=config.token)
-
-
-async def _cleanup_agent_on_gateway(
-    agent: Agent,
-    config: Gateway,
-    client_config: GatewayClientConfig,
-) -> None:
-    if agent.openclaw_session_id:
-        await delete_session(agent.openclaw_session_id, config=client_config)
-    main_session = gateway_agent_session_key(config)
-    workspace_root = config.workspace_root
-    workspace_path = f"{workspace_root.rstrip('/')}/workspace-{_slugify(agent.name)}"
-    cleanup_message = (
-        "Cleanup request for deleted agent.\n\n"
-        f"Agent name: {agent.name}\n"
-        f"Agent id: {agent.id}\n"
-        f"Session key: {agent.openclaw_session_id or _build_session_key(agent.name)}\n"
-        f"Workspace path: {workspace_path}\n\n"
-        "Actions:\n"
-        "1) Remove the workspace directory.\n"
-        "2) Delete any lingering session artifacts.\n"
-        "Reply NO_REPLY."
-    )
-    await ensure_session(main_session, config=client_config, label="Gateway Agent")
-    await send_message(
-        cleanup_message,
-        session_key=main_session,
-        config=client_config,
-        deliver=False,
-    )
+    return config
 
 
 @router.get("", response_model=DefaultLimitOffsetPage[BoardRead])
@@ -330,11 +283,11 @@ async def delete_board(
         await session.exec(select(Task.id).where(Task.board_id == board.id)),
     )
 
-    config, client_config = await _board_gateway(session, board)
-    if config and client_config:
+    config = await _board_gateway(session, board)
+    if config:
         try:
             for agent in agents:
-                await _cleanup_agent_on_gateway(agent, config, client_config)
+                await cleanup_agent(agent, config)
         except OpenClawGatewayError as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,

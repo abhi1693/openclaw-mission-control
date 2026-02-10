@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -16,20 +15,10 @@ from app.api import board_onboarding as onboarding_api
 from app.api import tasks as tasks_api
 from app.api.deps import ActorContext, get_board_or_404, get_task_or_404
 from app.core.agent_auth import AgentAuthContext, get_agent_auth_context
-from app.core.config import settings
-from app.core.time import utcnow
 from app.db.pagination import paginate
 from app.db.session import get_session
-from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
-from app.integrations.openclaw_gateway import (
-    OpenClawGatewayError,
-    ensure_session,
-    openclaw_call,
-    send_message,
-)
 from app.models.agents import Agent
 from app.models.boards import Board
-from app.models.gateways import Gateway
 from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
 from app.schemas.agents import (
@@ -45,7 +34,6 @@ from app.schemas.board_onboarding import BoardOnboardingAgentUpdate, BoardOnboar
 from app.schemas.boards import BoardRead
 from app.schemas.common import OkResponse
 from app.schemas.gateway_coordination import (
-    GatewayLeadBroadcastBoardResult,
     GatewayLeadBroadcastRequest,
     GatewayLeadBroadcastResponse,
     GatewayLeadMessageRequest,
@@ -56,8 +44,7 @@ from app.schemas.gateway_coordination import (
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
-from app.services.board_leads import LeadAgentOptions, LeadAgentRequest, ensure_board_lead_agent
-from app.services.gateway_agents import gateway_agent_session_key
+from app.services.openclaw import AgentLifecycleService, GatewayCoordinationService
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_status_by_id,
@@ -76,10 +63,6 @@ if TYPE_CHECKING:
     from app.models.board_onboarding import BoardOnboardingSession
 
 router = APIRouter(prefix="/agent", tags=["agent"])
-
-_AGENT_SESSION_PREFIX = "agent:"
-_SESSION_KEY_PARTS_MIN = 2
-_LEAD_SESSION_KEY_MISSING = "Lead agent has no session key"
 SESSION_DEP = Depends(get_session)
 AGENT_CTX_DEP = Depends(get_agent_auth_context)
 BOARD_DEP = Depends(get_board_or_404)
@@ -98,18 +81,6 @@ def _coerce_agent_items(items: Sequence[Any]) -> list[Agent]:
             raise TypeError(msg)
         agents.append(item)
     return agents
-
-
-def _gateway_agent_id(agent: Agent) -> str:
-    session_key = agent.openclaw_session_id or ""
-    if session_key.startswith(_AGENT_SESSION_PREFIX):
-        parts = session_key.split(":")
-        if len(parts) >= _SESSION_KEY_PARTS_MIN and parts[1]:
-            return parts[1]
-    # Fall back to a stable slug derived from name (matches provisioning behavior).
-    value = agent.name.lower().strip()
-    value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
-    return value or str(agent.id)
 
 
 class SoulUpdateRequest(SQLModel):
@@ -147,71 +118,9 @@ def _actor(agent_ctx: AgentAuthContext) -> ActorContext:
     return ActorContext(actor_type="agent", agent=agent_ctx.agent)
 
 
-def _require_lead_session_key(lead: Agent) -> str:
-    session_key = lead.openclaw_session_id
-    if not session_key:
-        raise ValueError(_LEAD_SESSION_KEY_MISSING)
-    return session_key
-
-
 def _guard_board_access(agent_ctx: AgentAuthContext, board: Board) -> None:
     if agent_ctx.agent.board_id and agent_ctx.agent.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-
-
-async def _gateway_config(session: AsyncSession, board: Board) -> GatewayClientConfig:
-    if not board.gateway_id:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    return GatewayClientConfig(url=gateway.url, token=gateway.token)
-
-
-async def _require_gateway_main(
-    session: AsyncSession,
-    agent: Agent,
-) -> tuple[Gateway, GatewayClientConfig]:
-    if agent.board_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the dedicated gateway agent may call this endpoint.",
-        )
-    gateway_id = agent.gateway_id
-    gateway = await Gateway.objects.by_id(gateway_id).first(session)
-    if gateway is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the dedicated gateway agent may call this endpoint.",
-        )
-    if agent.openclaw_session_id != gateway_agent_session_key(gateway):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the dedicated gateway agent may call this endpoint.",
-        )
-    if not gateway.url:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Gateway url is required",
-        )
-    return gateway, GatewayClientConfig(url=gateway.url, token=gateway.token)
-
-
-async def _require_gateway_board(
-    session: AsyncSession,
-    *,
-    gateway: Gateway,
-    board_id: UUID | str,
-) -> Board:
-    board = await Board.objects.by_id(board_id).first(session)
-    if board is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Board not found",
-        )
-    if board.gateway_id != gateway.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    return board
 
 
 @router.get("/boards", response_model=DefaultLimitOffsetPage[BoardRead])
@@ -256,8 +165,8 @@ async def list_agents(
     def _transform(items: Sequence[Any]) -> Sequence[Any]:
         agents = _coerce_agent_items(items)
         return [
-            agents_api.to_agent_read(
-                agents_api.with_computed_status(agent),
+            AgentLifecycleService.to_agent_read(
+                AgentLifecycleService.with_computed_status(agent),
             )
             for agent in agents
         ]
@@ -560,47 +469,14 @@ async def nudge_agent(
     _guard_board_access(agent_ctx, board)
     if not agent_ctx.agent.is_board_lead:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    target = await Agent.objects.by_id(agent_id).first(session)
-    if target is None or (target.board_id and target.board_id != board.id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    if not target.openclaw_session_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Target agent has no session key",
-        )
-    message = payload.message
-    config = await _gateway_config(session, board)
-    try:
-        await ensure_session(
-            target.openclaw_session_id,
-            config=config,
-            label=target.name,
-        )
-        await send_message(
-            message,
-            session_key=target.openclaw_session_id,
-            config=config,
-            deliver=True,
-        )
-    except OpenClawGatewayError as exc:
-        record_activity(
-            session,
-            event_type="agent.nudge.failed",
-            message=f"Nudge failed for {target.name}: {exc}",
-            agent_id=agent_ctx.agent.id,
-        )
-        await session.commit()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
-    record_activity(
-        session,
-        event_type="agent.nudge.sent",
-        message=f"Nudge sent to {target.name}.",
-        agent_id=agent_ctx.agent.id,
+    coordination = GatewayCoordinationService(session)
+    await coordination.nudge_board_agent(
+        board=board,
+        actor_agent=agent_ctx.agent,
+        target_agent_id=agent_id,
+        message=payload.message,
+        correlation_id=f"nudge:{board.id}:{agent_id}",
     )
-    await session.commit()
     return OkResponse()
 
 
@@ -631,36 +507,11 @@ async def get_agent_soul(
     _guard_board_access(agent_ctx, board)
     if not agent_ctx.agent.is_board_lead and str(agent_ctx.agent.id) != agent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    target = await Agent.objects.by_id(agent_id).first(session)
-    if target is None or (target.board_id and target.board_id != board.id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    config = await _gateway_config(session, board)
-    gateway_id = _gateway_agent_id(target)
-    try:
-        payload = await openclaw_call(
-            "agents.files.get",
-            {"agentId": gateway_id, "name": "SOUL.md"},
-            config=config,
-        )
-    except OpenClawGatewayError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
-    if isinstance(payload, str):
-        return payload
-    if isinstance(payload, dict):
-        content = payload.get("content")
-        if isinstance(content, str):
-            return content
-        file_obj = payload.get("file")
-        if isinstance(file_obj, dict):
-            nested = file_obj.get("content")
-            if isinstance(nested, str):
-                return nested
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail="Invalid gateway response",
+    coordination = GatewayCoordinationService(session)
+    return await coordination.get_agent_soul(
+        board=board,
+        target_agent_id=agent_id,
+        correlation_id=f"soul.read:{board.id}:{agent_id}",
     )
 
 
@@ -676,48 +527,16 @@ async def update_agent_soul(
     _guard_board_access(agent_ctx, board)
     if not agent_ctx.agent.is_board_lead:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    target = await Agent.objects.by_id(agent_id).first(session)
-    if target is None or (target.board_id and target.board_id != board.id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    config = await _gateway_config(session, board)
-    gateway_id = _gateway_agent_id(target)
-    content = payload.content.strip()
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="content is required",
-        )
-
-    # Persist the SOUL in the DB so future reprovision/update doesn't overwrite it.
-    target.soul_template = content
-    target.updated_at = utcnow()
-    session.add(target)
-    await session.commit()
-    try:
-        await openclaw_call(
-            "agents.files.set",
-            {"agentId": gateway_id, "name": "SOUL.md", "content": content},
-            config=config,
-        )
-    except OpenClawGatewayError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
-    reason = (payload.reason or "").strip()
-    source_url = (payload.source_url or "").strip()
-    note = f"SOUL.md updated for {target.name}."
-    if reason:
-        note = f"{note} Reason: {reason}"
-    if source_url:
-        note = f"{note} Source: {source_url}"
-    record_activity(
-        session,
-        event_type="agent.soul.updated",
-        message=note,
-        agent_id=agent_ctx.agent.id,
+    coordination = GatewayCoordinationService(session)
+    await coordination.update_agent_soul(
+        board=board,
+        target_agent_id=agent_id,
+        content=payload.content,
+        reason=payload.reason,
+        source_url=payload.source_url,
+        actor_agent_id=agent_ctx.agent.id,
+        correlation_id=f"soul.write:{board.id}:{agent_id}",
     )
-    await session.commit()
     return OkResponse()
 
 
@@ -732,89 +551,14 @@ async def ask_user_via_gateway_main(
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
 ) -> GatewayMainAskUserResponse:
     """Route a lead's ask-user request through the dedicated gateway agent."""
-    import json
-
     _guard_board_access(agent_ctx, board)
     if not agent_ctx.agent.is_board_lead:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-
-    if not board.gateway_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Board is not attached to a gateway",
-        )
-    gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Gateway is not configured for this board",
-        )
-    main_session_key = gateway_agent_session_key(gateway)
-    config = GatewayClientConfig(url=gateway.url, token=gateway.token)
-
-    correlation = payload.correlation_id.strip() if payload.correlation_id else ""
-    correlation_line = f"Correlation ID: {correlation}\n" if correlation else ""
-    preferred_channel = (payload.preferred_channel or "").strip()
-    channel_line = f"Preferred channel: {preferred_channel}\n" if preferred_channel else ""
-
-    tags = payload.reply_tags or ["gateway_main", "user_reply"]
-    tags_json = json.dumps(tags)
-    reply_source = payload.reply_source or "user_via_gateway_main"
-    base_url = settings.base_url or "http://localhost:8000"
-
-    message = (
-        "LEAD REQUEST: ASK USER\n"
-        f"Board: {board.name}\n"
-        f"Board ID: {board.id}\n"
-        f"From lead: {agent_ctx.agent.name}\n"
-        f"{correlation_line}"
-        f"{channel_line}\n"
-        f"{payload.content.strip()}\n\n"
-        "Please reach the user via your configured OpenClaw channel(s) "
-        "(Slack/SMS/etc).\n"
-        "If you cannot reach them there, post the question in Mission Control "
-        "board chat as a fallback.\n\n"
-        "When you receive the answer, reply in Mission Control by writing a "
-        "NON-chat memory item on this board:\n"
-        f"POST {base_url}/api/v1/agent/boards/{board.id}/memory\n"
-        f'Body: {{"content":"<answer>","tags":{tags_json},"source":"{reply_source}"}}\n'
-        "Do NOT reply in OpenClaw chat."
-    )
-
-    try:
-        await ensure_session(main_session_key, config=config, label="Gateway Agent")
-        await send_message(message, session_key=main_session_key, config=config, deliver=True)
-    except OpenClawGatewayError as exc:
-        record_activity(
-            session,
-            event_type="gateway.lead.ask_user.failed",
-            message=f"Lead user question failed for {board.name}: {exc}",
-            agent_id=agent_ctx.agent.id,
-        )
-        await session.commit()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
-
-    record_activity(
-        session,
-        event_type="gateway.lead.ask_user.sent",
-        message=f"Lead requested user info via gateway agent for board: {board.name}.",
-        agent_id=agent_ctx.agent.id,
-    )
-
-    main_agent = await Agent.objects.filter_by(
-        gateway_id=gateway.id,
-        board_id=None,
-    ).first(session)
-
-    await session.commit()
-
-    return GatewayMainAskUserResponse(
-        board_id=board.id,
-        main_agent_id=main_agent.id if main_agent else None,
-        main_agent_name=main_agent.name if main_agent else None,
+    coordination = GatewayCoordinationService(session)
+    return await coordination.ask_user_via_gateway_main(
+        board=board,
+        payload=payload,
+        actor_agent=agent_ctx.agent,
     )
 
 
@@ -829,76 +573,11 @@ async def message_gateway_board_lead(
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
 ) -> GatewayLeadMessageResponse:
     """Send a gateway-main message to a single board lead agent."""
-    import json
-
-    gateway, config = await _require_gateway_main(session, agent_ctx.agent)
-    board = await _require_gateway_board(session, gateway=gateway, board_id=board_id)
-    lead, lead_created = await ensure_board_lead_agent(
-        session,
-        request=LeadAgentRequest(
-            board=board,
-            gateway=gateway,
-            config=config,
-            user=None,
-            options=LeadAgentOptions(action="provision"),
-        ),
-    )
-    if not lead.openclaw_session_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Lead agent has no session key",
-        )
-
-    base_url = settings.base_url or "http://localhost:8000"
-    header = "GATEWAY MAIN QUESTION" if payload.kind == "question" else "GATEWAY MAIN HANDOFF"
-    correlation = payload.correlation_id.strip() if payload.correlation_id else ""
-    correlation_line = f"Correlation ID: {correlation}\n" if correlation else ""
-    tags = payload.reply_tags or ["gateway_main", "lead_reply"]
-    tags_json = json.dumps(tags)
-    reply_source = payload.reply_source or "lead_to_gateway_main"
-
-    message = (
-        f"{header}\n"
-        f"Board: {board.name}\n"
-        f"Board ID: {board.id}\n"
-        f"From agent: {agent_ctx.agent.name}\n"
-        f"{correlation_line}\n"
-        f"{payload.content.strip()}\n\n"
-        "Reply to the gateway agent by writing a NON-chat memory item on this board:\n"
-        f"POST {base_url}/api/v1/agent/boards/{board.id}/memory\n"
-        f'Body: {{"content":"...","tags":{tags_json},"source":"{reply_source}"}}\n'
-        "Do NOT reply in OpenClaw chat."
-    )
-
-    try:
-        await ensure_session(lead.openclaw_session_id, config=config, label=lead.name)
-        await send_message(message, session_key=lead.openclaw_session_id, config=config)
-    except OpenClawGatewayError as exc:
-        record_activity(
-            session,
-            event_type="gateway.main.lead_message.failed",
-            message=f"Lead message failed for {board.name}: {exc}",
-            agent_id=agent_ctx.agent.id,
-        )
-        await session.commit()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
-
-    record_activity(
-        session,
-        event_type="gateway.main.lead_message.sent",
-        message=f"Sent {payload.kind} to lead for board: {board.name}.",
-        agent_id=agent_ctx.agent.id,
-    )
-    await session.commit()
-
-    return GatewayLeadMessageResponse(
-        board_id=board.id,
-        lead_agent_id=lead.id,
-        lead_agent_name=lead.name,
-        lead_created=lead_created,
+    coordination = GatewayCoordinationService(session)
+    return await coordination.message_gateway_board_lead(
+        actor_agent=agent_ctx.agent,
+        board_id=board_id,
+        payload=payload,
     )
 
 
@@ -912,92 +591,8 @@ async def broadcast_gateway_lead_message(
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
 ) -> GatewayLeadBroadcastResponse:
     """Broadcast a gateway-main message to multiple board leads."""
-    import json
-
-    gateway, config = await _require_gateway_main(session, agent_ctx.agent)
-
-    statement = (
-        select(Board)
-        .where(col(Board.gateway_id) == gateway.id)
-        .order_by(col(Board.created_at).desc())
-    )
-    if payload.board_ids:
-        statement = statement.where(col(Board.id).in_(payload.board_ids))
-    boards = list(await session.exec(statement))
-
-    base_url = settings.base_url or "http://localhost:8000"
-    header = "GATEWAY MAIN QUESTION" if payload.kind == "question" else "GATEWAY MAIN HANDOFF"
-    correlation = payload.correlation_id.strip() if payload.correlation_id else ""
-    correlation_line = f"Correlation ID: {correlation}\n" if correlation else ""
-    tags = payload.reply_tags or ["gateway_main", "lead_reply"]
-    tags_json = json.dumps(tags)
-    reply_source = payload.reply_source or "lead_to_gateway_main"
-
-    results: list[GatewayLeadBroadcastBoardResult] = []
-    sent = 0
-    failed = 0
-
-    async def _send_to_board(target_board: Board) -> GatewayLeadBroadcastBoardResult:
-        try:
-            lead, _lead_created = await ensure_board_lead_agent(
-                session,
-                request=LeadAgentRequest(
-                    board=target_board,
-                    gateway=gateway,
-                    config=config,
-                    user=None,
-                    options=LeadAgentOptions(action="provision"),
-                ),
-            )
-            lead_session_key = _require_lead_session_key(lead)
-            message = (
-                f"{header}\n"
-                f"Board: {target_board.name}\n"
-                f"Board ID: {target_board.id}\n"
-                f"From agent: {agent_ctx.agent.name}\n"
-                f"{correlation_line}\n"
-                f"{payload.content.strip()}\n\n"
-                "Reply to the gateway agent by writing a NON-chat memory item "
-                "on this board:\n"
-                f"POST {base_url}/api/v1/agent/boards/{target_board.id}/memory\n"
-                f'Body: {{"content":"...","tags":{tags_json},'
-                f'"source":"{reply_source}"}}\n'
-                "Do NOT reply in OpenClaw chat."
-            )
-            await ensure_session(lead_session_key, config=config, label=lead.name)
-            await send_message(message, session_key=lead_session_key, config=config)
-            return GatewayLeadBroadcastBoardResult(
-                board_id=target_board.id,
-                lead_agent_id=lead.id,
-                lead_agent_name=lead.name,
-                ok=True,
-            )
-        except (HTTPException, OpenClawGatewayError, ValueError) as exc:
-            return GatewayLeadBroadcastBoardResult(
-                board_id=target_board.id,
-                ok=False,
-                error=str(exc),
-            )
-
-    for board in boards:
-        board_result = await _send_to_board(board)
-        results.append(board_result)
-        if board_result.ok:
-            sent += 1
-        else:
-            failed += 1
-
-    record_activity(
-        session,
-        event_type="gateway.main.lead_broadcast.sent",
-        message=f"Broadcast {payload.kind} to {sent} board leads (failed: {failed}).",
-        agent_id=agent_ctx.agent.id,
-    )
-    await session.commit()
-
-    return GatewayLeadBroadcastResponse(
-        ok=True,
-        sent=sent,
-        failed=failed,
-        results=results,
+    coordination = GatewayCoordinationService(session)
+    return await coordination.broadcast_gateway_lead_message(
+        actor_agent=agent_ctx.agent,
+        payload=payload,
     )

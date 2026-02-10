@@ -29,8 +29,8 @@ from app.schemas.board_groups import BoardGroupCreate, BoardGroupRead, BoardGrou
 from app.schemas.common import OkResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.view_models import BoardGroupSnapshot
-from app.services.agent_provisioning import DEFAULT_HEARTBEAT_CONFIG, sync_gateway_agent_heartbeats
 from app.services.board_group_snapshot import build_group_snapshot
+from app.services.openclaw import DEFAULT_HEARTBEAT_CONFIG, sync_gateway_agent_heartbeats
 from app.services.organizations import (
     OrganizationContext,
     board_access_filter,

@@ -20,8 +20,6 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.time import utcnow
 from app.db.session import get_session
-from app.integrations.openclaw_gateway import GatewayConfig as GatewayClientConfig
-from app.integrations.openclaw_gateway import OpenClawGatewayError, ensure_session, send_message
 from app.models.board_onboarding import BoardOnboardingSession
 from app.models.gateways import Gateway
 from app.schemas.board_onboarding import (
@@ -35,8 +33,13 @@ from app.schemas.board_onboarding import (
     BoardOnboardingUserProfile,
 )
 from app.schemas.boards import BoardRead
-from app.services.board_leads import LeadAgentOptions, LeadAgentRequest, ensure_board_lead_agent
-from app.services.gateway_agents import gateway_agent_session_key
+from app.services.openclaw import (
+    BoardOnboardingMessagingService,
+    LeadAgentOptions,
+    LeadAgentRequest,
+    ensure_board_lead_agent,
+    require_gateway_config_for_board,
+)
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -52,18 +55,6 @@ BOARD_OR_404_DEP = Depends(get_board_or_404)
 SESSION_DEP = Depends(get_session)
 ACTOR_DEP = Depends(require_admin_or_agent)
 ADMIN_AUTH_DEP = Depends(require_admin_auth)
-
-
-async def _gateway_config(
-    session: AsyncSession,
-    board: Board,
-) -> tuple[Gateway, GatewayClientConfig]:
-    if not board.gateway_id:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-    if gateway is None or not gateway.url:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    return gateway, GatewayClientConfig(url=gateway.url, token=gateway.token)
 
 
 def _parse_draft_user_profile(
@@ -178,8 +169,7 @@ async def start_onboarding(
     if onboarding:
         return onboarding
 
-    gateway, config = await _gateway_config(session, board)
-    session_key = gateway_agent_session_key(gateway)
+    dispatcher = BoardOnboardingMessagingService(session)
     base_url = settings.base_url or "http://localhost:8000"
     prompt = (
         "BOARD ONBOARDING REQUEST\n\n"
@@ -246,19 +236,11 @@ async def start_onboarding(
         "working style.\n"
     )
 
-    try:
-        await ensure_session(session_key, config=config, label="Gateway Agent")
-        await send_message(
-            prompt,
-            session_key=session_key,
-            config=config,
-            deliver=False,
-        )
-    except OpenClawGatewayError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
+    session_key = await dispatcher.dispatch_start_prompt(
+        board=board,
+        prompt=prompt,
+        correlation_id=f"onboarding.start:{board.id}",
+    )
 
     onboarding = BoardOnboardingSession(
         board_id=board.id,
@@ -289,7 +271,7 @@ async def answer_onboarding(
     if onboarding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    _, config = await _gateway_config(session, board)
+    dispatcher = BoardOnboardingMessagingService(session)
     answer_text = payload.answer
     if payload.other_text:
         answer_text = f"{payload.answer}: {payload.other_text}"
@@ -299,19 +281,12 @@ async def answer_onboarding(
         {"role": "user", "content": answer_text, "timestamp": utcnow().isoformat()},
     )
 
-    try:
-        await ensure_session(onboarding.session_key, config=config, label="Gateway Agent")
-        await send_message(
-            answer_text,
-            session_key=onboarding.session_key,
-            config=config,
-            deliver=False,
-        )
-    except OpenClawGatewayError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
+    await dispatcher.dispatch_answer(
+        board=board,
+        onboarding=onboarding,
+        answer_text=answer_text,
+        correlation_id=f"onboarding.answer:{board.id}:{onboarding.id}",
+    )
 
     onboarding.messages = messages
     onboarding.updated_at = utcnow()
@@ -337,10 +312,7 @@ async def agent_onboarding_update(
 
     if board.gateway_id:
         gateway = await Gateway.objects.by_id(board.gateway_id).first(session)
-        if (
-            gateway
-            and (agent.gateway_id != gateway.id or agent.board_id is not None)
-        ):
+        if gateway and (agent.gateway_id != gateway.id or agent.board_id is not None):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     onboarding = (
@@ -421,7 +393,7 @@ async def confirm_onboarding(
     lead_agent = _parse_draft_lead_agent(onboarding.draft_goal)
     lead_options = _lead_agent_options(lead_agent)
 
-    gateway, config = await _gateway_config(session, board)
+    gateway, config = await require_gateway_config_for_board(session, board)
     session.add(board)
     session.add(onboarding)
     await session.commit()
