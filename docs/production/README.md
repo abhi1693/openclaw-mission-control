@@ -1,6 +1,26 @@
-# Production deployment (production-ish)
+# Production deployment
 
-This document describes **production-ish** deployment patterns for **OpenClaw Mission Control**.
+This document describes the current (or intended) production deployment for **OpenClaw Mission Control**.
+
+> If you’re looking for the dev-friendly self-host path, start with the repo root README quickstart.
+
+## Production truth (fill this in; keep it short)
+
+As of now, this repo primarily documents **production-ish patterns**. Operators should record the actual production setup here to prevent drift.
+
+Answer these explicitly:
+- **Topology**: single VPS (Compose) vs split services vs Kubernetes?
+- **Reverse proxy/TLS**: Caddy/nginx/ALB/Ingress? domains?
+- **Secrets**: where do they live (Vault/SSM/K8s Secrets/.env on disk)? who can read them?
+- **Database**: container Postgres vs managed Postgres?
+- **Backups/PITR**: pg_dump-only vs volume snapshots vs managed PITR? RPO/RTO?
+
+Baseline assumptions used by the docs (until filled):
+- Single-host Compose + reverse proxy (TLS) + off-host DB backups.
+
+---
+
+## Production deployment (production-ish)
 
 Mission Control is a web app (frontend) + API (backend) + Postgres. The simplest reliable
 baseline is Docker Compose plus a reverse proxy with TLS.
