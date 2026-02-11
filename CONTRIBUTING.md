@@ -10,9 +10,9 @@ This repo welcomes contributions in three broad categories:
 
 ## Where to start
 
-- Docs landing page: [`docs/README.md`](./docs/README.md)
-- Development workflow: [`docs/03-development.md`](./docs/03-development.md)
-- Testing guide: [`docs/testing/README.md`](./docs/testing/README.md)
+- Docs landing page: [Docs landing](./docs/README.md)
+- Development workflow: [Development workflow](./docs/03-development.md)
+- Testing guide: [Testing guide](./docs/testing/README.md)
 
 ## Filing issues
 

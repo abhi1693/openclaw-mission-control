@@ -18,17 +18,17 @@ Mission Control is a small, service-oriented stack:
 - **Frontend:** Next.js (default http://localhost:3000)
 - **Backend:** FastAPI (default http://localhost:8000)
 - **Database:** Postgres
-- **Gateway integration (optional):** WebSocket protocol documented in [`docs/openclaw_gateway_ws.md`](./docs/openclaw_gateway_ws.md)
+- **Gateway integration (optional):** WebSocket protocol documented in [Gateway WebSocket protocol](./docs/openclaw_gateway_ws.md)
 
 ## Documentation
 
 Start with the docs landing page:
-- [`docs/README.md`](./docs/README.md)
+- [Docs landing](./docs/README.md)
 
 Operational deep dives:
-- Deployment: [`docs/deployment/README.md`](./docs/deployment/README.md)
-- Production notes: [`docs/production/README.md`](./docs/production/README.md)
-- Troubleshooting: [`docs/troubleshooting/README.md`](./docs/troubleshooting/README.md)
+- Deployment: [Deployment guide](./docs/deployment/README.md)
+- Production notes: [Production notes](./docs/production/README.md)
+- Troubleshooting: [Troubleshooting](./docs/troubleshooting/README.md)
 
 ## Authentication (Clerk)
 
@@ -38,7 +38,7 @@ You must configure Clerk keys for:
 - the frontend (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`)
 - the backend (`CLERK_SECRET_KEY`)
 
-See: [`docs/deployment/README.md`](./docs/deployment/README.md#clerk-auth-notes).
+See: [Deployment guide](./docs/deployment/README.md#clerk-auth-notes).
 
 ## Deployment modes
 
@@ -86,12 +86,12 @@ docker compose -f compose.yml --env-file .env down -v
 
 This is the fastest workflow for contributors: run Postgres via Docker, and run the backend + frontend in dev mode.
 
-See: [`docs/03-development.md`](./docs/03-development.md)
+See: [Development workflow](./docs/03-development.md)
 
 ## Testing and CI parity
 
-- Testing guide: [`docs/testing/README.md`](./docs/testing/README.md)
-- Coverage policy: [`docs/coverage-policy.md`](./docs/coverage-policy.md)
+- Testing guide: [Testing guide](./docs/testing/README.md)
+- Coverage policy: [Coverage policy](./docs/coverage-policy.md)
 
 From repo root:
 

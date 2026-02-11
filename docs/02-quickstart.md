@@ -11,4 +11,4 @@ After `docker compose up`:
 
 ## Common gotchas
 - `NEXT_PUBLIC_API_URL` must be reachable from your browser (host), not just from inside Docker.
-- Clerk auth is required; ensure Clerk keys are configured (see `docs/deployment/README.md`).
+- Clerk auth is required; ensure Clerk keys are configured (see [Deployment guide](deployment/README.md)).

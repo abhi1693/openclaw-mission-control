@@ -82,7 +82,7 @@ Notes:
 Mission Control can coordinate with OpenClaw Gateways over WebSockets.
 
 - Protocol methods/events list: `backend/app/services/openclaw/gateway_rpc.py`.
-- Operator-facing protocol docs: `docs/openclaw_gateway_ws.md`.
+- Operator-facing protocol docs: [Gateway WebSocket protocol](openclaw_gateway_ws.md).
 
 ## Where to start reading code
 

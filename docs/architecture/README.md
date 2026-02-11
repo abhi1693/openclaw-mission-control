@@ -54,8 +54,8 @@ flowchart LR
 ### Gateway integration (optional)
 Mission Control can call into an OpenClaw Gateway over WebSockets.
 - Client + protocol: `backend/app/services/openclaw/gateway_rpc.py`
-- Protocol doc: `docs/openclaw_gateway_ws.md`
-- Base gateway config (getting started): `docs/openclaw_gateway_base_config.md`
+- Protocol doc: [Gateway WebSocket protocol](../openclaw_gateway_ws.md)
+- Base gateway config (getting started): [Gateway base config](../openclaw_gateway_base_config.md)
 
 ## Request flows
 
@@ -110,9 +110,9 @@ Frontend:
 
 ## Related docs
 - Self-host (Docker Compose): see repo root README: [Quick start (self-host with Docker Compose)](../../README.md#quick-start-self-host-with-docker-compose)
-- Production-ish deployment: [`docs/production/README.md`](../production/README.md)
-- Testing (Cypress/Clerk): [`docs/testing/README.md`](../testing/README.md)
-- Troubleshooting: [`docs/troubleshooting/README.md`](../troubleshooting/README.md)
+- Production-ish deployment: [Production notes](../production/README.md)
+- Testing (Cypress/Clerk): [Testing guide](../testing/README.md)
+- Troubleshooting: [Troubleshooting](../troubleshooting/README.md)
 
 ## Notes / gotchas
 - Mermaid rendering depends on the markdown renderer.

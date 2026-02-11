@@ -24,11 +24,11 @@ This folder is the canonical documentation set for Mission Control.
 
 ## Existing deep-dive docs
 
-Some deeper docs already exist under `docs/**` directories; the IA pages above link to them where appropriate:
-- `docs/architecture/README.md`
-- `docs/deployment/README.md`
-- `docs/production/README.md`
-- `docs/testing/README.md`
-- `docs/troubleshooting/README.md`
-- `docs/openclaw_gateway_ws.md`
-- `docs/openclaw_gateway_base_config.md`
+These deeper references already exist under `docs/` directories:
+- [Architecture deep dive](architecture/README.md)
+- [Deployment guide](deployment/README.md)
+- [Production notes](production/README.md)
+- [Testing guide](testing/README.md)
+- [Troubleshooting](troubleshooting/README.md)
+- [Gateway WebSocket protocol](openclaw_gateway_ws.md)
+- [Gateway base config](openclaw_gateway_base_config.md)

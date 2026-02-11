@@ -14,11 +14,11 @@ This is the “quick triage” page. For detailed playbooks and diagnostics, use
 
 ### Frontend keeps redirecting / Clerk errors
 - Verify your Clerk keys are set correctly in the frontend environment.
-- See: `docs/deployment/README.md` (Clerk auth notes).
+- See: [Deployment guide](deployment/README.md) (Clerk auth notes).
 
 ### Backend returns 5xx
 - Check DB connectivity (`DATABASE_URL`) and migrations.
 - Check backend logs.
 
 ## Next
-- Promote the most common issues from `docs/troubleshooting/README.md` into this page once we see repeated incidents.
+- Promote the most common issues from [Troubleshooting deep dive](troubleshooting/README.md) into this page once we see repeated incidents.
