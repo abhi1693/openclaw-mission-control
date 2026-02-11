@@ -5,8 +5,10 @@ This folder is the documentation home for **OpenClaw Mission Control**.
 ## Start here
 
 - [Getting started](./getting-started/README.md)
-- [Deployment](./deployment/README.md)
 - [Development](./development/README.md)
+- [Testing](./testing/README.md)
+- [Deployment](./deployment/README.md)
+- [Release checklist](./release/README.md)
 - [Operations](./operations/README.md)
 - [Troubleshooting](./troubleshooting/README.md)
 
