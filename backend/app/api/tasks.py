@@ -184,9 +184,7 @@ def _coerce_task_event_rows(
                 msg = "Expected (ActivityEvent, Task | None) rows"
                 raise TypeError(msg)
 
-        if isinstance(first, ActivityEvent) and (
-            isinstance(second, Task) or second is None
-        ):
+        if isinstance(first, ActivityEvent) and (isinstance(second, Task) or second is None):
             rows.append((first, second))
             continue
 

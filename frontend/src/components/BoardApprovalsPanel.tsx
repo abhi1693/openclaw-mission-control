@@ -582,9 +582,7 @@ export function BoardApprovalsPanel({
                       <StatusDot
                         status={selectedApproval.status}
                         variant="approval"
-                        className={cn(
-                          "h-2 w-2 rounded-full",
-                        )}
+                        className={cn("h-2 w-2 rounded-full")}
                       />
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
