@@ -164,14 +164,32 @@ def _coerce_task_event_rows(
 ) -> list[tuple[ActivityEvent, Task | None]]:
     rows: list[tuple[ActivityEvent, Task | None]] = []
     for item in items:
-        if (
-            isinstance(item, tuple)
-            and len(item) == TASK_EVENT_ROW_LEN
-            and isinstance(item[0], ActivityEvent)
-            and (isinstance(item[1], Task) or item[1] is None)
+        first: object
+        second: object
+
+        if isinstance(item, tuple):
+            if len(item) != TASK_EVENT_ROW_LEN:
+                msg = "Expected (ActivityEvent, Task | None) rows"
+                raise TypeError(msg)
+            first, second = item
+        else:
+            try:
+                row_len = len(item)  # type: ignore[arg-type]
+                first = item[0]  # type: ignore[index]
+                second = item[1]  # type: ignore[index]
+            except (IndexError, KeyError, TypeError):
+                msg = "Expected (ActivityEvent, Task | None) rows"
+                raise TypeError(msg) from None
+            if row_len != TASK_EVENT_ROW_LEN:
+                msg = "Expected (ActivityEvent, Task | None) rows"
+                raise TypeError(msg)
+
+        if isinstance(first, ActivityEvent) and (
+            isinstance(second, Task) or second is None
         ):
-            rows.append((item[0], item[1]))
+            rows.append((first, second))
             continue
+
         msg = "Expected (ActivityEvent, Task | None) rows"
         raise TypeError(msg)
     return rows

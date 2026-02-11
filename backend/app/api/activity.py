@@ -103,16 +103,39 @@ def _coerce_task_comment_rows(
 ) -> list[tuple[ActivityEvent, Task, Board, Agent | None]]:
     rows: list[tuple[ActivityEvent, Task, Board, Agent | None]] = []
     for item in items:
+        first: Any
+        second: Any
+        third: Any
+        fourth: Any
+
+        if isinstance(item, tuple):
+            if len(item) != TASK_COMMENT_ROW_LEN:
+                msg = "Expected (ActivityEvent, Task, Board, Agent | None) rows"
+                raise TypeError(msg)
+            first, second, third, fourth = item
+        else:
+            try:
+                row_len = len(item)
+                first = item[0]
+                second = item[1]
+                third = item[2]
+                fourth = item[3]
+            except (IndexError, KeyError, TypeError):
+                msg = "Expected (ActivityEvent, Task, Board, Agent | None) rows"
+                raise TypeError(msg) from None
+            if row_len != TASK_COMMENT_ROW_LEN:
+                msg = "Expected (ActivityEvent, Task, Board, Agent | None) rows"
+                raise TypeError(msg)
+
         if (
-            isinstance(item, tuple)
-            and len(item) == TASK_COMMENT_ROW_LEN
-            and isinstance(item[0], ActivityEvent)
-            and isinstance(item[1], Task)
-            and isinstance(item[2], Board)
-            and (isinstance(item[3], Agent) or item[3] is None)
+            isinstance(first, ActivityEvent)
+            and isinstance(second, Task)
+            and isinstance(third, Board)
+            and (isinstance(fourth, Agent) or fourth is None)
         ):
-            rows.append((item[0], item[1], item[2], item[3]))
+            rows.append((first, second, third, fourth))
             continue
+
         msg = "Expected (ActivityEvent, Task, Board, Agent | None) rows"
         raise TypeError(msg)
     return rows
