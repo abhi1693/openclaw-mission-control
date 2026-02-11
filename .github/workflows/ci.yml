@@ -53,8 +53,9 @@ jobs:
 
       - name: Run backend checks
         env:
-          # Keep CI builds deterministic and secretless.
+          # Keep CI builds deterministic.
           NEXT_TELEMETRY_DISABLED: "1"
+          AUTH_MODE: "clerk"
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           make backend-lint
@@ -65,10 +66,10 @@ jobs:
         env:
           # Keep CI builds deterministic.
           NEXT_TELEMETRY_DISABLED: "1"
-          # Clerk env (wired from repo settings; values are not printed).
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_AUTH_MODE: "clerk"
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          CLERK_JWKS_URL: ${{ vars.CLERK_JWKS_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
         run: |
           make frontend-lint
           make frontend-typecheck
@@ -105,11 +106,11 @@ jobs:
 
       - name: Start frontend (dev server)
         env:
-          NEXT_PUBLIC_API_URL: "http://localhost:3000"
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_AUTH_MODE: "clerk"
           NEXT_TELEMETRY_DISABLED: "1"
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          CLERK_JWKS_URL: ${{ vars.CLERK_JWKS_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
         run: |
           cd frontend
           npm run dev -- --hostname 0.0.0.0 --port 3000 &
@@ -122,16 +123,13 @@ jobs:
 
       - name: Run Cypress E2E
         env:
-          NEXT_PUBLIC_API_URL: "http://localhost:3000"
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_AUTH_MODE: "clerk"
           NEXT_TELEMETRY_DISABLED: "1"
           # Clerk testing tokens (official @clerk/testing Cypress integration)
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           # Also set for the app itself.
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          CLERK_JWKS_URL: ${{ vars.CLERK_JWKS_URL }}
-          # Test user identifier (used by cy.clerkSignIn)
-          CYPRESS_CLERK_TEST_EMAIL: "jane+clerk_test@example.com"
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
         run: |
           cd frontend
           npm run e2e -- --browser chrome
