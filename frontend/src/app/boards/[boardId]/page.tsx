@@ -1315,6 +1315,12 @@ export default function BoardDetailPage() {
     return () => window.clearTimeout(timeout);
   }, [chatMessages, isChatOpen]);
 
+  /**
+   * Returns an ISO timestamp for the newest board chat message.
+   *
+   * Used as the `since` cursor when (re)connecting to the SSE endpoint so we
+   * don't re-stream the entire chat log.
+   */
   const latestChatTimestamp = (items: BoardChatMessage[]) => {
     if (!items.length) return undefined;
     const latest = items.reduce((max, item) => {
@@ -1373,9 +1379,9 @@ export default function BoardDetailPage() {
         while (!isCancelled) {
           const { value, done } = await reader.read();
           if (done) break;
+          // Consider the stream healthy once we receive any bytes (including pings)
+          // and reset the backoff so a later disconnect doesn't wait the full max.
           if (value && value.length) {
-            // Consider the stream "healthy" once we receive any bytes (including pings),
-            // then reset the backoff for future reconnects.
             backoff.reset();
           }
           buffer += decoder.decode(value, { stream: true });

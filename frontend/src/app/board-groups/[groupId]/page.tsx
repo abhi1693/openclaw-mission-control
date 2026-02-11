@@ -339,6 +339,12 @@ export default function BoardGroupDetailPage() {
     [],
   );
 
+  /**
+   * Computes the newest `created_at` timestamp in a list of memory items.
+   *
+   * We pass this as `since` when reconnecting SSE so we don't re-stream the
+   * entire chat history after transient disconnects.
+   */
   const latestMemoryTimestamp = useCallback((items: BoardGroupMemoryRead[]) => {
     if (!items.length) return undefined;
     const latest = items.reduce((max, item) => {
@@ -405,11 +411,13 @@ export default function BoardGroupDetailPage() {
         while (!isCancelled) {
           const { value, done } = await reader.read();
           if (done) break;
+
+          // Consider the stream healthy once we receive any bytes (including pings)
+          // and reset the backoff so a later disconnect doesn't wait the full max.
           if (value && value.length) {
-            // Consider the stream healthy once we receive any bytes (including pings),
-            // then reset the backoff for future reconnects.
             backoff.reset();
           }
+
           buffer += decoder.decode(value, { stream: true });
           buffer = buffer.replace(/\r\n/g, "\n");
           let boundary = buffer.indexOf("\n\n");
