@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.core.logging import TRACE_LEVEL
 from app.models.board_onboarding import BoardOnboardingSession
 from app.models.boards import Board
 from app.services.openclaw.coordination_service import AbstractGatewayMessagingService
@@ -25,7 +26,7 @@ class BoardOnboardingMessagingService(AbstractGatewayMessagingService):
             correlation_id, prefix="onboarding.start"
         )
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.onboarding.start_dispatch.start trace_id=%s board_id=%s",
             trace_id,
             board.id,
@@ -83,7 +84,7 @@ class BoardOnboardingMessagingService(AbstractGatewayMessagingService):
             correlation_id, prefix="onboarding.answer"
         )
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.onboarding.answer_dispatch.start trace_id=%s board_id=%s onboarding_id=%s",
             trace_id,
             board.id,

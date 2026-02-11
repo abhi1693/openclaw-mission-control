@@ -4,7 +4,9 @@ This package is the **Next.js** web UI for OpenClaw Mission Control.
 
 - Talks to the Mission Control **backend** over HTTP (typically `http://localhost:8000`).
 - Uses **React Query** for data fetching.
-- Can optionally enable **Clerk** authentication (disabled by default unless you provide a _real_ Clerk publishable key).
+- Supports two auth modes:
+  - **local** shared bearer token mode (self-host default)
+  - **clerk** mode
 
 ## Prerequisites
 
@@ -53,27 +55,23 @@ Example:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### Optional: Clerk authentication
+### Authentication mode
 
-Clerk is **optional**.
+Set `NEXT_PUBLIC_AUTH_MODE` to one of:
 
-The app only enables Clerk when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` looks like a real key.
-Implementation detail: we gate on a conservative regex (`pk_test_...` / `pk_live_...`) in `src/auth/clerkKey.ts`.
+- `local` (default for self-host)
+- `clerk`
 
-#### Env vars
+For `local` mode:
+
+- users enter the token in the local login screen
+- requests use that token as `Authorization: Bearer ...`
+
+For `clerk` mode, configure:
 
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-  - If **unset/blank/placeholder**, Clerk is treated as **disabled**.
-- `CLERK_SECRET_KEY`
-  - Required only if you enable Clerk features that need server-side verification.
-- Redirect URLs (optional; used by Clerk UI flows):
-  - `NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL`
-  - `NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL`
-  - `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL`
-  - `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL`
-
-**Important:** `frontend/.env.example` contains placeholder values like `YOUR_PUBLISHABLE_KEY`.
-Those placeholders are _not_ valid keys and are intentionally treated as “Clerk disabled”.
+- optional `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL`
+- optional `NEXT_PUBLIC_CLERK_AFTER_SIGN_OUT_URL`
 
 ## How the frontend talks to the backend
 
@@ -107,7 +105,7 @@ All Orval-generated requests go through the custom mutator (`src/api/mutator.ts`
 It will:
 
 - set `Content-Type: application/json` when there is a body and you didn’t specify a content type
-- add `Authorization: Bearer <token>` automatically **if** Clerk is enabled and there is an active Clerk session in the browser
+- add `Authorization: Bearer <token>` automatically from local mode token or Clerk session
 - parse errors into an `ApiError` with status + parsed response body
 
 ## Common commands
@@ -149,11 +147,11 @@ cp .env.example .env.local
 - Confirm `NEXT_PUBLIC_API_URL` points to the correct host/port.
 - If accessing from another device (LAN), use a reachable backend URL (not `localhost`).
 
-### Clerk redirects / auth UI shows unexpectedly
+### Wrong auth mode UI
 
-Clerk should be **off** unless you set a real `pk_test_...` or `pk_live_...` publishable key.
-
-- Remove/blank `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in your `.env.local` to force Clerk off.
+- Ensure `NEXT_PUBLIC_AUTH_MODE` matches backend `AUTH_MODE`.
+- For local mode, set `NEXT_PUBLIC_AUTH_MODE=local`.
+- For Clerk mode, set `NEXT_PUBLIC_AUTH_MODE=clerk` and a real Clerk publishable key.
 
 ### Dev server blocked by origin restrictions
 

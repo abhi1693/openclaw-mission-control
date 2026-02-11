@@ -22,6 +22,7 @@ from sqlmodel import col, select
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.agent_tokens import verify_agent_token
+from app.core.logging import TRACE_LEVEL
 from app.core.time import utcnow
 from app.db import crud
 from app.db.pagination import paginate
@@ -983,7 +984,7 @@ class AgentLifecycleService(OpenClawDBService):
         raise_gateway_errors: bool,
     ) -> None:
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "agent.provision.start action=%s agent_id=%s target_main=%s",
             action,
             agent.id,
@@ -1471,7 +1472,7 @@ class AgentLifecycleService(OpenClawDBService):
         actor: ActorContextLike,
     ) -> AgentRead:
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "agent.create.start actor_type=%s board_id=%s",
             actor.actor_type,
             payload.board_id,
@@ -1523,7 +1524,12 @@ class AgentLifecycleService(OpenClawDBService):
         payload: AgentUpdate,
         options: AgentUpdateOptions,
     ) -> AgentRead:
-        self.logger.log(5, "agent.update.start agent_id=%s force=%s", agent_id, options.force)
+        self.logger.log(
+            TRACE_LEVEL,
+            "agent.update.start agent_id=%s force=%s",
+            agent_id,
+            options.force,
+        )
         agent = await Agent.objects.by_id(agent_id).first(self.session)
         if agent is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -1573,7 +1579,10 @@ class AgentLifecycleService(OpenClawDBService):
         actor: ActorContextLike,
     ) -> AgentRead:
         self.logger.log(
-            5, "agent.heartbeat.start agent_id=%s actor_type=%s", agent_id, actor.actor_type
+            TRACE_LEVEL,
+            "agent.heartbeat.start agent_id=%s actor_type=%s",
+            agent_id,
+            actor.actor_type,
         )
         agent = await Agent.objects.by_id(agent_id).first(self.session)
         if agent is None:
@@ -1599,7 +1608,7 @@ class AgentLifecycleService(OpenClawDBService):
         actor: ActorContextLike,
     ) -> AgentRead:
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "agent.heartbeat_or_create.start actor_type=%s name=%s board_id=%s",
             actor.actor_type,
             payload.name,
@@ -1644,7 +1653,7 @@ class AgentLifecycleService(OpenClawDBService):
         agent_id: str,
         ctx: OrganizationContext,
     ) -> OkResponse:
-        self.logger.log(5, "agent.delete.start agent_id=%s", agent_id)
+        self.logger.log(TRACE_LEVEL, "agent.delete.start agent_id=%s", agent_id)
         agent = await Agent.objects.by_id(agent_id).first(self.session)
         if agent is None:
             return OkResponse()

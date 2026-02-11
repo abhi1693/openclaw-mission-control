@@ -15,6 +15,8 @@ COPY . ./
 # Allows configuring the API URL at build time.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ARG NEXT_PUBLIC_AUTH_MODE
+ENV NEXT_PUBLIC_AUTH_MODE=${NEXT_PUBLIC_AUTH_MODE}
 
 RUN npm run build
 
@@ -22,10 +24,12 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ARG NEXT_PUBLIC_AUTH_MODE
 
 # If provided at runtime, Next will expose NEXT_PUBLIC_* to the browser as well
 # (but note some values may be baked at build time).
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_AUTH_MODE=${NEXT_PUBLIC_AUTH_MODE}
 
 COPY --from=builder /app/.next ./.next
 # `public/` is optional in Next.js apps; repo may not have it.

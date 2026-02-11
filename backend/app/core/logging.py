@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import time
+from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any
@@ -17,6 +18,9 @@ from app.core.version import APP_NAME, APP_VERSION
 TRACE_LEVEL = 5
 EXC_INFO_TUPLE_SIZE = 3
 logging.addLevelName(TRACE_LEVEL, "TRACE")
+_REQUEST_ID_CONTEXT: ContextVar[str | None] = ContextVar("request_id", default=None)
+_REQUEST_METHOD_CONTEXT: ContextVar[str | None] = ContextVar("request_method", default=None)
+_REQUEST_PATH_CONTEXT: ContextVar[str | None] = ContextVar("request_path", default=None)
 
 
 def _coerce_exc_info(
@@ -75,6 +79,53 @@ def _trace(self: logging.Logger, message: str, *args: object, **kwargs: object) 
 
 logging.Logger.trace = _trace  # type: ignore[attr-defined]
 
+
+def set_request_id(request_id: str | None) -> Token[str | None]:
+    """Bind request-id to logging context for the current task."""
+    normalized = (request_id or "").strip() or None
+    return _REQUEST_ID_CONTEXT.set(normalized)
+
+
+def reset_request_id(token: Token[str | None]) -> None:
+    """Reset request-id context to a previous token value."""
+    _REQUEST_ID_CONTEXT.reset(token)
+
+
+def get_request_id() -> str | None:
+    """Return request-id currently bound to logging context."""
+    return _REQUEST_ID_CONTEXT.get()
+
+
+def set_request_route_context(
+    method: str | None,
+    path: str | None,
+) -> tuple[Token[str | None], Token[str | None]]:
+    """Bind request method/path to logging context for the current task."""
+    normalized_method = (method or "").strip().upper() or None
+    normalized_path = (path or "").strip() or None
+    return (
+        _REQUEST_METHOD_CONTEXT.set(normalized_method),
+        _REQUEST_PATH_CONTEXT.set(normalized_path),
+    )
+
+
+def reset_request_route_context(tokens: tuple[Token[str | None], Token[str | None]]) -> None:
+    """Reset request method/path context to previously-bound values."""
+    method_token, path_token = tokens
+    _REQUEST_METHOD_CONTEXT.reset(method_token)
+    _REQUEST_PATH_CONTEXT.reset(path_token)
+
+
+def get_request_method() -> str | None:
+    """Return request method currently bound to logging context."""
+    return _REQUEST_METHOD_CONTEXT.get()
+
+
+def get_request_path() -> str | None:
+    """Return request path currently bound to logging context."""
+    return _REQUEST_PATH_CONTEXT.get()
+
+
 _STANDARD_LOG_RECORD_ATTRS = {
     "args",
     "asctime",
@@ -117,6 +168,18 @@ class AppLogFilter(logging.Filter):
         """Attach app metadata fields to each emitted record."""
         record.app = self._app_name
         record.version = self._version
+        if not getattr(record, "request_id", None):
+            request_id = get_request_id()
+            if request_id:
+                record.request_id = request_id
+        if not getattr(record, "method", None):
+            method = get_request_method()
+            if method:
+                record.method = method
+        if not getattr(record, "path", None):
+            path = get_request_path()
+            if path:
+                record.path = path
         return True
 
 
@@ -227,6 +290,18 @@ class AppLogger:
                 logger = logging.getLogger(name)
                 logger.disabled = True
 
+        logging.getLogger(__name__).info(
+            "logging.configured level=%s format=%s use_utc=%s",
+            level_name,
+            format_name,
+            settings.log_use_utc,
+        )
+        logging.getLogger(__name__).debug(
+            "logging.libraries uvicorn_level=%s sql_enabled=%s",
+            level_name,
+            level_name == "TRACE",
+        )
+
         cls._configured = True
 
     @classmethod
@@ -240,3 +315,8 @@ class AppLogger:
 def configure_logging() -> None:
     """Configure global application logging once during startup."""
     AppLogger.configure()
+
+
+def get_logger(name: str | None = None) -> logging.Logger:
+    """Return an app logger from the centralized logger configuration."""
+    return AppLogger.get_logger(name)

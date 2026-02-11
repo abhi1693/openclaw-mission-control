@@ -15,7 +15,9 @@ When running Compose, you get:
   - Health check: `GET /healthz`
 - **Frontend UI** (Next.js) on `http://localhost:${FRONTEND_PORT:-3000}`
 
-Auth (Clerk) is **required** right now. You must configure Clerk keys for the frontend, and configure `CLERK_JWKS_URL` for the backend so protected API routes can verify JWTs.
+Auth is configurable per deployment:
+- `AUTH_MODE=local` (self-host default; shared bearer token)
+- `AUTH_MODE=clerk` (Clerk JWT auth; backend requires `CLERK_SECRET_KEY`)
 
 ## Requirements
 
@@ -29,6 +31,9 @@ From repo root:
 
 ```bash
 cp .env.example .env
+
+# REQUIRED for local mode:
+# set LOCAL_AUTH_TOKEN in .env to a non-placeholder value with at least 50 characters.
 
 docker compose -f compose.yml --env-file .env up -d --build
 ```
@@ -86,7 +91,7 @@ These persist across `docker compose down`.
 ### Root `.env` (Compose)
 
 - Copy the template: `cp .env.example .env`
-- Edit values as needed (ports, Clerk URLs/keys, etc.)
+- Edit values as needed (ports, auth mode, tokens, API URL, etc.)
 
 Compose is invoked with:
 
@@ -110,43 +115,57 @@ Instead, it supports an optional user-managed env file:
 
 If present, Compose will load it.
 
-## Clerk (auth) notes
+## Authentication modes
 
-Clerk is currently required.
+Mission Control supports two deployment auth modes:
 
-### Frontend (Clerk keys)
+- `AUTH_MODE=local`: shared bearer token auth (self-host default)
+- `AUTH_MODE=clerk`: Clerk JWT auth
 
-Create `frontend/.env` (this file is **not** committed; `compose.yml` loads it if present):
+### Local mode (self-host default)
+
+Set in `.env` (repo root):
 
 ```env
-# Frontend → Backend
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Frontend → Clerk
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-CLERK_SECRET_KEY=YOUR_SECRET_KEY
-
-# Optional (but recommended) redirects
-NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/boards
-NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/boards
-NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/boards
-NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/boards
+AUTH_MODE=local
+LOCAL_AUTH_TOKEN=replace-with-random-token-at-least-50-characters
 ```
 
-### Backend (JWT verification)
+Set frontend mode (optional override in `frontend/.env`):
 
-The backend verifies Clerk JWTs using **`CLERK_JWKS_URL`**.
+```env
+NEXT_PUBLIC_AUTH_MODE=local
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-- Compose loads `backend/.env.example` by default, where `CLERK_JWKS_URL` is empty.
-- For a real deployment, provide a real value either by:
-  1) creating `backend/.env` and updating `compose.yml` to load it (preferred), **or**
-  2) adding `CLERK_JWKS_URL: ${CLERK_JWKS_URL}` under `backend.environment` and setting it in root `.env`.
+Users enter `LOCAL_AUTH_TOKEN` in the local login screen.
 
-Related backend env vars (optional tuning):
-- `CLERK_VERIFY_IAT` (default: true)
-- `CLERK_LEEWAY` (default: 10.0)
+### Clerk mode
 
-**Security:** treat `CLERK_SECRET_KEY` like a password. Do not commit it.
+Set in `.env` (repo root):
+
+```env
+AUTH_MODE=clerk
+```
+
+Create `backend/.env` with at least:
+
+```env
+CLERK_SECRET_KEY=sk_test_your_real_key
+CLERK_API_URL=https://api.clerk.com
+CLERK_VERIFY_IAT=true
+CLERK_LEEWAY=10.0
+```
+
+Create `frontend/.env` with at least:
+
+```env
+NEXT_PUBLIC_AUTH_MODE=clerk
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_real_key
+```
+
+**Security:** treat `LOCAL_AUTH_TOKEN` and `CLERK_SECRET_KEY` like passwords. Do not commit them.
 
 ## Troubleshooting
 

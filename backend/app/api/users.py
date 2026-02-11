@@ -13,6 +13,7 @@ from app.db import crud
 from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
+from app.models.approval_task_links import ApprovalTaskLink
 from app.models.approvals import Approval
 from app.models.board_group_memory import BoardGroupMemory
 from app.models.board_groups import BoardGroup
@@ -81,6 +82,14 @@ async def _delete_organization_tree(
         session,
         TaskFingerprint,
         col(TaskFingerprint.board_id).in_(board_ids),
+        commit=False,
+    )
+    await crud.delete_where(
+        session,
+        ApprovalTaskLink,
+        col(ApprovalTaskLink.approval_id).in_(
+            select(Approval.id).where(col(Approval.board_id).in_(board_ids))
+        ),
         commit=False,
     )
     await crud.delete_where(

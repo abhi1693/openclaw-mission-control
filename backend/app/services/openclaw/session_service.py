@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from app.core.logging import TRACE_LEVEL
 from app.models.boards import Board
 from app.schemas.gateway_api import (
     GatewayResolveQuery,
@@ -88,7 +89,7 @@ class GatewaySessionService(OpenClawDBService):
         user: User | None = None,
     ) -> tuple[Board | None, GatewayClientConfig, str | None]:
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.resolve.start board_id=%s gateway_url=%s",
             params.board_id,
             params.gateway_url,

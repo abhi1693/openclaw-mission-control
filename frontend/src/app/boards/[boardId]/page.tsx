@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { Markdown } from "@/components/atoms/Markdown";
+import { StatusDot } from "@/components/atoms/StatusDot";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { TaskBoard } from "@/components/organisms/TaskBoard";
 import { DashboardShell } from "@/components/templates/DashboardShell";
@@ -1112,11 +1113,17 @@ export default function BoardDetailPage() {
               try {
                 const payload = JSON.parse(data) as {
                   approval?: ApprovalRead;
-                  task_counts?: {
-                    task_id?: string;
-                    approvals_count?: number;
-                    approvals_pending_count?: number;
-                  };
+                  task_counts?:
+                    | {
+                        task_id?: string;
+                        approvals_count?: number;
+                        approvals_pending_count?: number;
+                      }
+                    | Array<{
+                        task_id?: string;
+                        approvals_count?: number;
+                        approvals_pending_count?: number;
+                      }>;
                   pending_approvals_count?: number;
                 };
                 if (payload.approval) {
@@ -1136,23 +1143,30 @@ export default function BoardDetailPage() {
                     return next;
                   });
                 }
-                if (payload.task_counts?.task_id) {
-                  const taskId = payload.task_counts.task_id;
+                const taskCounts = Array.isArray(payload.task_counts)
+                  ? payload.task_counts
+                  : payload.task_counts
+                    ? [payload.task_counts]
+                    : [];
+                if (taskCounts.length > 0) {
                   setTasks((prev) => {
-                    const index = prev.findIndex((task) => task.id === taskId);
-                    if (index === -1) return prev;
-                    const next = [...prev];
-                    const current = next[index];
-                    next[index] = {
-                      ...current,
-                      approvals_count:
-                        payload.task_counts?.approvals_count ??
-                        current.approvals_count,
-                      approvals_pending_count:
-                        payload.task_counts?.approvals_pending_count ??
-                        current.approvals_pending_count,
-                    };
-                    return next;
+                    const countsByTaskId = new Map(
+                      taskCounts
+                        .filter((row) => Boolean(row.task_id))
+                        .map((row) => [row.task_id as string, row]),
+                    );
+                    return prev.map((task) => {
+                      const counts = countsByTaskId.get(task.id);
+                      if (!counts) return task;
+                      return {
+                        ...task,
+                        approvals_count:
+                          counts.approvals_count ?? task.approvals_count,
+                        approvals_pending_count:
+                          counts.approvals_pending_count ??
+                          task.approvals_pending_count,
+                      };
+                    });
                   });
                 }
               } catch {
@@ -1720,7 +1734,40 @@ export default function BoardDetailPage() {
   const taskApprovals = useMemo(() => {
     if (!selectedTask) return [];
     const taskId = selectedTask.id;
-    return approvals.filter((approval) => approval.task_id === taskId);
+    const taskIdsForApproval = (approval: Approval) => {
+      const payload = approval.payload ?? {};
+      const payloadValue = (key: string) => {
+        const value = (payload as Record<string, unknown>)[key];
+        if (typeof value === "string" || typeof value === "number") {
+          return String(value);
+        }
+        return null;
+      };
+      const payloadArray = (key: string) => {
+        const value = (payload as Record<string, unknown>)[key];
+        if (!Array.isArray(value)) return [];
+        return value.filter((item): item is string => typeof item === "string");
+      };
+      const linkedTaskIds = (
+        approval as Approval & { task_ids?: string[] | null }
+      ).task_ids;
+      const singleTaskId =
+        approval.task_id ??
+        payloadValue("task_id") ??
+        payloadValue("taskId") ??
+        payloadValue("taskID");
+      const merged = [
+        ...(Array.isArray(linkedTaskIds) ? linkedTaskIds : []),
+        ...payloadArray("task_ids"),
+        ...payloadArray("taskIds"),
+        ...payloadArray("taskIDs"),
+        ...(singleTaskId ? [singleTaskId] : []),
+      ];
+      return [...new Set(merged)];
+    };
+    return approvals.filter((approval) =>
+      taskIdsForApproval(approval).includes(taskId),
+    );
   }, [approvals, selectedTask]);
 
   const workingAgentIds = useMemo(() => {
@@ -2168,13 +2215,46 @@ export default function BoardDetailPage() {
     return null;
   };
 
-  const approvalRows = (approval: Approval) => {
+  const approvalPayloadValues = (payload: Approval["payload"], key: string) => {
+    if (!payload || typeof payload !== "object") return [];
+    const value = (payload as Record<string, unknown>)[key];
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is string => typeof item === "string");
+  };
+
+  const approvalTaskIds = (approval: Approval) => {
     const payload = approval.payload ?? {};
-    const taskId =
+    const linkedTaskIds = (
+      approval as Approval & { task_ids?: string[] | null }
+    ).task_ids;
+    const singleTaskId =
       approval.task_id ??
       approvalPayloadValue(payload, "task_id") ??
       approvalPayloadValue(payload, "taskId") ??
       approvalPayloadValue(payload, "taskID");
+    const manyTaskIds = [
+      ...approvalPayloadValues(payload, "task_ids"),
+      ...approvalPayloadValues(payload, "taskIds"),
+      ...approvalPayloadValues(payload, "taskIDs"),
+    ];
+    const merged = [
+      ...(Array.isArray(linkedTaskIds) ? linkedTaskIds : []),
+      ...manyTaskIds,
+      ...(singleTaskId ? [singleTaskId] : []),
+    ];
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    merged.forEach((value) => {
+      if (seen.has(value)) return;
+      seen.add(value);
+      deduped.push(value);
+    });
+    return deduped;
+  };
+
+  const approvalRows = (approval: Approval) => {
+    const payload = approval.payload ?? {};
+    const taskIds = approvalTaskIds(approval);
     const assignedAgentId =
       approvalPayloadValue(payload, "assigned_agent_id") ??
       approvalPayloadValue(payload, "assignedAgentId");
@@ -2182,7 +2262,9 @@ export default function BoardDetailPage() {
     const role = approvalPayloadValue(payload, "role");
     const isAssign = approval.action_type.includes("assign");
     const rows: Array<{ label: string; value: string }> = [];
-    if (taskId) rows.push({ label: "Task", value: taskId });
+    if (taskIds.length === 1) rows.push({ label: "Task", value: taskIds[0] });
+    if (taskIds.length > 1)
+      rows.push({ label: "Tasks", value: taskIds.join(", ") });
     if (isAssign) {
       rows.push({
         label: "Assignee",
@@ -2425,14 +2507,12 @@ export default function BoardDetailPage() {
                         >
                           <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
                             {agentAvatarLabel(agent)}
-                            <span
+                            <StatusDot
+                              status={agent.status}
+                              variant="agent"
                               className={cn(
                                 "absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white",
-                                isWorking
-                                  ? "bg-emerald-500"
-                                  : agent.status === "online"
-                                    ? "bg-green-500"
-                                    : "bg-slate-300",
+                                isWorking && "ring-2 ring-emerald-200",
                               )}
                             />
                           </div>

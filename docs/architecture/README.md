@@ -2,7 +2,7 @@
 
 Mission Control is the **web UI + HTTP API** for operating OpenClaw. It’s where you manage boards, tasks, agents, approvals, and (optionally) gateway connections.
 
-> Auth note: **Clerk is required for now** (current product direction). The codebase includes gating so CI/local can run with placeholders, but real deployments should configure Clerk.
+> Auth note: Mission Control supports two auth modes: `local` (shared bearer token) and `clerk`.
 
 At a high level:
 - The **frontend** is a Next.js app used by humans.
@@ -29,9 +29,12 @@ flowchart LR
 - Routes/pages: `frontend/src/app/*` (Next.js App Router)
 - API utilities: `frontend/src/lib/*` and `frontend/src/api/*`
 
-**Auth (Clerk, required for now)**
-- The codebase includes gating so CI/local can run without secrets, but real deployments should configure Clerk.
-- See `frontend/src/auth/clerkKey.ts`, `frontend/src/auth/clerk.tsx`, and `frontend/src/proxy.ts`.
+**Auth (`local` or Clerk)**
+- `local` mode authenticates a shared bearer token (`LOCAL_AUTH_TOKEN`) and resolves a local user context.
+- `clerk` mode verifies Clerk JWTs using `CLERK_SECRET_KEY`.
+- Frontend mode switch + wrappers: `frontend/src/auth/clerk.tsx`, `frontend/src/auth/localAuth.ts`, and `frontend/src/components/providers/AuthProvider.tsx`.
+- Backend mode switch: `backend/app/core/config.py` and `backend/app/core/auth.py`.
+
 
 ### Backend (FastAPI)
 - Location: `backend/`
@@ -52,8 +55,8 @@ flowchart LR
 ### Gateway integration (optional)
 Mission Control can call into an OpenClaw Gateway over WebSockets.
 - Client + protocol: `backend/app/services/openclaw/gateway_rpc.py`
-- Protocol doc: `docs/openclaw_gateway_ws.md`
-- Base gateway config (getting started): `docs/openclaw_gateway_base_config.md`
+- Protocol doc: [Gateway WebSocket protocol](../openclaw_gateway_ws.md)
+- Base gateway config (getting started): [Gateway base config](../openclaw_gateway_base_config.md)
 
 ## Request flows
 
@@ -62,11 +65,13 @@ Mission Control can call into an OpenClaw Gateway over WebSockets.
 2. Frontend calls backend endpoints under `/api/v1/*`.
 3. Backend reads/writes Postgres.
 
-### Auth (Clerk — required for now)
-- **Frontend** enables Clerk when a publishable key is present/valid.
-- **Backend** uses `fastapi-clerk-auth` when `CLERK_JWKS_URL` is configured.
-  - See `backend/app/core/auth.py`.
-
+### Auth (`local` or Clerk)
+- **Frontend**:
+  - `local`: token entry screen + session storage token (`frontend/src/components/organisms/LocalAuthLogin.tsx`, `frontend/src/auth/localAuth.ts`).
+  - `clerk`: Clerk wrappers/hooks (`frontend/src/auth/clerk.tsx`).
+- **Backend**:
+  - `local`: validates `Authorization: Bearer <LOCAL_AUTH_TOKEN>`.
+  - `clerk`: validates Clerk request state with SDK + `CLERK_SECRET_KEY`.
 ### Agent access (X-Agent-Token)
 Automation/agents can use the “agent” API surface:
 - Endpoints under `/api/v1/agent/*` (router: `backend/app/api/agent.py`).
@@ -92,7 +97,7 @@ Backend:
 Frontend:
 - `frontend/src/app/` — Next.js routes
 - `frontend/src/components/` — UI components
-- `frontend/src/auth/` — Clerk gating/wrappers
+- `frontend/src/auth/` — auth mode helpers (`clerk` and `local`)
 - `frontend/src/lib/` — utilities + API base
 
 ## Where to start reading code
@@ -106,13 +111,13 @@ Backend:
 Frontend:
 1. `frontend/src/app/*` — main UI routes
 2. `frontend/src/lib/api-base.ts` — backend calls
-3. `frontend/src/auth/*` — Clerk integration (gated for CI/local)
+3. `frontend/src/auth/*` — auth mode integration (`local` + Clerk)
 
 ## Related docs
 - Self-host (Docker Compose): see repo root README: [Quick start (self-host with Docker Compose)](../../README.md#quick-start-self-host-with-docker-compose)
-- Production-ish deployment: [`docs/production/README.md`](../production/README.md)
-- Testing (Cypress/Clerk): [`docs/testing/README.md`](../testing/README.md)
-- Troubleshooting: [`docs/troubleshooting/README.md`](../troubleshooting/README.md)
+- Production-ish deployment: [Production notes](../production/README.md)
+- Testing (Cypress/Clerk): [Testing guide](../testing/README.md)
+- Troubleshooting: [Troubleshooting](../troubleshooting/README.md)
 
 ## Notes / gotchas
 - Mermaid rendering depends on the markdown renderer.

@@ -91,6 +91,9 @@ If you create cron jobs, track them in memory and delete them when no longer nee
 - Task comments: primary work log (markdown is OK; keep it structured and scannable).
 - Board chat: only for questions/decisions that require a human response. Keep it short. Do not spam. Do not post task status updates.
 - Approvals: use for explicit yes/no on external or risky actions.
+  - Approvals may be linked to one or more tasks.
+  - Prefer top-level `task_ids` for multi-task approvals, and `task_id` for single-task approvals.
+  - When adding task references in `payload`, keep `payload.task_ids`/`payload.task_id` consistent with top-level fields.
 - `TASK_SOUL.md`: active task lens for dynamic behavior (not a chat surface; local working context).
 
 ## Collaboration (mandatory)

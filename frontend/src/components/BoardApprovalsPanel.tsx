@@ -16,6 +16,7 @@ import {
   useUpdateApprovalApiV1BoardsBoardIdApprovalsApprovalIdPatch,
 } from "@/api/generated/approvals/approvals";
 import type { ApprovalRead } from "@/api/generated/model";
+import { StatusDot } from "@/components/atoms/StatusDot";
 import {
   ChartContainer,
   ChartTooltip,
@@ -85,12 +86,6 @@ const humanizeAction = (value: string) =>
 const formatStatusLabel = (status: string) =>
   status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
-const statusDotClass = (status: string) => {
-  if (status === "approved") return "bg-emerald-500";
-  if (status === "rejected") return "bg-rose-500";
-  return "bg-amber-500";
-};
-
 const rubricColors = [
   "#0f172a",
   "#1d4ed8",
@@ -154,13 +149,36 @@ const payloadValue = (payload: Approval["payload"], key: string) => {
   return null;
 };
 
-const approvalSummary = (approval: Approval, boardLabel?: string | null) => {
+const payloadValues = (payload: Approval["payload"], key: string) => {
+  if (!payload) return [];
+  const value = payload[key as keyof typeof payload];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+};
+
+const approvalTaskIds = (approval: Approval) => {
   const payload = approval.payload ?? {};
-  const taskId =
+  const linkedTaskIds = (approval as Approval & { task_ids?: string[] | null })
+    .task_ids;
+  const singleTaskId =
     approval.task_id ??
     payloadValue(payload, "task_id") ??
     payloadValue(payload, "taskId") ??
     payloadValue(payload, "taskID");
+  const merged = [
+    ...(Array.isArray(linkedTaskIds) ? linkedTaskIds : []),
+    ...payloadValues(payload, "task_ids"),
+    ...payloadValues(payload, "taskIds"),
+    ...payloadValues(payload, "taskIDs"),
+    ...(singleTaskId ? [singleTaskId] : []),
+  ];
+  return [...new Set(merged)];
+};
+
+const approvalSummary = (approval: Approval, boardLabel?: string | null) => {
+  const payload = approval.payload ?? {};
+  const taskIds = approvalTaskIds(approval);
+  const taskId = taskIds[0] ?? null;
   const assignedAgentId =
     payloadValue(payload, "assigned_agent_id") ??
     payloadValue(payload, "assignedAgentId");
@@ -171,7 +189,9 @@ const approvalSummary = (approval: Approval, boardLabel?: string | null) => {
   const isAssign = approval.action_type.includes("assign");
   const rows: Array<{ label: string; value: string }> = [];
   if (boardLabel) rows.push({ label: "Board", value: boardLabel });
-  if (taskId) rows.push({ label: "Task", value: taskId });
+  if (taskIds.length === 1) rows.push({ label: "Task", value: taskIds[0] });
+  if (taskIds.length > 1)
+    rows.push({ label: "Tasks", value: taskIds.join(", ") });
   if (isAssign) {
     rows.push({
       label: "Assignee",
@@ -584,11 +604,10 @@ export function BoardApprovalsPanel({
                     </div>
 
                     <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full",
-                          statusDotClass(selectedApproval.status),
-                        )}
+                      <StatusDot
+                        status={selectedApproval.status}
+                        variant="approval"
+                        className={cn("h-2 w-2 rounded-full")}
                       />
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">

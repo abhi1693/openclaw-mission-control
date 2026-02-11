@@ -56,6 +56,7 @@ async def test_delete_my_org_cleans_dependents_before_organization_delete() -> N
         "activity_events",
         "task_dependencies",
         "task_fingerprints",
+        "approval_task_links",
         "approvals",
         "board_memory",
         "board_onboarding_sessions",

@@ -24,6 +24,7 @@ import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SearchableSelect from "@/components/ui/searchable-select";
+import { Textarea } from "@/components/ui/textarea";
 
 const slugify = (value: string) =>
   value
@@ -39,6 +40,7 @@ export default function NewBoardPage() {
   const { isAdmin } = useOrganizationMembership(isSignedIn);
 
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [gatewayId, setGatewayId] = useState<string>("");
   const [boardGroupId, setBoardGroupId] = useState<string>("none");
 
@@ -95,7 +97,9 @@ export default function NewBoardPage() {
   const errorMessage =
     error ?? gatewaysQuery.error?.message ?? groupsQuery.error?.message ?? null;
 
-  const isFormReady = Boolean(name.trim() && displayGatewayId);
+  const isFormReady = Boolean(
+    name.trim() && description.trim() && displayGatewayId,
+  );
 
   const gatewayOptions = useMemo(
     () =>
@@ -124,6 +128,11 @@ export default function NewBoardPage() {
       setError("Select a gateway before creating a board.");
       return;
     }
+    const trimmedDescription = description.trim();
+    if (!trimmedDescription) {
+      setError("Board description is required.");
+      return;
+    }
 
     setError(null);
 
@@ -131,6 +140,7 @@ export default function NewBoardPage() {
       data: {
         name: trimmedName,
         slug: slugify(trimmedName),
+        description: trimmedDescription,
         gateway_id: resolvedGatewayId,
         board_group_id: boardGroupId === "none" ? null : boardGroupId,
       },
@@ -207,6 +217,19 @@ export default function NewBoardPage() {
                 Optional. Groups increase cross-board visibility.
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-900">
+              Description <span className="text-red-500">*</span>
+            </label>
+            <Textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="What context should the lead agent know before onboarding?"
+              className="min-h-[120px]"
+              disabled={isLoading}
+            />
           </div>
         </div>
 

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 from starlette.requests import Request
 
+from app.core import error_handling
 from app.core.error_handling import (
     REQUEST_ID_HEADER,
     _error_payload,
@@ -109,6 +110,60 @@ def test_client_provided_request_id_is_preserved():
     body = resp.json()
     assert body["request_id"] == "req-123"
     assert resp.headers.get(REQUEST_ID_HEADER) == "req-123"
+
+
+def test_slow_request_emits_slow_log(monkeypatch: pytest.MonkeyPatch) -> None:
+    warnings: list[tuple[str, dict[str, object]]] = []
+
+    def _fake_warning(message: str, *args: object, **kwargs: object) -> None:
+        _ = args
+        extra = kwargs.get("extra")
+        warnings.append((message, extra if isinstance(extra, dict) else {}))
+
+    perf_ticks = iter((100.0, 100.2))
+
+    def _fake_perf_counter() -> float:
+        return next(perf_ticks)
+
+    monkeypatch.setattr(error_handling.settings, "request_log_slow_ms", 1)
+    monkeypatch.setattr(error_handling, "perf_counter", _fake_perf_counter)
+    monkeypatch.setattr(error_handling.logger, "warning", _fake_warning)
+
+    app = FastAPI()
+    install_error_handling(app)
+
+    @app.get("/slow")
+    def slow() -> dict[str, str]:
+        return {"ok": "1"}
+
+    client = TestClient(app)
+    resp = client.get("/slow")
+
+    assert resp.status_code == 200
+    assert any(
+        message == "http.request.slow" and extra.get("slow_threshold_ms") == 1
+        for message, extra in warnings
+    )
+
+
+def test_health_route_skips_request_logs_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(error_handling.settings, "request_log_include_health", False)
+
+    app = FastAPI()
+    install_error_handling(app)
+
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
+    client = TestClient(app)
+    resp = client.get("/healthz")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+    assert isinstance(resp.headers.get(REQUEST_ID_HEADER), str)
 
 
 def test_get_request_id_returns_none_for_missing_or_invalid_state() -> None:

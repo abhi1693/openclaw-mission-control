@@ -59,8 +59,10 @@ Recommended approach:
 
 Secrets guidelines:
 
-- **Clerk auth is required for now**: you must configure Clerk keys/JWKS for the app to work.
-- Never commit Clerk secret key.
+- Choose auth mode explicitly:
+  - `AUTH_MODE=local`: set `LOCAL_AUTH_TOKEN` to a random value with at least 50 characters
+  - `AUTH_MODE=clerk`: configure Clerk keys
+- Never commit `LOCAL_AUTH_TOKEN` or Clerk secret key.
 - Prefer passing secrets as environment variables from the host (or use Docker secrets if you later
   migrate to Swarm/K8s).
 - Rotate secrets if they ever hit logs.
@@ -75,7 +77,7 @@ sudo git clone https://github.com/abhi1693/openclaw-mission-control.git mission-
 cd mission-control
 
 cp .env.example .env
-# edit .env with real values (domains, Clerk keys, etc.)
+# edit .env with real values (domains, auth mode + secrets, etc.)
 
 docker compose -f compose.yml --env-file .env up -d --build
 ```

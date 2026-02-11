@@ -7,7 +7,7 @@ from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import model_validator
-from sqlmodel import SQLModel
+from sqlmodel import Field, SQLModel
 
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 STATUS_REQUIRED_ERROR = "status is required"
@@ -19,10 +19,28 @@ class ApprovalBase(SQLModel):
 
     action_type: str
     task_id: UUID | None = None
+    task_ids: list[UUID] = Field(default_factory=list)
     payload: dict[str, object] | None = None
     confidence: int
     rubric_scores: dict[str, int] | None = None
     status: ApprovalStatus = "pending"
+
+    @model_validator(mode="after")
+    def normalize_task_links(self) -> Self:
+        """Keep task identifiers deduplicated and task_id aligned with task_ids."""
+        deduped: list[UUID] = []
+        seen: set[UUID] = set()
+        if self.task_id is not None:
+            deduped.append(self.task_id)
+            seen.add(self.task_id)
+        for task_id in self.task_ids:
+            if task_id in seen:
+                continue
+            seen.add(task_id)
+            deduped.append(task_id)
+        self.task_ids = deduped
+        self.task_id = deduped[0] if deduped else None
+        return self
 
 
 class ApprovalCreate(ApprovalBase):

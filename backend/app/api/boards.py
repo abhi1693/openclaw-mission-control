@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,10 +16,12 @@ from app.api.deps import (
     require_org_admin,
     require_org_member,
 )
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import get_session
+from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board
 from app.models.gateways import Gateway
@@ -27,9 +29,13 @@ from app.schemas.boards import BoardCreate, BoardRead, BoardUpdate
 from app.schemas.common import OkResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.view_models import BoardGroupSnapshot, BoardSnapshot
+from app.services.activity_log import record_activity
 from app.services.board_group_snapshot import build_board_group_snapshot
 from app.services.board_lifecycle import delete_board as delete_board_service
 from app.services.board_snapshot import build_board_snapshot
+from app.services.openclaw.gateway_dispatch import GatewayDispatchService
+from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 from app.services.organizations import OrganizationContext, board_access_filter
 
 if TYPE_CHECKING:
@@ -37,6 +43,7 @@ if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
 router = APIRouter(prefix="/boards", tags=["boards"])
+logger = get_logger(__name__)
 
 SESSION_DEP = Depends(get_session)
 ORG_ADMIN_DEP = Depends(require_org_admin)
@@ -156,6 +163,185 @@ async def _apply_board_update(
     return await crud.save(session, board)
 
 
+def _board_group_change_message(
+    *,
+    action: Literal["join", "leave"],
+    changed_board: Board,
+    recipient_board: Board,
+    group: BoardGroup,
+) -> str:
+    changed_label = "Joined Board" if action == "join" else "Left Board"
+    guidance = (
+        "1) Use cross-board discussion when work spans multiple boards.\n"
+        "2) Check related board activity before acting on shared concerns.\n"
+        "3) Explicitly coordinate ownership to avoid duplicate or conflicting work.\n"
+    )
+    if action == "leave":
+        guidance = (
+            "1) Treat cross-board coordination with the departed board as inactive.\n"
+            "2) Re-check dependencies and ownership that previously spanned this board.\n"
+            "3) Confirm no in-flight handoffs still rely on the prior group link.\n"
+        )
+    return (
+        "BOARD GROUP UPDATED\n"
+        f"{changed_label}: {changed_board.name}\n"
+        f"{changed_label} ID: {changed_board.id}\n"
+        f"Recipient Board: {recipient_board.name}\n"
+        f"Recipient Board ID: {recipient_board.id}\n"
+        f"Board Group: {group.name}\n"
+        f"Board Group ID: {group.id}\n\n"
+        "Coordination guidance:\n"
+        f"{guidance}"
+    )
+
+
+async def _notify_agents_on_board_group_change(
+    *,
+    session: AsyncSession,
+    board: Board,
+    group: BoardGroup,
+    action: Literal["join", "leave"],
+) -> None:
+    dispatch = GatewayDispatchService(session)
+    group_boards = await Board.objects.filter_by(board_group_id=group.id).all(session)
+    board_by_id = {item.id: item for item in group_boards}
+    board_by_id.setdefault(board.id, board)
+    board_ids = list(board_by_id.keys())
+    if not board_ids:
+        return
+    agents = await Agent.objects.by_field_in("board_id", board_ids).all(session)
+    if not agents:
+        return
+
+    config_by_board_id: dict[UUID, GatewayClientConfig] = {}
+    for group_board in board_by_id.values():
+        config = await dispatch.optional_gateway_config_for_board(group_board)
+        if config is None:
+            logger.warning(
+                "board.group.%s.notify_skipped board_id=%s group_id=%s target_board_id=%s "
+                "reason=no_gateway_config",
+                action,
+                board.id,
+                group.id,
+                group_board.id,
+            )
+            continue
+        config_by_board_id[group_board.id] = config
+
+    if not config_by_board_id:
+        logger.warning(
+            "board.group.%s.notify_skipped board_id=%s group_id=%s reason=no_gateway_config_any_board",
+            action,
+            board.id,
+            group.id,
+        )
+        return
+
+    message_by_board_id = {
+        recipient_board_id: _board_group_change_message(
+            action=action,
+            changed_board=board,
+            recipient_board=recipient_board,
+            group=group,
+        )
+        for recipient_board_id, recipient_board in board_by_id.items()
+    }
+
+    notified = 0
+    failed = 0
+    skipped_missing_session = 0
+    skipped_missing_config = 0
+    skipped_missing_board = 0
+    for agent in agents:
+        if not agent.openclaw_session_id:
+            skipped_missing_session += 1
+            continue
+        if agent.board_id is None:
+            skipped_missing_board += 1
+            continue
+        config = config_by_board_id.get(agent.board_id)
+        message = message_by_board_id.get(agent.board_id)
+        recipient_board = board_by_id.get(agent.board_id)
+        if config is None or message is None or recipient_board is None:
+            skipped_missing_config += 1
+            continue
+        error = await dispatch.try_send_agent_message(
+            session_key=agent.openclaw_session_id,
+            config=config,
+            agent_name=agent.name,
+            message=message,
+            deliver=False,
+        )
+        if error is None:
+            notified += 1
+            record_activity(
+                session,
+                event_type=f"board.group.{action}.notified",
+                message=(
+                    f"Board-group {action} notice sent to {agent.name} for board "
+                    f"{recipient_board.name} related to {board.name} and {group.name}."
+                ),
+                agent_id=agent.id,
+            )
+        else:
+            failed += 1
+            record_activity(
+                session,
+                event_type=f"board.group.{action}.notify_failed",
+                message=(
+                    f"Board-group {action} notify failed for {agent.name} on board "
+                    f"{recipient_board.name}: {error}"
+                ),
+                agent_id=agent.id,
+            )
+
+    if notified or failed:
+        await session.commit()
+    logger.info(
+        "board.group.%s.notify_complete board_id=%s group_id=%s boards_total=%s agents_total=%s "
+        "agents_notified=%s agents_failed=%s agents_skipped_no_session=%s "
+        "agents_skipped_no_gateway=%s agents_skipped_no_board=%s",
+        action,
+        board.id,
+        group.id,
+        len(board_by_id),
+        len(agents),
+        notified,
+        failed,
+        skipped_missing_session,
+        skipped_missing_config,
+        skipped_missing_board,
+    )
+
+
+async def _notify_agents_on_board_group_addition(
+    *,
+    session: AsyncSession,
+    board: Board,
+    group: BoardGroup,
+) -> None:
+    await _notify_agents_on_board_group_change(
+        session=session,
+        board=board,
+        group=group,
+        action="join",
+    )
+
+
+async def _notify_agents_on_board_group_removal(
+    *,
+    session: AsyncSession,
+    board: Board,
+    group: BoardGroup,
+) -> None:
+    await _notify_agents_on_board_group_change(
+        session=session,
+        board=board,
+        group=group,
+        action="leave",
+    )
+
+
 @router.get("", response_model=DefaultLimitOffsetPage[BoardRead])
 async def list_boards(
     gateway_id: UUID | None = GATEWAY_ID_QUERY,
@@ -233,7 +419,40 @@ async def update_board(
     board: Board = BOARD_USER_WRITE_DEP,
 ) -> Board:
     """Update mutable board properties."""
-    return await _apply_board_update(payload=payload, session=session, board=board)
+    previous_group_id = board.board_group_id
+    updated = await _apply_board_update(payload=payload, session=session, board=board)
+    new_group_id = updated.board_group_id
+    if previous_group_id is not None and previous_group_id != new_group_id:
+        previous_group = await crud.get_by_id(session, BoardGroup, previous_group_id)
+        if previous_group is not None:
+            try:
+                await _notify_agents_on_board_group_removal(
+                    session=session,
+                    board=updated,
+                    group=previous_group,
+                )
+            except (OpenClawGatewayError, OSError, RuntimeError, ValueError):
+                logger.exception(
+                    "board.group.leave.notify_unexpected board_id=%s group_id=%s",
+                    updated.id,
+                    previous_group_id,
+                )
+    if new_group_id is not None and new_group_id != previous_group_id:
+        board_group = await crud.get_by_id(session, BoardGroup, new_group_id)
+        if board_group is not None:
+            try:
+                await _notify_agents_on_board_group_addition(
+                    session=session,
+                    board=updated,
+                    group=board_group,
+                )
+            except (OpenClawGatewayError, OSError, RuntimeError, ValueError):
+                logger.exception(
+                    "board.group.join.notify_unexpected board_id=%s group_id=%s",
+                    updated.id,
+                    new_group_id,
+                )
+    return updated
 
 
 @router.delete("/{board_id}", response_model=OkResponse)

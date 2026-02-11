@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 from uuid import uuid4
@@ -17,7 +18,10 @@ from uuid import uuid4
 import websockets
 from websockets.exceptions import WebSocketException
 
+from app.core.logging import TRACE_LEVEL, get_logger
+
 PROTOCOL_VERSION = 3
+logger = get_logger(__name__)
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
@@ -165,6 +169,11 @@ def _build_gateway_url(config: GatewayConfig) -> str:
     return str(urlunparse(parsed._replace(query=query)))
 
 
+def _redacted_url_for_log(raw_url: str) -> str:
+    parsed = urlparse(raw_url)
+    return str(urlunparse(parsed._replace(query="", fragment="")))
+
+
 async def _await_response(
     ws: websockets.ClientConnection,
     request_id: str,
@@ -172,6 +181,12 @@ async def _await_response(
     while True:
         raw = await ws.recv()
         data = json.loads(raw)
+        logger.log(
+            TRACE_LEVEL,
+            "gateway.rpc.recv request_id=%s type=%s",
+            request_id,
+            data.get("type"),
+        )
 
         if data.get("type") == "res" and data.get("id") == request_id:
             ok = data.get("ok")
@@ -199,6 +214,13 @@ async def _send_request(
         "method": method,
         "params": params or {},
     }
+    logger.log(
+        TRACE_LEVEL,
+        "gateway.rpc.send method=%s request_id=%s params_keys=%s",
+        method,
+        request_id,
+        sorted((params or {}).keys()),
+    )
     await ws.send(json.dumps(message))
     return await _await_response(ws, request_id)
 
@@ -229,7 +251,11 @@ async def _ensure_connected(
             first_message = first_message.decode("utf-8")
         data = json.loads(first_message)
         if data.get("type") != "event" or data.get("event") != "connect.challenge":
-            pass
+            logger.warning(
+                "gateway.rpc.connect.unexpected_first_message type=%s event=%s",
+                data.get("type"),
+                data.get("event"),
+            )
     connect_id = str(uuid4())
     response = {
         "type": "req",
@@ -249,6 +275,12 @@ async def openclaw_call(
 ) -> object:
     """Call a gateway RPC method and return the result payload."""
     gateway_url = _build_gateway_url(config)
+    started_at = perf_counter()
+    logger.debug(
+        "gateway.rpc.call.start method=%s gateway_url=%s",
+        method,
+        _redacted_url_for_log(gateway_url),
+    )
     try:
         async with websockets.connect(gateway_url, ping_interval=None) as ws:
             first_message = None
@@ -257,8 +289,19 @@ async def openclaw_call(
             except TimeoutError:
                 first_message = None
             await _ensure_connected(ws, first_message, config)
-            return await _send_request(ws, method, params)
+            payload = await _send_request(ws, method, params)
+            logger.debug(
+                "gateway.rpc.call.success method=%s duration_ms=%s",
+                method,
+                int((perf_counter() - started_at) * 1000),
+            )
+            return payload
     except OpenClawGatewayError:
+        logger.warning(
+            "gateway.rpc.call.gateway_error method=%s duration_ms=%s",
+            method,
+            int((perf_counter() - started_at) * 1000),
+        )
         raise
     except (
         TimeoutError,
@@ -267,6 +310,12 @@ async def openclaw_call(
         ValueError,
         WebSocketException,
     ) as exc:  # pragma: no cover - network/protocol errors
+        logger.error(
+            "gateway.rpc.call.transport_error method=%s duration_ms=%s error_type=%s",
+            method,
+            int((perf_counter() - started_at) * 1000),
+            exc.__class__.__name__,
+        )
         raise OpenClawGatewayError(str(exc)) from exc
 
 

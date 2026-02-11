@@ -30,7 +30,7 @@ Implementation in this repo:
   - `cy.clerkLoaded()`
   - `cy.clerkSignIn(...)` / `cy.clerkSignOut(...)`
 
-See also: [`docs/e2e-auth.md`](../e2e-auth.md).
+See also: [E2E auth notes](../e2e-auth.md).
 
 ### Test user (non-secret)
 

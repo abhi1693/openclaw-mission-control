@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Literal
@@ -11,6 +10,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlmodel import col, select
 
 from app.core.agent_tokens import verify_agent_token
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.session import get_session
 from app.models.agents import Agent
@@ -18,7 +18,7 @@ from app.models.agents import Agent
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _LAST_SEEN_TOUCH_INTERVAL = timedelta(seconds=30)
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})

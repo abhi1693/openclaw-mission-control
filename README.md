@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/abhi1693/openclaw-mission-control/actions/workflows/ci.yml/badge.svg)](https://github.com/abhi1693/openclaw-mission-control/actions/workflows/ci.yml)
 
-Web UI + API for operating OpenClaw: managing boards, tasks, agents, approvals, and gateway connections.
+Mission Control is the **web UI and HTTP API** for operating OpenClaw. It’s designed for teams that want a clear control plane for managing **boards**, **tasks**, **agents**, **approvals**, and (optionally) **gateway connections**.
+
+<img width="1878" height="870" alt="image" src="https://github.com/user-attachments/assets/b432d66f-8c9b-4c5e-b7e5-81c86a73aa7d" />
 
 ## Active development
 
@@ -11,53 +13,74 @@ OpenClaw Mission Control is under active development. Expect breaking changes an
 - Use at your own risk for production workloads.
 - We welcome **bug reports**, **feature requests**, and **PRs** — see GitHub Issues: https://github.com/abhi1693/openclaw-mission-control/issues
 
-- **Frontend:** Next.js app (default http://localhost:3000)
-- **Backend:** FastAPI service (default http://localhost:8000)
-- **Data:** Postgres
-- **Gateway integration:** see [`docs/openclaw_gateway_ws.md`](./docs/openclaw_gateway_ws.md)
-- **Gateway base config (local):** see [`docs/openclaw_gateway_base_config.md`](./docs/openclaw_gateway_base_config.md)
+## Architecture (high level)
 
-> Note on auth (Clerk)
->
-> Clerk is **optional** for local/self-host. The frontend enables Clerk **only** when
-> `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is set. If you don’t want to configure Clerk,
-> make sure that variable is **unset/blank**.
+Mission Control is a small, service-oriented stack:
 
-## Quick start (self-host with Docker Compose)
+- **Frontend:** Next.js (default http://localhost:3000)
+- **Backend:** FastAPI (default http://localhost:8000)
+- **Database:** Postgres
+- **Gateway integration (optional):** WebSocket protocol documented in [Gateway WebSocket protocol](./docs/openclaw_gateway_ws.md)
 
-### Prerequisites
+## Documentation
 
-- Docker + Docker Compose v2 (`docker compose`)
+Start with the docs landing page:
+- [Docs landing](./docs/README.md)
 
-### Run
+Operational deep dives:
+- Deployment: [Deployment guide](./docs/deployment/README.md)
+- Production notes: [Production notes](./docs/production/README.md)
+- Troubleshooting: [Troubleshooting](./docs/troubleshooting/README.md)
+
+## Authentication
+
+Mission Control supports two auth modes via `AUTH_MODE`:
+
+- `local`: shared bearer token auth for self-hosted deployments
+- `clerk`: Clerk JWT auth
+
+`local` mode requires:
+- backend: `AUTH_MODE=local`, `LOCAL_AUTH_TOKEN=<token>`
+- frontend: `NEXT_PUBLIC_AUTH_MODE=local`, then enter the token in the login screen
+
+`clerk` mode requires:
+- backend: `AUTH_MODE=clerk`, `CLERK_SECRET_KEY=<secret>`
+- frontend: `NEXT_PUBLIC_AUTH_MODE=clerk`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<key>`
+
+## Deployment modes
+
+### 1) Self-host (Docker Compose)
+
+**Prerequisites:** Docker + Docker Compose v2 (`docker compose`)
 
 ```bash
 cp .env.example .env
 
-# REQUIRED: ensure the browser can reach the backend API.
-# NEXT_PUBLIC_API_URL must be reachable from the *browser* (host), not an internal Docker network name.
-# If you change ports/hosts, update NEXT_PUBLIC_API_URL in .env accordingly.
-# (Missing/blank NEXT_PUBLIC_API_URL will break frontend API calls like Activity feed.)
+# REQUIRED for local auth mode:
+# set LOCAL_AUTH_TOKEN to a non-placeholder value with at least 50 characters.
 
-# IMPORTANT: if you are not configuring Clerk, disable it by ensuring
-# NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is NOT set.
-# (The default `frontend/.env.example` contains placeholders that you should delete/blank.)
+# REQUIRED: the browser must be able to reach the backend.
+# NEXT_PUBLIC_API_URL must be reachable from the *browser* (host), not an internal Docker network name.
+# Missing/blank NEXT_PUBLIC_API_URL will break frontend API calls (e.g. Activity feed).
+
+# Auth defaults in .env.example are local mode.
+# For production, set LOCAL_AUTH_TOKEN to a random value with at least 50 characters.
+# For Clerk mode, set AUTH_MODE=clerk and provide Clerk keys.
 
 docker compose -f compose.yml --env-file .env up -d --build
 ```
 
 Open:
-
 - Frontend: http://localhost:3000
 - Backend health: http://localhost:8000/healthz
 
-### Stop
+Stop:
 
 ```bash
 docker compose -f compose.yml --env-file .env down
 ```
 
-### Common Compose commands
+Useful ops:
 
 ```bash
 # Tail logs
@@ -70,133 +93,25 @@ docker compose -f compose.yml --env-file .env up -d --build backend
 docker compose -f compose.yml --env-file .env down -v
 ```
 
-## Quick start (local development)
+### 2) Contributor local dev loop (DB in Docker, apps on host)
 
 This is the fastest workflow for contributors: run Postgres via Docker, and run the backend + frontend in dev mode.
 
-### Prerequisites
+See: [Development workflow](./docs/03-development.md)
 
-- Docker + Docker Compose v2
-- Python **3.12+** + [`uv`](https://github.com/astral-sh/uv)
-- Node.js (recommend 18+) + npm
+## Testing and CI parity
 
-### 1) Start Postgres
-
-```bash
-cp .env.example .env
-
-docker compose -f compose.yml --env-file .env up -d db
-```
-
-### 2) Backend (FastAPI)
-
-```bash
-cd backend
-
-cp .env.example .env
-
-# deps
-uv sync --extra dev
-
-# run API on :8000
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Notes:
-
-- If you run the DB container, the backend should use the default in `backend/.env` (`localhost:5432`).
-- Database migrations:
-
-  ```bash
-  cd backend
-  uv run alembic upgrade head
-  ```
-
-### 3) Frontend (Next.js)
-
-```bash
-cd frontend
-
-# Configure API URL (REQUIRED) and optionally disable Clerk for local dev by removing/blanking Clerk env vars
-cp .env.example .env.local
-
-# If you run the backend locally on :8000, this should be:
-# NEXT_PUBLIC_API_URL=http://localhost:8000
-
-npm install
-npm run dev
-```
-
-Open http://localhost:3000.
-
-### Cypress E2E (local)
-
-When running Cypress (`cd frontend && npm run e2e`), make sure `NEXT_PUBLIC_API_URL` is set (either in `frontend/.env.local` or your shell env). In CI we run the frontend on `http://localhost:3000`, so `NEXT_PUBLIC_API_URL` is set to `http://localhost:3000` for the E2E job.
-
-## Key concepts / high-level architecture
-
-- **Mission Control backend** exposes a REST API at `/api/v1/*` and also hosts health endpoints (`/healthz`, `/readyz`).
-- **Mission Control frontend** calls the backend via `NEXT_PUBLIC_API_URL`.
-- **Postgres** stores boards/tasks/agents/etc.
-- **OpenClaw Gateway** connectivity is over WebSockets; protocol details live in [`docs/openclaw_gateway_ws.md`](./docs/openclaw_gateway_ws.md).
-
-## Common commands
-
-- Testing notes: [`docs/testing/README.md`](./docs/testing/README.md)
-
-### CI test suites (canonical commands)
-
-CI (`.github/workflows/ci.yml`) runs these suites on PRs:
-
-- **Backend**: `make backend-coverage` (includes `pytest` + coverage artifacts)
-- **Frontend**: `make frontend-test` (Vitest + coverage)
-- **E2E (Cypress)**: runs only when a `cypress.config.*` is present in the repo (job `e2e`).
-
-### Coverage policy
-
-CI enforces a **scoped 100% coverage gate** (statements + branches) for a small set of unit-testable modules.
-See `docs/coverage-policy.md`.
+- Testing guide: [Testing guide](./docs/testing/README.md)
+- Coverage policy: [Coverage policy](./docs/coverage-policy.md)
 
 From repo root:
 
 ```bash
 make help
 make setup
-make lint
-make typecheck
-make test
 make check
 ```
 
-## Troubleshooting
+## License
 
-More: [`docs/troubleshooting/README.md`](./docs/troubleshooting/README.md)
-
-### Frontend keeps redirecting / Clerk errors
-
-You likely have `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` set (even to a placeholder). To run without Clerk:
-
-- Remove the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` line from `frontend/.env.local`, **or** set it to an empty value.
-
-### Backend can’t connect to Postgres
-
-- Confirm containers are up:
-
-  ```bash
-  docker compose -f compose.yml --env-file .env ps
-  ```
-
-- If you’re running backend locally (not in compose), make sure `backend/.env` points to `localhost`:
-  - `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/mission_control`
-
-### Port already in use
-
-Adjust ports in `.env` (copied from `.env.example`):
-
-- `FRONTEND_PORT`
-- `BACKEND_PORT`
-- `POSTGRES_PORT`
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=abhi1693/openclaw-mission-control&type=date&legend=top-left)](https://www.star-history.com/#abhi1693/openclaw-mission-control&type=date&legend=top-left)
+This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).

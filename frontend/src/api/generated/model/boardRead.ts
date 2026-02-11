@@ -12,6 +12,7 @@ import type { BoardReadSuccessMetrics } from "./boardReadSuccessMetrics";
 export interface BoardRead {
   name: string;
   slug: string;
+  description: string;
   gateway_id?: string | null;
   board_group_id?: string | null;
   board_type?: string;

@@ -999,47 +999,53 @@ export default function BoardGroupDetailPage() {
                         {item.tasks && item.tasks.length > 0 ? (
                           <ul className="space-y-3">
                             {item.tasks.map((task) => (
-                              <li
-                                key={task.id}
-                                className="rounded-lg border border-slate-200 bg-slate-50/40 p-3"
-                              >
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <span
-                                      className={cn(
-                                        "inline-flex flex-shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                                        statusTone(task.status),
-                                      )}
-                                    >
-                                      {statusLabel(task.status)}
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        "inline-flex flex-shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                                        priorityTone(task.priority),
-                                      )}
-                                    >
-                                      {task.priority}
-                                    </span>
-                                    <p className="truncate text-sm font-medium text-slate-900">
-                                      {task.title}
+                              <li key={task.id}>
+                                <Link
+                                  href={{
+                                    pathname: `/boards/${item.board.id}`,
+                                    query: { taskId: task.id },
+                                  }}
+                                  className="block rounded-lg border border-slate-200 bg-slate-50/40 p-3 transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                                  title="Open task on board"
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span
+                                        className={cn(
+                                          "inline-flex flex-shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                                          statusTone(task.status),
+                                        )}
+                                      >
+                                        {statusLabel(task.status)}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "inline-flex flex-shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                                          priorityTone(task.priority),
+                                        )}
+                                      >
+                                        {task.priority}
+                                      </span>
+                                      <p className="truncate text-sm font-medium text-slate-900">
+                                        {task.title}
+                                      </p>
+                                    </div>
+                                    <p className="text-xs text-slate-500">
+                                      {formatTimestamp(task.updated_at)}
                                     </p>
                                   </div>
-                                  <p className="text-xs text-slate-500">
-                                    {formatTimestamp(task.updated_at)}
-                                  </p>
-                                </div>
-                                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-                                  <p className="truncate">
-                                    Assignee:{" "}
-                                    <span className="font-medium text-slate-900">
-                                      {task.assignee ?? "Unassigned"}
-                                    </span>
-                                  </p>
-                                  <p className="font-mono text-[11px] text-slate-400">
-                                    {task.id}
-                                  </p>
-                                </div>
+                                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                                    <p className="truncate">
+                                      Assignee:{" "}
+                                      <span className="font-medium text-slate-900">
+                                        {task.assignee ?? "Unassigned"}
+                                      </span>
+                                    </p>
+                                    <p className="font-mono text-[11px] text-slate-400">
+                                      {task.id}
+                                    </p>
+                                  </div>
+                                </Link>
                               </li>
                             ))}
                           </ul>

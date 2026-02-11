@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from sqlmodel import col
 
 from app.core.auth import AuthContext
+from app.core.logging import TRACE_LEVEL
 from app.core.time import utcnow
 from app.db import crud
 from app.models.activity_events import ActivityEvent
@@ -256,7 +257,7 @@ class GatewayAdminLifecycleService(OpenClawDBService):
         action: str = "provision",
     ) -> Agent:
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.main_agent.ensure.start gateway_id=%s action=%s",
             gateway.id,
             action,
@@ -331,7 +332,7 @@ class GatewayAdminLifecycleService(OpenClawDBService):
         auth: AuthContext,
     ) -> GatewayTemplatesSyncResult:
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.templates.sync.start gateway_id=%s include_main=%s",
             gateway.id,
             query.include_main,

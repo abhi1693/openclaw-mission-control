@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 from sqlmodel import col, select
 
 from app.core.config import settings
+from app.core.logging import TRACE_LEVEL
 from app.core.time import utcnow
 from app.models.agents import Agent
 from app.models.boards import Board
@@ -172,7 +173,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
     ) -> None:
         trace_id = GatewayDispatchService.resolve_trace_id(correlation_id, prefix="coord.nudge")
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.coordination.nudge.start trace_id=%s board_id=%s actor_agent_id=%s "
             "target_agent_id=%s",
             trace_id,
@@ -252,7 +253,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
     ) -> str:
         trace_id = GatewayDispatchService.resolve_trace_id(correlation_id, prefix="coord.soul.read")
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.coordination.soul_read.start trace_id=%s board_id=%s target_agent_id=%s",
             trace_id,
             board.id,
@@ -322,7 +323,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             correlation_id, prefix="coord.soul.write"
         )
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.coordination.soul_write.start trace_id=%s board_id=%s target_agent_id=%s "
             "actor_agent_id=%s",
             trace_id,
@@ -418,7 +419,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             payload.correlation_id, prefix="coord.ask_user"
         )
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.coordination.ask_user.start trace_id=%s board_id=%s actor_agent_id=%s",
             trace_id,
             board.id,
@@ -563,7 +564,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             payload.correlation_id, prefix="coord.lead_message"
         )
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.coordination.lead_message.start trace_id=%s board_id=%s actor_agent_id=%s",
             trace_id,
             board_id,
@@ -652,7 +653,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             payload.correlation_id, prefix="coord.lead_broadcast"
         )
         self.logger.log(
-            5,
+            TRACE_LEVEL,
             "gateway.coordination.lead_broadcast.start trace_id=%s actor_agent_id=%s",
             trace_id,
             actor_agent.id,

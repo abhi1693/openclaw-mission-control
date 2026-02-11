@@ -23,6 +23,7 @@ class Board(TenantScoped, table=True):
     organization_id: UUID = Field(foreign_key="organizations.id", index=True)
     name: str
     slug: str = Field(index=True)
+    description: str = Field(default="")
     gateway_id: UUID | None = Field(default=None, foreign_key="gateways.id", index=True)
     board_group_id: UUID | None = Field(
         default=None,

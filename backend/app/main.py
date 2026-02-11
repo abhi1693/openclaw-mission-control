@@ -28,20 +28,30 @@ from app.api.tasks import router as tasks_router
 from app.api.users import router as users_router
 from app.core.config import settings
 from app.core.error_handling import install_error_handling
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, get_logger
 from app.db.session import init_db
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 configure_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Initialize application resources before serving requests."""
+    logger.info(
+        "app.lifecycle.starting environment=%s db_auto_migrate=%s",
+        settings.environment,
+        settings.db_auto_migrate,
+    )
     await init_db()
-    yield
+    logger.info("app.lifecycle.started")
+    try:
+        yield
+    finally:
+        logger.info("app.lifecycle.stopped")
 
 
 app = FastAPI(title="Mission Control API", version="0.1.0", lifespan=lifespan)
@@ -55,6 +65,9 @@ if origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    logger.info("app.cors.enabled origins_count=%s", len(origins))
+else:
+    logger.info("app.cors.disabled")
 
 install_error_handling(app)
 
@@ -98,3 +111,4 @@ api_v1.include_router(users_router)
 app.include_router(api_v1)
 
 add_pagination(app)
+logger.debug("app.routes.registered count=%s", len(app.routes))

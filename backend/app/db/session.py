@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +15,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import models as _models
 from app.core.config import settings
+from app.core.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -42,7 +42,7 @@ async_session_maker = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _alembic_config() -> Config:

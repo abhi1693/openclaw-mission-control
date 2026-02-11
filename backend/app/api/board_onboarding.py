@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,6 +17,7 @@ from app.api.deps import (
     require_admin_or_agent,
 )
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.session import get_session
 from app.models.board_onboarding import BoardOnboardingSession
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from app.models.boards import Board
 
 router = APIRouter(prefix="/boards/{board_id}/onboarding", tags=["board-onboarding"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 BOARD_USER_READ_DEP = Depends(get_board_for_user_read)
 BOARD_USER_WRITE_DEP = Depends(get_board_for_user_write)
 BOARD_OR_404_DEP = Depends(get_board_or_404)
@@ -175,6 +175,7 @@ async def start_onboarding(
     prompt = (
         "BOARD ONBOARDING REQUEST\n\n"
         f"Board Name: {board.name}\n"
+        f"Board Description: {board.description or '(not provided)'}\n"
         "You are the gateway agent. Ask the user 6-10 focused questions total:\n"
         "- 3-6 questions to clarify the board goal.\n"
         "- 1 question to choose a unique name for the board lead agent "

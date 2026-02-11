@@ -37,6 +37,7 @@ const buildBoard = (overrides: Partial<BoardRead> = {}): BoardRead => ({
   id: "board-1",
   name: "Ops Board",
   slug: "ops-board",
+  description: "Operations board context.",
   organization_id: "org-1",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",

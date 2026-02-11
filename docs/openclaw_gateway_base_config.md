@@ -3,8 +3,8 @@
 This document explains a "base" OpenClaw Gateway config intended for local development and LAN use, and how to connect it to Mission Control.
 
 Related:
-- Gateway WebSocket protocol: `docs/openclaw_gateway_ws.md` (default URL `ws://127.0.0.1:18789`)
-- Mission Control architecture (gateway integration): `docs/architecture/README.md`
+- Gateway WebSocket protocol: [Gateway WebSocket protocol](openclaw_gateway_ws.md) (default URL `ws://127.0.0.1:18789`)
+- Mission Control architecture (gateway integration): [Architecture deep dive](architecture/README.md)
 
 ## Who This Is For
 

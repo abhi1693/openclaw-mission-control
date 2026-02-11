@@ -44,7 +44,7 @@
     "autoprefixer": "^10.4.24",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cypress": "^14.0.0",
+    "cypress": "^15.10.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^25.0.1",

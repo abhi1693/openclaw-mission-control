@@ -6,8 +6,10 @@ OpenClaw services without adding new architectural layers.
 
 from __future__ import annotations
 
-import logging
+from logging import Logger
 from typing import TYPE_CHECKING
+
+from app.core.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -19,7 +21,7 @@ class OpenClawDBService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         # Use the concrete subclass module for logger naming.
-        self._logger = logging.getLogger(self.__class__.__module__)
+        self._logger = get_logger(self.__class__.__module__)
 
     @property
     def session(self) -> AsyncSession:
@@ -30,11 +32,11 @@ class OpenClawDBService:
         self._session = value
 
     @property
-    def logger(self) -> logging.Logger:
+    def logger(self) -> Logger:
         return self._logger
 
     @logger.setter
-    def logger(self, value: logging.Logger) -> None:
+    def logger(self, value: Logger) -> None:
         self._logger = value
 
     async def add_commit_refresh(self, model: object) -> None:

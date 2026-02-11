@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
+from app.core import error_handling as error_handling_module
 from app.core.error_handling import REQUEST_ID_HEADER, RequestIdMiddleware
+from app.core.logging import TRACE_LEVEL, AppLogFilter, get_logger
+from app.core.version import APP_NAME, APP_VERSION
 
 
 @pytest.mark.asyncio
@@ -89,3 +94,136 @@ async def test_request_id_middleware_does_not_duplicate_existing_header() -> Non
         v for k, v in start_headers if k.lower() == REQUEST_ID_HEADER.lower().encode("latin-1")
     ]
     assert values == [b"already"]
+
+
+class _CaptureHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_logs_trace_start_and_debug_completion() -> None:
+    capture = _CaptureHandler()
+    capture.setLevel(TRACE_LEVEL)
+    logger = error_handling_module.logger
+    logger.setLevel(TRACE_LEVEL)
+    logger.addHandler(capture)
+
+    async def app(scope, receive, send):  # type: ignore[no-untyped-def]
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    middleware = RequestIdMiddleware(app)
+    request_scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/v1/auth/bootstrap",
+        "client": ("127.0.0.1", 5454),
+        "headers": [],
+    }
+    sent_messages: list[dict[str, object]] = []
+
+    async def send(message):  # type: ignore[no-untyped-def]
+        sent_messages.append(message)
+
+    try:
+        await middleware(request_scope, lambda: None, send)
+    finally:
+        logger.removeHandler(capture)
+        capture.close()
+
+    start = next(
+        record for record in capture.records if record.getMessage() == "http.request.start"
+    )
+    complete = next(
+        record for record in capture.records if record.getMessage() == "http.request.complete"
+    )
+
+    assert start.levelname == "TRACE"
+    assert getattr(start, "method", None) == "GET"
+    assert getattr(start, "path", None) == "/api/v1/auth/bootstrap"
+
+    assert complete.levelname == "DEBUG"
+    assert getattr(complete, "status_code", None) == 200
+    assert isinstance(getattr(complete, "duration_ms", None), int)
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_logs_error_for_5xx_completion() -> None:
+    capture = _CaptureHandler()
+    capture.setLevel(TRACE_LEVEL)
+    logger = error_handling_module.logger
+    logger.setLevel(TRACE_LEVEL)
+    logger.addHandler(capture)
+
+    async def app(scope, receive, send):  # type: ignore[no-untyped-def]
+        await send({"type": "http.response.start", "status": 503, "headers": []})
+        await send({"type": "http.response.body", "body": b"unavailable"})
+
+    middleware = RequestIdMiddleware(app)
+    request_scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/tasks",
+        "client": ("127.0.0.1", 5454),
+        "headers": [],
+    }
+    sent_messages: list[dict[str, object]] = []
+
+    async def send(message):  # type: ignore[no-untyped-def]
+        sent_messages.append(message)
+
+    try:
+        await middleware(request_scope, lambda: None, send)
+    finally:
+        logger.removeHandler(capture)
+        capture.close()
+
+    complete = next(
+        record for record in capture.records if record.getMessage() == "http.request.complete"
+    )
+    assert complete.levelname == "ERROR"
+    assert getattr(complete, "status_code", None) == 503
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_enriches_in_request_logs_with_route_context() -> None:
+    capture = _CaptureHandler()
+    capture.setLevel(TRACE_LEVEL)
+    capture.addFilter(AppLogFilter(APP_NAME, APP_VERSION))
+
+    app_logger = get_logger("tests.request_context.enrichment")
+    app_logger.setLevel(TRACE_LEVEL)
+    app_logger.addHandler(capture)
+
+    async def app(scope, receive, send):  # type: ignore[no-untyped-def]
+        app_logger.info("inside.request.handler")
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    middleware = RequestIdMiddleware(app)
+    request_scope = {
+        "type": "http",
+        "method": "PUT",
+        "path": "/api/v1/boards/abc",
+        "client": ("127.0.0.1", 5454),
+        "headers": [],
+    }
+
+    async def send(_message):  # type: ignore[no-untyped-def]
+        return None
+
+    try:
+        await middleware(request_scope, lambda: None, send)
+    finally:
+        app_logger.removeHandler(capture)
+        capture.close()
+
+    record = next(item for item in capture.records if item.getMessage() == "inside.request.handler")
+    assert isinstance(getattr(record, "request_id", None), str) and getattr(record, "request_id")
+    assert getattr(record, "method", None) == "PUT"
+    assert getattr(record, "path", None) == "/api/v1/boards/abc"

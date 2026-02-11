@@ -1,3 +1,5 @@
+import { getLocalAuthToken, isLocalAuthMode } from "@/auth/localAuth";
+
 type ClerkSession = {
   getToken: () => Promise<string>;
 };
@@ -47,6 +49,12 @@ export const customFetch = async <T>(
   const hasBody = options.body !== undefined && options.body !== null;
   if (hasBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
+  }
+  if (isLocalAuthMode() && !headers.has("Authorization")) {
+    const token = getLocalAuthToken();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
   }
   if (!headers.has("Authorization")) {
     const token = await resolveClerkToken();
