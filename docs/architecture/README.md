@@ -50,6 +50,7 @@ flowchart LR
 - **Postgres**: persistence for boards/tasks/agents/approvals/etc.
   - Models: `backend/app/models/*`
   - Migrations: `backend/migrations/*`
+  - DB/migrations doc: [Backend DB layer & migrations](db-and-migrations.md)
 
 ### Gateway integration (optional)
 Mission Control can call into an OpenClaw Gateway over WebSockets.
