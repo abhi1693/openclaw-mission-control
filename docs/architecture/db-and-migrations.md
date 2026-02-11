@@ -85,6 +85,19 @@ This repo’s `env.py` configures:
 - `compare_type=True` (type changes show up in autogenerate diffs)
 - `pool.NullPool` for migration connections
 
+## Downgrades (operator caution)
+
+`alembic downgrade` is **not** guaranteed to be safe in production.
+
+Why:
+- Many migrations are not logically reversible (data drops/transforms/backfills).
+- Even when a downgrade script exists, the *application* may not be compatible with the old schema.
+
+Recommended rollback posture:
+- Prefer **restore-from-backup** (or managed DB PITR) to a known-good point.
+- Prefer **forward-fix** migrations over downgrades when feasible.
+- Only use `alembic downgrade` in production if you have explicitly tested it for that migration chain and understand the data impact.
+
 ## How to apply migrations
 
 From `backend/README.md`:
@@ -95,6 +108,33 @@ cd backend
 # apply migrations
 uv run alembic upgrade head
 ```
+
+## First 30 minutes: migrations failed on startup (operator triage)
+
+Symptoms:
+- Backend crashloops on startup.
+- Logs show Alembic errors / schema mismatch.
+
+Checklist:
+1) **Confirm config**
+- `DATABASE_URL` points to the intended DB (host, dbname, credentials).
+- Confirm whether `DB_AUTO_MIGRATE` is enabled (and whether it *should* be).
+
+2) **Read the failing revision**
+- Check backend logs for the revision id it was trying to apply.
+- If running migrations manually:
+
+```bash
+cd backend
+uv run alembic current
+uv run alembic heads
+```
+
+3) **Inspect DB revision state (if needed)**
+- Look at the `alembic_version` table in the DB to confirm the current revision.
+
+4) **Stabilize**
+- If this is production and you’re unsure: stop automated migration attempts, take a backup, and apply a controlled migration step (or restore to a known-good point).
 
 ## Safe migration workflow (maintainers)
 
