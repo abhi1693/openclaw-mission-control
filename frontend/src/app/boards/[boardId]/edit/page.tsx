@@ -65,6 +65,7 @@ export default function EditBoardPage() {
 
   const [board, setBoard] = useState<BoardRead | null>(null);
   const [name, setName] = useState<string | undefined>(undefined);
+  const [description, setDescription] = useState<string | undefined>(undefined);
   const [gatewayId, setGatewayId] = useState<string | undefined>(undefined);
   const [boardGroupId, setBoardGroupId] = useState<string | undefined>(
     undefined,
@@ -182,6 +183,7 @@ export default function EditBoardPage() {
   const baseBoard = board ?? loadedBoard;
 
   const resolvedName = name ?? baseBoard?.name ?? "";
+  const resolvedDescription = description ?? baseBoard?.description ?? "";
   const resolvedGatewayId = gatewayId ?? baseBoard?.gateway_id ?? "";
   const resolvedBoardGroupId =
     boardGroupId ?? baseBoard?.board_group_id ?? "none";
@@ -209,7 +211,9 @@ export default function EditBoardPage() {
     boardQuery.error?.message ??
     null;
 
-  const isFormReady = Boolean(resolvedName.trim() && displayGatewayId);
+  const isFormReady = Boolean(
+    resolvedName.trim() && resolvedDescription.trim() && displayGatewayId,
+  );
 
   const gatewayOptions = useMemo(
     () =>
@@ -231,6 +235,7 @@ export default function EditBoardPage() {
 
   const handleOnboardingConfirmed = (updated: BoardRead) => {
     setBoard(updated);
+    setDescription(updated.description ?? "");
     setBoardType(updated.board_type ?? "goal");
     setObjective(updated.objective ?? "");
     setSuccessMetrics(
@@ -256,6 +261,11 @@ export default function EditBoardPage() {
       setError("Select a gateway before saving.");
       return;
     }
+    const trimmedDescription = resolvedDescription.trim();
+    if (!trimmedDescription) {
+      setError("Board description is required.");
+      return;
+    }
 
     setError(null);
     setMetricsError(null);
@@ -276,6 +286,7 @@ export default function EditBoardPage() {
     const payload: BoardUpdate = {
       name: trimmedName,
       slug: slugify(trimmedName),
+      description: trimmedDescription,
       gateway_id: resolvedGatewayId || null,
       board_group_id:
         resolvedBoardGroupId === "none" ? null : resolvedBoardGroupId,
@@ -408,6 +419,19 @@ export default function EditBoardPage() {
                   disabled={isLoading}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Description <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                value={resolvedDescription}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="What context should the lead agent know?"
+                className="min-h-[120px]"
+                disabled={isLoading}
+              />
             </div>
 
             <div className="space-y-2">

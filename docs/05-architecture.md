@@ -7,7 +7,7 @@
 
 Mission Control is the **web UI + HTTP API** for operating OpenClaw. It’s where you manage boards, tasks, agents, approvals, and (optionally) gateway connections.
 
-> Auth note: **Clerk is required for production**. The codebase includes gating so CI/local can run without “real” keys, but real deployments should configure Clerk.
+> Auth note: Mission Control supports two auth modes: `local` (shared bearer token) and `clerk`.
 
 ## Components
 
@@ -48,14 +48,17 @@ Common UI-driven data shapes:
 - “boards/tasks” views → board/task CRUD + streams.
 - “activity feed” → activity/events endpoints.
 
-### 2) Authentication (Clerk)
+### 2) Authentication (`local` or Clerk)
 
-- **Frontend**: Clerk is enabled only when a publishable key is present/valid.
-  - Gating/wrappers: `frontend/src/auth/clerkKey.ts`, `frontend/src/auth/clerk.tsx`.
-- **Frontend → backend**: API calls attach `Authorization: Bearer <token>` when available.
-  - Token injection: `frontend/src/api/mutator.ts` (uses `window.Clerk.session.getToken()`).
-- **Backend**: validates inbound auth and resolves a user context.
-  - Implementation: `backend/app/core/auth.py` (uses `clerk_backend_api` SDK with `CLERK_SECRET_KEY`).
+- **Frontend**:
+  - `local`: token entry + token storage (`frontend/src/components/organisms/LocalAuthLogin.tsx`, `frontend/src/auth/localAuth.ts`).
+  - `clerk`: Clerk wrappers/hooks (`frontend/src/auth/clerk.tsx`).
+- **Frontend → backend**:
+  - API calls attach `Authorization: Bearer <token>` from local mode token or Clerk session token (`frontend/src/api/mutator.ts`).
+- **Backend**:
+  - `local`: validates `LOCAL_AUTH_TOKEN`.
+  - `clerk`: validates Clerk request state via `clerk_backend_api` + `CLERK_SECRET_KEY`.
+  - Implementation: `backend/app/core/auth.py`.
 
 ### 3) Agent automation surface (`/api/v1/agent/*`)
 

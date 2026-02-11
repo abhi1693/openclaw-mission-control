@@ -175,6 +175,7 @@ async def start_onboarding(
     prompt = (
         "BOARD ONBOARDING REQUEST\n\n"
         f"Board Name: {board.name}\n"
+        f"Board Description: {board.description or '(not provided)'}\n"
         "You are the gateway agent. Ask the user 6-10 focused questions total:\n"
         "- 3-6 questions to clarify the board goal.\n"
         "- 1 question to choose a unique name for the board lead agent "

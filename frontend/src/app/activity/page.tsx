@@ -133,6 +133,15 @@ const FeedCard = memo(function FeedCard({
 FeedCard.displayName = "FeedCard";
 
 export default function ActivityPage() {
+  // Clerk auth state can differ between the server render and client hydration.
+  // When that happens, <SignedIn>/<SignedOut> can cause a React hydration mismatch
+  // that fails Cypress (and is noisy in the console). Gate the initial render until
+  // after mount so the first client render matches the server markup.
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const { isSignedIn } = useAuth();
   const isPageActive = usePageActive();
 
@@ -294,46 +303,50 @@ export default function ActivityPage() {
 
   return (
     <DashboardShell>
-      <SignedOut>
-        <SignedOutPanel
-          message="Sign in to view the feed."
-          forceRedirectUrl="/activity"
-          signUpForceRedirectUrl="/activity"
-          mode="redirect"
-          buttonTestId="activity-signin"
-        />
-      </SignedOut>
-      <SignedIn>
-        <DashboardSidebar />
-        <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-            <div className="px-8 py-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <ActivityIcon className="h-5 w-5 text-slate-600" />
-                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                      Live feed
-                    </h1>
+      {isMounted ? (
+        <>
+          <SignedOut>
+            <SignedOutPanel
+              message="Sign in to view the feed."
+              forceRedirectUrl="/activity"
+              signUpForceRedirectUrl="/activity"
+              mode="redirect"
+              buttonTestId="activity-signin"
+            />
+          </SignedOut>
+          <SignedIn>
+            <DashboardSidebar />
+            <main className="flex-1 overflow-y-auto bg-slate-50">
+              <div className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+                <div className="px-8 py-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <ActivityIcon className="h-5 w-5 text-slate-600" />
+                        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                          Live feed
+                        </h1>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Realtime task comments across all boards.
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Realtime task comments across all boards.
-                  </p>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="p-8">
-            <ActivityFeed
-              isLoading={feedQuery.isLoading}
-              errorMessage={feedQuery.error?.message}
-              items={orderedFeed}
-              renderItem={(item) => <FeedCard key={item.id} item={item} />}
-            />
-          </div>
-        </main>
-      </SignedIn>
+              <div className="p-8">
+                <ActivityFeed
+                  isLoading={feedQuery.isLoading}
+                  errorMessage={feedQuery.error?.message}
+                  items={orderedFeed}
+                  renderItem={(item) => <FeedCard key={item.id} item={item} />}
+                />
+              </div>
+            </main>
+          </SignedIn>
+        </>
+      ) : null}
     </DashboardShell>
   );
 }

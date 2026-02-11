@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { SignOutButton, useUser } from "@/auth/clerk";
+import { clearLocalAuthToken, isLocalAuthMode } from "@/auth/localAuth";
 import {
   Activity,
   Bot,
@@ -36,13 +37,17 @@ export function UserMenu({
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const { user } = useUser();
-  if (!user) return null;
+  const localMode = isLocalAuthMode();
+  if (!user && !localMode) return null;
 
-  const avatarUrl = user.imageUrl ?? null;
-  const avatarLabelSource = displayNameFromDb ?? user.id ?? "U";
+  const avatarUrl = localMode ? null : (user?.imageUrl ?? null);
+  const avatarLabelSource =
+    displayNameFromDb ?? (localMode ? "Local User" : user?.id) ?? "U";
   const avatarLabel = avatarLabelSource.slice(0, 1).toUpperCase();
-  const displayName = displayNameFromDb ?? "Account";
-  const displayEmail = displayEmailFromDb ?? "";
+  const displayName =
+    displayNameFromDb ?? (localMode ? "Local User" : "Account");
+  const displayEmail =
+    displayEmailFromDb ?? (localMode ? "local@localhost" : "");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -166,16 +171,31 @@ export function UserMenu({
 
           <div className="my-2 h-px bg-[color:var(--neutral-200,var(--border))]" />
 
-          <SignOutButton>
+          {localMode ? (
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[color:var(--neutral-800,var(--text))] transition hover:bg-[color:var(--neutral-100,var(--surface-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                clearLocalAuthToken();
+                setOpen(false);
+                window.location.reload();
+              }}
             >
               <LogOut className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))]" />
               Sign out
             </button>
-          </SignOutButton>
+          ) : (
+            <SignOutButton>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[color:var(--neutral-800,var(--text))] transition hover:bg-[color:var(--neutral-100,var(--surface-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
+                onClick={() => setOpen(false)}
+              >
+                <LogOut className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))]" />
+                Sign out
+              </button>
+            </SignOutButton>
+          )}
         </div>
       </PopoverContent>
     </Popover>

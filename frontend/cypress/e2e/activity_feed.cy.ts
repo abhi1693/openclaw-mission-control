@@ -4,6 +4,18 @@ describe("/activity feed", () => {
   const apiBase = "**/api/v1";
   const email = Cypress.env("CLERK_TEST_EMAIL") || "jane+clerk_test@example.com";
 
+  const originalDefaultCommandTimeout = Cypress.config("defaultCommandTimeout");
+
+  beforeEach(() => {
+    // Clerk's Cypress helpers perform async work inside `cy.then()`.
+    // CI can be slow enough that the default 4s command timeout flakes.
+    Cypress.config("defaultCommandTimeout", 20_000);
+  });
+
+  afterEach(() => {
+    Cypress.config("defaultCommandTimeout", originalDefaultCommandTimeout);
+  });
+
   function stubStreamEmpty() {
     cy.intercept(
       "GET",

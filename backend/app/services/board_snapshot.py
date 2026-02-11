@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import case, func
+from sqlalchemy import func
 from sqlmodel import col, select
 
 from app.models.agents import Agent
@@ -15,6 +15,7 @@ from app.schemas.approvals import ApprovalRead
 from app.schemas.board_memory import BoardMemoryRead
 from app.schemas.boards import BoardRead
 from app.schemas.view_models import BoardSnapshot, TaskCardRead
+from app.services.approval_task_links import load_task_ids_by_approval, task_counts_for_board
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
@@ -34,8 +35,10 @@ def _memory_to_read(memory: BoardMemory) -> BoardMemoryRead:
     return BoardMemoryRead.model_validate(memory, from_attributes=True)
 
 
-def _approval_to_read(approval: Approval) -> ApprovalRead:
-    return ApprovalRead.model_validate(approval, from_attributes=True)
+def _approval_to_read(approval: Approval, *, task_ids: list[UUID]) -> ApprovalRead:
+    model = ApprovalRead.model_validate(approval, from_attributes=True)
+    primary_task_id = task_ids[0] if task_ids else None
+    return model.model_copy(update={"task_id": primary_task_id, "task_ids": task_ids})
 
 
 def _task_to_card(
@@ -120,27 +123,23 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
         .limit(200)
         .all(session)
     )
-    approval_reads = [_approval_to_read(approval) for approval in approvals]
-
-    counts_by_task_id: dict[UUID, tuple[int, int]] = {}
-    rows = list(
-        await session.exec(
-            select(
-                col(Approval.task_id),
-                func.count(col(Approval.id)).label("total"),
-                func.sum(
-                    case((col(Approval.status) == "pending", 1), else_=0),
-                ).label("pending"),
-            )
-            .where(col(Approval.board_id) == board.id)
-            .where(col(Approval.task_id).is_not(None))
-            .group_by(col(Approval.task_id)),
-        ),
+    approval_ids = [approval.id for approval in approvals]
+    task_ids_by_approval = await load_task_ids_by_approval(
+        session,
+        approval_ids=approval_ids,
     )
-    for task_id, total, pending in rows:
-        if task_id is None:
-            continue
-        counts_by_task_id[task_id] = (int(total or 0), int(pending or 0))
+    approval_reads = [
+        _approval_to_read(
+            approval,
+            task_ids=task_ids_by_approval.get(
+                approval.id,
+                [approval.task_id] if approval.task_id is not None else [],
+            ),
+        )
+        for approval in approvals
+    ]
+
+    counts_by_task_id = await task_counts_for_board(session, board_id=board.id)
 
     task_cards = [
         _task_to_card(

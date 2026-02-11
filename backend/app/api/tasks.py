@@ -29,6 +29,7 @@ from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
+from app.models.approval_task_links import ApprovalTaskLink
 from app.models.approvals import Approval
 from app.models.boards import Board
 from app.models.task_dependencies import TaskDependency
@@ -39,6 +40,7 @@ from app.schemas.errors import BlockedTaskError
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
+from app.services.approval_task_links import load_task_ids_by_approval
 from app.services.mentions import extract_mentions, matches_agent_mention
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
@@ -922,12 +924,26 @@ async def delete_task(
         col(TaskFingerprint.task_id) == task.id,
         commit=False,
     )
+
+    primary_approvals = list(
+        await Approval.objects.filter(col(Approval.task_id) == task.id).all(session),
+    )
     await crud.delete_where(
         session,
-        Approval,
-        col(Approval.task_id) == task.id,
+        ApprovalTaskLink,
+        col(ApprovalTaskLink.task_id) == task.id,
         commit=False,
     )
+    if primary_approvals:
+        primary_ids = [approval.id for approval in primary_approvals]
+        remaining_by_approval = await load_task_ids_by_approval(session, approval_ids=primary_ids)
+        for approval in primary_approvals:
+            remaining_task_ids = remaining_by_approval.get(approval.id, [])
+            if remaining_task_ids:
+                approval.task_id = remaining_task_ids[0]
+                session.add(approval)
+                continue
+            await session.delete(approval)
     await crud.delete_where(
         session,
         TaskDependency,

@@ -11,6 +11,7 @@ from sqlmodel import SQLModel
 
 _ERR_GOAL_FIELDS_REQUIRED = "Confirmed goal boards require objective and success_metrics"
 _ERR_GATEWAY_REQUIRED = "gateway_id is required"
+_ERR_DESCRIPTION_REQUIRED = "description is required"
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID)
 
 
@@ -19,6 +20,7 @@ class BoardBase(SQLModel):
 
     name: str
     slug: str
+    description: str
     gateway_id: UUID | None = None
     board_group_id: UUID | None = None
     board_type: str = "goal"
@@ -37,6 +39,10 @@ class BoardCreate(BoardBase):
     @model_validator(mode="after")
     def validate_goal_fields(self) -> Self:
         """Require gateway and goal details when creating a confirmed goal board."""
+        description = self.description.strip()
+        if not description:
+            raise ValueError(_ERR_DESCRIPTION_REQUIRED)
+        self.description = description
         if self.gateway_id is None:
             raise ValueError(_ERR_GATEWAY_REQUIRED)
         if (
@@ -53,6 +59,7 @@ class BoardUpdate(SQLModel):
 
     name: str | None = None
     slug: str | None = None
+    description: str | None = None
     gateway_id: UUID | None = None
     board_group_id: UUID | None = None
     board_type: str | None = None
@@ -68,6 +75,13 @@ class BoardUpdate(SQLModel):
         # Treat explicit null like "unset" is invalid for patch updates.
         if "gateway_id" in self.model_fields_set and self.gateway_id is None:
             raise ValueError(_ERR_GATEWAY_REQUIRED)
+        if "description" in self.model_fields_set:
+            if self.description is None:
+                raise ValueError(_ERR_DESCRIPTION_REQUIRED)
+            description = self.description.strip()
+            if not description:
+                raise ValueError(_ERR_DESCRIPTION_REQUIRED)
+            self.description = description
         return self
 
 

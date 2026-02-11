@@ -16,21 +16,33 @@ import {
 } from "@clerk/nextjs";
 
 import { isLikelyValidClerkPublishableKey } from "@/auth/clerkKey";
+import { getLocalAuthToken, isLocalAuthMode } from "@/auth/localAuth";
+
+function hasLocalAuthToken(): boolean {
+  return Boolean(getLocalAuthToken());
+}
 
 export function isClerkEnabled(): boolean {
   // IMPORTANT: keep this in sync with AuthProvider; otherwise components like
   // <SignedOut/> may render without a <ClerkProvider/> and crash during prerender.
+  if (isLocalAuthMode()) return false;
   return isLikelyValidClerkPublishableKey(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   );
 }
 
 export function SignedIn(props: { children: ReactNode }) {
+  if (isLocalAuthMode()) {
+    return hasLocalAuthToken() ? <>{props.children}</> : null;
+  }
   if (!isClerkEnabled()) return null;
   return <ClerkSignedIn>{props.children}</ClerkSignedIn>;
 }
 
 export function SignedOut(props: { children: ReactNode }) {
+  if (isLocalAuthMode()) {
+    return hasLocalAuthToken() ? null : <>{props.children}</>;
+  }
   if (!isClerkEnabled()) return <>{props.children}</>;
   return <ClerkSignedOut>{props.children}</ClerkSignedOut>;
 }
@@ -49,6 +61,13 @@ export function SignOutButton(
 }
 
 export function useUser() {
+  if (isLocalAuthMode()) {
+    return {
+      isLoaded: true,
+      isSignedIn: hasLocalAuthToken(),
+      user: null,
+    } as const;
+  }
   if (!isClerkEnabled()) {
     return { isLoaded: true, isSignedIn: false, user: null } as const;
   }
@@ -56,6 +75,16 @@ export function useUser() {
 }
 
 export function useAuth() {
+  if (isLocalAuthMode()) {
+    const token = getLocalAuthToken();
+    return {
+      isLoaded: true,
+      isSignedIn: Boolean(token),
+      userId: token ? "local-user" : null,
+      sessionId: token ? "local-session" : null,
+      getToken: async () => token,
+    } as const;
+  }
   if (!isClerkEnabled()) {
     return {
       isLoaded: true,

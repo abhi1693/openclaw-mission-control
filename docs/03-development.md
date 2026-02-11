@@ -1,27 +1,23 @@
 # Development
 
-## Deep dives
+This page is the contributor workflow for Mission Control.
 
-- [Testing guide](testing/README.md)
-- [Troubleshooting deep dive](troubleshooting/README.md)
-
-How we develop Mission Control locally, with a workflow that stays close to CI.
-
+It’s intentionally **CI-aligned**: if you can run these commands locally, you should not be surprised by CI.
 
 ## Prerequisites
 
 - Docker + Docker Compose v2 (`docker compose`)
-- Python **3.12+** + `uv`
+- Python **3.12+** + [`uv`](https://github.com/astral-sh/uv)
 - Node.js + npm
-  - CI pins **Node 20** via GitHub Actions (`actions/setup-node@v4` with `node-version: "20"`).
+  - CI pins **Node 20** via `.github/workflows/ci.yml` (`actions/setup-node@v4`, `node-version: "20"`).
 
-## Repo structure (where to run commands)
+## Repo layout
 
-- Repo root: `Makefile` contains canonical targets.
-- Backend code: `backend/` (FastAPI)
-- Frontend code: `frontend/` (Next.js)
+- Backend: `backend/` (FastAPI)
+- Frontend: `frontend/` (Next.js)
+- Canonical commands: `Makefile`
 
-## “One command” setup
+## Setup (one command)
 
 From repo root:
 
@@ -29,104 +25,23 @@ From repo root:
 make setup
 ```
 
-What it does:
-- Syncs backend deps with `uv`.
-- Syncs frontend deps with `npm` via the node wrapper.
+What it does (evidence: `Makefile`):
+- `make backend-sync`: `cd backend && uv sync --extra dev`
+- `make frontend-sync`: verifies node tooling (`scripts/with_node.sh --check`), then `npm install` in `frontend/`
 
-## Canonical checks (CI parity)
+## Run the stack (two recommended loops)
 
-### Run everything locally (closest to CI)
+### Loop A (recommended): DB via Compose, app in dev mode
 
-From repo root:
-
-```bash
-make check
-```
-
-CI runs two jobs:
-- `check` (lint/typecheck/tests/coverage/build)
-- `e2e` (Cypress)
-
-## Backend workflow
-
-### Install/sync deps
-
-```bash
-cd backend
-uv sync --extra dev
-```
-
-### Run the API (dev)
-
-```bash
-cd backend
-cp .env.example .env
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Backend checks
-
-From repo root:
-
-```bash
-make backend-lint       # flake8
-make backend-typecheck  # mypy --strict
-make backend-test       # pytest
-make backend-coverage   # pytest + scoped coverage gate
-```
-
-### DB migrations
-
-From repo root:
-
-```bash
-make backend-migrate
-```
-
-## Frontend workflow
-
-### Install deps
-
-```bash
-cd frontend
-npm install
-```
-
-(or from repo root: `make frontend-sync`)
-
-### Run the UI (dev)
-
-```bash
-cd frontend
-cp .env.example .env.local
-# Ensure NEXT_PUBLIC_API_URL is correct for the browser:
-# NEXT_PUBLIC_API_URL=http://localhost:8000
-npm run dev
-```
-
-### Frontend checks
-
-From repo root:
-
-```bash
-make frontend-lint       # eslint
-make frontend-typecheck  # tsc
-make frontend-test       # vitest
-make frontend-build      # next build
-```
-
-## Local dev loops
-
-### Loop A (recommended): DB via Compose, backend + frontend in dev mode
-
-1) Start Postgres only:
+1) Start Postgres:
 
 ```bash
 cp .env.example .env
+
 docker compose -f compose.yml --env-file .env up -d db
 ```
 
-2) Backend (local):
+2) Backend dev server:
 
 ```bash
 cd backend
@@ -135,16 +50,18 @@ uv sync --extra dev
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-3) Frontend (local):
+3) Frontend dev server:
 
 ```bash
 cd frontend
 cp .env.example .env.local
+# ensure this is correct for the browser:
+# NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install
 npm run dev
 ```
 
-### Loop B: all-in-one Docker Compose
+### Loop B: all-in-one Compose
 
 ```bash
 cp .env.example .env
@@ -152,31 +69,53 @@ cp .env.example .env
 docker compose -f compose.yml --env-file .env up -d --build
 ```
 
-Useful ops:
+## Checks (CI parity)
+
+### Run everything
 
 ```bash
-docker compose -f compose.yml --env-file .env logs -f --tail=200
-docker compose -f compose.yml --env-file .env up -d --build backend
-# destructive reset (drops Postgres volume):
-docker compose -f compose.yml --env-file .env down -v
+make check
 ```
 
-## Cypress E2E workflow (high level)
+Evidence: `Makefile`.
 
-See the deep dive: [docs/testing/README.md](testing/README.md).
+### Common targeted commands
 
-Notes:
-- E2E uses Clerk (official `@clerk/testing` integration); CI injects Clerk env vars.
+Backend:
+```bash
+make backend-lint       # flake8
+make backend-typecheck  # mypy --strict
+make backend-test       # pytest
+make backend-coverage   # pytest + scoped 100% coverage gate
+make backend-migrate    # alembic upgrade head
+```
 
-## Tooling notes
+Frontend:
+```bash
+make frontend-lint      # eslint
+make frontend-typecheck # tsc
+make frontend-test      # vitest
+make frontend-build     # next build
+```
 
-### Node wrapper (`scripts/with_node.sh`)
+## Cypress E2E
 
-Many Make targets run frontend commands via `bash scripts/with_node.sh`.
-It checks `node`/`npm`/`npx` and can use `nvm` if present.
+Evidence: `docs/testing/README.md`, `.github/workflows/ci.yml`.
 
-## Quick troubleshooting
+- E2E uses Clerk’s official Cypress integration (`@clerk/testing`).
+- Local run pattern:
 
-- UI loads but API calls fail / activity feed blank:
-  - confirm `NEXT_PUBLIC_API_URL` is set and browser-reachable.
-  - see [Troubleshooting](troubleshooting/README.md).
+```bash
+# terminal 1
+cd frontend
+npm run dev -- --hostname 0.0.0.0 --port 3000
+
+# terminal 2
+cd frontend
+npm run e2e -- --browser chrome
+```
+
+## Deep dives
+
+- [Testing guide](testing/README.md)
+- [Troubleshooting deep dive](troubleshooting/README.md)

@@ -1,105 +1,116 @@
 # Configuration
 
-This page documents how Mission Control is configured across local dev, self-host, and production.
+This page documents **where configuration comes from**, the key **environment variables**, and a couple operational footguns (migrations, CORS).
 
-## Deep dives
+For deployment/production patterns, see:
+- [Deployment](deployment/README.md)
+- [Production](production/README.md)
 
-- Deployment: [docs/deployment/README.md](deployment/README.md)
-- Production notes: [docs/production/README.md](production/README.md)
+## Configuration sources & precedence
 
-## Config sources & precedence
+Mission Control is a 3-service stack (`compose.yml`): Postgres (`db`), backend (`backend`), frontend (`frontend`).
 
-Mission Control is a 3-service stack (`compose.yml`): Postgres (`db`), FastAPI backend (`backend`), and Next.js frontend (`frontend`). Configuration comes from a mix of **compose env files**, **service env vars**, and **app-specific env files**.
+### Docker Compose (recommended for local/self-host)
 
-### Docker Compose (recommended local/self-host)
+Common pattern:
 
-Precedence (highest → lowest):
+```bash
+cp .env.example .env
 
-1) **Explicit runtime environment** passed to Compose
-- `docker compose ... -e NAME=value` (or exported in your shell)
+docker compose -f compose.yml --env-file .env up -d --build
+```
 
-2) **Compose env-file** used for interpolation
-- `docker compose -f compose.yml --env-file .env up ...`
-- Suggested workflow: copy repo root `.env.example` → `.env` and edit.
+Precedence (high → low):
 
-3) **Compose defaults** embedded in `compose.yml`
-- e.g. `${BACKEND_PORT:-8000}`.
+1. Environment exported in your shell (or `-e NAME=value`)
+2. Compose `--env-file .env` (variable interpolation)
+3. Defaults in `compose.yml` (e.g. `${BACKEND_PORT:-8000}`)
+4. Backend defaults via `env_file: ./backend/.env.example`
+5. Frontend optional user-managed `frontend/.env`
 
-4) **Backend container env**
-- `compose.yml` sets backend `env_file: ./backend/.env.example` (defaults)
-- plus overrides in `compose.yml: services.backend.environment`.
+> Note: Compose intentionally does **not** load `frontend/.env.example` to avoid placeholder Clerk keys accidentally enabling Clerk.
 
-5) **Frontend container env**
-- `compose.yml` sets `NEXT_PUBLIC_API_URL` via `environment:` and also as a **build arg**.
-- `compose.yml` optionally loads `frontend/.env` (user-managed), *not* `frontend/.env.example`.
+### Backend env-file loading (non-Compose)
 
-### Backend env-file loading behavior (non-Compose)
+Evidence: `backend/app/core/config.py`.
 
-When running the backend directly (e.g., `uvicorn`), settings load from env vars and from these files:
+When running the backend directly (uvicorn), settings are loaded from:
 - `backend/.env` (always attempted)
 - `.env` (repo root; optional)
+- plus process env vars
 
-This is intentional so running from repo root still picks up backend config.
+## Environment variables (grouped)
 
-### Frontend env-file behavior (non-Compose)
+### Root `.env` (Compose-level)
 
-- Next.js uses `NEXT_PUBLIC_*` variables for browser-visible configuration.
-- For local dev you typically create `frontend/.env.local` (Next.js convention) or `frontend/.env` (if you want Compose to read it).
+Template: `.env.example`.
 
-## Environment variables
+- Ports: `FRONTEND_PORT`, `BACKEND_PORT`, `POSTGRES_PORT`
+- Postgres defaults: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+- Backend knobs: `CORS_ORIGINS`, `DB_AUTO_MIGRATE`
+- Frontend: `NEXT_PUBLIC_API_URL` (required)
 
-This table is based on `backend/app/core/config.py`, `.env.example`, `backend/.env.example`, `frontend/.env.example`, and `compose.yml`.
+### Backend
 
-### Compose / shared (repo root `.env`)
+Template: `backend/.env.example` + settings model `backend/app/core/config.py`.
 
-| Variable | Used by | Purpose | Default / example | Footguns |
-|---|---|---|---|---|
-| `FRONTEND_PORT` | compose | Host port for frontend container | `3000` | Port conflicts on host are common |
-| `BACKEND_PORT` | compose | Host port for backend container | `8000` | If changed, ensure frontend points at the new port |
-| `POSTGRES_DB` | db/compose | Postgres database name | `mission_control` | Changing requires new DB or migration plan |
-| `POSTGRES_USER` | db/compose | Postgres user | `postgres` | — |
-| `POSTGRES_PASSWORD` | db/compose | Postgres password | `postgres` | Don’t use defaults in real deployments |
-| `POSTGRES_PORT` | compose | Host port for Postgres | `5432` | Port conflicts on host are common |
-| `CORS_ORIGINS` | backend/compose | Backend CORS allowlist | `http://localhost:3000` | Must include the real frontend origin |
-| `DB_AUTO_MIGRATE` | backend/compose | Auto-run Alembic migrations at backend startup | `true` (in `.env.example`) | Can be risky in prod; see notes below |
-| `NEXT_PUBLIC_API_URL` | frontend (build+runtime) | Browser-reachable backend URL | `http://localhost:8000` | Must be reachable from the **browser**, not just Docker |
+- `ENVIRONMENT`
+- `LOG_LEVEL`
+- `DATABASE_URL`
+- `CORS_ORIGINS`
+- `DB_AUTO_MIGRATE`
 
-### Backend (FastAPI)
+Clerk:
+- `CLERK_SECRET_KEY` (required; backend enforces non-empty)
+- `CLERK_API_URL`, `CLERK_VERIFY_IAT`, `CLERK_LEEWAY`
 
-> Settings are defined in `backend/app/core/config.py` and typically configured via `backend/.env`.
+### Frontend
 
-| Variable | Required? | Purpose | Default / example | Notes |
-|---|---:|---|---|---|
-| `ENVIRONMENT` | no | Environment name (drives defaults) | `dev` | In `dev`, `DB_AUTO_MIGRATE` defaults to true **if not explicitly set** |
-| `DATABASE_URL` | no | Postgres connection string | `postgresql+psycopg://...@localhost:5432/...` | In Compose, overridden to use `db:5432` |
-| `CORS_ORIGINS` | no | Comma-separated CORS origins | empty | Compose supplies a sane default |
-| `BASE_URL` | no | External base URL for this service | empty | Used for absolute links/callbacks if needed |
-| `CLERK_SECRET_KEY` | **yes** | Clerk secret key (backend auth) | (none) | `backend/app/core/config.py` enforces non-empty |
-| `CLERK_API_URL` | no | Clerk API base | `https://api.clerk.com` | — |
-| `CLERK_VERIFY_IAT` | no | Verify issued-at claims | `true` | — |
-| `CLERK_LEEWAY` | no | JWT timing leeway seconds | `10.0` | — |
-| `LOG_LEVEL` | no | Logging level | `INFO` | — |
-| `LOG_FORMAT` | no | Log format | `text` | — |
-| `LOG_USE_UTC` | no | Use UTC timestamps | `false` | — |
-| `DB_AUTO_MIGRATE` | no | Auto-migrate DB on startup | `false` in backend `.env.example` | In `dev`, backend may flip this to true if unset |
-
-### Frontend (Next.js)
+Template: `frontend/.env.example`.
 
 | Variable | Required? | Purpose | Default / example | Footguns |
 |---|---:|---|---|---|
 | `NEXT_PUBLIC_API_URL` | **yes** | Backend base URL used by the browser | `http://localhost:8000` | Must be browser-reachable |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | **yes** | Enables Clerk in the frontend | (none) | Must be a real publishable key |
-| `CLERK_SECRET_KEY` | **yes** | Clerk secret key used by the frontend (server-side) and E2E | (none) | Do not commit; required for Clerk-enabled operation |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL` | optional | Post-login redirect | `/boards` | — |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL` | optional | Post-signup redirect | `/boards` | — |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | optional | Fallback redirect | `/boards` | — |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | optional | Fallback redirect | `/boards` | — |
 | `NEXT_PUBLIC_CLERK_AFTER_SIGN_OUT_URL` | optional | Post-logout redirect | `/` | — |
 
-## Operational footguns
+## Minimal dev configuration
 
-- **Clerk placeholder keys**: `frontend/.env.example` contains non-empty Clerk placeholders. `compose.yml` intentionally does **not** load it, because it can accidentally flip Clerk “on”. Prefer user-managed `frontend/.env` (for Compose) or `frontend/.env.local` (for Next dev).
-- **`DB_AUTO_MIGRATE`**:
-  - In `ENVIRONMENT=dev`, backend defaults `DB_AUTO_MIGRATE=true` if you didn’t set it explicitly.
-  - In production, consider disabling auto-migrate and running migrations as an explicit step.
+### Split-mode dev (fastest contributor loop)
+
+- Start DB via Compose.
+- Run backend+frontend dev servers.
+
+See [Development](03-development.md).
+
+## Migrations (`DB_AUTO_MIGRATE`)
+
+Evidence: `backend/app/db/session.py`.
+
+On backend startup:
+- if `DB_AUTO_MIGRATE=true` and migrations exist under `backend/migrations/versions/`, backend runs `alembic upgrade head`.
+- otherwise it falls back to `SQLModel.metadata.create_all`.
+
+Operational guidance:
+- Auto-migrate is convenient on a single host.
+- In multi-instance deployments, prefer running migrations as an explicit deploy step to avoid race conditions.
+
+## CORS (`CORS_ORIGINS`)
+
+Evidence: `backend/app/main.py`, `backend/app/core/config.py`.
+
+- `CORS_ORIGINS` is a comma-separated list.
+- It must include the frontend origin (e.g. `http://localhost:3000`) or browser requests will fail.
+
+## Common footguns
+
+- **Frontend env template vs runtime env**: `frontend/.env.example` is a template and `compose.yml` intentionally does **not** load it at runtime. Use user-managed `frontend/.env` (for Compose) or `frontend/.env.local` (for Next dev).
 - **`NEXT_PUBLIC_API_URL` reachability**: must work from the browser’s network context (host), not only from within the Docker network.
+
+## Troubleshooting config issues
+
+- UI loads but API calls fail / Activity feed blank → `NEXT_PUBLIC_API_URL` is missing/incorrect.
+- Backend fails at startup → check required env vars (notably `CLERK_SECRET_KEY`) and migrations.
+
+See also: `docs/troubleshooting/README.md`.

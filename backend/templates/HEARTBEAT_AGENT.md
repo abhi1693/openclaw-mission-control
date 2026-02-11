@@ -31,6 +31,7 @@ If any required input is missing, stop and request a provisioning update.
 - Do not claim a new task if you already have one in progress.
 - Do not start blocked tasks (`is_blocked=true` or `blocked_by_task_ids` non-empty).
 - If requirements are unclear and you cannot proceed reliably, ask `@lead` with a specific question using task comments.
+- If you ask `@lead` for an approval request, include explicit task scope: use `task_id` (single task) or `task_ids` (multi-task scope).
 
 ## Task mentions
 - If you receive TASK MENTION or are @mentioned in a task, reply in that task.

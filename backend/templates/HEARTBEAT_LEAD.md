@@ -281,13 +281,15 @@ Body: {"depends_on_task_ids":["DEP_TASK_ID_1","DEP_TASK_ID_2"]}
 - If the task depends on other tasks, always set `depends_on_task_ids`. If any dependency is incomplete, keep the task unassigned and do not delegate it until unblocked.
 - If confidence < 70 or the action is risky/external, request approval instead:
   POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals
+  - Use `task_ids` when an approval applies to multiple tasks; use `task_id` when only one task applies.
+  - Keep `payload.task_ids`/`payload.task_id` aligned with top-level `task_ids`/`task_id`.
   Body example:
-  {"action_type":"task.create","confidence":60,"payload":{"title":"...","description":"..."},"rubric_scores":{"clarity":20,"constraints":15,"completeness":10,"risk":10,"dependencies":10,"similarity":10}}
+  {"action_type":"task.create","task_ids":["TASK_ID_1","TASK_ID_2"],"confidence":60,"payload":{"title":"...","description":"...","task_ids":["TASK_ID_1","TASK_ID_2"]},"rubric_scores":{"clarity":20,"constraints":15,"completeness":10,"risk":10,"dependencies":10,"similarity":10}}
 - If you have follow‑up questions, still create the task and add a comment on that task with the questions. You are allowed to comment on tasks you created.
 
 8) Review handling (when a task reaches **review**):
 - Read all comments before deciding.
-- Before requesting any approval, check existing approvals + board memory to ensure you are not duplicating an in-flight request for the same TASK_ID/action.
+- Before requesting any approval, check existing approvals + board memory to ensure you are not duplicating an in-flight request for the same task scope (`task_id`/`task_ids`) and action.
 - If the task is complete:
   - Before marking **done**, leave a brief markdown comment explaining *why* it is done so the human can evaluate your reasoning.
   - If confidence >= 70 and the action is not risky/external, move it to **done** directly.
@@ -296,7 +298,7 @@ Body: {"depends_on_task_ids":["DEP_TASK_ID_1","DEP_TASK_ID_2"]}
   - If confidence < 70 or risky/external, request approval:
     POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals
     Body example:
-    {"action_type":"task.complete","confidence":60,"payload":{"task_id":"...","reason":"..."},"rubric_scores":{"clarity":20,"constraints":15,"completeness":15,"risk":15,"dependencies":10,"similarity":5}}
+    {"action_type":"task.complete","task_ids":["TASK_ID_1","TASK_ID_2"],"confidence":60,"payload":{"task_ids":["TASK_ID_1","TASK_ID_2"],"reason":"..."},"rubric_scores":{"clarity":20,"constraints":15,"completeness":15,"risk":15,"dependencies":10,"similarity":5}}
 - If the work is **not** done correctly:
   - Add a **review feedback comment** on the task describing what is missing or wrong.
   - If confidence >= 70 and not risky/external, move it back to **inbox** directly (unassigned):
@@ -305,7 +307,7 @@ Body: {"depends_on_task_ids":["DEP_TASK_ID_1","DEP_TASK_ID_2"]}
   - If confidence < 70 or risky/external, request approval to move it back:
     POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals
     Body example:
-    {"action_type":"task.rework","confidence":60,"payload":{"task_id":"...","desired_status":"inbox","assigned_agent_id":null,"reason":"..."},"rubric_scores":{"clarity":20,"constraints":15,"completeness":10,"risk":15,"dependencies":10,"similarity":5}}
+    {"action_type":"task.rework","task_ids":["TASK_ID_1","TASK_ID_2"],"confidence":60,"payload":{"task_ids":["TASK_ID_1","TASK_ID_2"],"desired_status":"inbox","assigned_agent_id":null,"reason":"..."},"rubric_scores":{"clarity":20,"constraints":15,"completeness":10,"risk":15,"dependencies":10,"similarity":5}}
   - Assign or create the next agent who should handle the rework.
   - That agent must read **all comments** before starting the task.
 - If the work reveals more to do, **create one or more follow‑up tasks** (and assign/create agents as needed).

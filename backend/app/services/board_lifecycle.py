@@ -14,6 +14,7 @@ from sqlmodel import col, select
 from app.db import crud
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
+from app.models.approval_task_links import ApprovalTaskLink
 from app.models.approvals import Approval
 from app.models.board_memory import BoardMemory
 from app.models.board_onboarding import BoardOnboardingSession
@@ -73,6 +74,13 @@ async def delete_board(session: AsyncSession, *, board: Board) -> OkResponse:
     )
 
     # Approvals can reference tasks and agents, so delete before both.
+    approval_ids = select(Approval.id).where(col(Approval.board_id) == board.id)
+    await crud.delete_where(
+        session,
+        ApprovalTaskLink,
+        col(ApprovalTaskLink.approval_id).in_(approval_ids),
+        commit=False,
+    )
     await crud.delete_where(session, Approval, col(Approval.board_id) == board.id)
 
     await crud.delete_where(session, BoardMemory, col(BoardMemory.board_id) == board.id)

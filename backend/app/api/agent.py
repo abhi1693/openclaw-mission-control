@@ -60,7 +60,6 @@ if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
     from app.models.activity_events import ActivityEvent
-    from app.models.approvals import Approval
     from app.models.board_memory import BoardMemory
     from app.models.board_onboarding import BoardOnboardingSession
 
@@ -422,7 +421,7 @@ async def create_approval(
     board: Board = BOARD_DEP,
     session: AsyncSession = SESSION_DEP,
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
-) -> Approval:
+) -> ApprovalRead:
     """Create a board approval request."""
     _guard_board_access(agent_ctx, board)
     return await approvals_api.create_approval(

@@ -12,6 +12,7 @@ import type { BoardCreateSuccessMetrics } from "./boardCreateSuccessMetrics";
 export interface BoardCreate {
   name: string;
   slug: string;
+  description: string;
   gateway_id?: string | null;
   board_group_id?: string | null;
   board_type?: string;

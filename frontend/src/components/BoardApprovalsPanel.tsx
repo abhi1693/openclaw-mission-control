@@ -149,13 +149,36 @@ const payloadValue = (payload: Approval["payload"], key: string) => {
   return null;
 };
 
-const approvalSummary = (approval: Approval, boardLabel?: string | null) => {
+const payloadValues = (payload: Approval["payload"], key: string) => {
+  if (!payload) return [];
+  const value = payload[key as keyof typeof payload];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+};
+
+const approvalTaskIds = (approval: Approval) => {
   const payload = approval.payload ?? {};
-  const taskId =
+  const linkedTaskIds = (approval as Approval & { task_ids?: string[] | null })
+    .task_ids;
+  const singleTaskId =
     approval.task_id ??
     payloadValue(payload, "task_id") ??
     payloadValue(payload, "taskId") ??
     payloadValue(payload, "taskID");
+  const merged = [
+    ...(Array.isArray(linkedTaskIds) ? linkedTaskIds : []),
+    ...payloadValues(payload, "task_ids"),
+    ...payloadValues(payload, "taskIds"),
+    ...payloadValues(payload, "taskIDs"),
+    ...(singleTaskId ? [singleTaskId] : []),
+  ];
+  return [...new Set(merged)];
+};
+
+const approvalSummary = (approval: Approval, boardLabel?: string | null) => {
+  const payload = approval.payload ?? {};
+  const taskIds = approvalTaskIds(approval);
+  const taskId = taskIds[0] ?? null;
   const assignedAgentId =
     payloadValue(payload, "assigned_agent_id") ??
     payloadValue(payload, "assignedAgentId");
@@ -166,7 +189,9 @@ const approvalSummary = (approval: Approval, boardLabel?: string | null) => {
   const isAssign = approval.action_type.includes("assign");
   const rows: Array<{ label: string; value: string }> = [];
   if (boardLabel) rows.push({ label: "Board", value: boardLabel });
-  if (taskId) rows.push({ label: "Task", value: taskId });
+  if (taskIds.length === 1) rows.push({ label: "Task", value: taskIds[0] });
+  if (taskIds.length > 1)
+    rows.push({ label: "Tasks", value: taskIds.join(", ") });
   if (isAssign) {
     rows.push({
       label: "Assignee",

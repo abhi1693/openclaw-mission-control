@@ -12,6 +12,7 @@ import type { BoardUpdateSuccessMetrics } from "./boardUpdateSuccessMetrics";
 export interface BoardUpdate {
   name?: string | null;
   slug?: string | null;
+  description?: string | null;
   gateway_id?: string | null;
   board_group_id?: string | null;
   board_type?: string | null;

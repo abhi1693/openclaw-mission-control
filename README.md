@@ -30,15 +30,20 @@ Operational deep dives:
 - Production notes: [Production notes](./docs/production/README.md)
 - Troubleshooting: [Troubleshooting](./docs/troubleshooting/README.md)
 
-## Authentication (Clerk)
+## Authentication
 
-**Clerk is currently required**.
+Mission Control supports two auth modes via `AUTH_MODE`:
 
-You must configure Clerk keys for:
-- the frontend (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`)
-- the backend (`CLERK_SECRET_KEY`)
+- `local`: shared bearer token auth for self-hosted deployments
+- `clerk`: Clerk JWT auth
 
-See: [Deployment guide](./docs/deployment/README.md#clerk-auth-notes).
+`local` mode requires:
+- backend: `AUTH_MODE=local`, `LOCAL_AUTH_TOKEN=<token>`
+- frontend: `NEXT_PUBLIC_AUTH_MODE=local`, then enter the token in the login screen
+
+`clerk` mode requires:
+- backend: `AUTH_MODE=clerk`, `CLERK_SECRET_KEY=<secret>`
+- frontend: `NEXT_PUBLIC_AUTH_MODE=clerk`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<key>`
 
 ## Deployment modes
 
@@ -49,12 +54,16 @@ See: [Deployment guide](./docs/deployment/README.md#clerk-auth-notes).
 ```bash
 cp .env.example .env
 
+# REQUIRED for local auth mode:
+# set LOCAL_AUTH_TOKEN to a non-placeholder value with at least 50 characters.
+
 # REQUIRED: the browser must be able to reach the backend.
 # NEXT_PUBLIC_API_URL must be reachable from the *browser* (host), not an internal Docker network name.
 # Missing/blank NEXT_PUBLIC_API_URL will break frontend API calls (e.g. Activity feed).
 
-# REQUIRED: Clerk config.
-# Provide real Clerk values via frontend/.env (recommended) and backend/.env.
+# Auth defaults in .env.example are local mode.
+# For production, set LOCAL_AUTH_TOKEN to a random value with at least 50 characters.
+# For Clerk mode, set AUTH_MODE=clerk and provide Clerk keys.
 
 docker compose -f compose.yml --env-file .env up -d --build
 ```

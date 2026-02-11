@@ -1,24 +1,38 @@
 # Troubleshooting
 
-## Deep dives
+This is the “symptom → checks → likely fixes” page.
 
+For deeper playbooks, see:
 - [Troubleshooting deep dive](troubleshooting/README.md)
 
-This is the “quick triage” page. For detailed playbooks and diagnostics, use the deep dive.
+## Triage map
 
-## Quick triage
+| Symptom | Fast checks | Likely fix |
+|---|---|---|
+| UI loads but API calls fail / Activity feed blank | Browser devtools shows `/api/v1/*` failures; check backend `/healthz` | Fix `NEXT_PUBLIC_API_URL` (must be browser-reachable) |
+| UI redirects / Clerk errors | Is `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` set? Are Clerk redirects correct? | Unset keys for local dev without Clerk; configure real keys for prod |
+| Backend `/healthz` fails | Is backend container/process running? check backend logs | Fix crash loop: env vars, DB connectivity, migrations |
+| Backend returns 5xx | Check DB connectivity (`DATABASE_URL`), DB logs | Fix DB outage/misconfig; re-run migrations if needed |
+| Browser shows CORS errors | Compare `CORS_ORIGINS` vs frontend origin | Add frontend origin to `CORS_ORIGINS` |
 
-### Frontend loads but shows API errors
-- Confirm `NEXT_PUBLIC_API_URL` points to a backend your browser can reach.
-- Check backend `/healthz`.
+## Common checks
 
-### Frontend keeps redirecting / Clerk errors
-- Verify your Clerk keys are set correctly in the frontend environment.
-- See: [Deployment guide](deployment/README.md) (Clerk auth notes).
+### 1) Verify backend health
 
-### Backend returns 5xx
-- Check DB connectivity (`DATABASE_URL`) and migrations.
-- Check backend logs.
+```bash
+curl -f http://localhost:8000/healthz
+```
+
+### 2) Verify frontend can reach backend
+
+- Ensure `NEXT_PUBLIC_API_URL` matches the backend URL the browser can reach.
+
+### 3) Check logs
+
+```bash
+docker compose -f compose.yml --env-file .env logs -f --tail=200 backend
+```
 
 ## Next
-- Promote the most common issues from [Troubleshooting deep dive](troubleshooting/README.md) into this page once we see repeated incidents.
+
+If you hit a recurring incident, promote it from the deep-dive page into this triage map.

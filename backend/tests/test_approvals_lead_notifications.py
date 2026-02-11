@@ -10,7 +10,7 @@ from app.api import approvals
 from app.models.agents import Agent
 from app.models.approvals import Approval
 from app.models.boards import Board
-from app.schemas.approvals import ApprovalUpdate
+from app.schemas.approvals import ApprovalRead, ApprovalUpdate
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
 
 
@@ -120,6 +120,25 @@ async def test_update_approval_notifies_lead_when_approved(
         _fake_try_send_agent_message,
     )
 
+    async def _fake_load_task_ids_by_approval(
+        _session: object,
+        *,
+        approval_ids: list[UUID],
+    ) -> dict[UUID, list[UUID]]:
+        _ = approval_ids
+        return {approval.id: []}
+
+    monkeypatch.setattr(approvals, "load_task_ids_by_approval", _fake_load_task_ids_by_approval)
+
+    async def _fake_reads(_session: object, _approvals: list[Approval]) -> list[ApprovalRead]:
+        return [ApprovalRead.model_validate(approval, from_attributes=True)]
+
+    monkeypatch.setattr(
+        approvals,
+        "_approval_reads",
+        _fake_reads,
+    )
+
     updated = await approvals.update_approval(
         approval_id=str(approval.id),
         payload=ApprovalUpdate(status="approved"),
@@ -154,6 +173,15 @@ async def test_update_approval_skips_notify_when_status_not_resolved(
         called["notify"] += 1
 
     monkeypatch.setattr(approvals, "_notify_lead_on_approval_resolution", _fake_notify)
+
+    async def _fake_reads(_session: object, _approvals: list[Approval]) -> list[ApprovalRead]:
+        return [ApprovalRead.model_validate(approval, from_attributes=True)]
+
+    monkeypatch.setattr(
+        approvals,
+        "_approval_reads",
+        _fake_reads,
+    )
 
     updated = await approvals.update_approval(
         approval_id=str(approval.id),

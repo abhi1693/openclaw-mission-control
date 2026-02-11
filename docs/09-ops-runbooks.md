@@ -1,38 +1,81 @@
-# Ops / runbooks
+# Operations
 
-## Deep dives
+This is the ops/SRE entrypoint.
 
+It aims to answer, quickly:
+- “Is the system up?”
+- “What changed?”
+- “What should I check next?”
+
+Deep dives:
 - [Deployment](deployment/README.md)
 - [Production](production/README.md)
-- [Troubleshooting](troubleshooting/README.md)
-
-This page is the operator entrypoint. It points to the existing deep-dive runbooks and adds a short “first 30 minutes” checklist.
+- [Troubleshooting deep dive](troubleshooting/README.md)
 
 ## First 30 minutes (incident checklist)
 
-1. **Confirm impact**
-   - What’s broken: UI, API, auth, or gateway integration?
-   - All users or a subset?
+### 0) Stabilize communications
 
-2. **Check service health**
-   - Backend: `/healthz` and `/readyz`
-   - Frontend: can it load? does it reach the API?
+- Identify incident lead and comms channel.
+- Capture last deploy SHA/tag and time window.
+- Do not paste secrets into chat/tickets.
 
-3. **Check auth (Clerk)**
-   - Frontend: did Clerk get enabled unintentionally? (publishable key set)
-   - Backend: is `CLERK_SECRET_KEY` configured correctly?
+### 1) Confirm impact
 
-4. **Check DB connectivity**
-   - Can backend connect to Postgres (`DATABASE_URL`)?
+- UI broken vs API broken vs auth vs DB vs gateway integration.
+- All users or subset?
 
-5. **Check logs**
-   - Backend logs for 5xx spikes or auth failures.
-   - Frontend logs for API URL/proxy misconfig.
+### 2) Health checks
 
-6. **Stabilize**
-   - Roll back the last change if you can.
-   - Temporarily disable optional integrations (gateway) to isolate.
+- Backend:
+  - `curl -f http://<backend-host>:8000/healthz`
+  - `curl -f http://<backend-host>:8000/readyz`
+- Frontend:
+  - can the UI load?
+  - in browser devtools, are `/api/v1/*` requests failing?
 
-## Backups / restore
+### 3) Configuration sanity
 
-See [Production](production/README.md). If you run Mission Control in production, treat backup/restore as a regular drill, not a one-time setup.
+Common misconfigs that look like outages:
+
+- `NEXT_PUBLIC_API_URL` wrong → UI loads but API calls fail.
+- `CORS_ORIGINS` missing frontend origin → browser CORS errors.
+- Clerk misconfig → auth redirects/401s.
+
+### 4) Database
+
+- If backend is 5xx’ing broadly, DB is a top suspect.
+- Verify `DATABASE_URL` points at the correct host.
+
+### 5) Logs
+
+Compose:
+
+```bash
+docker compose -f compose.yml --env-file .env logs -f --tail=200
+```
+
+Targeted:
+
+```bash
+docker compose -f compose.yml --env-file .env logs -f --tail=200 backend
+```
+
+### 6) Rollback / isolate
+
+- If there was a recent deploy and symptoms align, rollback to last known good.
+- If gateway integration is implicated, isolate by disabling gateway-dependent flows.
+
+## Common failure modes
+
+- UI loads, Activity feed blank → `NEXT_PUBLIC_API_URL` wrong/unreachable.
+- Repeated auth redirects/errors → Clerk keys/redirects misconfigured.
+- Backend 5xx → DB outage/misconfig; migration failure.
+- Backend won’t start → config validation failure (e.g. empty `CLERK_SECRET_KEY`).
+
+## Backups
+
+Evidence: `docs/production/README.md`.
+
+- Minimum viable: periodic `pg_dump` to off-host storage.
+- Treat restore as a drill (quarterly), not a one-time checklist.
