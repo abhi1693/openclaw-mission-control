@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -21,6 +21,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const isOnboardingPath = pathname === "/onboarding";
+
+  // Avoid SSR/client markup divergence around auth-gated UI.
+  // `useAuth()`/`SignedIn` may resolve differently between the server render and client hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const meQuery = useGetMeApiV1UsersMeGet<
     getMeApiV1UsersMeGetResponse,
@@ -75,24 +80,28 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <div className="flex items-center px-6">
             <BrandMark />
           </div>
-          <SignedIn>
-            <div className="flex items-center">
-              <div className="max-w-[220px]">
-                <OrgSwitcher />
+          {mounted && (
+            <SignedIn>
+              <div className="flex items-center">
+                <div className="max-w-[220px]">
+                  <OrgSwitcher />
+                </div>
               </div>
-            </div>
-          </SignedIn>
-          <SignedIn>
-            <div className="flex items-center gap-3 px-6">
-              <div className="hidden text-right lg:block">
-                <p className="text-sm font-semibold text-slate-900">
-                  {displayName}
-                </p>
-                <p className="text-xs text-slate-500">Operator</p>
+            </SignedIn>
+          )}
+          {mounted && (
+            <SignedIn>
+              <div className="flex items-center gap-3 px-6">
+                <div className="hidden text-right lg:block">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {displayName}
+                  </p>
+                  <p className="text-xs text-slate-500">Operator</p>
+                </div>
+                <UserMenu displayName={displayName} displayEmail={displayEmail} />
               </div>
-              <UserMenu displayName={displayName} displayEmail={displayEmail} />
-            </div>
-          </SignedIn>
+            </SignedIn>
+          )}
         </div>
       </header>
       <div className="grid min-h-[calc(100vh-64px)] grid-cols-[260px_1fr] bg-slate-50">
