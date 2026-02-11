@@ -1,6 +1,5 @@
 describe("Happy path: create a task", () => {
   const apiBase = "**/api/v1";
-  const email = Cypress.env("CLERK_TEST_EMAIL") || "jane+clerk_test@example.com";
 
   const now = "2026-02-11T00:00:00.000Z";
   const boardId = "b1";
@@ -94,10 +93,8 @@ describe("Happy path: create a task", () => {
       body: createdTask,
     }).as("createTask");
 
-    // Auth: follow existing pattern in repo tests.
-    cy.visit("/sign-in");
-    cy.clerkLoaded();
-    cy.clerkSignIn({ strategy: "email_code", identifier: email });
+    // Auth: prefer the repo's deterministic OTP-based helper (avoids driving Clerk iframes/modals).
+    cy.loginWithClerkOtp();
 
     cy.visit(`/boards/${boardId}`);
     cy.wait("@membership");
