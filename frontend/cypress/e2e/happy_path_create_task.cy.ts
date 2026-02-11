@@ -1,3 +1,8 @@
+// Happy-path UI journey that remains CI-stable even when the backend is not running.
+// Notes:
+// - This spec stubs all backend HTTP/SSE calls the board page makes.
+// - Auth uses `cy.loginWithClerkOtp()` (requires CYPRESS_CLERK_TEST_EMAIL/OTP or defaults).
+
 describe("Happy path: create a task", () => {
   const apiBase = "**/api/v1";
 
