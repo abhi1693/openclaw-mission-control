@@ -67,9 +67,12 @@ Cypress.Commands.add("loginWithClerkOtp", () => {
       .type(email, { delay: 10 });
 
     // IMPORTANT: Clerk renders a "Continue with Google" social button that matches /continue/i.
-    // Ensure we click the *form* submit button, otherwise we enter a social-login flow and OTP never appears.
-    cy.contains('button[type="submit"]', /continue|sign in|send|next/i, { timeout: 20_000 })
-      .should("be.visible")
+    // Ensure we click the *form* submit button (not a social-login button), otherwise OTP never appears.
+    // Some Clerk variants render the submit button without matching text, so don't require a text match.
+    cy.get('button[type="submit"], input[type="submit"]', { timeout: 20_000 })
+      .filter(':visible')
+      .first()
+      .should('not.be.disabled')
       .click({ force: true });
   };
 
