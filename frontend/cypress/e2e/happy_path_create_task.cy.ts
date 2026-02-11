@@ -106,6 +106,7 @@ describe("Happy path: create a task", () => {
     cy.visit(`/boards/${boardId}`);
     cy.wait("@membership");
     cy.wait("@boardSnapshot");
+    cy.wait("@groupSnapshot");
 
     // Use list view for simpler assertions.
     cy.contains("button", "List").click();
