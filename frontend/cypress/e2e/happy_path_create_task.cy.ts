@@ -39,6 +39,13 @@ describe("Happy path: create a task", () => {
         pending_approvals_count: 0,
       },
     }).as("boardSnapshot");
+
+    // The board page also attempts to load a board-group snapshot; in CI E2E we don't run the backend,
+    // so stub this to a deterministic empty response.
+    cy.intercept("GET", `${apiBase}/boards/${boardId}/group-snapshot*`, {
+      statusCode: 200,
+      body: { boards: [] },
+    }).as("groupSnapshot");
   }
 
   function stubMembershipWriteAccess() {
