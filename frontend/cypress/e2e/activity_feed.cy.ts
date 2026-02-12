@@ -46,6 +46,32 @@ describe("/activity feed", () => {
     cy.intercept("GET", `${apiBase}/agents/stream*`, emptySse).as("agentsStream");
   }
 
+  function stubBoardBootstrap() {
+    // Some app bootstraps happen before we get to the /activity call.
+    // Keep these stable so the page always reaches the activity request.
+    cy.intercept("GET", `${apiBase}/organizations/me/member*`, {
+      statusCode: 200,
+      body: { organization_id: "org1", role: "owner" },
+    }).as("orgMeMember");
+
+    cy.intercept("GET", `${apiBase}/boards*`, {
+      statusCode: 200,
+      body: {
+        items: [{ id: "b1", name: "Testing", updated_at: "2026-02-07T00:00:00Z" }],
+      },
+    }).as("boardsList");
+
+    cy.intercept("GET", `${apiBase}/boards/b1/snapshot*`, {
+      statusCode: 200,
+      body: {
+        tasks: [{ id: "t1", title: "CI hardening" }],
+        agents: [],
+        approvals: [],
+        chat_messages: [],
+      },
+    }).as("boardSnapshot");
+  }
+
   function assertSignedInAndLanded() {
     cy.waitForAppLoaded();
     cy.contains(/live feed/i).should("be.visible");
@@ -58,6 +84,8 @@ describe("/activity feed", () => {
   });
 
   it("happy path: renders task comment cards", () => {
+    stubBoardBootstrap();
+
     cy.intercept("GET", "**/api/v1/activity**", {
       statusCode: 200,
       body: {
@@ -94,6 +122,8 @@ describe("/activity feed", () => {
   });
 
   it("empty state: shows waiting message when no items", () => {
+    stubBoardBootstrap();
+
     cy.intercept("GET", "**/api/v1/activity**", {
       statusCode: 200,
       body: { items: [] },
@@ -113,6 +143,8 @@ describe("/activity feed", () => {
   });
 
   it("error state: shows failure UI when API errors", () => {
+    stubBoardBootstrap();
+
     cy.intercept("GET", "**/api/v1/activity**", {
       statusCode: 500,
       body: { detail: "boom" },
