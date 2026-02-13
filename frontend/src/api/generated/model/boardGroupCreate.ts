@@ -9,7 +9,7 @@
  * Payload for creating a board group.
  */
 export interface BoardGroupCreate {
+  description?: string | null;
   name: string;
   slug: string;
-  description?: string | null;
 }

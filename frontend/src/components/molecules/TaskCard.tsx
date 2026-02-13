@@ -10,6 +10,7 @@ interface TaskCardProps {
   priority?: string;
   assignee?: string;
   due?: string;
+  isOverdue?: boolean;
   approvalsPendingCount?: number;
   tags?: Array<{ id: string; name: string; color: string }>;
   isBlocked?: boolean;
@@ -27,6 +28,7 @@ export function TaskCard({
   priority,
   assignee,
   due,
+  isOverdue = false,
   approvalsPendingCount = 0,
   tags = [],
   isBlocked = false,
@@ -157,8 +159,18 @@ export function TaskCard({
           <span>{assignee ?? "Unassigned"}</span>
         </div>
         {due ? (
-          <div className="flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-slate-400" />
+          <div
+            className={cn(
+              "flex items-center gap-2",
+              isOverdue && "font-semibold text-rose-600",
+            )}
+          >
+            <CalendarClock
+              className={cn(
+                "h-4 w-4",
+                isOverdue ? "text-rose-500" : "text-slate-400",
+              )}
+            />
             <span>{due}</span>
           </div>
         ) : null}

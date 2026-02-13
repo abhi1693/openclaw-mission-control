@@ -10,15 +10,19 @@ import type { BoardUpdateSuccessMetrics } from "./boardUpdateSuccessMetrics";
  * Payload for partial board updates.
  */
 export interface BoardUpdate {
-  name?: string | null;
-  slug?: string | null;
-  description?: string | null;
-  gateway_id?: string | null;
+  block_status_changes_with_pending_approval?: boolean | null;
   board_group_id?: string | null;
   board_type?: string | null;
-  objective?: string | null;
-  success_metrics?: BoardUpdateSuccessMetrics;
-  target_date?: string | null;
+  description?: string | null;
+  gateway_id?: string | null;
   goal_confirmed?: boolean | null;
   goal_source?: string | null;
+  name?: string | null;
+  objective?: string | null;
+  only_lead_can_change_status?: boolean | null;
+  require_approval_for_done?: boolean | null;
+  require_review_before_done?: boolean | null;
+  slug?: string | null;
+  success_metrics?: BoardUpdateSuccessMetrics;
+  target_date?: string | null;
 }

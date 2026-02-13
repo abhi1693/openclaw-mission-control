@@ -59,6 +59,8 @@ async def test_delete_my_org_cleans_dependents_before_organization_delete() -> N
         "approval_task_links",
         "approvals",
         "board_memory",
+        "board_webhook_payloads",
+        "board_webhooks",
         "board_onboarding_sessions",
         "organization_board_access",
         "organization_invite_board_access",

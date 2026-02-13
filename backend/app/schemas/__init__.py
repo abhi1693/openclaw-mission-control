@@ -11,6 +11,13 @@ from app.schemas.board_onboarding import (
     BoardOnboardingRead,
     BoardOnboardingStart,
 )
+from app.schemas.board_webhooks import (
+    BoardWebhookCreate,
+    BoardWebhookIngestResponse,
+    BoardWebhookPayloadRead,
+    BoardWebhookRead,
+    BoardWebhookUpdate,
+)
 from app.schemas.boards import BoardCreate, BoardRead, BoardUpdate
 from app.schemas.gateways import GatewayCreate, GatewayRead, GatewayUpdate
 from app.schemas.metrics import DashboardMetrics
@@ -47,6 +54,11 @@ __all__ = [
     "BoardGroupMemoryRead",
     "BoardMemoryCreate",
     "BoardMemoryRead",
+    "BoardWebhookCreate",
+    "BoardWebhookIngestResponse",
+    "BoardWebhookPayloadRead",
+    "BoardWebhookRead",
+    "BoardWebhookUpdate",
     "BoardOnboardingAnswer",
     "BoardOnboardingConfirm",
     "BoardOnboardingRead",

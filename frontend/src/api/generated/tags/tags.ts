@@ -361,6 +361,122 @@ export const useCreateTagApiV1TagsPost = <
   );
 };
 /**
+ * Delete a tag and remove all associated tag links.
+ * @summary Delete Tag
+ */
+export type deleteTagApiV1TagsTagIdDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteTagApiV1TagsTagIdDeleteResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type deleteTagApiV1TagsTagIdDeleteResponseSuccess =
+  deleteTagApiV1TagsTagIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteTagApiV1TagsTagIdDeleteResponseError =
+  deleteTagApiV1TagsTagIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type deleteTagApiV1TagsTagIdDeleteResponse =
+  | deleteTagApiV1TagsTagIdDeleteResponseSuccess
+  | deleteTagApiV1TagsTagIdDeleteResponseError;
+
+export const getDeleteTagApiV1TagsTagIdDeleteUrl = (tagId: string) => {
+  return `/api/v1/tags/${tagId}`;
+};
+
+export const deleteTagApiV1TagsTagIdDelete = async (
+  tagId: string,
+  options?: RequestInit,
+): Promise<deleteTagApiV1TagsTagIdDeleteResponse> => {
+  return customFetch<deleteTagApiV1TagsTagIdDeleteResponse>(
+    getDeleteTagApiV1TagsTagIdDeleteUrl(tagId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteTagApiV1TagsTagIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
+    TError,
+    { tagId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
+  TError,
+  { tagId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteTagApiV1TagsTagIdDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
+    { tagId: string }
+  > = (props) => {
+    const { tagId } = props ?? {};
+
+    return deleteTagApiV1TagsTagIdDelete(tagId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTagApiV1TagsTagIdDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>
+>;
+
+export type DeleteTagApiV1TagsTagIdDeleteMutationError = HTTPValidationError;
+
+/**
+ * @summary Delete Tag
+ */
+export const useDeleteTagApiV1TagsTagIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
+      TError,
+      { tagId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
+  TError,
+  { tagId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteTagApiV1TagsTagIdDeleteMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * Get a single tag in the active organization.
  * @summary Get Tag
  */
@@ -673,122 +789,6 @@ export const useUpdateTagApiV1TagsTagIdPatch = <
 > => {
   return useMutation(
     getUpdateTagApiV1TagsTagIdPatchMutationOptions(options),
-    queryClient,
-  );
-};
-/**
- * Delete a tag and remove all associated tag links.
- * @summary Delete Tag
- */
-export type deleteTagApiV1TagsTagIdDeleteResponse200 = {
-  data: OkResponse;
-  status: 200;
-};
-
-export type deleteTagApiV1TagsTagIdDeleteResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type deleteTagApiV1TagsTagIdDeleteResponseSuccess =
-  deleteTagApiV1TagsTagIdDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteTagApiV1TagsTagIdDeleteResponseError =
-  deleteTagApiV1TagsTagIdDeleteResponse422 & {
-    headers: Headers;
-  };
-
-export type deleteTagApiV1TagsTagIdDeleteResponse =
-  | deleteTagApiV1TagsTagIdDeleteResponseSuccess
-  | deleteTagApiV1TagsTagIdDeleteResponseError;
-
-export const getDeleteTagApiV1TagsTagIdDeleteUrl = (tagId: string) => {
-  return `/api/v1/tags/${tagId}`;
-};
-
-export const deleteTagApiV1TagsTagIdDelete = async (
-  tagId: string,
-  options?: RequestInit,
-): Promise<deleteTagApiV1TagsTagIdDeleteResponse> => {
-  return customFetch<deleteTagApiV1TagsTagIdDeleteResponse>(
-    getDeleteTagApiV1TagsTagIdDeleteUrl(tagId),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export const getDeleteTagApiV1TagsTagIdDeleteMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
-    TError,
-    { tagId: string },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
-  TError,
-  { tagId: string },
-  TContext
-> => {
-  const mutationKey = ["deleteTagApiV1TagsTagIdDelete"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
-    { tagId: string }
-  > = (props) => {
-    const { tagId } = props ?? {};
-
-    return deleteTagApiV1TagsTagIdDelete(tagId, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteTagApiV1TagsTagIdDeleteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>
->;
-
-export type DeleteTagApiV1TagsTagIdDeleteMutationError = HTTPValidationError;
-
-/**
- * @summary Delete Tag
- */
-export const useDeleteTagApiV1TagsTagIdDelete = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
-      TError,
-      { tagId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof deleteTagApiV1TagsTagIdDelete>>,
-  TError,
-  { tagId: string },
-  TContext
-> => {
-  return useMutation(
-    getDeleteTagApiV1TagsTagIdDeleteMutationOptions(options),
     queryClient,
   );
 };

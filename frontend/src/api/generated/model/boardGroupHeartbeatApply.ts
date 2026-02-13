@@ -10,6 +10,6 @@
  */
 export interface BoardGroupHeartbeatApply {
   every: string;
-  target?: string | null;
   include_board_leads?: boolean;
+  target?: string | null;
 }

@@ -10,8 +10,8 @@ import type { BoardOnboardingQuestionOption } from "./boardOnboardingQuestionOpt
  * Question payload emitted by the onboarding assistant.
  */
 export interface BoardOnboardingAgentQuestion {
-  /** @minLength 1 */
-  question: string;
   /** @minItems 1 */
   options: BoardOnboardingQuestionOption[];
+  /** @minLength 1 */
+  question: string;
 }

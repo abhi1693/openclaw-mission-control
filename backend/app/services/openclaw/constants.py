@@ -55,6 +55,7 @@ DEFAULT_GATEWAY_FILES = frozenset(
     {
         "AGENTS.md",
         "SOUL.md",
+        "LEAD_PLAYBOOK.md",
         "TASK_SOUL.md",
         "SELF.md",
         "AUTONOMY.md",

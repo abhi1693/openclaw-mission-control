@@ -104,6 +104,33 @@ frontend-test: frontend-tooling ## Frontend tests (vitest)
 backend-migrate: ## Apply backend DB migrations (uses backend/migrations)
 	cd $(BACKEND_DIR) && uv run alembic upgrade head
 
+.PHONY: backend-migration-check
+backend-migration-check: ## Validate migration graph + reversible path on clean Postgres
+	@set -euo pipefail; \
+	(cd $(BACKEND_DIR) && uv run python scripts/check_migration_graph.py); \
+	CONTAINER_NAME="mc-migration-check-$$RANDOM"; \
+	docker run -d --rm --name $$CONTAINER_NAME -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=migration_ci -p 55432:5432 postgres:16 >/dev/null; \
+	cleanup() { docker rm -f $$CONTAINER_NAME >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT; \
+	for i in $$(seq 1 30); do \
+		if docker exec $$CONTAINER_NAME pg_isready -U postgres -d migration_ci >/dev/null 2>&1; then break; fi; \
+		sleep 1; \
+		if [ $$i -eq 30 ]; then echo "Postgres did not become ready"; exit 1; fi; \
+	done; \
+	cd $(BACKEND_DIR) && \
+		AUTH_MODE=local \
+		LOCAL_AUTH_TOKEN=ci-local-token-ci-local-token-ci-local-token-ci-local-token \
+		DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/migration_ci \
+		uv run alembic upgrade head && \
+		AUTH_MODE=local \
+		LOCAL_AUTH_TOKEN=ci-local-token-ci-local-token-ci-local-token-ci-local-token \
+		DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/migration_ci \
+		uv run alembic downgrade base && \
+		AUTH_MODE=local \
+		LOCAL_AUTH_TOKEN=ci-local-token-ci-local-token-ci-local-token-ci-local-token \
+		DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/migration_ci \
+		uv run alembic upgrade head
+
 .PHONY: build
 build: frontend-build ## Build artifacts
 
@@ -122,3 +149,15 @@ backend-templates-sync: ## Sync templates to existing gateway agents (usage: mak
 
 .PHONY: check
 check: lint typecheck backend-coverage frontend-test build ## Run lint + typecheck + tests + coverage + build
+
+
+.PHONY: docs-lint
+docs-lint: frontend-tooling ## Lint markdown files (tiny ruleset; avoids noisy churn)
+	$(NODE_WRAP) npx markdownlint-cli2@0.15.0 --config .markdownlint-cli2.yaml "**/*.md"
+
+.PHONY: docs-link-check
+docs-link-check: ## Check for broken relative links in markdown docs
+	python scripts/check_markdown_links.py
+
+.PHONY: docs-check
+docs-check: docs-lint docs-link-check ## Run all docs quality gates

@@ -11,7 +11,7 @@ import type { BoardGroupHeartbeatApplyResultRequested } from "./boardGroupHeartb
  */
 export interface BoardGroupHeartbeatApplyResult {
   board_group_id: string;
+  failed_agent_ids: string[];
   requested: BoardGroupHeartbeatApplyResultRequested;
   updated_agent_ids: string[];
-  failed_agent_ids: string[];
 }

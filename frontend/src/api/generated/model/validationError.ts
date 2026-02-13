@@ -7,9 +7,9 @@
 import type { ValidationErrorCtx } from "./validationErrorCtx";
 
 export interface ValidationError {
+  ctx?: ValidationErrorCtx;
+  input?: unknown;
   loc: (string | number)[];
   msg: string;
   type: string;
-  input?: unknown;
-  ctx?: ValidationErrorCtx;
 }

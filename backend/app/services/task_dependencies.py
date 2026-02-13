@@ -164,7 +164,8 @@ async def validate_dependency_update(
             },
         )
 
-    # Ensure the dependency graph is acyclic after applying the update.
+    # Rebuild the board-wide graph and overlay the pending edit for this task so
+    # validation catches indirect cycles created through existing edges.
     task_ids = list(
         await session.exec(
             select(col(Task.id)).where(col(Task.board_id) == board_id),

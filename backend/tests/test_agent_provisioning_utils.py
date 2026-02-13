@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -345,3 +346,92 @@ async def test_control_plane_upsert_agent_handles_already_exists(monkeypatch):
 
     assert calls[0][0] == "agents.create"
     assert calls[1][0] == "agents.update"
+
+
+def test_is_missing_agent_error_matches_gateway_agent_not_found() -> None:
+    assert agent_provisioning._is_missing_agent_error(
+        agent_provisioning.OpenClawGatewayError('agent "mc-abc" not found'),
+    )
+    assert not agent_provisioning._is_missing_agent_error(
+        agent_provisioning.OpenClawGatewayError("dial tcp: connection refused"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_agent_lifecycle_ignores_missing_gateway_agent(monkeypatch) -> None:
+    class _ControlPlaneStub:
+        def __init__(self) -> None:
+            self.deleted_sessions: list[str] = []
+
+        async def delete_agent(self, agent_id: str, *, delete_files: bool = True) -> None:
+            _ = (agent_id, delete_files)
+            raise agent_provisioning.OpenClawGatewayError('agent "mc-abc" not found')
+
+        async def delete_agent_session(self, session_key: str) -> None:
+            self.deleted_sessions.append(session_key)
+
+    gateway = _GatewayStub(
+        id=uuid4(),
+        name="Acme",
+        url="ws://gateway.example/ws",
+        token=None,
+        workspace_root="/tmp/openclaw",
+    )
+    agent = SimpleNamespace(
+        id=uuid4(),
+        name="Worker",
+        board_id=uuid4(),
+        openclaw_session_id=None,
+        is_board_lead=False,
+    )
+    control_plane = _ControlPlaneStub()
+    monkeypatch.setattr(agent_provisioning, "_control_plane_for_gateway", lambda _g: control_plane)
+
+    await agent_provisioning.OpenClawGatewayProvisioner().delete_agent_lifecycle(
+        agent=agent,  # type: ignore[arg-type]
+        gateway=gateway,  # type: ignore[arg-type]
+        delete_files=True,
+        delete_session=True,
+    )
+
+    assert len(control_plane.deleted_sessions) == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_agent_lifecycle_raises_on_non_missing_agent_error(monkeypatch) -> None:
+    class _ControlPlaneStub:
+        async def delete_agent(self, agent_id: str, *, delete_files: bool = True) -> None:
+            _ = (agent_id, delete_files)
+            raise agent_provisioning.OpenClawGatewayError("gateway timeout")
+
+        async def delete_agent_session(self, session_key: str) -> None:
+            _ = session_key
+            raise AssertionError("delete_agent_session should not be called")
+
+    gateway = _GatewayStub(
+        id=uuid4(),
+        name="Acme",
+        url="ws://gateway.example/ws",
+        token=None,
+        workspace_root="/tmp/openclaw",
+    )
+    agent = SimpleNamespace(
+        id=uuid4(),
+        name="Worker",
+        board_id=uuid4(),
+        openclaw_session_id=None,
+        is_board_lead=False,
+    )
+    monkeypatch.setattr(
+        agent_provisioning,
+        "_control_plane_for_gateway",
+        lambda _g: _ControlPlaneStub(),
+    )
+
+    with pytest.raises(agent_provisioning.OpenClawGatewayError):
+        await agent_provisioning.OpenClawGatewayProvisioner().delete_agent_lifecycle(
+            agent=agent,  # type: ignore[arg-type]
+            gateway=gateway,  # type: ignore[arg-type]
+            delete_files=True,
+            delete_session=True,
+        )

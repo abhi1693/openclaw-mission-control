@@ -9,14 +9,14 @@
  * Denormalized task-comment feed item enriched with task and board fields.
  */
 export interface ActivityTaskCommentFeedItemRead {
-  id: string;
-  created_at: string;
-  message: string | null;
   agent_id: string | null;
   agent_name?: string | null;
   agent_role?: string | null;
-  task_id: string;
-  task_title: string;
   board_id: string;
   board_name: string;
+  created_at: string;
+  id: string;
+  message: string | null;
+  task_id: string;
+  task_title: string;
 }

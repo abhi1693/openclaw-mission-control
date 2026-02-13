@@ -40,6 +40,7 @@ type DropdownSelectProps = {
   emptyMessage?: string;
 };
 
+// Resolve trigger placeholder text with explicit prop override first, then accessible fallback.
 const resolvePlaceholder = (ariaLabel: string, placeholder?: string) => {
   if (placeholder) {
     return placeholder;
@@ -51,6 +52,7 @@ const resolvePlaceholder = (ariaLabel: string, placeholder?: string) => {
   return trimmed.endsWith("...") ? trimmed : `${trimmed}...`;
 };
 
+// Resolve search input placeholder from explicit override or a normalized aria label.
 const resolveSearchPlaceholder = (
   ariaLabel: string,
   searchPlaceholder?: string,
@@ -107,6 +109,7 @@ export default function DropdownSelect({
     handleOpenChange(false);
   };
 
+  // Reset list scroll when opening or refining search so results start at the top.
   React.useEffect(() => {
     if (!open) {
       return;

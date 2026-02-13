@@ -10,7 +10,7 @@
  */
 export interface GatewayCreate {
   name: string;
+  token?: string | null;
   url: string;
   workspace_root: string;
-  token?: string | null;
 }

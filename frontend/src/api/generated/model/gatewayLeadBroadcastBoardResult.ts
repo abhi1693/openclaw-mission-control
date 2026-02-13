@@ -10,8 +10,8 @@
  */
 export interface GatewayLeadBroadcastBoardResult {
   board_id: string;
+  error?: string | null;
   lead_agent_id?: string | null;
   lead_agent_name?: string | null;
   ok?: boolean;
-  error?: string | null;
 }

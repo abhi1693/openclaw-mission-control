@@ -9,8 +9,8 @@
  * Organization payload returned by read endpoints.
  */
 export interface OrganizationRead {
+  created_at: string;
   id: string;
   name: string;
-  created_at: string;
   updated_at: string;
 }

@@ -10,17 +10,17 @@ import type { TagRef } from "./tagRef";
  * Task summary row used inside board-group snapshot responses.
  */
 export interface BoardGroupTaskSummary {
-  id: string;
-  board_id: string;
-  board_name: string;
-  title: string;
-  status: string;
-  priority: string;
   assigned_agent_id?: string | null;
   assignee?: string | null;
-  due_at?: string | null;
-  in_progress_at?: string | null;
-  tags?: TagRef[];
+  board_id: string;
+  board_name: string;
   created_at: string;
+  due_at?: string | null;
+  id: string;
+  in_progress_at?: string | null;
+  priority: string;
+  status: string;
+  tags?: TagRef[];
+  title: string;
   updated_at: string;
 }

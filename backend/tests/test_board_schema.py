@@ -76,6 +76,31 @@ def test_board_update_rejects_empty_description_patch() -> None:
         BoardUpdate(description="   ")
 
 
+def test_board_rule_toggles_have_expected_defaults() -> None:
+    """Boards should default to approval-gated done and optional review gating."""
+    created = BoardCreate(
+        name="Ops Board",
+        slug="ops-board",
+        description="Operations workflow board.",
+        gateway_id=uuid4(),
+    )
+    assert created.require_approval_for_done is True
+    assert created.require_review_before_done is False
+    assert created.block_status_changes_with_pending_approval is False
+    assert created.only_lead_can_change_status is False
+
+    updated = BoardUpdate(
+        require_approval_for_done=False,
+        require_review_before_done=True,
+        block_status_changes_with_pending_approval=True,
+        only_lead_can_change_status=True,
+    )
+    assert updated.require_approval_for_done is False
+    assert updated.require_review_before_done is True
+    assert updated.block_status_changes_with_pending_approval is True
+    assert updated.only_lead_can_change_status is True
+
+
 def test_onboarding_confirm_requires_goal_fields() -> None:
     """Onboarding confirm should enforce goal fields for goal board types."""
     with pytest.raises(

@@ -9,7 +9,7 @@
  * Gateway command catalog and protocol metadata.
  */
 export interface GatewayCommandsResponse {
-  protocol_version: number;
-  methods: string[];
   events: string[];
+  methods: string[];
+  protocol_version: number;
 }

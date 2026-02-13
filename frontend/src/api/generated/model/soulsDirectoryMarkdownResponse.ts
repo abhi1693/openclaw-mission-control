@@ -9,7 +9,7 @@
  * Response payload containing rendered markdown for a soul.
  */
 export interface SoulsDirectoryMarkdownResponse {
+  content: string;
   handle: string;
   slug: string;
-  content: string;
 }

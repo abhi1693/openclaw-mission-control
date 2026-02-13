@@ -10,10 +10,10 @@
  */
 export interface GatewaysStatusResponse {
   connected: boolean;
+  error?: string | null;
   gateway_url: string;
-  sessions_count?: number | null;
-  sessions?: unknown[] | null;
   main_session?: unknown | null;
   main_session_error?: string | null;
-  error?: string | null;
+  sessions?: unknown[] | null;
+  sessions_count?: number | null;
 }

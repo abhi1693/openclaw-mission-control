@@ -108,6 +108,17 @@ It will:
 - add `Authorization: Bearer <token>` automatically from local mode token or Clerk session
 - parse errors into an `ApiError` with status + parsed response body
 
+## Mobile / responsive UI validation
+
+When changing UI intended to be mobile-ready, validate in Chrome (or similar) using the device toolbar at common widths (e.g. **320px**, **375px**, **768px**).
+
+Quick checklist:
+
+- No horizontal scroll
+- Primary actions reachable without precision taps
+- Focus rings visible when tabbing
+- Modals/popovers not clipped
+
 ## Common commands
 
 From `frontend/`:

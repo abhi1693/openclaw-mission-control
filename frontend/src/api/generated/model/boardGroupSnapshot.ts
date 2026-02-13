@@ -11,6 +11,6 @@ import type { BoardGroupRead } from "./boardGroupRead";
  * Top-level board-group snapshot response payload.
  */
 export interface BoardGroupSnapshot {
-  group?: BoardGroupRead | null;
   boards?: BoardGroupBoardSnapshot[];
+  group?: BoardGroupRead | null;
 }

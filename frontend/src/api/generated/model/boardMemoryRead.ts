@@ -9,11 +9,11 @@
  * Serialized board memory entry returned from read endpoints.
  */
 export interface BoardMemoryRead {
-  id: string;
   board_id: string;
   content: string;
-  tags?: string[] | null;
-  source?: string | null;
-  is_chat?: boolean;
   created_at: string;
+  id: string;
+  is_chat?: boolean;
+  source?: string | null;
+  tags?: string[] | null;
 }

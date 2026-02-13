@@ -4,7 +4,6 @@ on:
   pull_request:
   push:
     branches: [master]
-  # Allow maintainers to manually kick CI when GitHub doesn't create a run for a new head SHA.
   workflow_dispatch:
 
 concurrency:
@@ -62,6 +61,37 @@ jobs:
             nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-
 
 
+
+      - name: Run migration integrity gate
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.sha }}"
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if ! echo "$CHANGED_FILES" | grep -Eq '^backend/(app/models|db|migrations|alembic\.ini)'; then
+            echo "No migration-relevant backend changes detected; skipping migration gate."
+            exit 0
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^backend/app/models/' && ! echo "$CHANGED_FILES" | grep -Eq '^backend/migrations/versions/'; then
+            echo "Model changes detected without a migration under backend/migrations/versions/."
+            exit 1
+          fi
+
+          make backend-migration-check
+
       - name: Run backend checks
         env:
           # Keep CI builds deterministic.
@@ -87,6 +117,11 @@ jobs:
           make frontend-test
           make frontend-build
 
+
+      - name: Docs quality gates (lint + relative link check)
+        run: |
+          make docs-check
+
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,6 +131,55 @@ jobs:
           path: |
             backend/coverage.xml
             frontend/coverage/**
+
+  installer:
+    runs-on: ubuntu-latest
+    needs: [check]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate installer shell syntax
+        run: bash -n install.sh
+
+      - name: Installer smoke test (docker mode)
+        run: |
+          ./install.sh \
+            --mode docker \
+            --backend-port 18000 \
+            --frontend-port 13000 \
+            --public-host localhost \
+            --api-url http://localhost:18000 \
+            --token-mode generate
+          curl -fsS http://127.0.0.1:18000/healthz >/dev/null
+          curl -fsS http://127.0.0.1:13000 >/dev/null
+
+      - name: Cleanup docker stack after docker mode
+        if: always()
+        run: |
+          docker compose -f compose.yml --env-file .env down -v --remove-orphans || true
+
+      - name: Installer smoke test (local mode)
+        run: |
+          ./install.sh \
+            --mode local \
+            --backend-port 18001 \
+            --frontend-port 13001 \
+            --public-host localhost \
+            --api-url http://localhost:18001 \
+            --token-mode generate \
+            --db-mode docker \
+            --start-services yes
+          curl -fsS http://127.0.0.1:18001/healthz >/dev/null
+          curl -fsS http://127.0.0.1:13001 >/dev/null
+
+      - name: Cleanup local processes and docker resources
+        if: always()
+        run: |
+          if [ -f .install-logs/backend.pid ]; then kill "$(cat .install-logs/backend.pid)" || true; fi
+          if [ -f .install-logs/frontend.pid ]; then kill "$(cat .install-logs/frontend.pid)" || true; fi
+          docker compose -f compose.yml --env-file .env down -v --remove-orphans || true
 
   e2e:
     runs-on: ubuntu-latest

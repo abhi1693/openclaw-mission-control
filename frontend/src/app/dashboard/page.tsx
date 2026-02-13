@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { SignedIn, SignedOut, useAuth } from "@/auth/clerk";
@@ -24,9 +25,19 @@ import { Activity, PenSquare, Timer, Users } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
-import DropdownSelect from "@/components/ui/dropdown-select";
+import DropdownSelect, {
+  type DropdownSelectOption,
+} from "@/components/ui/dropdown-select";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
 import { ApiError } from "@/api/mutator";
+import {
+  type listBoardGroupsApiV1BoardGroupsGetResponse,
+  useListBoardGroupsApiV1BoardGroupsGet,
+} from "@/api/generated/board-groups/board-groups";
+import {
+  type listBoardsApiV1BoardsGetResponse,
+  useListBoardsApiV1BoardsGet,
+} from "@/api/generated/boards/boards";
 import {
   type dashboardMetricsApiV1MetricsDashboardGetResponse,
   useDashboardMetricsApiV1MetricsDashboardGet,
@@ -85,6 +96,7 @@ const DASHBOARD_RANGE_OPTIONS: Array<{ value: RangeKey; label: string }> = [
 const DASHBOARD_RANGE_SET = new Set<RangeKey>(
   DASHBOARD_RANGE_OPTIONS.map((option) => option.value),
 );
+const ALL_FILTER_VALUE = "all";
 const DEFAULT_RANGE: RangeKey = "7d";
 
 const formatPeriod = (value: string, bucket: BucketKey) => {
@@ -251,15 +263,111 @@ export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedRangeParam = searchParams.get("range");
+  const selectedGroupParam = searchParams.get("group");
+  const selectedBoardParam = searchParams.get("board");
   const selectedRange: RangeKey =
-    selectedRangeParam && DASHBOARD_RANGE_SET.has(selectedRangeParam as RangeKey)
+    selectedRangeParam &&
+    DASHBOARD_RANGE_SET.has(selectedRangeParam as RangeKey)
       ? (selectedRangeParam as RangeKey)
       : DEFAULT_RANGE;
+  const selectedGroupId =
+    selectedGroupParam && selectedGroupParam !== ALL_FILTER_VALUE
+      ? selectedGroupParam
+      : null;
+  const selectedBoardId =
+    selectedBoardParam && selectedBoardParam !== ALL_FILTER_VALUE
+      ? selectedBoardParam
+      : null;
+
+  const boardsQuery = useListBoardsApiV1BoardsGet<
+    listBoardsApiV1BoardsGetResponse,
+    ApiError
+  >(
+    { limit: 200 },
+    {
+      query: {
+        enabled: Boolean(isSignedIn),
+        refetchInterval: 30_000,
+        refetchOnMount: "always",
+      },
+    },
+  );
+  const boardGroupsQuery = useListBoardGroupsApiV1BoardGroupsGet<
+    listBoardGroupsApiV1BoardGroupsGetResponse,
+    ApiError
+  >(
+    { limit: 200 },
+    {
+      query: {
+        enabled: Boolean(isSignedIn),
+        refetchInterval: 30_000,
+        refetchOnMount: "always",
+      },
+    },
+  );
+
+  const boards = useMemo(
+    () =>
+      boardsQuery.data?.status === 200
+        ? [...(boardsQuery.data.data.items ?? [])].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          )
+        : [],
+    [boardsQuery.data],
+  );
+  const boardGroups = useMemo(
+    () =>
+      boardGroupsQuery.data?.status === 200
+        ? [...(boardGroupsQuery.data.data.items ?? [])].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          )
+        : [],
+    [boardGroupsQuery.data],
+  );
+
+  const filteredBoards = useMemo(
+    () =>
+      selectedGroupId
+        ? boards.filter((board) => board.board_group_id === selectedGroupId)
+        : boards,
+    [boards, selectedGroupId],
+  );
+  const selectedBoard = useMemo(
+    () => boards.find((board) => board.id === selectedBoardId) ?? null,
+    [boards, selectedBoardId],
+  );
+  const selectedGroup = useMemo(
+    () => boardGroups.find((group) => group.id === selectedGroupId) ?? null,
+    [boardGroups, selectedGroupId],
+  );
+
+  const boardGroupOptions = useMemo<DropdownSelectOption[]>(
+    () => [
+      { value: ALL_FILTER_VALUE, label: "All groups" },
+      ...boardGroups.map((group) => ({ value: group.id, label: group.name })),
+    ],
+    [boardGroups],
+  );
+  const boardOptions = useMemo<DropdownSelectOption[]>(
+    () => [
+      { value: ALL_FILTER_VALUE, label: "All boards" },
+      ...filteredBoards.map((board) => ({
+        value: board.id,
+        label: board.name,
+      })),
+    ],
+    [filteredBoards],
+  );
+
   const metricsQuery = useDashboardMetricsApiV1MetricsDashboardGet<
     dashboardMetricsApiV1MetricsDashboardGetResponse,
     ApiError
   >(
-    { range_key: selectedRange },
+    {
+      range_key: selectedRange,
+      board_id: selectedBoardId ?? undefined,
+      group_id: selectedGroupId ?? undefined,
+    },
     {
       query: {
         enabled: Boolean(isSignedIn),
@@ -355,6 +463,75 @@ export default function DashboardPage() {
                   triggerClassName="h-9 min-w-[150px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   contentClassName="rounded-lg border border-slate-200"
                 />
+                <DropdownSelect
+                  value={selectedGroupId ?? ALL_FILTER_VALUE}
+                  onValueChange={(value) => {
+                    const nextGroupId =
+                      value === ALL_FILTER_VALUE ? null : value;
+                    const params = new URLSearchParams(searchParams.toString());
+                    if (nextGroupId) {
+                      params.set("group", nextGroupId);
+                    } else {
+                      params.delete("group");
+                    }
+                    if (selectedBoardId) {
+                      const selectedBoardRecord = boards.find(
+                        (board) => board.id === selectedBoardId,
+                      );
+                      const boardVisibleInScope = nextGroupId
+                        ? selectedBoardRecord?.board_group_id === nextGroupId
+                        : true;
+                      if (!boardVisibleInScope) {
+                        params.delete("board");
+                      }
+                    }
+                    router.replace(`${pathname}?${params.toString()}`);
+                  }}
+                  options={boardGroupOptions}
+                  ariaLabel="Dashboard board group filter"
+                  placeholder="All groups"
+                  triggerClassName="h-9 min-w-[170px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  contentClassName="rounded-lg border border-slate-200"
+                  searchEnabled={false}
+                  disabled={boardGroupsQuery.isLoading}
+                />
+                <DropdownSelect
+                  value={selectedBoardId ?? ALL_FILTER_VALUE}
+                  onValueChange={(value) => {
+                    const nextBoardId =
+                      value === ALL_FILTER_VALUE ? null : value;
+                    const params = new URLSearchParams(searchParams.toString());
+                    if (nextBoardId) {
+                      params.set("board", nextBoardId);
+                    } else {
+                      params.delete("board");
+                    }
+                    router.replace(`${pathname}?${params.toString()}`);
+                  }}
+                  options={boardOptions}
+                  ariaLabel="Dashboard board filter"
+                  placeholder="All boards"
+                  triggerClassName="h-9 min-w-[170px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  contentClassName="rounded-lg border border-slate-200"
+                  searchEnabled={false}
+                  disabled={boardsQuery.isLoading || boardOptions.length <= 1}
+                />
+                {selectedGroup ? (
+                  <Link
+                    href={`/board-groups/${selectedGroup.id}`}
+                    className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  >
+                    Open group
+                  </Link>
+                ) : null}
+                {selectedBoard ? (
+                  <Link
+                    href={`/boards/${selectedBoard.id}`}
+                    className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  >
+                    Open board
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>
@@ -401,10 +578,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <ChartCard
-                    title="Completed Tasks"
-                    subtitle="Throughput"
-                  >
+                  <ChartCard title="Completed Tasks" subtitle="Throughput">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={throughputSeries}
@@ -449,10 +623,7 @@ export default function DashboardPage() {
                     </ResponsiveContainer>
                   </ChartCard>
 
-                  <ChartCard
-                    title="Avg Hours to Review"
-                    subtitle="Cycle time"
-                  >
+                  <ChartCard title="Avg Hours to Review" subtitle="Cycle time">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
                         data={cycleSeries}
@@ -501,10 +672,7 @@ export default function DashboardPage() {
                     </ResponsiveContainer>
                   </ChartCard>
 
-                  <ChartCard
-                    title="Failed Events"
-                    subtitle="Error rate"
-                  >
+                  <ChartCard title="Failed Events" subtitle="Error rate">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
                         data={errorSeries}

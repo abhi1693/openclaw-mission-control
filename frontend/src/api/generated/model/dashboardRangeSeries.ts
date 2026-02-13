@@ -12,7 +12,7 @@ import type { DashboardSeriesPoint } from "./dashboardSeriesPoint";
  * Series payload for a single range/bucket combination.
  */
 export interface DashboardRangeSeries {
-  range: DashboardRangeSeriesRange;
   bucket: DashboardRangeSeriesBucket;
   points: DashboardSeriesPoint[];
+  range: DashboardRangeSeriesRange;
 }

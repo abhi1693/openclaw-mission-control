@@ -86,6 +86,41 @@ def _parse_draft_lead_agent(
         return None
 
 
+def _normalize_autonomy_token(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    if not text:
+        return None
+    return text.replace("_", "-")
+
+
+def _is_fully_autonomous_choice(value: object) -> bool:
+    token = _normalize_autonomy_token(value)
+    if token is None:
+        return False
+    if token in {"autonomous", "fully-autonomous", "full-autonomy"}:
+        return True
+    return "autonom" in token and "fully" in token
+
+
+def _require_approval_for_done_from_draft(draft_goal: object) -> bool:
+    """Enable done-approval gate unless onboarding selected fully autonomous mode."""
+    if not isinstance(draft_goal, dict):
+        return True
+    raw_lead = draft_goal.get("lead_agent")
+    if not isinstance(raw_lead, dict):
+        return True
+    if _is_fully_autonomous_choice(raw_lead.get("autonomy_level")):
+        return False
+    raw_identity_profile = raw_lead.get("identity_profile")
+    if isinstance(raw_identity_profile, dict):
+        for key in ("autonomy_level", "autonomy", "mode"):
+            if _is_fully_autonomous_choice(raw_identity_profile.get(key)):
+                return False
+    return True
+
+
 def _apply_user_profile(
     auth: AuthContext,
     profile: BoardOnboardingUserProfile | None,
@@ -408,6 +443,9 @@ async def confirm_onboarding(
     board.target_date = payload.target_date
     board.goal_confirmed = True
     board.goal_source = "lead_agent_onboarding"
+    board.require_approval_for_done = _require_approval_for_done_from_draft(
+        onboarding.draft_goal,
+    )
 
     onboarding.status = "confirmed"
     onboarding.updated_at = utcnow()

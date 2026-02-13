@@ -10,6 +10,6 @@ import type { DashboardWipRangeSeries } from "./dashboardWipRangeSeries";
  * Primary vs comparison pair for WIP status series metrics.
  */
 export interface DashboardWipSeriesSet {
-  primary: DashboardWipRangeSeries;
   comparison: DashboardWipRangeSeries;
+  primary: DashboardWipRangeSeries;
 }

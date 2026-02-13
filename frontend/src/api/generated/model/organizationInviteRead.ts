@@ -9,16 +9,16 @@
  * Organization invite payload returned from read endpoints.
  */
 export interface OrganizationInviteRead {
-  id: string;
-  organization_id: string;
-  invited_email: string;
-  role: string;
+  accepted_at?: string | null;
+  accepted_by_user_id?: string | null;
   all_boards_read: boolean;
   all_boards_write: boolean;
-  token: string;
-  created_by_user_id?: string | null;
-  accepted_by_user_id?: string | null;
-  accepted_at?: string | null;
   created_at: string;
+  created_by_user_id?: string | null;
+  id: string;
+  invited_email: string;
+  organization_id: string;
+  role: string;
+  token: string;
   updated_at: string;
 }

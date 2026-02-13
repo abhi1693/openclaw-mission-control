@@ -11,6 +11,7 @@ from sqlmodel import Field, SQLModel
 
 from app.schemas.common import NonEmptyStr
 from app.schemas.tags import TagRef
+from app.schemas.task_custom_fields import TaskCustomFieldValues
 
 TaskStatus = Literal["inbox", "in_progress", "review", "done"]
 STATUS_REQUIRED_ERROR = "status is required"
@@ -36,6 +37,7 @@ class TaskCreate(TaskBase):
     """Payload for creating a task."""
 
     created_by_user_id: UUID | None = None
+    custom_field_values: TaskCustomFieldValues = Field(default_factory=dict)
 
 
 class TaskUpdate(SQLModel):
@@ -49,6 +51,7 @@ class TaskUpdate(SQLModel):
     assigned_agent_id: UUID | None = None
     depends_on_task_ids: list[UUID] | None = None
     tag_ids: list[UUID] | None = None
+    custom_field_values: TaskCustomFieldValues | None = None
     comment: NonEmptyStr | None = None
 
     @field_validator("comment", mode="before")
@@ -81,6 +84,7 @@ class TaskRead(TaskBase):
     blocked_by_task_ids: list[UUID] = Field(default_factory=list)
     is_blocked: bool = False
     tags: list[TagRef] = Field(default_factory=list)
+    custom_field_values: TaskCustomFieldValues | None = None
 
 
 class TaskCommentCreate(SQLModel):

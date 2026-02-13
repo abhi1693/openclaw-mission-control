@@ -10,11 +10,11 @@ import type { GatewayTemplatesSyncError } from "./gatewayTemplatesSyncError";
  * Summary payload returned by gateway template sync endpoints.
  */
 export interface GatewayTemplatesSyncResult {
+  agents_skipped: number;
+  agents_updated: number;
+  errors?: GatewayTemplatesSyncError[];
   gateway_id: string;
   include_main: boolean;
-  reset_sessions: boolean;
-  agents_updated: number;
-  agents_skipped: number;
   main_updated: boolean;
-  errors?: GatewayTemplatesSyncError[];
+  reset_sessions: boolean;
 }

@@ -10,13 +10,13 @@
  */
 export interface UserRead {
   clerk_user_id: string;
+  context?: string | null;
   email?: string | null;
+  id: string;
+  is_super_admin: boolean;
   name?: string | null;
+  notes?: string | null;
   preferred_name?: string | null;
   pronouns?: string | null;
   timezone?: string | null;
-  notes?: string | null;
-  context?: string | null;
-  id: string;
-  is_super_admin: boolean;
 }

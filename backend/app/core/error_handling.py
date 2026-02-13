@@ -224,10 +224,25 @@ def _get_request_id(request: Request) -> str | None:
 
 
 def _error_payload(*, detail: object, request_id: str | None) -> dict[str, object]:
-    payload: dict[str, Any] = {"detail": detail}
+    payload: dict[str, Any] = {"detail": _json_safe(detail)}
     if request_id:
         payload["request_id"] = request_id
     return payload
+
+
+def _json_safe(value: object) -> object:
+    """Return a JSON-serializable representation for error payloads."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, (bytearray, memoryview)):
+        return bytes(value).decode("utf-8", errors="replace")
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
 
 
 async def _request_validation_handler(

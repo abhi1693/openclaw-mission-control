@@ -35,6 +35,11 @@ import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { createExponentialBackoff } from "@/lib/backoff";
+import {
+  DEFAULT_HUMAN_LABEL,
+  resolveHumanActorName,
+  resolveMemberDisplayName,
+} from "@/lib/display-name";
 import { apiDatetimeToMs, parseApiDatetime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
@@ -315,6 +320,11 @@ export default function ActivityPage() {
       membershipQuery.data?.status === 200 ? membershipQuery.data.data : null;
     return member ? ["owner", "admin"].includes(member.role) : false;
   }, [membershipQuery.data]);
+  const currentUserDisplayName = useMemo(() => {
+    const member =
+      membershipQuery.data?.status === 200 ? membershipQuery.data.data : null;
+    return resolveMemberDisplayName(member, DEFAULT_HUMAN_LABEL);
+  }, [membershipQuery.data]);
 
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
@@ -344,7 +354,10 @@ export default function ActivityPage() {
   }, []);
 
   const resolveAuthor = useCallback(
-    (agentId: string | null | undefined, fallbackName = "Admin") => {
+    (
+      agentId: string | null | undefined,
+      fallbackName: string = currentUserDisplayName,
+    ) => {
       if (agentId) {
         const agent = agentsByIdRef.current.get(agentId);
         if (agent) {
@@ -361,7 +374,7 @@ export default function ActivityPage() {
         role: null,
       };
     },
-    [],
+    [currentUserDisplayName],
   );
 
   const boardNameForId = useCallback((boardId: string | null | undefined) => {
@@ -390,7 +403,7 @@ export default function ActivityPage() {
         ? taskMetaByIdRef.current.get(event.task_id)
         : null;
       const boardId = meta?.boardId ?? null;
-      const author = resolveAuthor(event.agent_id, "Admin");
+      const author = resolveAuthor(event.agent_id, currentUserDisplayName);
       return {
         id: `activity:${event.id}`,
         created_at: event.created_at,
@@ -407,7 +420,7 @@ export default function ActivityPage() {
           meta?.title ?? (event.task_id ? "Unknown task" : "Task activity"),
       };
     },
-    [boardNameForId, resolveAuthor],
+    [boardNameForId, currentUserDisplayName, resolveAuthor],
   );
 
   const mapTaskComment = useCallback(
@@ -416,7 +429,7 @@ export default function ActivityPage() {
         ? taskMetaByIdRef.current.get(comment.task_id)
         : null;
       const boardId = meta?.boardId ?? fallbackBoardId;
-      const author = resolveAuthor(comment.agent_id, "Admin");
+      const author = resolveAuthor(comment.agent_id, currentUserDisplayName);
       return {
         id: `comment:${comment.id}`,
         created_at: comment.created_at,
@@ -433,7 +446,7 @@ export default function ActivityPage() {
           meta?.title ?? (comment.task_id ? "Unknown task" : "Task activity"),
       };
     },
-    [boardNameForId, resolveAuthor],
+    [boardNameForId, currentUserDisplayName, resolveAuthor],
   );
 
   const mapApprovalEvent = useCallback(
@@ -464,7 +477,7 @@ export default function ActivityPage() {
           ? approval.created_at
           : (approval.resolved_at ?? approval.created_at);
       const action = humanizeApprovalAction(approval.action_type);
-      const author = resolveAuthor(approval.agent_id, "Admin");
+      const author = resolveAuthor(approval.agent_id, currentUserDisplayName);
       const statusText =
         nextStatus === "approved"
           ? "approved"
@@ -499,13 +512,16 @@ export default function ActivityPage() {
         title: `Approval · ${action}`,
       };
     },
-    [boardNameForId, resolveAuthor],
+    [boardNameForId, currentUserDisplayName, resolveAuthor],
   );
 
   const mapBoardChat = useCallback(
     (memory: BoardMemoryRead, boardId: string): FeedItem => {
       const content = (memory.content ?? "").trim();
-      const actorName = (memory.source ?? "User").trim() || "User";
+      const actorName = resolveHumanActorName(
+        memory.source,
+        currentUserDisplayName,
+      );
       const command = content.startsWith("/");
       return {
         id: `chat:${memory.id}`,
@@ -522,7 +538,7 @@ export default function ActivityPage() {
         title: command ? "Board command" : "Board chat",
       };
     },
-    [boardNameForId],
+    [boardNameForId, currentUserDisplayName],
   );
 
   const mapAgentEvent = useCallback(

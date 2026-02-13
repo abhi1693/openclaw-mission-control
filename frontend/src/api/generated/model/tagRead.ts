@@ -9,13 +9,13 @@
  * Tag payload returned from API endpoints.
  */
 export interface TagRead {
-  name: string;
-  slug: string;
   color?: string;
+  created_at: string;
   description?: string | null;
   id: string;
+  name: string;
   organization_id: string;
+  slug: string;
   task_count?: number;
-  created_at: string;
   updated_at: string;
 }

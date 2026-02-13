@@ -165,276 +165,191 @@ export const useCreateOrganizationApiV1OrganizationsPost = <
   );
 };
 /**
- * List organizations where the current user is a member.
- * @summary List My Organizations
+ * Accept an invite and return resulting membership.
+ * @summary Accept Org Invite
  */
-export type listMyOrganizationsApiV1OrganizationsMeListGetResponse200 = {
-  data: OrganizationListItem[];
+export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse200 = {
+  data: OrganizationMemberRead;
   status: 200;
 };
 
-export type listMyOrganizationsApiV1OrganizationsMeListGetResponseSuccess =
-  listMyOrganizationsApiV1OrganizationsMeListGetResponse200 & {
-    headers: Headers;
-  };
-export type listMyOrganizationsApiV1OrganizationsMeListGetResponse =
-  listMyOrganizationsApiV1OrganizationsMeListGetResponseSuccess;
-
-export const getListMyOrganizationsApiV1OrganizationsMeListGetUrl = () => {
-  return `/api/v1/organizations/me/list`;
-};
-
-export const listMyOrganizationsApiV1OrganizationsMeListGet = async (
-  options?: RequestInit,
-): Promise<listMyOrganizationsApiV1OrganizationsMeListGetResponse> => {
-  return customFetch<listMyOrganizationsApiV1OrganizationsMeListGetResponse>(
-    getListMyOrganizationsApiV1OrganizationsMeListGetUrl(),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getListMyOrganizationsApiV1OrganizationsMeListGetQueryKey = () => {
-  return [`/api/v1/organizations/me/list`] as const;
-};
-
-export const getListMyOrganizationsApiV1OrganizationsMeListGetQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-  >,
-  TError = unknown,
->(options?: {
-  query?: Partial<
-    UseQueryOptions<
-      Awaited<
-        ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-      >,
-      TError,
-      TData
-    >
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getListMyOrganizationsApiV1OrganizationsMeListGetQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>>
-  > = ({ signal }) =>
-    listMyOrganizationsApiV1OrganizationsMeListGet({
-      signal,
-      ...requestOptions,
-    });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>>,
-    TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
-
-export type ListMyOrganizationsApiV1OrganizationsMeListGetQueryResult =
-  NonNullable<
-    Awaited<ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>>
-  >;
-export type ListMyOrganizationsApiV1OrganizationsMeListGetQueryError = unknown;
-
-export function useListMyOrganizationsApiV1OrganizationsMeListGet<
-  TData = Awaited<
-    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-  >,
-  TError = unknown,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useListMyOrganizationsApiV1OrganizationsMeListGet<
-  TData = Awaited<
-    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useListMyOrganizationsApiV1OrganizationsMeListGet<
-  TData = Awaited<
-    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary List My Organizations
- */
-
-export function useListMyOrganizationsApiV1OrganizationsMeListGet<
-  TData = Awaited<
-    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getListMyOrganizationsApiV1OrganizationsMeListGetQueryOptions(options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * Set the caller's active organization.
- * @summary Set Active Org
- */
-export type setActiveOrgApiV1OrganizationsMeActivePatchResponse200 = {
-  data: OrganizationRead;
-  status: 200;
-};
-
-export type setActiveOrgApiV1OrganizationsMeActivePatchResponse422 = {
+export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse422 = {
   data: HTTPValidationError;
   status: 422;
 };
 
-export type setActiveOrgApiV1OrganizationsMeActivePatchResponseSuccess =
-  setActiveOrgApiV1OrganizationsMeActivePatchResponse200 & {
+export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseSuccess =
+  acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse200 & {
     headers: Headers;
   };
-export type setActiveOrgApiV1OrganizationsMeActivePatchResponseError =
-  setActiveOrgApiV1OrganizationsMeActivePatchResponse422 & {
+export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseError =
+  acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse422 & {
     headers: Headers;
   };
 
-export type setActiveOrgApiV1OrganizationsMeActivePatchResponse =
-  | setActiveOrgApiV1OrganizationsMeActivePatchResponseSuccess
-  | setActiveOrgApiV1OrganizationsMeActivePatchResponseError;
+export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse =
+  | acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseSuccess
+  | acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseError;
 
-export const getSetActiveOrgApiV1OrganizationsMeActivePatchUrl = () => {
-  return `/api/v1/organizations/me/active`;
+export const getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostUrl = () => {
+  return `/api/v1/organizations/invites/accept`;
 };
 
-export const setActiveOrgApiV1OrganizationsMeActivePatch = async (
-  organizationActiveUpdate: OrganizationActiveUpdate,
+export const acceptOrgInviteApiV1OrganizationsInvitesAcceptPost = async (
+  organizationInviteAccept: OrganizationInviteAccept,
   options?: RequestInit,
-): Promise<setActiveOrgApiV1OrganizationsMeActivePatchResponse> => {
-  return customFetch<setActiveOrgApiV1OrganizationsMeActivePatchResponse>(
-    getSetActiveOrgApiV1OrganizationsMeActivePatchUrl(),
+): Promise<acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse> => {
+  return customFetch<acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse>(
+    getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostUrl(),
     {
       ...options,
-      method: "PATCH",
+      method: "POST",
       headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(organizationActiveUpdate),
+      body: JSON.stringify(organizationInviteAccept),
     },
   );
 };
 
-export const getSetActiveOrgApiV1OrganizationsMeActivePatchMutationOptions = <
+export const getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+      >,
+      TError,
+      { data: OrganizationInviteAccept },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+    >,
+    TError,
+    { data: OrganizationInviteAccept },
+    TContext
+  > => {
+    const mutationKey = ["acceptOrgInviteApiV1OrganizationsInvitesAcceptPost"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+      >,
+      { data: OrganizationInviteAccept }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return acceptOrgInviteApiV1OrganizationsInvitesAcceptPost(
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type AcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+    >
+  >;
+export type AcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationBody =
+  OrganizationInviteAccept;
+export type AcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Accept Org Invite
+ */
+export const useAcceptOrgInviteApiV1OrganizationsInvitesAcceptPost = <
   TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+      >,
+      TError,
+      { data: OrganizationInviteAccept },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+  >,
+  TError,
+  { data: OrganizationInviteAccept },
+  TContext
+> => {
+  return useMutation(
+    getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * Delete the active organization and related entities.
+ * @summary Delete My Org
+ */
+export type deleteMyOrgApiV1OrganizationsMeDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteMyOrgApiV1OrganizationsMeDeleteResponseSuccess =
+  deleteMyOrgApiV1OrganizationsMeDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteMyOrgApiV1OrganizationsMeDeleteResponse =
+  deleteMyOrgApiV1OrganizationsMeDeleteResponseSuccess;
+
+export const getDeleteMyOrgApiV1OrganizationsMeDeleteUrl = () => {
+  return `/api/v1/organizations/me`;
+};
+
+export const deleteMyOrgApiV1OrganizationsMeDelete = async (
+  options?: RequestInit,
+): Promise<deleteMyOrgApiV1OrganizationsMeDeleteResponse> => {
+  return customFetch<deleteMyOrgApiV1OrganizationsMeDeleteResponse>(
+    getDeleteMyOrgApiV1OrganizationsMeDeleteUrl(),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions = <
+  TError = unknown,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
+    Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
     TError,
-    { data: OrganizationActiveUpdate },
+    void,
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
+  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
   TError,
-  { data: OrganizationActiveUpdate },
+  void,
   TContext
 > => {
-  const mutationKey = ["setActiveOrgApiV1OrganizationsMeActivePatch"];
+  const mutationKey = ["deleteMyOrgApiV1OrganizationsMeDelete"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -444,51 +359,46 @@ export const getSetActiveOrgApiV1OrganizationsMeActivePatchMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
-    { data: OrganizationActiveUpdate }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return setActiveOrgApiV1OrganizationsMeActivePatch(data, requestOptions);
+    Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+    void
+  > = () => {
+    return deleteMyOrgApiV1OrganizationsMeDelete(requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type SetActiveOrgApiV1OrganizationsMeActivePatchMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>
-  >;
-export type SetActiveOrgApiV1OrganizationsMeActivePatchMutationBody =
-  OrganizationActiveUpdate;
-export type SetActiveOrgApiV1OrganizationsMeActivePatchMutationError =
-  HTTPValidationError;
+export type DeleteMyOrgApiV1OrganizationsMeDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>
+>;
+
+export type DeleteMyOrgApiV1OrganizationsMeDeleteMutationError = unknown;
 
 /**
- * @summary Set Active Org
+ * @summary Delete My Org
  */
-export const useSetActiveOrgApiV1OrganizationsMeActivePatch = <
-  TError = HTTPValidationError,
+export const useDeleteMyOrgApiV1OrganizationsMeDelete = <
+  TError = unknown,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
+      Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
       TError,
-      { data: OrganizationActiveUpdate },
+      void,
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
+  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
   TError,
-  { data: OrganizationActiveUpdate },
+  void,
   TContext
 > => {
   return useMutation(
-    getSetActiveOrgApiV1OrganizationsMeActivePatchMutationOptions(options),
+    getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions(options),
     queryClient,
   );
 };
@@ -666,55 +576,69 @@ export function useGetMyOrgApiV1OrganizationsMeGet<
 }
 
 /**
- * Delete the active organization and related entities.
- * @summary Delete My Org
+ * Set the caller's active organization.
+ * @summary Set Active Org
  */
-export type deleteMyOrgApiV1OrganizationsMeDeleteResponse200 = {
-  data: OkResponse;
+export type setActiveOrgApiV1OrganizationsMeActivePatchResponse200 = {
+  data: OrganizationRead;
   status: 200;
 };
 
-export type deleteMyOrgApiV1OrganizationsMeDeleteResponseSuccess =
-  deleteMyOrgApiV1OrganizationsMeDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteMyOrgApiV1OrganizationsMeDeleteResponse =
-  deleteMyOrgApiV1OrganizationsMeDeleteResponseSuccess;
-
-export const getDeleteMyOrgApiV1OrganizationsMeDeleteUrl = () => {
-  return `/api/v1/organizations/me`;
+export type setActiveOrgApiV1OrganizationsMeActivePatchResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
 };
 
-export const deleteMyOrgApiV1OrganizationsMeDelete = async (
+export type setActiveOrgApiV1OrganizationsMeActivePatchResponseSuccess =
+  setActiveOrgApiV1OrganizationsMeActivePatchResponse200 & {
+    headers: Headers;
+  };
+export type setActiveOrgApiV1OrganizationsMeActivePatchResponseError =
+  setActiveOrgApiV1OrganizationsMeActivePatchResponse422 & {
+    headers: Headers;
+  };
+
+export type setActiveOrgApiV1OrganizationsMeActivePatchResponse =
+  | setActiveOrgApiV1OrganizationsMeActivePatchResponseSuccess
+  | setActiveOrgApiV1OrganizationsMeActivePatchResponseError;
+
+export const getSetActiveOrgApiV1OrganizationsMeActivePatchUrl = () => {
+  return `/api/v1/organizations/me/active`;
+};
+
+export const setActiveOrgApiV1OrganizationsMeActivePatch = async (
+  organizationActiveUpdate: OrganizationActiveUpdate,
   options?: RequestInit,
-): Promise<deleteMyOrgApiV1OrganizationsMeDeleteResponse> => {
-  return customFetch<deleteMyOrgApiV1OrganizationsMeDeleteResponse>(
-    getDeleteMyOrgApiV1OrganizationsMeDeleteUrl(),
+): Promise<setActiveOrgApiV1OrganizationsMeActivePatchResponse> => {
+  return customFetch<setActiveOrgApiV1OrganizationsMeActivePatchResponse>(
+    getSetActiveOrgApiV1OrganizationsMeActivePatchUrl(),
     {
       ...options,
-      method: "DELETE",
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(organizationActiveUpdate),
     },
   );
 };
 
-export const getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions = <
-  TError = unknown,
+export const getSetActiveOrgApiV1OrganizationsMeActivePatchMutationOptions = <
+  TError = HTTPValidationError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+    Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
     TError,
-    void,
+    { data: OrganizationActiveUpdate },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+  Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
   TError,
-  void,
+  { data: OrganizationActiveUpdate },
   TContext
 > => {
-  const mutationKey = ["deleteMyOrgApiV1OrganizationsMeDelete"];
+  const mutationKey = ["setActiveOrgApiV1OrganizationsMeActivePatch"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -724,1212 +648,54 @@ export const getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
-    void
-  > = () => {
-    return deleteMyOrgApiV1OrganizationsMeDelete(requestOptions);
+    Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
+    { data: OrganizationActiveUpdate }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setActiveOrgApiV1OrganizationsMeActivePatch(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type DeleteMyOrgApiV1OrganizationsMeDeleteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>
->;
-
-export type DeleteMyOrgApiV1OrganizationsMeDeleteMutationError = unknown;
+export type SetActiveOrgApiV1OrganizationsMeActivePatchMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>
+  >;
+export type SetActiveOrgApiV1OrganizationsMeActivePatchMutationBody =
+  OrganizationActiveUpdate;
+export type SetActiveOrgApiV1OrganizationsMeActivePatchMutationError =
+  HTTPValidationError;
 
 /**
- * @summary Delete My Org
+ * @summary Set Active Org
  */
-export const useDeleteMyOrgApiV1OrganizationsMeDelete = <
-  TError = unknown,
+export const useSetActiveOrgApiV1OrganizationsMeActivePatch = <
+  TError = HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+      Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
       TError,
-      void,
+      { data: OrganizationActiveUpdate },
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof deleteMyOrgApiV1OrganizationsMeDelete>>,
+  Awaited<ReturnType<typeof setActiveOrgApiV1OrganizationsMeActivePatch>>,
   TError,
-  void,
+  { data: OrganizationActiveUpdate },
   TContext
 > => {
   return useMutation(
-    getDeleteMyOrgApiV1OrganizationsMeDeleteMutationOptions(options),
+    getSetActiveOrgApiV1OrganizationsMeActivePatchMutationOptions(options),
     queryClient,
   );
 };
-/**
- * Get the caller's membership record in the active organization.
- * @summary Get My Membership
- */
-export type getMyMembershipApiV1OrganizationsMeMemberGetResponse200 = {
-  data: OrganizationMemberRead;
-  status: 200;
-};
-
-export type getMyMembershipApiV1OrganizationsMeMemberGetResponseSuccess =
-  getMyMembershipApiV1OrganizationsMeMemberGetResponse200 & {
-    headers: Headers;
-  };
-export type getMyMembershipApiV1OrganizationsMeMemberGetResponse =
-  getMyMembershipApiV1OrganizationsMeMemberGetResponseSuccess;
-
-export const getGetMyMembershipApiV1OrganizationsMeMemberGetUrl = () => {
-  return `/api/v1/organizations/me/member`;
-};
-
-export const getMyMembershipApiV1OrganizationsMeMemberGet = async (
-  options?: RequestInit,
-): Promise<getMyMembershipApiV1OrganizationsMeMemberGetResponse> => {
-  return customFetch<getMyMembershipApiV1OrganizationsMeMemberGetResponse>(
-    getGetMyMembershipApiV1OrganizationsMeMemberGetUrl(),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getGetMyMembershipApiV1OrganizationsMeMemberGetQueryKey = () => {
-  return [`/api/v1/organizations/me/member`] as const;
-};
-
-export const getGetMyMembershipApiV1OrganizationsMeMemberGetQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-  >,
-  TError = unknown,
->(options?: {
-  query?: Partial<
-    UseQueryOptions<
-      Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>,
-      TError,
-      TData
-    >
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getGetMyMembershipApiV1OrganizationsMeMemberGetQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>
-  > = ({ signal }) =>
-    getMyMembershipApiV1OrganizationsMeMemberGet({ signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>,
-    TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
-
-export type GetMyMembershipApiV1OrganizationsMeMemberGetQueryResult =
-  NonNullable<
-    Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>
-  >;
-export type GetMyMembershipApiV1OrganizationsMeMemberGetQueryError = unknown;
-
-export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
-  TData = Awaited<
-    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-  >,
-  TError = unknown,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
-  TData = Awaited<
-    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
-  TData = Awaited<
-    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary Get My Membership
- */
-
-export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
-  TData = Awaited<
-    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-  >,
-  TError = unknown,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getGetMyMembershipApiV1OrganizationsMeMemberGetQueryOptions(options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * List members for the active organization.
- * @summary List Org Members
- */
-export type listOrgMembersApiV1OrganizationsMeMembersGetResponse200 = {
-  data: LimitOffsetPageTypeVarCustomizedOrganizationMemberRead;
-  status: 200;
-};
-
-export type listOrgMembersApiV1OrganizationsMeMembersGetResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type listOrgMembersApiV1OrganizationsMeMembersGetResponseSuccess =
-  listOrgMembersApiV1OrganizationsMeMembersGetResponse200 & {
-    headers: Headers;
-  };
-export type listOrgMembersApiV1OrganizationsMeMembersGetResponseError =
-  listOrgMembersApiV1OrganizationsMeMembersGetResponse422 & {
-    headers: Headers;
-  };
-
-export type listOrgMembersApiV1OrganizationsMeMembersGetResponse =
-  | listOrgMembersApiV1OrganizationsMeMembersGetResponseSuccess
-  | listOrgMembersApiV1OrganizationsMeMembersGetResponseError;
-
-export const getListOrgMembersApiV1OrganizationsMeMembersGetUrl = (
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/api/v1/organizations/me/members?${stringifiedParams}`
-    : `/api/v1/organizations/me/members`;
-};
-
-export const listOrgMembersApiV1OrganizationsMeMembersGet = async (
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-  options?: RequestInit,
-): Promise<listOrgMembersApiV1OrganizationsMeMembersGetResponse> => {
-  return customFetch<listOrgMembersApiV1OrganizationsMeMembersGetResponse>(
-    getListOrgMembersApiV1OrganizationsMeMembersGetUrl(params),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getListOrgMembersApiV1OrganizationsMeMembersGetQueryKey = (
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-) => {
-  return [
-    `/api/v1/organizations/me/members`,
-    ...(params ? [params] : []),
-  ] as const;
-};
-
-export const getListOrgMembersApiV1OrganizationsMeMembersGetQueryOptions = <
-  TData = Awaited<
-    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-  >,
-  TError = HTTPValidationError,
->(
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getListOrgMembersApiV1OrganizationsMeMembersGetQueryKey(params);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>>
-  > = ({ signal }) =>
-    listOrgMembersApiV1OrganizationsMeMembersGet(params, {
-      signal,
-      ...requestOptions,
-    });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>>,
-    TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
-
-export type ListOrgMembersApiV1OrganizationsMeMembersGetQueryResult =
-  NonNullable<
-    Awaited<ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>>
-  >;
-export type ListOrgMembersApiV1OrganizationsMeMembersGetQueryError =
-  HTTPValidationError;
-
-export function useListOrgMembersApiV1OrganizationsMeMembersGet<
-  TData = Awaited<
-    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-  >,
-  TError = HTTPValidationError,
->(
-  params: undefined | ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useListOrgMembersApiV1OrganizationsMeMembersGet<
-  TData = Awaited<
-    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-  >,
-  TError = HTTPValidationError,
->(
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-          >,
-          TError,
-          Awaited<
-            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useListOrgMembersApiV1OrganizationsMeMembersGet<
-  TData = Awaited<
-    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-  >,
-  TError = HTTPValidationError,
->(
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary List Org Members
- */
-
-export function useListOrgMembersApiV1OrganizationsMeMembersGet<
-  TData = Awaited<
-    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-  >,
-  TError = HTTPValidationError,
->(
-  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getListOrgMembersApiV1OrganizationsMeMembersGetQueryOptions(
-      params,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * Get a specific organization member by id.
- * @summary Get Org Member
- */
-export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse200 = {
-  data: OrganizationMemberRead;
-  status: 200;
-};
-
-export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseSuccess =
-  getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse200 & {
-    headers: Headers;
-  };
-export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseError =
-  getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse422 & {
-    headers: Headers;
-  };
-
-export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse =
-  | getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseSuccess
-  | getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseError;
-
-export const getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetUrl = (
-  memberId: string,
-) => {
-  return `/api/v1/organizations/me/members/${memberId}`;
-};
-
-export const getOrgMemberApiV1OrganizationsMeMembersMemberIdGet = async (
-  memberId: string,
-  options?: RequestInit,
-): Promise<getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse> => {
-  return customFetch<getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse>(
-    getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetUrl(memberId),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryKey = (
-  memberId: string,
-) => {
-  return [`/api/v1/organizations/me/members/${memberId}`] as const;
-};
-
-export const getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryOptions =
-  <
-    TData = Awaited<
-      ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-    >,
-    TError = HTTPValidationError,
-  >(
-    memberId: string,
-    options?: {
-      query?: Partial<
-        UseQueryOptions<
-          Awaited<
-            ReturnType<
-              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
-            >
-          >,
-          TError,
-          TData
-        >
-      >;
-      request?: SecondParameter<typeof customFetch>;
-    },
-  ) => {
-    const { query: queryOptions, request: requestOptions } = options ?? {};
-
-    const queryKey =
-      queryOptions?.queryKey ??
-      getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryKey(memberId);
-
-    const queryFn: QueryFunction<
-      Awaited<
-        ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-      >
-    > = ({ signal }) =>
-      getOrgMemberApiV1OrganizationsMeMembersMemberIdGet(memberId, {
-        signal,
-        ...requestOptions,
-      });
-
-    return {
-      queryKey,
-      queryFn,
-      enabled: !!memberId,
-      ...queryOptions,
-    } as UseQueryOptions<
-      Awaited<
-        ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-      >,
-      TError,
-      TData
-    > & { queryKey: DataTag<QueryKey, TData, TError> };
-  };
-
-export type GetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryResult =
-  NonNullable<
-    Awaited<
-      ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-    >
-  >;
-export type GetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryError =
-  HTTPValidationError;
-
-export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
-  TData = Awaited<
-    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-  >,
-  TError = HTTPValidationError,
->(
-  memberId: string,
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
-            >
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
-  TData = Awaited<
-    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-  >,
-  TError = HTTPValidationError,
->(
-  memberId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-        >,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<
-            ReturnType<
-              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
-            >
-          >,
-          TError,
-          Awaited<
-            ReturnType<
-              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
-            >
-          >
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
-  TData = Awaited<
-    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-  >,
-  TError = HTTPValidationError,
->(
-  memberId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary Get Org Member
- */
-
-export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
-  TData = Awaited<
-    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-  >,
-  TError = HTTPValidationError,
->(
-  memberId: string,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<
-          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
-        >,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions =
-    getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryOptions(
-      memberId,
-      options,
-    );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * Update a member's role in the organization.
- * @summary Update Org Member
- */
-export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse200 =
-  {
-    data: OrganizationMemberRead;
-    status: 200;
-  };
-
-export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse422 =
-  {
-    data: HTTPValidationError;
-    status: 422;
-  };
-
-export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseSuccess =
-  updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse200 & {
-    headers: Headers;
-  };
-export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseError =
-  updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse422 & {
-    headers: Headers;
-  };
-
-export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse =
-  | updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseSuccess
-  | updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseError;
-
-export const getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchUrl = (
-  memberId: string,
-) => {
-  return `/api/v1/organizations/me/members/${memberId}`;
-};
-
-export const updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch = async (
-  memberId: string,
-  organizationMemberUpdate: OrganizationMemberUpdate,
-  options?: RequestInit,
-): Promise<updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse> => {
-  return customFetch<updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse>(
-    getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchUrl(memberId),
-    {
-      ...options,
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(organizationMemberUpdate),
-    },
-  );
-};
-
-export const getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch
-        >
-      >,
-      TError,
-      { memberId: string; data: OrganizationMemberUpdate },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch>
-    >,
-    TError,
-    { memberId: string; data: OrganizationMemberUpdate },
-    TContext
-  > => {
-    const mutationKey = [
-      "updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch",
-    ];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch
-        >
-      >,
-      { memberId: string; data: OrganizationMemberUpdate }
-    > = (props) => {
-      const { memberId, data } = props ?? {};
-
-      return updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch(
-        memberId,
-        data,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type UpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationResult =
-  NonNullable<
-    Awaited<
-      ReturnType<typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch>
-    >
-  >;
-export type UpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationBody =
-  OrganizationMemberUpdate;
-export type UpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Update Org Member
- */
-export const useUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch
-        >
-      >,
-      TError,
-      { memberId: string; data: OrganizationMemberUpdate },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<
-    ReturnType<typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch>
-  >,
-  TError,
-  { memberId: string; data: OrganizationMemberUpdate },
-  TContext
-> => {
-  return useMutation(
-    getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationOptions(
-      options,
-    ),
-    queryClient,
-  );
-};
-/**
- * Remove a member from the active organization.
- * @summary Remove Org Member
- */
-export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse200 =
-  {
-    data: OkResponse;
-    status: 200;
-  };
-
-export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse422 =
-  {
-    data: HTTPValidationError;
-    status: 422;
-  };
-
-export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseSuccess =
-  removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse200 & {
-    headers: Headers;
-  };
-export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseError =
-  removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse422 & {
-    headers: Headers;
-  };
-
-export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse =
-  | removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseSuccess
-  | removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseError;
-
-export const getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteUrl = (
-  memberId: string,
-) => {
-  return `/api/v1/organizations/me/members/${memberId}`;
-};
-
-export const removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete = async (
-  memberId: string,
-  options?: RequestInit,
-): Promise<removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse> => {
-  return customFetch<removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse>(
-    getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteUrl(memberId),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export const getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
-        >
-      >,
-      TError,
-      { memberId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
-      >
-    >,
-    TError,
-    { memberId: string },
-    TContext
-  > => {
-    const mutationKey = [
-      "removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete",
-    ];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
-        >
-      >,
-      { memberId: string }
-    > = (props) => {
-      const { memberId } = props ?? {};
-
-      return removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete(
-        memberId,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type RemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationResult =
-  NonNullable<
-    Awaited<
-      ReturnType<
-        typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
-      >
-    >
-  >;
-
-export type RemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Remove Org Member
- */
-export const useRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDelete = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
-        >
-      >,
-      TError,
-      { memberId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<
-    ReturnType<typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete>
-  >,
-  TError,
-  { memberId: string },
-  TContext
-> => {
-  return useMutation(
-    getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationOptions(
-      options,
-    ),
-    queryClient,
-  );
-};
-/**
- * Update board-level access settings for a member.
- * @summary Update Member Access
- */
-export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse200 =
-  {
-    data: OrganizationMemberRead;
-    status: 200;
-  };
-
-export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse422 =
-  {
-    data: HTTPValidationError;
-    status: 422;
-  };
-
-export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseSuccess =
-  updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse200 & {
-    headers: Headers;
-  };
-export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseError =
-  updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse422 & {
-    headers: Headers;
-  };
-
-export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse =
-
-    | updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseSuccess
-    | updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseError;
-
-export const getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutUrl =
-  (memberId: string) => {
-    return `/api/v1/organizations/me/members/${memberId}/access`;
-  };
-
-export const updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut =
-  async (
-    memberId: string,
-    organizationMemberAccessUpdate: OrganizationMemberAccessUpdate,
-    options?: RequestInit,
-  ): Promise<updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse> => {
-    return customFetch<updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse>(
-      getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutUrl(
-        memberId,
-      ),
-      {
-        ...options,
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...options?.headers },
-        body: JSON.stringify(organizationMemberAccessUpdate),
-      },
-    );
-  };
-
-export const getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
-        >
-      >,
-      TError,
-      { memberId: string; data: OrganizationMemberAccessUpdate },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
-      >
-    >,
-    TError,
-    { memberId: string; data: OrganizationMemberAccessUpdate },
-    TContext
-  > => {
-    const mutationKey = [
-      "updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut",
-    ];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
-        >
-      >,
-      { memberId: string; data: OrganizationMemberAccessUpdate }
-    > = (props) => {
-      const { memberId, data } = props ?? {};
-
-      return updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut(
-        memberId,
-        data,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type UpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationResult =
-  NonNullable<
-    Awaited<
-      ReturnType<
-        typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
-      >
-    >
-  >;
-export type UpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationBody =
-  OrganizationMemberAccessUpdate;
-export type UpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Update Member Access
- */
-export const useUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut =
-  <TError = HTTPValidationError, TContext = unknown>(
-    options?: {
-      mutation?: UseMutationOptions<
-        Awaited<
-          ReturnType<
-            typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
-          >
-        >,
-        TError,
-        { memberId: string; data: OrganizationMemberAccessUpdate },
-        TContext
-      >;
-      request?: SecondParameter<typeof customFetch>;
-    },
-    queryClient?: QueryClient,
-  ): UseMutationResult<
-    Awaited<
-      ReturnType<
-        typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
-      >
-    >,
-    TError,
-    { memberId: string; data: OrganizationMemberAccessUpdate },
-    TContext
-  > => {
-    return useMutation(
-      getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationOptions(
-        options,
-      ),
-      queryClient,
-    );
-  };
 /**
  * List pending invites for the active organization.
  * @summary List Org Invites
@@ -2457,71 +1223,737 @@ export const useRevokeOrgInviteApiV1OrganizationsMeInvitesInviteIdDelete = <
   );
 };
 /**
- * Accept an invite and return resulting membership.
- * @summary Accept Org Invite
+ * List organizations where the current user is a member.
+ * @summary List My Organizations
  */
-export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse200 = {
-  data: OrganizationMemberRead;
+export type listMyOrganizationsApiV1OrganizationsMeListGetResponse200 = {
+  data: OrganizationListItem[];
   status: 200;
 };
 
-export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseSuccess =
-  acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse200 & {
+export type listMyOrganizationsApiV1OrganizationsMeListGetResponseSuccess =
+  listMyOrganizationsApiV1OrganizationsMeListGetResponse200 & {
     headers: Headers;
   };
-export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseError =
-  acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse422 & {
-    headers: Headers;
-  };
+export type listMyOrganizationsApiV1OrganizationsMeListGetResponse =
+  listMyOrganizationsApiV1OrganizationsMeListGetResponseSuccess;
 
-export type acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse =
-  | acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseSuccess
-  | acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponseError;
-
-export const getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostUrl = () => {
-  return `/api/v1/organizations/invites/accept`;
+export const getListMyOrganizationsApiV1OrganizationsMeListGetUrl = () => {
+  return `/api/v1/organizations/me/list`;
 };
 
-export const acceptOrgInviteApiV1OrganizationsInvitesAcceptPost = async (
-  organizationInviteAccept: OrganizationInviteAccept,
+export const listMyOrganizationsApiV1OrganizationsMeListGet = async (
   options?: RequestInit,
-): Promise<acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse> => {
-  return customFetch<acceptOrgInviteApiV1OrganizationsInvitesAcceptPostResponse>(
-    getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostUrl(),
+): Promise<listMyOrganizationsApiV1OrganizationsMeListGetResponse> => {
+  return customFetch<listMyOrganizationsApiV1OrganizationsMeListGetResponse>(
+    getListMyOrganizationsApiV1OrganizationsMeListGetUrl(),
     {
       ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(organizationInviteAccept),
+      method: "GET",
     },
   );
 };
 
-export const getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationOptions =
+export const getListMyOrganizationsApiV1OrganizationsMeListGetQueryKey = () => {
+  return [`/api/v1/organizations/me/list`] as const;
+};
+
+export const getListMyOrganizationsApiV1OrganizationsMeListGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<
+        ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+      >,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListMyOrganizationsApiV1OrganizationsMeListGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>>
+  > = ({ signal }) =>
+    listMyOrganizationsApiV1OrganizationsMeListGet({
+      signal,
+      ...requestOptions,
+    });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListMyOrganizationsApiV1OrganizationsMeListGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>>
+  >;
+export type ListMyOrganizationsApiV1OrganizationsMeListGetQueryError = unknown;
+
+export function useListMyOrganizationsApiV1OrganizationsMeListGet<
+  TData = Awaited<
+    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListMyOrganizationsApiV1OrganizationsMeListGet<
+  TData = Awaited<
+    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListMyOrganizationsApiV1OrganizationsMeListGet<
+  TData = Awaited<
+    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List My Organizations
+ */
+
+export function useListMyOrganizationsApiV1OrganizationsMeListGet<
+  TData = Awaited<
+    ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listMyOrganizationsApiV1OrganizationsMeListGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListMyOrganizationsApiV1OrganizationsMeListGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Get the caller's membership record in the active organization.
+ * @summary Get My Membership
+ */
+export type getMyMembershipApiV1OrganizationsMeMemberGetResponse200 = {
+  data: OrganizationMemberRead;
+  status: 200;
+};
+
+export type getMyMembershipApiV1OrganizationsMeMemberGetResponseSuccess =
+  getMyMembershipApiV1OrganizationsMeMemberGetResponse200 & {
+    headers: Headers;
+  };
+export type getMyMembershipApiV1OrganizationsMeMemberGetResponse =
+  getMyMembershipApiV1OrganizationsMeMemberGetResponseSuccess;
+
+export const getGetMyMembershipApiV1OrganizationsMeMemberGetUrl = () => {
+  return `/api/v1/organizations/me/member`;
+};
+
+export const getMyMembershipApiV1OrganizationsMeMemberGet = async (
+  options?: RequestInit,
+): Promise<getMyMembershipApiV1OrganizationsMeMemberGetResponse> => {
+  return customFetch<getMyMembershipApiV1OrganizationsMeMemberGetResponse>(
+    getGetMyMembershipApiV1OrganizationsMeMemberGetUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyMembershipApiV1OrganizationsMeMemberGetQueryKey = () => {
+  return [`/api/v1/organizations/me/member`] as const;
+};
+
+export const getGetMyMembershipApiV1OrganizationsMeMemberGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+  >,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetMyMembershipApiV1OrganizationsMeMemberGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>
+  > = ({ signal }) =>
+    getMyMembershipApiV1OrganizationsMeMemberGet({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetMyMembershipApiV1OrganizationsMeMemberGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>>
+  >;
+export type GetMyMembershipApiV1OrganizationsMeMemberGetQueryError = unknown;
+
+export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
+  TData = Awaited<
+    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+  >,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
+  TData = Awaited<
+    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
+  TData = Awaited<
+    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get My Membership
+ */
+
+export function useGetMyMembershipApiV1OrganizationsMeMemberGet<
+  TData = Awaited<
+    ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+  >,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getMyMembershipApiV1OrganizationsMeMemberGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetMyMembershipApiV1OrganizationsMeMemberGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * List members for the active organization.
+ * @summary List Org Members
+ */
+export type listOrgMembersApiV1OrganizationsMeMembersGetResponse200 = {
+  data: LimitOffsetPageTypeVarCustomizedOrganizationMemberRead;
+  status: 200;
+};
+
+export type listOrgMembersApiV1OrganizationsMeMembersGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type listOrgMembersApiV1OrganizationsMeMembersGetResponseSuccess =
+  listOrgMembersApiV1OrganizationsMeMembersGetResponse200 & {
+    headers: Headers;
+  };
+export type listOrgMembersApiV1OrganizationsMeMembersGetResponseError =
+  listOrgMembersApiV1OrganizationsMeMembersGetResponse422 & {
+    headers: Headers;
+  };
+
+export type listOrgMembersApiV1OrganizationsMeMembersGetResponse =
+  | listOrgMembersApiV1OrganizationsMeMembersGetResponseSuccess
+  | listOrgMembersApiV1OrganizationsMeMembersGetResponseError;
+
+export const getListOrgMembersApiV1OrganizationsMeMembersGetUrl = (
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/organizations/me/members?${stringifiedParams}`
+    : `/api/v1/organizations/me/members`;
+};
+
+export const listOrgMembersApiV1OrganizationsMeMembersGet = async (
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  options?: RequestInit,
+): Promise<listOrgMembersApiV1OrganizationsMeMembersGetResponse> => {
+  return customFetch<listOrgMembersApiV1OrganizationsMeMembersGetResponse>(
+    getListOrgMembersApiV1OrganizationsMeMembersGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListOrgMembersApiV1OrganizationsMeMembersGetQueryKey = (
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+) => {
+  return [
+    `/api/v1/organizations/me/members`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListOrgMembersApiV1OrganizationsMeMembersGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListOrgMembersApiV1OrganizationsMeMembersGetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>>
+  > = ({ signal }) =>
+    listOrgMembersApiV1OrganizationsMeMembersGet(params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListOrgMembersApiV1OrganizationsMeMembersGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>>
+  >;
+export type ListOrgMembersApiV1OrganizationsMeMembersGetQueryError =
+  HTTPValidationError;
+
+export function useListOrgMembersApiV1OrganizationsMeMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params: undefined | ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListOrgMembersApiV1OrganizationsMeMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListOrgMembersApiV1OrganizationsMeMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Org Members
+ */
+
+export function useListOrgMembersApiV1OrganizationsMeMembersGet<
+  TData = Awaited<
+    ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: ListOrgMembersApiV1OrganizationsMeMembersGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listOrgMembersApiV1OrganizationsMeMembersGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListOrgMembersApiV1OrganizationsMeMembersGetQueryOptions(
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Remove a member from the active organization.
+ * @summary Remove Org Member
+ */
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse200 =
+  {
+    data: OkResponse;
+    status: 200;
+  };
+
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseSuccess =
+  removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseError =
+  removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse =
+  | removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseSuccess
+  | removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponseError;
+
+export const getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteUrl = (
+  memberId: string,
+) => {
+  return `/api/v1/organizations/me/members/${memberId}`;
+};
+
+export const removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete = async (
+  memberId: string,
+  options?: RequestInit,
+): Promise<removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse> => {
+  return customFetch<removeOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteResponse>(
+    getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteUrl(memberId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationOptions =
   <TError = HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
-        ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+        ReturnType<
+          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+        >
       >,
       TError,
-      { data: OrganizationInviteAccept },
+      { memberId: string },
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
   }): UseMutationOptions<
     Awaited<
-      ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+      ReturnType<
+        typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+      >
     >,
     TError,
-    { data: OrganizationInviteAccept },
+    { memberId: string },
     TContext
   > => {
-    const mutationKey = ["acceptOrgInviteApiV1OrganizationsInvitesAcceptPost"];
+    const mutationKey = [
+      "removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete",
+    ];
     const { mutation: mutationOptions, request: requestOptions } = options
       ? options.mutation &&
         "mutationKey" in options.mutation &&
@@ -2532,13 +1964,422 @@ export const getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationOption
 
     const mutationFn: MutationFunction<
       Awaited<
-        ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+        ReturnType<
+          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+        >
       >,
-      { data: OrganizationInviteAccept }
+      { memberId: string }
     > = (props) => {
-      const { data } = props ?? {};
+      const { memberId } = props ?? {};
 
-      return acceptOrgInviteApiV1OrganizationsInvitesAcceptPost(
+      return removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete(
+        memberId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type RemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+      >
+    >
+  >;
+
+export type RemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Remove Org Member
+ */
+export const useRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete
+        >
+      >,
+      TError,
+      { memberId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof removeOrgMemberApiV1OrganizationsMeMembersMemberIdDelete>
+  >,
+  TError,
+  { memberId: string },
+  TContext
+> => {
+  return useMutation(
+    getRemoveOrgMemberApiV1OrganizationsMeMembersMemberIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};
+/**
+ * Get a specific organization member by id.
+ * @summary Get Org Member
+ */
+export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse200 = {
+  data: OrganizationMemberRead;
+  status: 200;
+};
+
+export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseSuccess =
+  getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse200 & {
+    headers: Headers;
+  };
+export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseError =
+  getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse422 & {
+    headers: Headers;
+  };
+
+export type getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse =
+  | getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseSuccess
+  | getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponseError;
+
+export const getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetUrl = (
+  memberId: string,
+) => {
+  return `/api/v1/organizations/me/members/${memberId}`;
+};
+
+export const getOrgMemberApiV1OrganizationsMeMembersMemberIdGet = async (
+  memberId: string,
+  options?: RequestInit,
+): Promise<getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse> => {
+  return customFetch<getOrgMemberApiV1OrganizationsMeMembersMemberIdGetResponse>(
+    getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetUrl(memberId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryKey = (
+  memberId: string,
+) => {
+  return [`/api/v1/organizations/me/members/${memberId}`] as const;
+};
+
+export const getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+    >,
+    TError = HTTPValidationError,
+  >(
+    memberId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customFetch>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryKey(memberId);
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+      >
+    > = ({ signal }) =>
+      getOrgMemberApiV1OrganizationsMeMembersMemberIdGet(memberId, {
+        signal,
+        ...requestOptions,
+      });
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!memberId,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+    >
+  >;
+export type GetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryError =
+  HTTPValidationError;
+
+export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
+  TData = Awaited<
+    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  memberId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
+  TData = Awaited<
+    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  memberId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
+  TData = Awaited<
+    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  memberId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Org Member
+ */
+
+export function useGetOrgMemberApiV1OrganizationsMeMembersMemberIdGet<
+  TData = Awaited<
+    ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  memberId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getOrgMemberApiV1OrganizationsMeMembersMemberIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetOrgMemberApiV1OrganizationsMeMembersMemberIdGetQueryOptions(
+      memberId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Update a member's role in the organization.
+ * @summary Update Org Member
+ */
+export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse200 =
+  {
+    data: OrganizationMemberRead;
+    status: 200;
+  };
+
+export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseSuccess =
+  updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse200 & {
+    headers: Headers;
+  };
+export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseError =
+  updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse422 & {
+    headers: Headers;
+  };
+
+export type updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse =
+  | updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseSuccess
+  | updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponseError;
+
+export const getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchUrl = (
+  memberId: string,
+) => {
+  return `/api/v1/organizations/me/members/${memberId}`;
+};
+
+export const updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch = async (
+  memberId: string,
+  organizationMemberUpdate: OrganizationMemberUpdate,
+  options?: RequestInit,
+): Promise<updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse> => {
+  return customFetch<updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchResponse>(
+    getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchUrl(memberId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(organizationMemberUpdate),
+    },
+  );
+};
+
+export const getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch
+        >
+      >,
+      TError,
+      { memberId: string; data: OrganizationMemberUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch>
+    >,
+    TError,
+    { memberId: string; data: OrganizationMemberUpdate },
+    TContext
+  > => {
+    const mutationKey = [
+      "updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch
+        >
+      >,
+      { memberId: string; data: OrganizationMemberUpdate }
+    > = (props) => {
+      const { memberId, data } = props ?? {};
+
+      return updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch(
+        memberId,
         data,
         requestOptions,
       );
@@ -2547,31 +2388,33 @@ export const getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationOption
     return { mutationFn, ...mutationOptions };
   };
 
-export type AcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationResult =
+export type UpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationResult =
   NonNullable<
     Awaited<
-      ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+      ReturnType<typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch>
     >
   >;
-export type AcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationBody =
-  OrganizationInviteAccept;
-export type AcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationError =
+export type UpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationBody =
+  OrganizationMemberUpdate;
+export type UpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationError =
   HTTPValidationError;
 
 /**
- * @summary Accept Org Invite
+ * @summary Update Org Member
  */
-export const useAcceptOrgInviteApiV1OrganizationsInvitesAcceptPost = <
+export const useUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch = <
   TError = HTTPValidationError,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<
-        ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+        ReturnType<
+          typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch
+        >
       >,
       TError,
-      { data: OrganizationInviteAccept },
+      { memberId: string; data: OrganizationMemberUpdate },
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
@@ -2579,16 +2422,173 @@ export const useAcceptOrgInviteApiV1OrganizationsInvitesAcceptPost = <
   queryClient?: QueryClient,
 ): UseMutationResult<
   Awaited<
-    ReturnType<typeof acceptOrgInviteApiV1OrganizationsInvitesAcceptPost>
+    ReturnType<typeof updateOrgMemberApiV1OrganizationsMeMembersMemberIdPatch>
   >,
   TError,
-  { data: OrganizationInviteAccept },
+  { memberId: string; data: OrganizationMemberUpdate },
   TContext
 > => {
   return useMutation(
-    getAcceptOrgInviteApiV1OrganizationsInvitesAcceptPostMutationOptions(
+    getUpdateOrgMemberApiV1OrganizationsMeMembersMemberIdPatchMutationOptions(
       options,
     ),
     queryClient,
   );
 };
+/**
+ * Update board-level access settings for a member.
+ * @summary Update Member Access
+ */
+export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse200 =
+  {
+    data: OrganizationMemberRead;
+    status: 200;
+  };
+
+export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseSuccess =
+  updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse200 & {
+    headers: Headers;
+  };
+export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseError =
+  updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse422 & {
+    headers: Headers;
+  };
+
+export type updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse =
+
+    | updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseSuccess
+    | updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponseError;
+
+export const getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutUrl =
+  (memberId: string) => {
+    return `/api/v1/organizations/me/members/${memberId}/access`;
+  };
+
+export const updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut =
+  async (
+    memberId: string,
+    organizationMemberAccessUpdate: OrganizationMemberAccessUpdate,
+    options?: RequestInit,
+  ): Promise<updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse> => {
+    return customFetch<updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutResponse>(
+      getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutUrl(
+        memberId,
+      ),
+      {
+        ...options,
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...options?.headers },
+        body: JSON.stringify(organizationMemberAccessUpdate),
+      },
+    );
+  };
+
+export const getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
+        >
+      >,
+      TError,
+      { memberId: string; data: OrganizationMemberAccessUpdate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
+      >
+    >,
+    TError,
+    { memberId: string; data: OrganizationMemberAccessUpdate },
+    TContext
+  > => {
+    const mutationKey = [
+      "updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
+        >
+      >,
+      { memberId: string; data: OrganizationMemberAccessUpdate }
+    > = (props) => {
+      const { memberId, data } = props ?? {};
+
+      return updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut(
+        memberId,
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type UpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
+      >
+    >
+  >;
+export type UpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationBody =
+  OrganizationMemberAccessUpdate;
+export type UpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Update Member Access
+ */
+export const useUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
+          >
+        >,
+        TError,
+        { memberId: string; data: OrganizationMemberAccessUpdate },
+        TContext
+      >;
+      request?: SecondParameter<typeof customFetch>;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof updateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPut
+      >
+    >,
+    TError,
+    { memberId: string; data: OrganizationMemberAccessUpdate },
+    TContext
+  > => {
+    return useMutation(
+      getUpdateMemberAccessApiV1OrganizationsMeMembersMemberIdAccessPutMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };

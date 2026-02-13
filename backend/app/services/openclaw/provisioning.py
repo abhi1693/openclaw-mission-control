@@ -73,6 +73,17 @@ def _is_missing_session_error(exc: OpenClawGatewayError) -> bool:
     )
 
 
+def _is_missing_agent_error(exc: OpenClawGatewayError) -> bool:
+    message = str(exc).lower()
+    if not message:
+        return False
+    if any(
+        marker in message for marker in ("unknown agent", "no such agent", "agent does not exist")
+    ):
+        return True
+    return "agent" in message and "not found" in message
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
@@ -880,7 +891,11 @@ class OpenClawGatewayProvisioner:
             agent_gateway_id = GatewayAgentIdentity.openclaw_agent_id(gateway)
         else:
             agent_gateway_id = _agent_key(agent)
-        await control_plane.delete_agent(agent_gateway_id, delete_files=delete_files)
+        try:
+            await control_plane.delete_agent(agent_gateway_id, delete_files=delete_files)
+        except OpenClawGatewayError as exc:
+            if not _is_missing_agent_error(exc):
+                raise
 
         if delete_session:
             if agent.board_id is None:

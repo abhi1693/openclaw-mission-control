@@ -1,41 +1,39 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `backend/`: FastAPI service.
-  - App code: `backend/app/` (routes `backend/app/api/`, models `backend/app/models/`, schemas `backend/app/schemas/`, workers `backend/app/workers/`).
-  - DB migrations: `backend/migrations/` (generated versions in `backend/migrations/versions/`).
-  - Tests: `backend/tests/`.
-- `frontend/`: Next.js app.
-  - Routes: `frontend/src/app/`; shared UI: `frontend/src/components/`; utilities: `frontend/src/lib/`.
-  - Generated API client: `frontend/src/api/generated/` (do not edit by hand).
-  - Tests: colocated `*.test.ts(x)` (example: `frontend/src/lib/backoff.test.ts`).
-- `templates/`: shared templates packaged into the backend image (used by gateway integrations).
-- `docs/`: protocol/architecture notes (see `docs/openclaw_gateway_ws.md`).
+- `backend/`: FastAPI service. Main app code lives in `backend/app/` with API routes in `backend/app/api/`, data models in `backend/app/models/`, schemas in `backend/app/schemas/`, and service logic in `backend/app/services/`.
+- `backend/migrations/`: Alembic migrations (`backend/migrations/versions/` for generated revisions).
+- `backend/tests/`: pytest suite (`test_*.py` naming).
+- `backend/templates/`: backend-shipped templates used by gateway flows.
+- `frontend/`: Next.js app. Routes under `frontend/src/app/`, shared components under `frontend/src/components/`, utilities under `frontend/src/lib/`.
+- `frontend/src/api/generated/`: generated API client; regenerate instead of editing by hand.
+- `docs/`: contributor and operations docs (start at `docs/README.md`).
 
 ## Build, Test, and Development Commands
-From repo root:
-- `make setup`: install/sync backend + frontend dependencies.
-- `make check`: CI-equivalent suite (lint, typecheck, tests/coverage, frontend build).
+- `make setup`: install/sync backend and frontend dependencies.
+- `make check`: closest CI parity run (lint, typecheck, tests/coverage, frontend build).
 - `docker compose -f compose.yml --env-file .env up -d --build`: run full stack.
-
-Fast local dev:
-- `docker compose -f compose.yml --env-file .env up -d db`
-- Backend: `cd backend && uv sync --extra dev && uv run uvicorn app.main:app --reload --port 8000`
-- Frontend: `cd frontend && npm install && npm run dev`
-- API client: `make api-gen` (backend must be running on `127.0.0.1:8000`).
+- Fast local loop:
+  - `docker compose -f compose.yml --env-file .env up -d db`
+  - `cd backend && uv run uvicorn app.main:app --reload --port 8000`
+  - `cd frontend && npm run dev`
+- `make api-gen`: regenerate frontend API client (backend must be on `127.0.0.1:8000`).
 
 ## Coding Style & Naming Conventions
-- Python: Black + isort (line length 100), flake8 (`backend/.flake8`), strict mypy (`backend/pyproject.toml`). Use `snake_case`.
-- TypeScript/React: ESLint (Next.js) + Prettier (`make frontend-format`). Components `PascalCase`, variables `camelCase`. Prefix intentionally-unused destructured props with `_` (see `frontend/eslint.config.mjs`).
-- Optional: `pre-commit install` to run format/lint hooks locally.
+- Python: Black + isort + flake8 + strict mypy. Max line length is 100. Use `snake_case`.
+- TypeScript/React: ESLint + Prettier. Components use `PascalCase`; variables/functions use `camelCase`.
+- For intentionally unused destructured TS variables, prefix with `_` to satisfy lint config.
 
 ## Testing Guidelines
-- Backend: pytest (`backend/tests/`, files `test_*.py`). Run `make backend-test` or `make backend-coverage` (writes `backend/coverage.xml`).
-- Frontend: vitest + testing-library. Run `make frontend-test` (writes `frontend/coverage/`).
+- Backend: pytest via `make backend-test`; coverage policy via `make backend-coverage` (writes `backend/coverage.xml` and `backend/coverage.json`).
+- Frontend: vitest + Testing Library via `make frontend-test` (coverage in `frontend/coverage/`).
+- Add or update tests whenever behavior changes.
 
 ## Commit & Pull Request Guidelines
-- Commits: Conventional Commits (e.g., `feat: ...`, `fix: ...`, `docs: ...`, `chore: ...`, `refactor: ...`; optional scope like `feat(chat): ...`).
-- PRs: include what/why, how to test (ideally `make check`), linked issue (if any), and screenshots for UI changes.
+- Follow Conventional Commits (seen in history), e.g. `feat: ...`, `fix: ...`, `docs: ...`, `test(core): ...`.
+- Keep PRs focused and based on latest `master`.
+- Include: what changed, why, test evidence (`make check` or targeted commands), linked issue, and screenshots/logs when UI or operator workflow changes.
 
 ## Security & Configuration Tips
-- Never commit secrets. Use `.env.example` as the template and keep real values in `.env`.
+- Never commit secrets. Copy from `.env.example` and keep real values in local `.env`.
+- Report vulnerabilities privately via GitHub security advisories, not public issues.

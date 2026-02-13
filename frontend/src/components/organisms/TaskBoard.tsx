@@ -82,14 +82,20 @@ const columns: Array<{
   },
 ];
 
-const formatDueDate = (value?: string | null) => {
-  if (!value) return undefined;
-  const date = parseApiDatetime(value);
-  if (!date) return undefined;
-  return date.toLocaleDateString(undefined, {
+const resolveDueState = (
+  task: Task,
+): { due: string | undefined; isOverdue: boolean } => {
+  const date = parseApiDatetime(task.due_at);
+  if (!date) return { due: undefined, isOverdue: false };
+  const dueLabel = date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
+  const isOverdue = task.status !== "done" && date.getTime() < Date.now();
+  return {
+    due: isOverdue ? `Overdue · ${dueLabel}` : dueLabel,
+    isOverdue,
+  };
 };
 
 type CardPosition = { left: number; top: number };
@@ -149,6 +155,7 @@ export const TaskBoard = memo(function TaskBoard({
     return positions;
   }, []);
 
+  // Animate card reordering smoothly by applying FLIP whenever layout positions change.
   useLayoutEffect(() => {
     const cardRefsSnapshot = cardRefs.current;
     if (animationRafRef.current !== null) {
@@ -269,6 +276,7 @@ export const TaskBoard = memo(function TaskBoard({
     return buckets;
   }, [tasks]);
 
+  // Keep drag/drop state and payload handling centralized for column move interactions.
   const handleDragStart =
     (task: Task) => (event: React.DragEvent<HTMLDivElement>) => {
       if (readOnly) {
@@ -328,10 +336,17 @@ export const TaskBoard = memo(function TaskBoard({
   return (
     <div
       ref={boardRef}
-      className="grid grid-flow-col auto-cols-[minmax(260px,320px)] gap-4 overflow-x-auto pb-6"
+      data-testid="task-board"
+      className={cn(
+        // Mobile-first: stack columns vertically to avoid horizontal scrolling.
+        "grid grid-cols-1 gap-4 overflow-x-hidden pb-6",
+        // Desktop/tablet: switch back to horizontally scrollable kanban columns.
+        "sm:grid-flow-col sm:auto-cols-[minmax(260px,320px)] sm:grid-cols-none sm:overflow-x-auto",
+      )}
     >
       {columns.map((column) => {
         const columnTasks = grouped[column.status] ?? [];
+        // Derive review tab counts and the active subset from one canonical task list.
         const reviewCounts =
           column.status === "review"
             ? columnTasks.reduce(
@@ -377,7 +392,10 @@ export const TaskBoard = memo(function TaskBoard({
           <div
             key={column.title}
             className={cn(
-              "kanban-column min-h-[calc(100vh-260px)]",
+              // On mobile, columns are stacked, so avoid forcing tall fixed heights.
+              "kanban-column min-h-0",
+              // On larger screens, keep columns tall to reduce empty space during drag.
+              "sm:min-h-[calc(100vh-260px)]",
               activeColumn === column.status &&
                 !readOnly &&
                 "ring-2 ring-slate-200",
@@ -386,7 +404,7 @@ export const TaskBoard = memo(function TaskBoard({
             onDragOver={readOnly ? undefined : handleDragOver(column.status)}
             onDragLeave={readOnly ? undefined : handleDragLeave(column.status)}
           >
-            <div className="column-header sticky top-0 z-10 rounded-t-xl border border-b-0 border-slate-200 bg-white/80 px-4 py-3 backdrop-blur">
+            <div className="column-header z-10 rounded-t-xl border border-b-0 border-slate-200 bg-white px-4 py-3 sm:sticky sm:top-0 sm:bg-white/80 sm:backdrop-blur">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 rounded-full", column.dot)} />
@@ -445,26 +463,32 @@ export const TaskBoard = memo(function TaskBoard({
             </div>
             <div className="rounded-b-xl border border-t-0 border-slate-200 bg-white p-3">
               <div className="space-y-3">
-                {filteredTasks.map((task) => (
-                  <div key={task.id} ref={setCardRef(task.id)}>
-                    <TaskCard
-                      title={task.title}
-                      status={task.status}
-                      priority={task.priority}
-                      assignee={task.assignee ?? undefined}
-                      due={formatDueDate(task.due_at)}
-                      approvalsPendingCount={task.approvals_pending_count}
-                      tags={task.tags}
-                      isBlocked={task.is_blocked}
-                      blockedByCount={task.blocked_by_task_ids?.length ?? 0}
-                      onClick={() => onTaskSelect?.(task)}
-                      draggable={!readOnly && !task.is_blocked}
-                      isDragging={draggingId === task.id}
-                      onDragStart={readOnly ? undefined : handleDragStart(task)}
-                      onDragEnd={readOnly ? undefined : handleDragEnd}
-                    />
-                  </div>
-                ))}
+                {filteredTasks.map((task) => {
+                  const dueState = resolveDueState(task);
+                  return (
+                    <div key={task.id} ref={setCardRef(task.id)}>
+                      <TaskCard
+                        title={task.title}
+                        status={task.status}
+                        priority={task.priority}
+                        assignee={task.assignee ?? undefined}
+                        due={dueState.due}
+                        isOverdue={dueState.isOverdue}
+                        approvalsPendingCount={task.approvals_pending_count}
+                        tags={task.tags}
+                        isBlocked={task.is_blocked}
+                        blockedByCount={task.blocked_by_task_ids?.length ?? 0}
+                        onClick={() => onTaskSelect?.(task)}
+                        draggable={!readOnly && !task.is_blocked}
+                        isDragging={draggingId === task.id}
+                        onDragStart={
+                          readOnly ? undefined : handleDragStart(task)
+                        }
+                        onDragEnd={readOnly ? undefined : handleDragEnd}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

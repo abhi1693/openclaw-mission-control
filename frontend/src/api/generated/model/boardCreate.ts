@@ -10,15 +10,19 @@ import type { BoardCreateSuccessMetrics } from "./boardCreateSuccessMetrics";
  * Payload for creating a board.
  */
 export interface BoardCreate {
-  name: string;
-  slug: string;
-  description: string;
-  gateway_id?: string | null;
+  block_status_changes_with_pending_approval?: boolean;
   board_group_id?: string | null;
   board_type?: string;
-  objective?: string | null;
-  success_metrics?: BoardCreateSuccessMetrics;
-  target_date?: string | null;
+  description: string;
+  gateway_id?: string | null;
   goal_confirmed?: boolean;
   goal_source?: string | null;
+  name: string;
+  objective?: string | null;
+  only_lead_can_change_status?: boolean;
+  require_approval_for_done?: boolean;
+  require_review_before_done?: boolean;
+  slug: string;
+  success_metrics?: BoardCreateSuccessMetrics;
+  target_date?: string | null;
 }

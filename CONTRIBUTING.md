@@ -38,7 +38,6 @@ git checkout -b <branch-name>
 
 If you accidentally based your branch off another feature branch, fix it by cherry-picking the intended commits onto a clean branch and force-pushing the corrected branch (or opening a new PR).
 
-
 ### Expectations
 
 - Keep PRs **small and focused** when possible.

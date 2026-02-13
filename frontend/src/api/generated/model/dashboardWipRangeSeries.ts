@@ -12,7 +12,7 @@ import type { DashboardWipRangeSeriesRange } from "./dashboardWipRangeSeriesRang
  * WIP series payload for a single range/bucket combination.
  */
 export interface DashboardWipRangeSeries {
-  range: DashboardWipRangeSeriesRange;
   bucket: DashboardWipRangeSeriesBucket;
   points: DashboardWipPoint[];
+  range: DashboardWipRangeSeriesRange;
 }

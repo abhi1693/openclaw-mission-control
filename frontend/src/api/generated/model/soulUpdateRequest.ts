@@ -10,6 +10,6 @@
  */
 export interface SoulUpdateRequest {
   content: string;
-  source_url?: string | null;
   reason?: string | null;
+  source_url?: string | null;
 }

@@ -10,7 +10,7 @@
  */
 export interface SoulsDirectorySoulRef {
   handle: string;
-  slug: string;
   page_url: string;
   raw_md_url: string;
+  slug: string;
 }

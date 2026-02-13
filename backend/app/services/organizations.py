@@ -175,6 +175,8 @@ async def accept_invite(
     session.add(member)
     await session.flush()
 
+    # For scoped invites, copy invite board-access rows onto the member at accept
+    # time so effective permissions survive invite lifecycle cleanup.
     if not (invite.all_boards_read or invite.all_boards_write):
         access_rows = list(
             await session.exec(

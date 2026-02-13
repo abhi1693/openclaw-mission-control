@@ -9,9 +9,9 @@
  * Payload for creating a tag.
  */
 export interface TagCreate {
+  color?: string;
+  description?: string | null;
   /** @minLength 1 */
   name: string;
   slug?: string | null;
-  color?: string;
-  description?: string | null;
 }

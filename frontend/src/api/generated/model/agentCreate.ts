@@ -12,11 +12,11 @@ import type { AgentCreateIdentityProfile } from "./agentCreateIdentityProfile";
  */
 export interface AgentCreate {
   board_id?: string | null;
-  /** @minLength 1 */
-  name: string;
-  status?: string;
   heartbeat_config?: AgentCreateHeartbeatConfig;
   identity_profile?: AgentCreateIdentityProfile;
   identity_template?: string | null;
+  /** @minLength 1 */
+  name: string;
   soul_template?: string | null;
+  status?: string;
 }

@@ -29,6 +29,10 @@ class BoardBase(SQLModel):
     target_date: datetime | None = None
     goal_confirmed: bool = False
     goal_source: str | None = None
+    require_approval_for_done: bool = True
+    require_review_before_done: bool = False
+    block_status_changes_with_pending_approval: bool = False
+    only_lead_can_change_status: bool = False
 
 
 class BoardCreate(BoardBase):
@@ -68,6 +72,10 @@ class BoardUpdate(SQLModel):
     target_date: datetime | None = None
     goal_confirmed: bool | None = None
     goal_source: str | None = None
+    require_approval_for_done: bool | None = None
+    require_review_before_done: bool | None = None
+    block_status_changes_with_pending_approval: bool | None = None
+    only_lead_can_change_status: bool | None = None
 
     @model_validator(mode="after")
     def validate_gateway_id(self) -> Self:

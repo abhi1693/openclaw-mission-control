@@ -10,7 +10,7 @@
  */
 export interface OrganizationListItem {
   id: string;
+  is_active: boolean;
   name: string;
   role: string;
-  is_active: boolean;
 }

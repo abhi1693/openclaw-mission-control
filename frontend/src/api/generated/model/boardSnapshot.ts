@@ -14,10 +14,10 @@ import type { TaskCardRead } from "./taskCardRead";
  * Aggregated board payload used by board snapshot endpoints.
  */
 export interface BoardSnapshot {
-  board: BoardRead;
-  tasks: TaskCardRead[];
   agents: AgentRead[];
   approvals: ApprovalRead[];
+  board: BoardRead;
   chat_messages: BoardMemoryRead[];
   pending_approvals_count?: number;
+  tasks: TaskCardRead[];
 }

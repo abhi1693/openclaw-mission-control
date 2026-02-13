@@ -22,6 +22,11 @@ from app.core.logging import TRACE_LEVEL, get_logger
 
 PROTOCOL_VERSION = 3
 logger = get_logger(__name__)
+GATEWAY_OPERATOR_SCOPES = (
+    "operator.admin",
+    "operator.approvals",
+    "operator.pairing",
+)
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
@@ -229,6 +234,8 @@ def _build_connect_params(config: GatewayConfig) -> dict[str, Any]:
     params: dict[str, Any] = {
         "minProtocol": PROTOCOL_VERSION,
         "maxProtocol": PROTOCOL_VERSION,
+        "role": "operator",
+        "scopes": list(GATEWAY_OPERATOR_SCOPES),
         "client": {
             "id": "gateway-client",
             "version": "1.0.0",

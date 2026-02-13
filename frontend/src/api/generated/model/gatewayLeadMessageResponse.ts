@@ -9,9 +9,9 @@
  * Response payload for a lead-message dispatch attempt.
  */
 export interface GatewayLeadMessageResponse {
-  ok?: boolean;
   board_id: string;
   lead_agent_id?: string | null;
   lead_agent_name?: string | null;
   lead_created?: boolean;
+  ok?: boolean;
 }

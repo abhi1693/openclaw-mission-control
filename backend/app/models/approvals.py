@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, Float
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -25,7 +25,7 @@ class Approval(QueryModel, table=True):
     agent_id: UUID | None = Field(default=None, foreign_key="agents.id", index=True)
     action_type: str
     payload: dict[str, object] | None = Field(default=None, sa_column=Column(JSON))
-    confidence: int
+    confidence: float = Field(sa_column=Column(Float, nullable=False))
     rubric_scores: dict[str, int] | None = Field(default=None, sa_column=Column(JSON))
     status: str = Field(default="pending", index=True)
     created_at: datetime = Field(default_factory=utcnow)

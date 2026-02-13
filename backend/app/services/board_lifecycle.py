@@ -18,8 +18,11 @@ from app.models.approval_task_links import ApprovalTaskLink
 from app.models.approvals import Approval
 from app.models.board_memory import BoardMemory
 from app.models.board_onboarding import BoardOnboardingSession
+from app.models.board_webhook_payloads import BoardWebhookPayload
+from app.models.board_webhooks import BoardWebhook
 from app.models.organization_board_access import OrganizationBoardAccess
 from app.models.organization_invite_board_access import OrganizationInviteBoardAccess
+from app.models.tag_assignments import TagAssignment
 from app.models.task_dependencies import TaskDependency
 from app.models.task_fingerprints import TaskFingerprint
 from app.models.tasks import Task
@@ -34,6 +37,17 @@ if TYPE_CHECKING:
     from app.models.boards import Board
 
 
+def _is_missing_gateway_agent_error(exc: OpenClawGatewayError) -> bool:
+    message = str(exc).lower()
+    if not message:
+        return False
+    if any(
+        marker in message for marker in ("unknown agent", "no such agent", "agent does not exist")
+    ):
+        return True
+    return "agent" in message and "not found" in message
+
+
 async def delete_board(session: AsyncSession, *, board: Board) -> OkResponse:
     """Delete a board and all dependent records, cleaning gateway state when configured."""
     agents = await Agent.objects.filter_by(board_id=board.id).all(session)
@@ -43,17 +57,19 @@ async def delete_board(session: AsyncSession, *, board: Board) -> OkResponse:
         gateway = await require_gateway_for_board(session, board, require_workspace_root=True)
         # Ensure URL is present (required for gateway cleanup calls).
         gateway_client_config(gateway)
-        try:
-            for agent in agents:
+        for agent in agents:
+            try:
                 await OpenClawGatewayProvisioner().delete_agent_lifecycle(
                     agent=agent,
                     gateway=gateway,
                 )
-        except OpenClawGatewayError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Gateway cleanup failed: {exc}",
-            ) from exc
+            except OpenClawGatewayError as exc:
+                if _is_missing_gateway_agent_error(exc):
+                    continue
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Gateway cleanup failed: {exc}",
+                ) from exc
 
     if task_ids:
         await crud.delete_where(
@@ -62,6 +78,14 @@ async def delete_board(session: AsyncSession, *, board: Board) -> OkResponse:
             col(ActivityEvent.task_id).in_(task_ids),
             commit=False,
         )
+        await crud.delete_where(
+            session,
+            TagAssignment,
+            col(TagAssignment.task_id).in_(task_ids),
+            commit=False,
+        )
+    # Keep teardown ordered around FK/reference chains so dependent rows are gone
+    # before deleting their parent task/agent/board records.
     await crud.delete_where(
         session,
         TaskDependency,
@@ -84,6 +108,12 @@ async def delete_board(session: AsyncSession, *, board: Board) -> OkResponse:
     await crud.delete_where(session, Approval, col(Approval.board_id) == board.id)
 
     await crud.delete_where(session, BoardMemory, col(BoardMemory.board_id) == board.id)
+    await crud.delete_where(
+        session,
+        BoardWebhookPayload,
+        col(BoardWebhookPayload.board_id) == board.id,
+    )
+    await crud.delete_where(session, BoardWebhook, col(BoardWebhook.board_id) == board.id)
     await crud.delete_where(
         session,
         BoardOnboardingSession,

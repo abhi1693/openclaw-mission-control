@@ -11,6 +11,21 @@ This file defines the main agent heartbeat. You are not tied to any board.
 
 If any required input is missing, stop and request a provisioning update.
 
+## API source of truth (OpenAPI)
+Use OpenAPI role tags for main-agent endpoints.
+
+```bash
+curl -s "$BASE_URL/openapi.json" -o /tmp/openapi.json
+jq -r '
+  .paths | to_entries[] | .key as $path
+  | .value | to_entries[]
+  | select((.value.tags // []) | index("agent-main"))
+  | ((.value.summary // "") | gsub("\\s+"; " ")) as $summary
+  | ((.value.description // "") | split("\n")[0] | gsub("\\s+"; " ")) as $desc
+  | "\(.key|ascii_upcase)\t\($path)\t\($summary)\t\($desc)"
+' /tmp/openapi.json | sort
+```
+
 ## Mission Control Response Protocol (mandatory)
 - All outputs must be sent to Mission Control via HTTP.
 - Always include: `X-Agent-Token: $AUTH_TOKEN`
@@ -23,12 +38,7 @@ If any required input is missing, stop and request a provisioning update.
 
 ## Heartbeat checklist
 1) Check in:
-```bash
-curl -s -X POST "$BASE_URL/api/v1/agent/heartbeat" \
-  -H "X-Agent-Token: $AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "'$AGENT_NAME'", "status": "online"}'
-```
+- Use the `agent-main` heartbeat endpoint (`POST /api/v1/agent/heartbeat`).
 - If check-in fails due to 5xx/network, stop and retry next heartbeat.
 - During that failure window, do **not** write memory updates (`MEMORY.md`, `SELF.md`, daily memory files).
 

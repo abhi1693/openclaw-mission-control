@@ -11,6 +11,6 @@
 export interface BoardMemoryCreate {
   /** @minLength 1 */
   content: string;
-  tags?: string[] | null;
   source?: string | null;
+  tags?: string[] | null;
 }

@@ -12,19 +12,19 @@ import type { AgentReadIdentityProfile } from "./agentReadIdentityProfile";
  */
 export interface AgentRead {
   board_id?: string | null;
-  /** @minLength 1 */
-  name: string;
-  status?: string;
+  created_at: string;
+  gateway_id: string;
   heartbeat_config?: AgentReadHeartbeatConfig;
+  id: string;
   identity_profile?: AgentReadIdentityProfile;
   identity_template?: string | null;
-  soul_template?: string | null;
-  id: string;
-  gateway_id: string;
   is_board_lead?: boolean;
   is_gateway_main?: boolean;
-  openclaw_session_id?: string | null;
   last_seen_at: string | null;
-  created_at: string;
+  /** @minLength 1 */
+  name: string;
+  openclaw_session_id?: string | null;
+  soul_template?: string | null;
+  status?: string;
   updated_at: string;
 }

@@ -9,8 +9,8 @@
  * Heartbeat payload used to create an agent lazily.
  */
 export interface AgentHeartbeatCreate {
-  status?: string | null;
+  board_id?: string | null;
   /** @minLength 1 */
   name: string;
-  board_id?: string | null;
+  status?: string | null;
 }

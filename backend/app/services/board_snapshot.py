@@ -36,10 +36,21 @@ def _memory_to_read(memory: BoardMemory) -> BoardMemoryRead:
     return BoardMemoryRead.model_validate(memory, from_attributes=True)
 
 
-def _approval_to_read(approval: Approval, *, task_ids: list[UUID]) -> ApprovalRead:
+def _approval_to_read(
+    approval: Approval,
+    *,
+    task_ids: list[UUID],
+    task_titles: list[str],
+) -> ApprovalRead:
     model = ApprovalRead.model_validate(approval, from_attributes=True)
     primary_task_id = task_ids[0] if task_ids else None
-    return model.model_copy(update={"task_id": primary_task_id, "task_ids": task_ids})
+    return model.model_copy(
+        update={
+            "task_id": primary_task_id,
+            "task_ids": task_ids,
+            "task_titles": task_titles,
+        },
+    )
 
 
 def _task_to_card(
@@ -137,13 +148,23 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
         session,
         approval_ids=approval_ids,
     )
+    task_title_by_id = {task.id: task.title for task in tasks}
+    # Hydrate each approval with linked task metadata, falling back to legacy
+    # single-task fields so older rows still render complete approval cards.
     approval_reads = [
         _approval_to_read(
             approval,
-            task_ids=task_ids_by_approval.get(
-                approval.id,
-                [approval.task_id] if approval.task_id is not None else [],
+            task_ids=(
+                linked_task_ids := task_ids_by_approval.get(
+                    approval.id,
+                    [approval.task_id] if approval.task_id is not None else [],
+                )
             ),
+            task_titles=[
+                task_title_by_id[task_id]
+                for task_id in linked_task_ids
+                if task_id in task_title_by_id
+            ],
         )
         for approval in approvals
     ]

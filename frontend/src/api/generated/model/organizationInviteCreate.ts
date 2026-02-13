@@ -10,9 +10,9 @@ import type { OrganizationBoardAccessSpec } from "./organizationBoardAccessSpec"
  * Payload for creating an organization invite.
  */
 export interface OrganizationInviteCreate {
-  invited_email: string;
-  role?: string;
   all_boards_read?: boolean;
   all_boards_write?: boolean;
   board_access?: OrganizationBoardAccessSpec[];
+  invited_email: string;
+  role?: string;
 }

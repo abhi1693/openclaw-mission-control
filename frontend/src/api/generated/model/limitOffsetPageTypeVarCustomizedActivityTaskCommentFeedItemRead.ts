@@ -8,10 +8,10 @@ import type { ActivityTaskCommentFeedItemRead } from "./activityTaskCommentFeedI
 
 export interface LimitOffsetPageTypeVarCustomizedActivityTaskCommentFeedItemRead {
   items: ActivityTaskCommentFeedItemRead[];
-  /** @minimum 0 */
-  total: number;
   /** @minimum 1 */
   limit: number;
   /** @minimum 0 */
   offset: number;
+  /** @minimum 0 */
+  total: number;
 }

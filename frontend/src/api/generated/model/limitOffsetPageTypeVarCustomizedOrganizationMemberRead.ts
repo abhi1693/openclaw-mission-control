@@ -8,10 +8,10 @@ import type { OrganizationMemberRead } from "./organizationMemberRead";
 
 export interface LimitOffsetPageTypeVarCustomizedOrganizationMemberRead {
   items: OrganizationMemberRead[];
-  /** @minimum 0 */
-  total: number;
   /** @minimum 1 */
   limit: number;
   /** @minimum 0 */
   offset: number;
+  /** @minimum 0 */
+  total: number;
 }

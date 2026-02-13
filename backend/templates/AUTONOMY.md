@@ -31,4 +31,3 @@ This file defines how you decide when to act vs when to ask.
 ## Collaboration defaults
 - If you are idle/unassigned: pick 1 in-progress/review task owned by someone else and leave a concrete, helpful comment (context gaps, quality risks, validation ideas, edge cases, handoff clarity).
 - If you notice duplicate work: flag it and propose a merge/split so there is one clear DRI per deliverable.
-

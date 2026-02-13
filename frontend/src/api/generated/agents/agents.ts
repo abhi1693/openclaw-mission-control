@@ -365,6 +365,134 @@ export const useCreateAgentApiV1AgentsPost = <
   );
 };
 /**
+ * Heartbeat an existing agent or create/provision one if needed.
+ * @summary Heartbeat Or Create Agent
+ */
+export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse200 = {
+  data: AgentRead;
+  status: 200;
+};
+
+export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseSuccess =
+  heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse200 & {
+    headers: Headers;
+  };
+export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseError =
+  heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse422 & {
+    headers: Headers;
+  };
+
+export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse =
+  | heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseSuccess
+  | heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseError;
+
+export const getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostUrl = () => {
+  return `/api/v1/agents/heartbeat`;
+};
+
+export const heartbeatOrCreateAgentApiV1AgentsHeartbeatPost = async (
+  agentHeartbeatCreate: AgentHeartbeatCreate,
+  options?: RequestInit,
+): Promise<heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse> => {
+  return customFetch<heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse>(
+    getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(agentHeartbeatCreate),
+    },
+  );
+};
+
+export const getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>
+      >,
+      TError,
+      { data: AgentHeartbeatCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>>,
+    TError,
+    { data: AgentHeartbeatCreate },
+    TContext
+  > => {
+    const mutationKey = ["heartbeatOrCreateAgentApiV1AgentsHeartbeatPost"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>
+      >,
+      { data: AgentHeartbeatCreate }
+    > = (props) => {
+      const { data } = props ?? {};
+
+      return heartbeatOrCreateAgentApiV1AgentsHeartbeatPost(
+        data,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type HeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>>
+  >;
+export type HeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationBody =
+  AgentHeartbeatCreate;
+export type HeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Heartbeat Or Create Agent
+ */
+export const useHeartbeatOrCreateAgentApiV1AgentsHeartbeatPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>
+      >,
+      TError,
+      { data: AgentHeartbeatCreate },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>>,
+  TError,
+  { data: AgentHeartbeatCreate },
+  TContext
+> => {
+  return useMutation(
+    getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * Stream agent updates as SSE events.
  * @summary Stream Agents
  */
@@ -576,6 +704,123 @@ export function useStreamAgentsApiV1AgentsStreamGet<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * Delete an agent and clean related task state.
+ * @summary Delete Agent
+ */
+export type deleteAgentApiV1AgentsAgentIdDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteAgentApiV1AgentsAgentIdDeleteResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type deleteAgentApiV1AgentsAgentIdDeleteResponseSuccess =
+  deleteAgentApiV1AgentsAgentIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteAgentApiV1AgentsAgentIdDeleteResponseError =
+  deleteAgentApiV1AgentsAgentIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type deleteAgentApiV1AgentsAgentIdDeleteResponse =
+  | deleteAgentApiV1AgentsAgentIdDeleteResponseSuccess
+  | deleteAgentApiV1AgentsAgentIdDeleteResponseError;
+
+export const getDeleteAgentApiV1AgentsAgentIdDeleteUrl = (agentId: string) => {
+  return `/api/v1/agents/${agentId}`;
+};
+
+export const deleteAgentApiV1AgentsAgentIdDelete = async (
+  agentId: string,
+  options?: RequestInit,
+): Promise<deleteAgentApiV1AgentsAgentIdDeleteResponse> => {
+  return customFetch<deleteAgentApiV1AgentsAgentIdDeleteResponse>(
+    getDeleteAgentApiV1AgentsAgentIdDeleteUrl(agentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteAgentApiV1AgentsAgentIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
+    TError,
+    { agentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
+  TError,
+  { agentId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteAgentApiV1AgentsAgentIdDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
+    { agentId: string }
+  > = (props) => {
+    const { agentId } = props ?? {};
+
+    return deleteAgentApiV1AgentsAgentIdDelete(agentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAgentApiV1AgentsAgentIdDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>
+>;
+
+export type DeleteAgentApiV1AgentsAgentIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Delete Agent
+ */
+export const useDeleteAgentApiV1AgentsAgentIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
+      TError,
+      { agentId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
+  TError,
+  { agentId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteAgentApiV1AgentsAgentIdDeleteMutationOptions(options),
+    queryClient,
+  );
+};
 /**
  * Get a single agent by id.
  * @summary Get Agent
@@ -938,123 +1183,6 @@ export const useUpdateAgentApiV1AgentsAgentIdPatch = <
   );
 };
 /**
- * Delete an agent and clean related task state.
- * @summary Delete Agent
- */
-export type deleteAgentApiV1AgentsAgentIdDeleteResponse200 = {
-  data: OkResponse;
-  status: 200;
-};
-
-export type deleteAgentApiV1AgentsAgentIdDeleteResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type deleteAgentApiV1AgentsAgentIdDeleteResponseSuccess =
-  deleteAgentApiV1AgentsAgentIdDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteAgentApiV1AgentsAgentIdDeleteResponseError =
-  deleteAgentApiV1AgentsAgentIdDeleteResponse422 & {
-    headers: Headers;
-  };
-
-export type deleteAgentApiV1AgentsAgentIdDeleteResponse =
-  | deleteAgentApiV1AgentsAgentIdDeleteResponseSuccess
-  | deleteAgentApiV1AgentsAgentIdDeleteResponseError;
-
-export const getDeleteAgentApiV1AgentsAgentIdDeleteUrl = (agentId: string) => {
-  return `/api/v1/agents/${agentId}`;
-};
-
-export const deleteAgentApiV1AgentsAgentIdDelete = async (
-  agentId: string,
-  options?: RequestInit,
-): Promise<deleteAgentApiV1AgentsAgentIdDeleteResponse> => {
-  return customFetch<deleteAgentApiV1AgentsAgentIdDeleteResponse>(
-    getDeleteAgentApiV1AgentsAgentIdDeleteUrl(agentId),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export const getDeleteAgentApiV1AgentsAgentIdDeleteMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
-    TError,
-    { agentId: string },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
-  TError,
-  { agentId: string },
-  TContext
-> => {
-  const mutationKey = ["deleteAgentApiV1AgentsAgentIdDelete"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
-    { agentId: string }
-  > = (props) => {
-    const { agentId } = props ?? {};
-
-    return deleteAgentApiV1AgentsAgentIdDelete(agentId, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteAgentApiV1AgentsAgentIdDeleteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>
->;
-
-export type DeleteAgentApiV1AgentsAgentIdDeleteMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Delete Agent
- */
-export const useDeleteAgentApiV1AgentsAgentIdDelete = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
-      TError,
-      { agentId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof deleteAgentApiV1AgentsAgentIdDelete>>,
-  TError,
-  { agentId: string },
-  TContext
-> => {
-  return useMutation(
-    getDeleteAgentApiV1AgentsAgentIdDeleteMutationOptions(options),
-    queryClient,
-  );
-};
-/**
  * Record a heartbeat for a specific agent.
  * @summary Heartbeat Agent
  */
@@ -1179,134 +1307,6 @@ export const useHeartbeatAgentApiV1AgentsAgentIdHeartbeatPost = <
 > => {
   return useMutation(
     getHeartbeatAgentApiV1AgentsAgentIdHeartbeatPostMutationOptions(options),
-    queryClient,
-  );
-};
-/**
- * Heartbeat an existing agent or create/provision one if needed.
- * @summary Heartbeat Or Create Agent
- */
-export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse200 = {
-  data: AgentRead;
-  status: 200;
-};
-
-export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseSuccess =
-  heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse200 & {
-    headers: Headers;
-  };
-export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseError =
-  heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse422 & {
-    headers: Headers;
-  };
-
-export type heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse =
-  | heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseSuccess
-  | heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponseError;
-
-export const getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostUrl = () => {
-  return `/api/v1/agents/heartbeat`;
-};
-
-export const heartbeatOrCreateAgentApiV1AgentsHeartbeatPost = async (
-  agentHeartbeatCreate: AgentHeartbeatCreate,
-  options?: RequestInit,
-): Promise<heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse> => {
-  return customFetch<heartbeatOrCreateAgentApiV1AgentsHeartbeatPostResponse>(
-    getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostUrl(),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(agentHeartbeatCreate),
-    },
-  );
-};
-
-export const getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>
-      >,
-      TError,
-      { data: AgentHeartbeatCreate },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>>,
-    TError,
-    { data: AgentHeartbeatCreate },
-    TContext
-  > => {
-    const mutationKey = ["heartbeatOrCreateAgentApiV1AgentsHeartbeatPost"];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>
-      >,
-      { data: AgentHeartbeatCreate }
-    > = (props) => {
-      const { data } = props ?? {};
-
-      return heartbeatOrCreateAgentApiV1AgentsHeartbeatPost(
-        data,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type HeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>>
-  >;
-export type HeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationBody =
-  AgentHeartbeatCreate;
-export type HeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Heartbeat Or Create Agent
- */
-export const useHeartbeatOrCreateAgentApiV1AgentsHeartbeatPost = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>
-      >,
-      TError,
-      { data: AgentHeartbeatCreate },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof heartbeatOrCreateAgentApiV1AgentsHeartbeatPost>>,
-  TError,
-  { data: AgentHeartbeatCreate },
-  TContext
-> => {
-  return useMutation(
-    getHeartbeatOrCreateAgentApiV1AgentsHeartbeatPostMutationOptions(options),
     queryClient,
   );
 };

@@ -6,7 +6,8 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from enum import Enum
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -68,6 +69,7 @@ ACTOR_DEP = Depends(require_admin_or_agent)
 IS_CHAT_QUERY = Query(default=None)
 SINCE_QUERY = Query(default=None)
 _RUNTIME_TYPE_REFERENCES = (UUID,)
+AGENT_BOARD_ROLE_TAGS = cast("list[str | Enum]", ["agent-lead", "agent-worker"])
 
 
 def _parse_since(value: str | None) -> datetime | None:
@@ -402,14 +404,21 @@ async def create_board_group_memory(
     return memory
 
 
-@board_router.get("", response_model=DefaultLimitOffsetPage[BoardGroupMemoryRead])
+@board_router.get(
+    "",
+    response_model=DefaultLimitOffsetPage[BoardGroupMemoryRead],
+    tags=AGENT_BOARD_ROLE_TAGS,
+)
 async def list_board_group_memory_for_board(
     *,
     is_chat: bool | None = IS_CHAT_QUERY,
     board: Board = BOARD_READ_DEP,
     session: AsyncSession = SESSION_DEP,
 ) -> LimitOffsetPage[BoardGroupMemoryRead]:
-    """List memory entries for the board's linked group."""
+    """List shared memory for the board's linked group.
+
+    Use this for cross-board context and coordination signals.
+    """
     group_id = board.board_group_id
     if group_id is None:
         return await paginate(session, BoardGroupMemory.objects.by_ids([]).statement)
@@ -426,7 +435,7 @@ async def list_board_group_memory_for_board(
     return await paginate(session, queryset.statement)
 
 
-@board_router.get("/stream")
+@board_router.get("/stream", tags=AGENT_BOARD_ROLE_TAGS)
 async def stream_board_group_memory_for_board(
     request: Request,
     *,
@@ -434,7 +443,7 @@ async def stream_board_group_memory_for_board(
     since: str | None = SINCE_QUERY,
     is_chat: bool | None = IS_CHAT_QUERY,
 ) -> EventSourceResponse:
-    """Stream memory entries for the board's linked group."""
+    """Stream linked-group memory via SSE for near-real-time coordination."""
     group_id = board.board_group_id
     since_dt = _parse_since(since) or utcnow()
     last_seen = since_dt
@@ -463,14 +472,18 @@ async def stream_board_group_memory_for_board(
     return EventSourceResponse(event_generator(), ping=15)
 
 
-@board_router.post("", response_model=BoardGroupMemoryRead)
+@board_router.post("", response_model=BoardGroupMemoryRead, tags=AGENT_BOARD_ROLE_TAGS)
 async def create_board_group_memory_for_board(
     payload: BoardGroupMemoryCreate,
     board: Board = BOARD_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> BoardGroupMemory:
-    """Create a group memory entry from a board context and notify recipients."""
+    """Create shared group memory from a board context.
+
+    When tags/mentions indicate chat or broadcast intent, eligible agents in the
+    linked group are notified.
+    """
     group_id = board.board_group_id
     if group_id is None:
         raise HTTPException(

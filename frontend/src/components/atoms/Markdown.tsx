@@ -1,6 +1,14 @@
 "use client";
 
-import { memo, type HTMLAttributes } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  memo,
+  type HTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkBreaks from "remark-breaks";
@@ -11,6 +19,89 @@ import { cn } from "@/lib/utils";
 type MarkdownCodeProps = HTMLAttributes<HTMLElement> & {
   node?: unknown;
   inline?: boolean;
+};
+
+const MENTION_PATTERN =
+  /(^|[^A-Za-z0-9_])(@[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?)/g;
+
+const renderMentionsInText = (text: string, keyPrefix: string): ReactNode => {
+  let lastIndex = 0;
+  let mentionCount = 0;
+  const nodes: ReactNode[] = [];
+
+  for (const match of text.matchAll(MENTION_PATTERN)) {
+    const matchIndex = match.index ?? 0;
+    const prefix = match[1] ?? "";
+    const mention = match[2] ?? "";
+    const mentionStart = matchIndex + prefix.length;
+
+    if (matchIndex > lastIndex) {
+      nodes.push(text.slice(lastIndex, matchIndex));
+    }
+
+    if (prefix) {
+      nodes.push(prefix);
+    }
+
+    nodes.push(
+      <span
+        key={`${keyPrefix}-${mentionCount}`}
+        className="font-semibold text-cyan-700"
+      >
+        {mention}
+      </span>,
+    );
+
+    lastIndex = mentionStart + mention.length;
+    mentionCount += 1;
+  }
+
+  if (nodes.length === 0) {
+    return text;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes;
+};
+
+const renderMentions = (
+  content: ReactNode,
+  keyPrefix = "mention",
+): ReactNode => {
+  if (typeof content === "string") {
+    return renderMentionsInText(content, keyPrefix);
+  }
+  if (
+    content === null ||
+    content === undefined ||
+    typeof content === "boolean" ||
+    typeof content === "number"
+  ) {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return Children.map(content, (child, index) =>
+      renderMentions(child, `${keyPrefix}-${index}`),
+    );
+  }
+  if (isValidElement(content)) {
+    if (typeof content.type === "string" && content.type === "code") {
+      return content;
+    }
+    const childProps = content.props as { children?: ReactNode };
+    if (childProps.children === undefined) {
+      return content;
+    }
+    return cloneElement(
+      content as ReactElement<{ children?: ReactNode }>,
+      undefined,
+      renderMentions(childProps.children, keyPrefix),
+    );
+  }
+  return content;
 };
 
 const MARKDOWN_CODE_COMPONENTS: Components = {
@@ -77,28 +168,47 @@ const MARKDOWN_TABLE_COMPONENTS: Components = {
   tr: ({ node: _node, className, ...props }) => (
     <tr className={cn("align-top", className)} {...props} />
   ),
-  th: ({ node: _node, className, ...props }) => (
+  th: ({ node: _node, className, children, ...props }) => (
     <th
       className={cn(
         "border border-slate-200 px-3 py-2 text-left text-xs font-semibold",
         className,
       )}
       {...props}
-    />
+    >
+      {renderMentions(children)}
+    </th>
   ),
-  td: ({ node: _node, className, ...props }) => (
+  td: ({ node: _node, className, children, ...props }) => (
     <td
       className={cn("border border-slate-200 px-3 py-2 align-top", className)}
       {...props}
-    />
+    >
+      {renderMentions(children)}
+    </td>
   ),
 };
 
 const MARKDOWN_COMPONENTS_BASIC: Components = {
   ...MARKDOWN_TABLE_COMPONENTS,
   ...MARKDOWN_CODE_COMPONENTS,
-  p: ({ node: _node, className, ...props }) => (
-    <p className={cn("mb-2 last:mb-0", className)} {...props} />
+  a: ({ node: _node, className, children, ...props }) => (
+    <a
+      className={cn(
+        "font-medium text-sky-700 underline decoration-sky-400 underline-offset-2 transition-colors hover:text-sky-800 hover:decoration-sky-600",
+        className,
+      )}
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    >
+      {renderMentions(children)}
+    </a>
+  ),
+  p: ({ node: _node, className, children, ...props }) => (
+    <p className={cn("mb-2 last:mb-0", className)} {...props}>
+      {renderMentions(children)}
+    </p>
   ),
   ul: ({ node: _node, className, ...props }) => (
     <ul className={cn("mb-2 list-disc pl-5", className)} {...props} />
@@ -106,27 +216,39 @@ const MARKDOWN_COMPONENTS_BASIC: Components = {
   ol: ({ node: _node, className, ...props }) => (
     <ol className={cn("mb-2 list-decimal pl-5", className)} {...props} />
   ),
-  li: ({ node: _node, className, ...props }) => (
-    <li className={cn("mb-1", className)} {...props} />
+  li: ({ node: _node, className, children, ...props }) => (
+    <li className={cn("mb-1", className)} {...props}>
+      {renderMentions(children)}
+    </li>
   ),
-  strong: ({ node: _node, className, ...props }) => (
-    <strong className={cn("font-semibold", className)} {...props} />
+  strong: ({ node: _node, className, children, ...props }) => (
+    <strong className={cn("font-semibold", className)} {...props}>
+      {renderMentions(children)}
+    </strong>
   ),
 };
 
 const MARKDOWN_COMPONENTS_DESCRIPTION: Components = {
   ...MARKDOWN_COMPONENTS_BASIC,
-  p: ({ node: _node, className, ...props }) => (
-    <p className={cn("mb-3 last:mb-0", className)} {...props} />
+  p: ({ node: _node, className, children, ...props }) => (
+    <p className={cn("mb-3 last:mb-0", className)} {...props}>
+      {renderMentions(children)}
+    </p>
   ),
-  h1: ({ node: _node, className, ...props }) => (
-    <h1 className={cn("mb-2 text-base font-semibold", className)} {...props} />
+  h1: ({ node: _node, className, children, ...props }) => (
+    <h1 className={cn("mb-2 text-base font-semibold", className)} {...props}>
+      {renderMentions(children)}
+    </h1>
   ),
-  h2: ({ node: _node, className, ...props }) => (
-    <h2 className={cn("mb-2 text-sm font-semibold", className)} {...props} />
+  h2: ({ node: _node, className, children, ...props }) => (
+    <h2 className={cn("mb-2 text-sm font-semibold", className)} {...props}>
+      {renderMentions(children)}
+    </h2>
   ),
-  h3: ({ node: _node, className, ...props }) => (
-    <h3 className={cn("mb-2 text-sm font-semibold", className)} {...props} />
+  h3: ({ node: _node, className, children, ...props }) => (
+    <h3 className={cn("mb-2 text-sm font-semibold", className)} {...props}>
+      {renderMentions(children)}
+    </h3>
   ),
 };
 

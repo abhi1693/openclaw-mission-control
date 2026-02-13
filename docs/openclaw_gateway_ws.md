@@ -1,0 +1,3 @@
+# Gateway WebSocket protocol
+
+Placeholder.

@@ -13,10 +13,10 @@ import type { BoardOnboardingUserProfile } from "./boardOnboardingUserProfile";
  */
 export interface BoardOnboardingAgentComplete {
   board_type: string;
+  lead_agent?: BoardOnboardingLeadAgentDraft | null;
   objective?: string | null;
+  status: "complete";
   success_metrics?: BoardOnboardingAgentCompleteSuccessMetrics;
   target_date?: string | null;
-  status: "complete";
   user_profile?: BoardOnboardingUserProfile | null;
-  lead_agent?: BoardOnboardingLeadAgentDraft | null;
 }

@@ -26,6 +26,7 @@ from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
 from app.models.agents import Agent
 from app.models.approvals import Approval
+from app.models.tasks import Task
 from app.schemas.approvals import ApprovalCreate, ApprovalRead, ApprovalStatus, ApprovalUpdate
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.activity_log import record_activity
@@ -96,10 +97,36 @@ async def _approval_task_ids_map(
     return mapping
 
 
-def _approval_to_read(approval: Approval, *, task_ids: list[UUID]) -> ApprovalRead:
+async def _task_titles_by_id(
+    session: AsyncSession,
+    *,
+    task_ids: set[UUID],
+) -> dict[UUID, str]:
+    if not task_ids:
+        return {}
+    rows = list(
+        await session.exec(
+            select(col(Task.id), col(Task.title)).where(col(Task.id).in_(task_ids)),
+        ),
+    )
+    return {task_id: title for task_id, title in rows}
+
+
+def _approval_to_read(
+    approval: Approval,
+    *,
+    task_ids: list[UUID],
+    task_titles: list[str],
+) -> ApprovalRead:
     primary_task_id = task_ids[0] if task_ids else None
     model = ApprovalRead.model_validate(approval, from_attributes=True)
-    return model.model_copy(update={"task_id": primary_task_id, "task_ids": task_ids})
+    return model.model_copy(
+        update={
+            "task_id": primary_task_id,
+            "task_ids": task_ids,
+            "task_titles": task_titles,
+        },
+    )
 
 
 async def _approval_reads(
@@ -107,8 +134,17 @@ async def _approval_reads(
     approvals: Sequence[Approval],
 ) -> list[ApprovalRead]:
     mapping = await _approval_task_ids_map(session, approvals)
+    title_by_id = await _task_titles_by_id(
+        session,
+        task_ids={task_id for task_ids in mapping.values() for task_id in task_ids},
+    )
     return [
-        _approval_to_read(approval, task_ids=mapping.get(approval.id, [])) for approval in approvals
+        _approval_to_read(
+            approval,
+            task_ids=(task_ids := mapping.get(approval.id, [])),
+            task_titles=[title_by_id[task_id] for task_id in task_ids if task_id in title_by_id],
+        )
+        for approval in approvals
     ]
 
 
@@ -389,7 +425,12 @@ async def create_approval(
     )
     await session.commit()
     await session.refresh(approval)
-    return _approval_to_read(approval, task_ids=task_ids)
+    title_by_id = await _task_titles_by_id(session, task_ids=set(task_ids))
+    return _approval_to_read(
+        approval,
+        task_ids=task_ids,
+        task_titles=[title_by_id[task_id] for task_id in task_ids if task_id in title_by_id],
+    )
 
 
 @router.patch("/{approval_id}", response_model=ApprovalRead)

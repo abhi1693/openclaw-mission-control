@@ -9,7 +9,7 @@
  * Payload for partial board-group updates.
  */
 export interface BoardGroupUpdate {
+  description?: string | null;
   name?: string | null;
   slug?: string | null;
-  description?: string | null;
 }

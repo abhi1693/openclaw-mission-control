@@ -5,16 +5,16 @@ from __future__ import annotations
 import hashlib
 from typing import Mapping
 
-CONFIDENCE_THRESHOLD = 80
+CONFIDENCE_THRESHOLD = 80.0
 MIN_PLANNING_SIGNALS = 2
 
 
-def compute_confidence(rubric_scores: Mapping[str, int]) -> int:
+def compute_confidence(rubric_scores: Mapping[str, int]) -> float:
     """Compute aggregate confidence from rubric score components."""
-    return int(sum(rubric_scores.values()))
+    return float(sum(rubric_scores.values()))
 
 
-def approval_required(*, confidence: int, is_external: bool, is_risky: bool) -> bool:
+def approval_required(*, confidence: float, is_external: bool, is_risky: bool) -> bool:
     """Return whether an action must go through explicit approval."""
     return is_external or is_risky or confidence < CONFIDENCE_THRESHOLD
 

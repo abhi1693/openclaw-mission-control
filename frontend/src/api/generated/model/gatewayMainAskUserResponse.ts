@@ -9,8 +9,8 @@
  * Response payload for user-question dispatch via gateway main agent.
  */
 export interface GatewayMainAskUserResponse {
-  ok?: boolean;
   board_id: string;
   main_agent_id?: string | null;
   main_agent_name?: string | null;
+  ok?: boolean;
 }

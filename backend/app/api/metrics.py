@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import DateTime, case
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import func
@@ -18,6 +18,7 @@ from app.core.time import utcnow
 from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
+from app.models.boards import Board
 from app.models.tasks import Task
 from app.schemas.metrics import (
     DashboardBucketKey,
@@ -38,6 +39,8 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 ERROR_EVENT_PATTERN = "%failed"
 _RUNTIME_TYPE_REFERENCES = (UUID, AsyncSession)
 RANGE_QUERY = Query(default="24h")
+BOARD_ID_QUERY = Query(default=None)
+GROUP_ID_QUERY = Query(default=None)
 SESSION_DEP = Depends(get_session)
 ORG_MEMBER_DEP = Depends(require_org_member)
 
@@ -250,9 +253,7 @@ async def _query_wip(
     if not board_ids:
         return _wip_series_from_mapping(range_spec, {})
 
-    inbox_bucket_col = func.date_trunc(range_spec.bucket, Task.created_at).label(
-        "inbox_bucket"
-    )
+    inbox_bucket_col = func.date_trunc(range_spec.bucket, Task.created_at).label("inbox_bucket")
     inbox_statement = (
         select(inbox_bucket_col, func.count())
         .where(col(Task.status) == "inbox")
@@ -264,9 +265,7 @@ async def _query_wip(
     )
     inbox_results = (await session.exec(inbox_statement)).all()
 
-    status_bucket_col = func.date_trunc(range_spec.bucket, Task.updated_at).label(
-        "status_bucket"
-    )
+    status_bucket_col = func.date_trunc(range_spec.bucket, Task.updated_at).label("status_bucket")
     progress_case = case((col(Task.status) == "in_progress", 1), else_=0)
     review_case = case((col(Task.status) == "review", 1), else_=0)
     done_case = case((col(Task.status) == "done", 1), else_=0)
@@ -389,16 +388,54 @@ async def _tasks_in_progress(
     return int(result)
 
 
+async def _resolve_dashboard_board_ids(
+    session: AsyncSession,
+    *,
+    ctx: OrganizationContext,
+    board_id: UUID | None,
+    group_id: UUID | None,
+) -> list[UUID]:
+    board_ids = await list_accessible_board_ids(session, member=ctx.member, write=False)
+    if not board_ids:
+        return []
+    allowed = set(board_ids)
+
+    if board_id is not None and board_id not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    if group_id is None:
+        return [board_id] if board_id is not None else board_ids
+
+    group_board_ids = list(
+        await session.exec(
+            select(Board.id)
+            .where(col(Board.organization_id) == ctx.member.organization_id)
+            .where(col(Board.board_group_id) == group_id)
+            .where(col(Board.id).in_(board_ids)),
+        ),
+    )
+    if board_id is not None:
+        return [board_id] if board_id in set(group_board_ids) else []
+    return group_board_ids
+
+
 @router.get("/dashboard", response_model=DashboardMetrics)
 async def dashboard_metrics(
     range_key: DashboardRangeKey = RANGE_QUERY,
+    board_id: UUID | None = BOARD_ID_QUERY,
+    group_id: UUID | None = GROUP_ID_QUERY,
     session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_MEMBER_DEP,
 ) -> DashboardMetrics:
     """Return dashboard KPIs and time-series data for accessible boards."""
     primary = _resolve_range(range_key)
     comparison = _comparison_range(primary)
-    board_ids = await list_accessible_board_ids(session, member=ctx.member, write=False)
+    board_ids = await _resolve_dashboard_board_ids(
+        session,
+        ctx=ctx,
+        board_id=board_id,
+        group_id=group_id,
+    )
 
     throughput_primary = await _query_throughput(session, primary, board_ids)
     throughput_comparison = await _query_throughput(session, comparison, board_ids)

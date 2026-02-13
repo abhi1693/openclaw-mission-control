@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 from starlette.requests import Request
@@ -14,8 +15,11 @@ from app.core.error_handling import (
     _error_payload,
     _get_request_id,
     _http_exception_exception_handler,
+    _json_safe,
     _request_validation_exception_handler,
     _response_validation_exception_handler,
+    _request_validation_handler,
+    _response_validation_handler,
     install_error_handling,
 )
 
@@ -30,6 +34,31 @@ def test_request_validation_error_includes_request_id():
 
     client = TestClient(app)
     resp = client.get("/needs-int?limit=abc")
+
+    assert resp.status_code == 422
+    body = resp.json()
+    assert isinstance(body.get("detail"), list)
+    assert isinstance(body.get("request_id"), str) and body["request_id"]
+    assert resp.headers.get(REQUEST_ID_HEADER) == body["request_id"]
+
+
+def test_request_validation_error_handles_bytes_input_without_500():
+    class Payload(BaseModel):
+        content: str
+
+    app = FastAPI()
+    install_error_handling(app)
+
+    @app.put("/needs-object")
+    def needs_object(payload: Payload) -> dict[str, str]:
+        return {"content": payload.content}
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.put(
+        "/needs-object",
+        content=b"plain-text-body",
+        headers={"content-type": "text/plain"},
+    )
 
     assert resp.status_code == 422
     body = resp.json()
@@ -184,6 +213,20 @@ def test_error_payload_omits_request_id_when_none() -> None:
     assert _error_payload(detail="x", request_id=None) == {"detail": "x"}
 
 
+def test_json_safe_handles_binary_inputs() -> None:
+    assert _json_safe(b"\xf0\x9f\x92\xa1") == "💡"
+    assert _json_safe(bytearray(b"hello")) == "hello"
+    assert _json_safe(memoryview(b"world")) == "world"
+
+
+def test_json_safe_falls_back_to_string_for_unknown_objects() -> None:
+    class Weird:
+        def __str__(self) -> str:
+            return "weird-value"
+
+    assert _json_safe(Weird()) == "weird-value"
+
+
 @pytest.mark.asyncio
 async def test_request_validation_exception_wrapper_rejects_wrong_exception() -> None:
     req = Request({"type": "http", "headers": [], "state": {}})
@@ -203,3 +246,91 @@ async def test_http_exception_wrapper_rejects_wrong_exception() -> None:
     req = Request({"type": "http", "headers": [], "state": {}})
     with pytest.raises(TypeError, match="Expected StarletteHTTPException"):
         await _http_exception_exception_handler(req, Exception("x"))
+
+
+@pytest.mark.asyncio
+async def test_request_validation_handler_includes_request_id() -> None:
+    req = Request({"type": "http", "headers": [], "state": {"request_id": "req-1"}})
+    exc = RequestValidationError(
+        [
+            {
+                "loc": ("query", "limit"),
+                "msg": "value is not a valid integer",
+                "type": "type_error.integer",
+            }
+        ]
+    )
+
+    resp = await _request_validation_handler(req, exc)
+    assert resp.status_code == 422
+    assert resp.body
+
+
+@pytest.mark.asyncio
+async def test_request_validation_exception_wrapper_success_path() -> None:
+    req = Request({"type": "http", "headers": [], "state": {"request_id": "req-wrap-1"}})
+    exc = RequestValidationError(
+        [
+            {
+                "loc": ("query", "limit"),
+                "msg": "value is not a valid integer",
+                "type": "type_error.integer",
+            }
+        ]
+    )
+
+    resp = await _request_validation_exception_handler(req, exc)
+    assert resp.status_code == 422
+    assert b"request_id" in resp.body
+
+
+@pytest.mark.asyncio
+async def test_response_validation_handler_includes_request_id() -> None:
+    req = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/x",
+            "headers": [],
+            "state": {"request_id": "req-2"},
+        }
+    )
+    exc = ResponseValidationError(
+        [
+            {
+                "loc": ("response", "name"),
+                "msg": "field required",
+                "type": "value_error.missing",
+            }
+        ]
+    )
+
+    resp = await _response_validation_handler(req, exc)
+    assert resp.status_code == 500
+    assert resp.body
+
+
+@pytest.mark.asyncio
+async def test_response_validation_exception_wrapper_success_path() -> None:
+    req = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/x",
+            "headers": [],
+            "state": {"request_id": "req-wrap-2"},
+        }
+    )
+    exc = ResponseValidationError(
+        [
+            {
+                "loc": ("response", "name"),
+                "msg": "field required",
+                "type": "value_error.missing",
+            }
+        ]
+    )
+
+    resp = await _response_validation_exception_handler(req, exc)
+    assert resp.status_code == 500
+    assert b"request_id" in resp.body

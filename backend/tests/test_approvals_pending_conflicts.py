@@ -51,22 +51,25 @@ async def test_create_approval_rejects_duplicate_pending_for_same_task() -> None
         async with await _make_session(engine) as session:
             board, task_ids = await _seed_board_with_tasks(session, task_count=1)
             task_id = task_ids[0]
-            await approvals_api.create_approval(
+            created = await approvals_api.create_approval(
                 payload=ApprovalCreate(
                     action_type="task.execute",
                     task_id=task_id,
+                    payload={"reason": "Initial execution needs confirmation."},
                     confidence=80,
                     status="pending",
                 ),
                 board=board,
                 session=session,
             )
+            assert created.task_titles == [f"task-{task_id}"]
 
             with pytest.raises(HTTPException) as exc:
                 await approvals_api.create_approval(
                     payload=ApprovalCreate(
                         action_type="task.retry",
                         task_id=task_id,
+                        payload={"reason": "Retry should still be gated."},
                         confidence=77,
                         status="pending",
                     ),
@@ -91,22 +94,25 @@ async def test_create_approval_rejects_pending_conflict_from_linked_task_ids() -
         async with await _make_session(engine) as session:
             board, task_ids = await _seed_board_with_tasks(session, task_count=2)
             task_a, task_b = task_ids
-            await approvals_api.create_approval(
+            created = await approvals_api.create_approval(
                 payload=ApprovalCreate(
                     action_type="task.batch_execute",
                     task_ids=[task_a, task_b],
+                    payload={"reason": "Batch operation requires sign-off."},
                     confidence=85,
                     status="pending",
                 ),
                 board=board,
                 session=session,
             )
+            assert created.task_titles == [f"task-{task_a}", f"task-{task_b}"]
 
             with pytest.raises(HTTPException) as exc:
                 await approvals_api.create_approval(
                     payload=ApprovalCreate(
                         action_type="task.execute",
                         task_id=task_b,
+                        payload={"reason": "Single task overlaps with pending batch."},
                         confidence=70,
                         status="pending",
                     ),
@@ -135,6 +141,7 @@ async def test_update_approval_rejects_reopening_to_pending_with_existing_pendin
                 payload=ApprovalCreate(
                     action_type="task.execute",
                     task_id=task_id,
+                    payload={"reason": "Primary pending approval is active."},
                     confidence=83,
                     status="pending",
                 ),
@@ -145,6 +152,7 @@ async def test_update_approval_rejects_reopening_to_pending_with_existing_pendin
                 payload=ApprovalCreate(
                     action_type="task.review",
                     task_id=task_id,
+                    payload={"reason": "Review decision completed earlier."},
                     confidence=90,
                     status="approved",
                 ),

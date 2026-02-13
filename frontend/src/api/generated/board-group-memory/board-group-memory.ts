@@ -801,7 +801,9 @@ export function useStreamBoardGroupMemoryApiV1BoardGroupsGroupIdMemoryStreamGet<
 }
 
 /**
- * List memory entries for the board's linked group.
+ * List shared memory for the board's linked group.
+
+Use this for cross-board context and coordination signals.
  * @summary List Board Group Memory For Board
  */
 export type listBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryGetResponse200 =
@@ -1123,7 +1125,10 @@ export function useListBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryGet<
 }
 
 /**
- * Create a group memory entry from a board context and notify recipients.
+ * Create shared group memory from a board context.
+
+When tags/mentions indicate chat or broadcast intent, eligible agents in the
+linked group are notified.
  * @summary Create Board Group Memory For Board
  */
 export type createBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryPostResponse200 =
@@ -1280,7 +1285,7 @@ export const useCreateBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryPost 
     );
   };
 /**
- * Stream memory entries for the board's linked group.
+ * Stream linked-group memory via SSE for near-real-time coordination.
  * @summary Stream Board Group Memory For Board
  */
 export type streamBoardGroupMemoryForBoardApiV1BoardsBoardIdGroupMemoryStreamGetResponse200 =

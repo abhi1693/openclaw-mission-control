@@ -52,8 +52,13 @@ describe("BoardApprovalsPanel", () => {
         linked_request: {
           tasks: [
             {
+              task_id: "task-1",
               title: "Launch onboarding checklist",
               description: "Create and validate the v1 onboarding checklist.",
+            },
+            {
+              task_id: "task-2",
+              title: "Publish onboarding checklist",
             },
           ],
           task_ids: ["task-1", "task-2"],
@@ -84,7 +89,46 @@ describe("BoardApprovalsPanel", () => {
     expect(
       screen.getByText("Needs explicit sign-off before rollout."),
     ).toBeInTheDocument();
+    expect(screen.getByText("62% score")).toBeInTheDocument();
+    expect(screen.getByText(/related tasks/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Launch onboarding checklist" }),
+    ).toHaveAttribute("href", "/boards/board-1?taskId=task-1");
+    expect(
+      screen.getByRole("link", { name: "Publish onboarding checklist" }),
+    ).toHaveAttribute("href", "/boards/board-1?taskId=task-2");
     expect(screen.getByText(/rubric scores/i)).toBeInTheDocument();
     expect(screen.getByText("Clarity")).toBeInTheDocument();
+  });
+
+  it("uses schema task_titles for related task links when payload titles are missing", () => {
+    const approval = {
+      id: "approval-2",
+      board_id: "board-1",
+      action_type: "task.update",
+      confidence: 88,
+      status: "pending",
+      task_id: "task-a",
+      task_ids: ["task-a", "task-b"],
+      task_titles: ["Prepare release notes", "Publish release notes"],
+      created_at: "2026-02-12T11:00:00Z",
+      resolved_at: null,
+      payload: {
+        task_ids: ["task-a", "task-b"],
+        reason: "Needs sign-off before publishing.",
+      },
+      rubric_scores: null,
+    } as ApprovalRead;
+
+    renderWithQueryClient(
+      <BoardApprovalsPanel boardId="board-1" approvals={[approval]} />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Prepare release notes" }),
+    ).toHaveAttribute("href", "/boards/board-1?taskId=task-a");
+    expect(
+      screen.getByRole("link", { name: "Publish release notes" }),
+    ).toHaveAttribute("href", "/boards/board-1?taskId=task-b");
   });
 });

@@ -9,8 +9,8 @@
  * Compact tag representation embedded in task payloads.
  */
 export interface TagRef {
+  color: string;
   id: string;
   name: string;
   slug: string;
-  color: string;
 }

@@ -7,7 +7,7 @@ import json
 from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -33,6 +33,11 @@ from app.models.approval_task_links import ApprovalTaskLink
 from app.models.approvals import Approval
 from app.models.boards import Board
 from app.models.tag_assignments import TagAssignment
+from app.models.task_custom_fields import (
+    BoardTaskCustomField,
+    TaskCustomFieldDefinition,
+    TaskCustomFieldValue,
+)
 from app.models.task_dependencies import TaskDependency
 from app.models.task_fingerprints import TaskFingerprint
 from app.models.tasks import Task
@@ -40,9 +45,17 @@ from app.schemas.activity_events import ActivityEventRead
 from app.schemas.common import OkResponse
 from app.schemas.errors import BlockedTaskError
 from app.schemas.pagination import DefaultLimitOffsetPage
+from app.schemas.task_custom_fields import (
+    TaskCustomFieldType,
+    TaskCustomFieldValues,
+    validate_custom_field_value,
+)
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
-from app.services.approval_task_links import load_task_ids_by_approval
+from app.services.approval_task_links import (
+    load_task_ids_by_approval,
+    pending_approval_conflicts_by_task,
+)
 from app.services.mentions import extract_mentions, matches_agent_mention
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
@@ -96,6 +109,16 @@ ADMIN_AUTH_DEP = Depends(require_admin_auth)
 TASK_DEP = Depends(get_task_or_404)
 
 
+@dataclass(frozen=True, slots=True)
+class _BoardCustomFieldDefinition:
+    id: UUID
+    field_key: str
+    field_type: TaskCustomFieldType
+    validation_regex: str | None
+    required: bool
+    default_value: object | None
+
+
 def _comment_validation_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -104,13 +127,154 @@ def _comment_validation_error() -> HTTPException:
 
 
 def _blocked_task_error(blocked_by_task_ids: Sequence[UUID]) -> HTTPException:
+    # NOTE: Keep this payload machine-readable; UI and automation rely on it.
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={
             "message": "Task is blocked by incomplete dependencies.",
+            "code": "task_blocked_cannot_transition",
             "blocked_by_task_ids": [str(value) for value in blocked_by_task_ids],
         },
     )
+
+
+def _approval_required_for_done_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": ("Task can only be marked done when a linked approval has been approved."),
+            "blocked_by_task_ids": [],
+        },
+    )
+
+
+def _review_required_for_done_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": ("Task can only be marked done from review when the board rule is enabled."),
+            "blocked_by_task_ids": [],
+        },
+    )
+
+
+def _pending_approval_blocks_status_change_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": ("Task status cannot be changed while a linked approval is pending."),
+            "blocked_by_task_ids": [],
+        },
+    )
+
+
+async def _task_has_approved_linked_approval(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+) -> bool:
+    linked_approval_ids = select(col(ApprovalTaskLink.approval_id)).where(
+        col(ApprovalTaskLink.task_id) == task_id,
+    )
+    statement = (
+        select(col(Approval.id))
+        .where(col(Approval.board_id) == board_id)
+        .where(col(Approval.status) == "approved")
+        .where(
+            or_(
+                col(Approval.task_id) == task_id,
+                col(Approval.id).in_(linked_approval_ids),
+            ),
+        )
+        .limit(1)
+    )
+    return (await session.exec(statement)).first() is not None
+
+
+async def _task_has_pending_linked_approval(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+) -> bool:
+    conflicts = await pending_approval_conflicts_by_task(
+        session,
+        board_id=board_id,
+        task_ids=[task_id],
+    )
+    return task_id in conflicts
+
+
+async def _require_approved_linked_approval_for_done(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+    previous_status: str,
+    target_status: str,
+) -> None:
+    if previous_status == "done" or target_status != "done":
+        return
+    requires_approval = (
+        await session.exec(
+            select(col(Board.require_approval_for_done)).where(col(Board.id) == board_id),
+        )
+    ).first()
+    if requires_approval is False:
+        return
+    if not await _task_has_approved_linked_approval(
+        session,
+        board_id=board_id,
+        task_id=task_id,
+    ):
+        raise _approval_required_for_done_error()
+
+
+async def _require_review_before_done_when_enabled(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    previous_status: str,
+    target_status: str,
+) -> None:
+    if previous_status == "done" or target_status != "done":
+        return
+    requires_review = (
+        await session.exec(
+            select(col(Board.require_review_before_done)).where(col(Board.id) == board_id),
+        )
+    ).first()
+    if requires_review and previous_status != "review":
+        raise _review_required_for_done_error()
+
+
+async def _require_no_pending_approval_for_status_change_when_enabled(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+    previous_status: str,
+    target_status: str,
+    status_requested: bool,
+) -> None:
+    if not status_requested or previous_status == target_status:
+        return
+    blocks_status_change = (
+        await session.exec(
+            select(col(Board.block_status_changes_with_pending_approval)).where(
+                col(Board.id) == board_id,
+            ),
+        )
+    ).first()
+    if not blocks_status_change:
+        return
+    if await _task_has_pending_linked_approval(
+        session,
+        board_id=board_id,
+        task_id=task_id,
+    ):
+        raise _pending_approval_blocks_status_change_error()
 
 
 def _truncate_snippet(value: str) -> str:
@@ -555,6 +719,281 @@ def _status_values(status_filter: str | None) -> list[str]:
     return values
 
 
+async def _organization_custom_field_definitions_for_board(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+) -> dict[str, _BoardCustomFieldDefinition]:
+    organization_id = (
+        await session.exec(
+            select(Board.organization_id).where(col(Board.id) == board_id),
+        )
+    ).first()
+    if organization_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    definitions = list(
+        await session.exec(
+            select(TaskCustomFieldDefinition)
+            .join(
+                BoardTaskCustomField,
+                col(BoardTaskCustomField.task_custom_field_definition_id)
+                == col(TaskCustomFieldDefinition.id),
+            )
+            .where(
+                col(BoardTaskCustomField.board_id) == board_id,
+                col(TaskCustomFieldDefinition.organization_id) == organization_id,
+            ),
+        ),
+    )
+    return {
+        definition.field_key: _BoardCustomFieldDefinition(
+            id=definition.id,
+            field_key=definition.field_key,
+            field_type=cast(TaskCustomFieldType, definition.field_type),
+            validation_regex=definition.validation_regex,
+            required=definition.required,
+            default_value=definition.default_value,
+        )
+        for definition in definitions
+    }
+
+
+def _reject_unknown_custom_field_keys(
+    *,
+    custom_field_values: TaskCustomFieldValues,
+    definitions_by_key: dict[str, _BoardCustomFieldDefinition],
+) -> None:
+    unknown_field_keys = sorted(set(custom_field_values) - set(definitions_by_key))
+    if not unknown_field_keys:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={
+            "message": "Unknown custom field keys for this board.",
+            "unknown_field_keys": unknown_field_keys,
+        },
+    )
+
+
+def _reject_missing_required_custom_field_keys(
+    *,
+    effective_values: TaskCustomFieldValues,
+    definitions_by_key: dict[str, _BoardCustomFieldDefinition],
+) -> None:
+    missing_field_keys = [
+        definition.field_key
+        for definition in definitions_by_key.values()
+        if definition.required and effective_values.get(definition.field_key) is None
+    ]
+    if not missing_field_keys:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={
+            "message": "Required custom fields must have values.",
+            "missing_field_keys": sorted(missing_field_keys),
+        },
+    )
+
+
+def _reject_invalid_custom_field_values(
+    *,
+    custom_field_values: TaskCustomFieldValues,
+    definitions_by_key: dict[str, _BoardCustomFieldDefinition],
+) -> None:
+    for field_key, value in custom_field_values.items():
+        definition = definitions_by_key[field_key]
+        try:
+            validate_custom_field_value(
+                field_type=definition.field_type,
+                value=value,
+                validation_regex=definition.validation_regex,
+            )
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "message": "Invalid custom field value.",
+                    "field_key": field_key,
+                    "field_type": definition.field_type,
+                    "reason": str(err),
+                },
+            ) from err
+
+
+async def _task_custom_field_rows_by_definition_id(
+    session: AsyncSession,
+    *,
+    task_id: UUID,
+    definition_ids: list[UUID],
+) -> dict[UUID, TaskCustomFieldValue]:
+    if not definition_ids:
+        return {}
+    rows = list(
+        await session.exec(
+            select(TaskCustomFieldValue).where(
+                col(TaskCustomFieldValue.task_id) == task_id,
+                col(TaskCustomFieldValue.task_custom_field_definition_id).in_(definition_ids),
+            ),
+        ),
+    )
+    return {row.task_custom_field_definition_id: row for row in rows}
+
+
+async def _set_task_custom_field_values_for_create(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+    custom_field_values: TaskCustomFieldValues,
+) -> None:
+    definitions_by_key = await _organization_custom_field_definitions_for_board(
+        session,
+        board_id=board_id,
+    )
+    _reject_unknown_custom_field_keys(
+        custom_field_values=custom_field_values,
+        definitions_by_key=definitions_by_key,
+    )
+    _reject_invalid_custom_field_values(
+        custom_field_values=custom_field_values,
+        definitions_by_key=definitions_by_key,
+    )
+
+    effective_values: TaskCustomFieldValues = {}
+    for field_key, definition in definitions_by_key.items():
+        if field_key in custom_field_values:
+            effective_values[field_key] = custom_field_values[field_key]
+        else:
+            effective_values[field_key] = definition.default_value
+
+    _reject_missing_required_custom_field_keys(
+        effective_values=effective_values,
+        definitions_by_key=definitions_by_key,
+    )
+
+    for field_key, definition in definitions_by_key.items():
+        value = effective_values.get(field_key)
+        if value is None:
+            continue
+        session.add(
+            TaskCustomFieldValue(
+                task_id=task_id,
+                task_custom_field_definition_id=definition.id,
+                value=value,
+            ),
+        )
+
+
+async def _set_task_custom_field_values_for_update(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+    custom_field_values: TaskCustomFieldValues,
+) -> None:
+    definitions_by_key = await _organization_custom_field_definitions_for_board(
+        session,
+        board_id=board_id,
+    )
+    _reject_unknown_custom_field_keys(
+        custom_field_values=custom_field_values,
+        definitions_by_key=definitions_by_key,
+    )
+    _reject_invalid_custom_field_values(
+        custom_field_values=custom_field_values,
+        definitions_by_key=definitions_by_key,
+    )
+    definitions_by_id = {definition.id: definition for definition in definitions_by_key.values()}
+    rows_by_definition_id = await _task_custom_field_rows_by_definition_id(
+        session,
+        task_id=task_id,
+        definition_ids=list(definitions_by_id),
+    )
+
+    effective_values: TaskCustomFieldValues = {}
+    for field_key, definition in definitions_by_key.items():
+        current_row = rows_by_definition_id.get(definition.id)
+        if field_key in custom_field_values:
+            effective_values[field_key] = custom_field_values[field_key]
+        elif current_row is not None:
+            effective_values[field_key] = current_row.value
+        else:
+            effective_values[field_key] = definition.default_value
+
+    _reject_missing_required_custom_field_keys(
+        effective_values=effective_values,
+        definitions_by_key=definitions_by_key,
+    )
+
+    for field_key, value in custom_field_values.items():
+        definition = definitions_by_key[field_key]
+        row = rows_by_definition_id.get(definition.id)
+        if value is None:
+            if row is not None:
+                await session.delete(row)
+            continue
+        if row is None:
+            session.add(
+                TaskCustomFieldValue(
+                    task_id=task_id,
+                    task_custom_field_definition_id=definition.id,
+                    value=value,
+                ),
+            )
+            continue
+        row.value = value
+        row.updated_at = utcnow()
+        session.add(row)
+
+
+async def _task_custom_field_values_by_task_id(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Sequence[UUID],
+) -> dict[UUID, TaskCustomFieldValues]:
+    unique_task_ids = list({*task_ids})
+    if not unique_task_ids:
+        return {}
+
+    definitions_by_key = await _organization_custom_field_definitions_for_board(
+        session,
+        board_id=board_id,
+    )
+    if not definitions_by_key:
+        return {task_id: {} for task_id in unique_task_ids}
+
+    definitions_by_id = {definition.id: definition for definition in definitions_by_key.values()}
+    default_values = {
+        field_key: definition.default_value for field_key, definition in definitions_by_key.items()
+    }
+    values_by_task_id: dict[UUID, TaskCustomFieldValues] = {
+        task_id: dict(default_values) for task_id in unique_task_ids
+    }
+
+    rows = (
+        await session.exec(
+            select(
+                col(TaskCustomFieldValue.task_id),
+                col(TaskCustomFieldValue.task_custom_field_definition_id),
+                col(TaskCustomFieldValue.value),
+            ).where(
+                col(TaskCustomFieldValue.task_id).in_(unique_task_ids),
+                col(TaskCustomFieldValue.task_custom_field_definition_id).in_(
+                    list(definitions_by_id),
+                ),
+            ),
+        )
+    ).all()
+    for task_id, definition_id, value in rows:
+        definition = definitions_by_id.get(definition_id)
+        if definition is None:
+            continue
+        values_by_task_id[task_id][definition.field_key] = value
+    return values_by_task_id
+
+
 def _task_list_statement(
     *,
     board_id: UUID,
@@ -600,6 +1039,11 @@ async def _task_read_page(
         board_id=board_id,
         dependency_ids=list({*dep_ids}),
     )
+    custom_field_values_by_task_id = await _task_custom_field_values_by_task_id(
+        session,
+        board_id=board_id,
+        task_ids=task_ids,
+    )
 
     output: list[TaskRead] = []
     for task in tasks:
@@ -619,6 +1063,7 @@ async def _task_read_page(
                     "tags": tag_state.tags,
                     "blocked_by_task_ids": blocked_by,
                     "is_blocked": bool(blocked_by),
+                    "custom_field_values": custom_field_values_by_task_id.get(task.id, {}),
                 },
             ),
         )
@@ -630,12 +1075,17 @@ async def _stream_task_state(
     *,
     board_id: UUID,
     rows: list[tuple[ActivityEvent, Task | None]],
-) -> tuple[dict[UUID, list[UUID]], dict[UUID, str], dict[UUID, TagState]]:
+) -> tuple[
+    dict[UUID, list[UUID]],
+    dict[UUID, str],
+    dict[UUID, TagState],
+    dict[UUID, TaskCustomFieldValues],
+]:
     task_ids = [
         task.id for event, task in rows if task is not None and event.event_type != "task.comment"
     ]
     if not task_ids:
-        return {}, {}, {}
+        return {}, {}, {}, {}
 
     tag_state_by_task_id = await load_tag_state(
         session,
@@ -649,15 +1099,20 @@ async def _stream_task_state(
     dep_ids: list[UUID] = []
     for value in deps_map.values():
         dep_ids.extend(value)
+    custom_field_values_by_task_id = await _task_custom_field_values_by_task_id(
+        session,
+        board_id=board_id,
+        task_ids=list({*task_ids}),
+    )
     if not dep_ids:
-        return deps_map, {}, tag_state_by_task_id
+        return deps_map, {}, tag_state_by_task_id, custom_field_values_by_task_id
 
     dep_status = await dependency_status_by_id(
         session,
         board_id=board_id,
         dependency_ids=list({*dep_ids}),
     )
-    return deps_map, dep_status, tag_state_by_task_id
+    return deps_map, dep_status, tag_state_by_task_id, custom_field_values_by_task_id
 
 
 def _task_event_payload(
@@ -667,7 +1122,9 @@ def _task_event_payload(
     deps_map: dict[UUID, list[UUID]],
     dep_status: dict[UUID, str],
     tag_state_by_task_id: dict[UUID, TagState],
+    custom_field_values_by_task_id: dict[UUID, TaskCustomFieldValues] | None = None,
 ) -> dict[str, object]:
+    resolved_custom_field_values_by_task_id = custom_field_values_by_task_id or {}
     payload: dict[str, object] = {
         "type": event.event_type,
         "activity": ActivityEventRead.model_validate(event).model_dump(mode="json"),
@@ -696,6 +1153,10 @@ def _task_event_payload(
                 "tags": tag_state.tags,
                 "blocked_by_task_ids": blocked_by,
                 "is_blocked": bool(blocked_by),
+                "custom_field_values": resolved_custom_field_values_by_task_id.get(
+                    task.id,
+                    {},
+                ),
             },
         )
         .model_dump(mode="json")
@@ -719,10 +1180,12 @@ async def _task_event_generator(
 
         async with async_session_maker() as session:
             rows = await _fetch_task_events(session, board_id, last_seen)
-            deps_map, dep_status, tag_state_by_task_id = await _stream_task_state(
-                session,
-                board_id=board_id,
-                rows=rows,
+            deps_map, dep_status, tag_state_by_task_id, custom_field_values_by_task_id = (
+                await _stream_task_state(
+                    session,
+                    board_id=board_id,
+                    rows=rows,
+                )
             )
 
         for event, task in rows:
@@ -741,6 +1204,7 @@ async def _task_event_generator(
                 deps_map=deps_map,
                 dep_status=dep_status,
                 tag_state_by_task_id=tag_state_by_task_id,
+                custom_field_values_by_task_id=custom_field_values_by_task_id,
             )
             yield {"event": "task", "data": json.dumps(payload)}
         await asyncio.sleep(2)
@@ -801,9 +1265,10 @@ async def create_task(
     auth: AuthContext = ADMIN_AUTH_DEP,
 ) -> TaskRead:
     """Create a task and initialize dependency rows."""
-    data = payload.model_dump(exclude={"depends_on_task_ids", "tag_ids"})
+    data = payload.model_dump(exclude={"depends_on_task_ids", "tag_ids", "custom_field_values"})
     depends_on_task_ids = list(payload.depends_on_task_ids)
     tag_ids = list(payload.tag_ids)
+    custom_field_values = dict(payload.custom_field_values)
 
     task = Task.model_validate(data)
     task.board_id = board.id
@@ -835,6 +1300,12 @@ async def create_task(
     session.add(task)
     # Ensure the task exists in the DB before inserting dependency rows.
     await session.flush()
+    await _set_task_custom_field_values_for_create(
+        session,
+        board_id=board.id,
+        task_id=task.id,
+        custom_field_values=custom_field_values,
+    )
     for dep_id in normalized_deps:
         session.add(
             TaskDependency(
@@ -909,19 +1380,28 @@ async def update_task(
         payload.depends_on_task_ids if "depends_on_task_ids" in payload.model_fields_set else None
     )
     tag_ids = payload.tag_ids if "tag_ids" in payload.model_fields_set else None
+    custom_field_values = (
+        payload.custom_field_values if "custom_field_values" in payload.model_fields_set else None
+    )
+    custom_field_values_set = "custom_field_values" in payload.model_fields_set
     updates.pop("comment", None)
     updates.pop("depends_on_task_ids", None)
     updates.pop("tag_ids", None)
+    updates.pop("custom_field_values", None)
+    requested_status = payload.status if "status" in payload.model_fields_set else None
     update = _TaskUpdateInput(
         task=task,
         actor=actor,
         board_id=board_id,
         previous_status=previous_status,
         previous_assigned=previous_assigned,
+        status_requested=(requested_status is not None and requested_status != previous_status),
         updates=updates,
         comment=comment,
         depends_on_task_ids=depends_on_task_ids,
         tag_ids=tag_ids,
+        custom_field_values=custom_field_values or {},
+        custom_field_values_set=custom_field_values_set,
     )
     if actor.actor_type == "agent" and actor.agent and actor.agent.is_board_lead:
         return await _apply_lead_task_update(session, update=update)
@@ -996,6 +1476,12 @@ async def delete_task(
         session,
         TagAssignment,
         col(TagAssignment.task_id) == task.id,
+        commit=False,
+    )
+    await crud.delete_where(
+        session,
+        TaskCustomFieldValue,
+        col(TaskCustomFieldValue.task_id) == task.id,
         commit=False,
     )
     await session.delete(task)
@@ -1157,10 +1643,13 @@ class _TaskUpdateInput:
     board_id: UUID
     previous_status: str
     previous_assigned: UUID | None
+    status_requested: bool
     updates: dict[str, object]
     comment: str | None
     depends_on_task_ids: list[UUID] | None
     tag_ids: list[UUID] | None
+    custom_field_values: TaskCustomFieldValues
+    custom_field_values_set: bool
     normalized_tag_ids: list[UUID] | None = None
 
 
@@ -1240,6 +1729,11 @@ async def _task_read_response(
         board_id=board_id,
         dep_ids=dep_ids,
     )
+    custom_field_values_by_task_id = await _task_custom_field_values_by_task_id(
+        session,
+        board_id=board_id,
+        task_ids=[task.id],
+    )
     if task.status == "done":
         blocked_ids = []
     return TaskRead.model_validate(task, from_attributes=True).model_copy(
@@ -1249,6 +1743,7 @@ async def _task_read_response(
             "tags": tag_state.tags,
             "blocked_by_task_ids": blocked_ids,
             "is_blocked": bool(blocked_ids),
+            "custom_field_values": custom_field_values_by_task_id.get(task.id, {}),
         },
     )
 
@@ -1275,18 +1770,37 @@ def _lead_requested_fields(update: _TaskUpdateInput) -> set[str]:
         requested_fields.add("depends_on_task_ids")
     if update.tag_ids is not None:
         requested_fields.add("tag_ids")
+    if update.custom_field_values_set:
+        requested_fields.add("custom_field_values")
     return requested_fields
 
 
 def _validate_lead_update_request(update: _TaskUpdateInput) -> None:
-    allowed_fields = {"assigned_agent_id", "status", "depends_on_task_ids", "tag_ids"}
+    allowed_fields = {
+        "assigned_agent_id",
+        "status",
+        "depends_on_task_ids",
+        "tag_ids",
+        "custom_field_values",
+    }
     requested_fields = _lead_requested_fields(update)
-    if update.comment is not None or not requested_fields.issubset(allowed_fields):
+    if update.comment is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Board leads can only assign/unassign tasks, update "
-                "dependencies, or resolve review tasks."
+                "Lead comment gate failed: board leads cannot include `comment` in task PATCH. "
+                "Use the task comments endpoint instead."
+            ),
+        )
+    disallowed_fields = requested_fields - allowed_fields
+    if disallowed_fields:
+        disallowed = ", ".join(sorted(disallowed_fields))
+        allowed = ", ".join(sorted(allowed_fields))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Lead field gate failed: unsupported fields for board leads: "
+                f"{disallowed}. Allowed fields: {allowed}."
             ),
         )
 
@@ -1296,6 +1810,8 @@ async def _lead_effective_dependencies(
     *,
     update: _TaskUpdateInput,
 ) -> tuple[list[UUID], list[UUID]]:
+    # Use newly normalized dependency updates when supplied; otherwise fall back
+    # to the task's current dependencies for blocked-by evaluation.
     normalized_deps: list[UUID] | None = None
     if update.depends_on_task_ids is not None:
         if update.task.status == "done":
@@ -1374,13 +1890,19 @@ def _lead_apply_status(update: _TaskUpdateInput) -> None:
     if update.task.status != "review":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=("Board leads can only change status when a task is " "in review."),
+            detail=(
+                "Lead status gate failed: board leads can only change status when the current "
+                f"task status is `review` (current: `{update.task.status}`)."
+            ),
         )
     target_status = _required_status_value(update.updates["status"])
     if target_status not in {"done", "inbox"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=("Board leads can only move review tasks to done " "or inbox."),
+            detail=(
+                "Lead status target gate failed: review tasks can only move to `done` or "
+                f"`inbox` (requested: `{target_status}`)."
+            ),
         )
     if target_status == "inbox":
         update.task.assigned_agent_id = None
@@ -1440,19 +1962,53 @@ async def _apply_lead_task_update(
         update=update,
     )
 
-    if blocked_by and update.task.status != "done":
-        update.task.status = "inbox"
-        update.task.assigned_agent_id = None
-        update.task.in_progress_at = None
-    else:
-        await _lead_apply_assignment(session, update=update)
-        _lead_apply_status(update)
+    # Blocked tasks should not be silently rewritten into a "blocked-safe" state.
+    # Instead, reject assignment/status transitions with an explicit 409 payload.
+    if blocked_by:
+        attempted_fields: set[str] = set(update.updates.keys())
+        attempted_transition = (
+            "assigned_agent_id" in attempted_fields
+            or "status" in attempted_fields
+        )
+        if attempted_transition:
+            raise _blocked_task_error(blocked_by)
+
+    await _lead_apply_assignment(session, update=update)
+    _lead_apply_status(update)
+    await _require_no_pending_approval_for_status_change_when_enabled(
+        session,
+        board_id=update.board_id,
+        task_id=update.task.id,
+        previous_status=update.previous_status,
+        target_status=update.task.status,
+        status_requested=update.status_requested,
+    )
+    await _require_review_before_done_when_enabled(
+        session,
+        board_id=update.board_id,
+        previous_status=update.previous_status,
+        target_status=update.task.status,
+    )
+    await _require_approved_linked_approval_for_done(
+        session,
+        board_id=update.board_id,
+        task_id=update.task.id,
+        previous_status=update.previous_status,
+        target_status=update.task.status,
+    )
 
     if normalized_tag_ids is not None:
         await replace_tags(
             session,
             task_id=update.task.id,
             tag_ids=normalized_tag_ids,
+        )
+    if update.custom_field_values_set:
+        await _set_task_custom_field_values_for_update(
+            session,
+            board_id=update.board_id,
+            task_id=update.task.id,
+            custom_field_values=update.custom_field_values,
         )
 
     update.task.updated_at = utcnow()
@@ -1496,7 +2052,9 @@ async def _apply_non_lead_agent_task_rules(
         and update.actor.agent.board_id != update.task.board_id
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    allowed_fields = {"status", "comment"}
+    # Agents are limited to status/comment updates, and non-inbox status moves
+    # must pass dependency checks before they can proceed.
+    allowed_fields = {"status", "comment", "custom_field_values"}
     if (
         update.depends_on_task_ids is not None
         or update.tag_ids is not None
@@ -1506,6 +2064,18 @@ async def _apply_non_lead_agent_task_rules(
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     if "status" in update.updates:
+        only_lead_can_change_status = (
+            await session.exec(
+                select(col(Board.only_lead_can_change_status)).where(
+                    col(Board.id) == update.board_id,
+                ),
+            )
+        ).first()
+        if only_lead_can_change_status:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only board leads can change task status.",
+            )
         status_value = _required_status_value(update.updates["status"])
         if status_value != "inbox":
             dep_ids = await _task_dep_ids(
@@ -1569,6 +2139,8 @@ async def _apply_admin_task_rules(
     target_status = _required_status_value(
         update.updates.get("status", update.task.status),
     )
+    # Reset blocked tasks to inbox unless the task is already done and remains
+    # done, which is the explicit done-task exception.
     if blocked_ids and not (update.task.status == "done" and target_status == "done"):
         update.task.status = "inbox"
         update.task.assigned_agent_id = None
@@ -1625,6 +2197,8 @@ async def _record_task_update_activity(
     actor_agent_id = (
         update.actor.agent.id if update.actor.actor_type == "agent" and update.actor.agent else None
     )
+    # Record the task transition first, then reconcile dependents so any
+    # cascaded dependency effects are logged after the source change.
     record_activity(
         session,
         event_type=event_type,
@@ -1701,9 +2275,32 @@ async def _finalize_updated_task(
 ) -> TaskRead:
     for key, value in update.updates.items():
         setattr(update.task, key, value)
+    await _require_no_pending_approval_for_status_change_when_enabled(
+        session,
+        board_id=update.board_id,
+        task_id=update.task.id,
+        previous_status=update.previous_status,
+        target_status=update.task.status,
+        status_requested=update.status_requested,
+    )
+    await _require_review_before_done_when_enabled(
+        session,
+        board_id=update.board_id,
+        previous_status=update.previous_status,
+        target_status=update.task.status,
+    )
+    await _require_approved_linked_approval_for_done(
+        session,
+        board_id=update.board_id,
+        task_id=update.task.id,
+        previous_status=update.previous_status,
+        target_status=update.task.status,
+    )
     update.task.updated_at = utcnow()
 
     status_raw = update.updates.get("status")
+    # Entering review requires either a new comment or a valid recent one to
+    # ensure reviewers get context on readiness.
     if status_raw == "review":
         comment_text = (update.comment or "").strip()
         if not comment_text and not await has_valid_recent_comment(
@@ -1727,6 +2324,14 @@ async def _finalize_updated_task(
             session,
             task_id=update.task.id,
             tag_ids=normalized or [],
+        )
+
+    if update.custom_field_values_set:
+        await _set_task_custom_field_values_for_update(
+            session,
+            board_id=update.board_id,
+            task_id=update.task.id,
+            custom_field_values=update.custom_field_values,
         )
 
     session.add(update.task)

@@ -10,7 +10,7 @@
  */
 export interface GatewayUpdate {
   name?: string | null;
-  url?: string | null;
   token?: string | null;
+  url?: string | null;
   workspace_root?: string | null;
 }

@@ -9,6 +9,6 @@
  * Gateway sessions list response payload.
  */
 export interface GatewaySessionsResponse {
-  sessions: unknown[];
   main_session?: unknown | null;
+  sessions: unknown[];
 }

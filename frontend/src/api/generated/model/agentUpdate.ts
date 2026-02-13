@@ -12,11 +12,11 @@ import type { AgentUpdateIdentityProfile } from "./agentUpdateIdentityProfile";
  */
 export interface AgentUpdate {
   board_id?: string | null;
-  is_gateway_main?: boolean | null;
-  name?: string | null;
-  status?: string | null;
   heartbeat_config?: AgentUpdateHeartbeatConfig;
   identity_profile?: AgentUpdateIdentityProfile;
   identity_template?: string | null;
+  is_gateway_main?: boolean | null;
+  name?: string | null;
   soul_template?: string | null;
+  status?: string | null;
 }

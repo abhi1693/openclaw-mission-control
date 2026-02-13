@@ -32,6 +32,108 @@ import { customFetch } from "../../mutator";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
+ * Delete the authenticated account and any personal-only organizations.
+ * @summary Delete Me
+ */
+export type deleteMeApiV1UsersMeDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteMeApiV1UsersMeDeleteResponseSuccess =
+  deleteMeApiV1UsersMeDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteMeApiV1UsersMeDeleteResponse =
+  deleteMeApiV1UsersMeDeleteResponseSuccess;
+
+export const getDeleteMeApiV1UsersMeDeleteUrl = () => {
+  return `/api/v1/users/me`;
+};
+
+export const deleteMeApiV1UsersMeDelete = async (
+  options?: RequestInit,
+): Promise<deleteMeApiV1UsersMeDeleteResponse> => {
+  return customFetch<deleteMeApiV1UsersMeDeleteResponse>(
+    getDeleteMeApiV1UsersMeDeleteUrl(),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteMeApiV1UsersMeDeleteMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["deleteMeApiV1UsersMeDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
+    void
+  > = () => {
+    return deleteMeApiV1UsersMeDelete(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMeApiV1UsersMeDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>
+>;
+
+export type DeleteMeApiV1UsersMeDeleteMutationError = unknown;
+
+/**
+ * @summary Delete Me
+ */
+export const useDeleteMeApiV1UsersMeDelete = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
+      TError,
+      void,
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(
+    getDeleteMeApiV1UsersMeDeleteMutationOptions(options),
+    queryClient,
+  );
+};
+/**
  * Return the authenticated user's current profile payload.
  * @summary Get Me
  */
@@ -201,108 +303,6 @@ export function useGetMeApiV1UsersMeGet<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-/**
- * Delete the authenticated account and any personal-only organizations.
- * @summary Delete Me
- */
-export type deleteMeApiV1UsersMeDeleteResponse200 = {
-  data: OkResponse;
-  status: 200;
-};
-
-export type deleteMeApiV1UsersMeDeleteResponseSuccess =
-  deleteMeApiV1UsersMeDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteMeApiV1UsersMeDeleteResponse =
-  deleteMeApiV1UsersMeDeleteResponseSuccess;
-
-export const getDeleteMeApiV1UsersMeDeleteUrl = () => {
-  return `/api/v1/users/me`;
-};
-
-export const deleteMeApiV1UsersMeDelete = async (
-  options?: RequestInit,
-): Promise<deleteMeApiV1UsersMeDeleteResponse> => {
-  return customFetch<deleteMeApiV1UsersMeDeleteResponse>(
-    getDeleteMeApiV1UsersMeDeleteUrl(),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export const getDeleteMeApiV1UsersMeDeleteMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
-    TError,
-    void,
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["deleteMeApiV1UsersMeDelete"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
-    void
-  > = () => {
-    return deleteMeApiV1UsersMeDelete(requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteMeApiV1UsersMeDeleteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>
->;
-
-export type DeleteMeApiV1UsersMeDeleteMutationError = unknown;
-
-/**
- * @summary Delete Me
- */
-export const useDeleteMeApiV1UsersMeDelete = <
-  TError = unknown,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
-      TError,
-      void,
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof deleteMeApiV1UsersMeDelete>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(
-    getDeleteMeApiV1UsersMeDeleteMutationOptions(options),
-    queryClient,
-  );
-};
 /**
  * Apply partial profile updates for the authenticated user.
  * @summary Update Me

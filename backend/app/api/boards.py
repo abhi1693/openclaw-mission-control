@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from enum import Enum
+from typing import TYPE_CHECKING, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -56,6 +57,7 @@ BOARD_GROUP_ID_QUERY = Query(default=None)
 INCLUDE_SELF_QUERY = Query(default=False)
 INCLUDE_DONE_QUERY = Query(default=False)
 PER_BOARD_TASK_LIMIT_QUERY = Query(default=5, ge=0, le=100)
+AGENT_BOARD_ROLE_TAGS = cast("list[str | Enum]", ["agent-lead", "agent-worker"])
 
 
 async def _require_gateway(
@@ -393,7 +395,11 @@ async def get_board_snapshot(
     return await build_board_snapshot(session, board)
 
 
-@router.get("/{board_id}/group-snapshot", response_model=BoardGroupSnapshot)
+@router.get(
+    "/{board_id}/group-snapshot",
+    response_model=BoardGroupSnapshot,
+    tags=AGENT_BOARD_ROLE_TAGS,
+)
 async def get_board_group_snapshot(
     *,
     include_self: bool = INCLUDE_SELF_QUERY,
@@ -402,7 +408,10 @@ async def get_board_group_snapshot(
     board: Board = BOARD_ACTOR_READ_DEP,
     session: AsyncSession = SESSION_DEP,
 ) -> BoardGroupSnapshot:
-    """Get a grouped snapshot across related boards."""
+    """Get a grouped snapshot across related boards.
+
+    Returns high-signal cross-board status for dependency and overlap checks.
+    """
     return await build_board_group_snapshot(
         session,
         board=board,

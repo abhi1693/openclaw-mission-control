@@ -9,10 +9,10 @@
  * Request payload for asking the end user via a main gateway agent.
  */
 export interface GatewayMainAskUserRequest {
-  correlation_id?: string | null;
   /** @minLength 1 */
   content: string;
+  correlation_id?: string | null;
   preferred_channel?: string | null;
-  reply_tags?: string[];
   reply_source?: string | null;
+  reply_tags?: string[];
 }

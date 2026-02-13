@@ -9,10 +9,10 @@
  * Board access payload returned from read endpoints.
  */
 export interface OrganizationBoardAccessRead {
-  id: string;
   board_id: string;
   can_read: boolean;
   can_write: boolean;
   created_at: string;
+  id: string;
   updated_at: string;
 }
