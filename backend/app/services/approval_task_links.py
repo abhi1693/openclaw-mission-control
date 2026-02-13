@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import case, delete, exists, func
