@@ -24,4 +24,5 @@ export interface BoardUpdate {
   require_approval_for_done?: boolean | null;
   require_review_before_done?: boolean | null;
   block_status_changes_with_pending_approval?: boolean | null;
+  only_lead_can_change_status?: boolean | null;
 }

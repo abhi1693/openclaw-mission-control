@@ -24,6 +24,7 @@ export interface BoardRead {
   require_approval_for_done?: boolean;
   require_review_before_done?: boolean;
   block_status_changes_with_pending_approval?: boolean;
+  only_lead_can_change_status?: boolean;
   id: string;
   organization_id: string;
   created_at: string;

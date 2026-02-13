@@ -10,8 +10,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.api import boards
 import app.services.board_lifecycle as board_lifecycle
+from app.api import boards
 from app.models.boards import Board
 from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 

@@ -41,7 +41,9 @@ def _is_missing_gateway_agent_error(exc: OpenClawGatewayError) -> bool:
     message = str(exc).lower()
     if not message:
         return False
-    if any(marker in message for marker in ("unknown agent", "no such agent", "agent does not exist")):
+    if any(
+        marker in message for marker in ("unknown agent", "no such agent", "agent does not exist")
+    ):
         return True
     return "agent" in message and "not found" in message
 
