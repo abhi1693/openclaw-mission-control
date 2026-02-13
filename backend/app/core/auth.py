@@ -66,6 +66,13 @@ class AuthContext:
 
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
+    """Extract the bearer token from an `Authorization` header.
+
+    Returns `None` for missing/empty headers or non-bearer schemes.
+
+    Note: we do *not* validate the token here; this helper is only responsible for parsing.
+    """
+
     if not authorization:
         return None
     value = authorization.strip()
@@ -92,6 +99,14 @@ def _normalize_email(value: object) -> str | None:
 
 
 def _extract_claim_email(claims: dict[str, object]) -> str | None:
+    """Best-effort extraction of an email address from Clerk/JWT-like claims.
+
+    Clerk payloads vary depending on token type and SDK version. We try common flat keys first,
+    then fall back to an `email_addresses` list (either strings or dict-like entries).
+
+    Returns a normalized lowercase email or `None`.
+    """
+
     for key in ("email", "email_address", "primary_email_address"):
         email = _normalize_email(claims.get(key))
         if email:
@@ -119,10 +134,13 @@ def _extract_claim_email(claims: dict[str, object]) -> str | None:
             return candidate
         if fallback_email is None:
             fallback_email = candidate
+
     return fallback_email
 
 
 def _extract_claim_name(claims: dict[str, object]) -> str | None:
+    """Best-effort extraction of a display name from Clerk/JWT-like claims."""
+
     for key in ("name", "full_name"):
         text = _non_empty_str(claims.get(key))
         if text:
@@ -137,6 +155,17 @@ def _extract_claim_name(claims: dict[str, object]) -> str | None:
 
 
 def _extract_clerk_profile(profile: ClerkUser | None) -> tuple[str | None, str | None]:
+    """Extract `(email, name)` from a Clerk user profile.
+
+    The Clerk SDK surface is not perfectly consistent across environments:
+    - some fields may be absent,
+    - email addresses may be represented as strings or objects,
+    - the "primary" email may be identified by id.
+
+    This helper implements a defensive, best-effort extraction strategy and returns `(None, None)`
+    when the profile is unavailable.
+    """
+
     if profile is None:
         return None, None
 
