@@ -20,13 +20,15 @@ fi
 # Ensure base is present in shallow clones.
 git fetch --no-tags --depth=1 origin "$BASE_SHA" || true
 
-CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
-if [ -z "$CHANGED" ]; then
-  echo "No changed files detected."
+# Only count *newly added* migration files. Modified/deleted migrations should not trip this gate.
+# See review thread: https://github.com/abhi1693/openclaw-mission-control/pull/136#discussion_r2807812935
+ADDED_FILES=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" || true)
+if [ -z "$ADDED_FILES" ]; then
+  echo "No added files detected."
   exit 0
 fi
 
-MIGRATIONS=$(echo "$CHANGED" | grep -E '^backend/migrations/versions/.*\.py$' || true)
+MIGRATIONS=$(echo "$ADDED_FILES" | grep -E '^backend/migrations/versions/.*\.py$' || true)
 COUNT=$(echo "$MIGRATIONS" | sed '/^$/d' | wc -l | tr -d ' ')
 
 if [ "$COUNT" -le 1 ]; then
