@@ -61,7 +61,6 @@ async def _seed_board_task_and_agent(
         block_status_changes_with_pending_approval=block_status_changes_with_pending_approval,
         only_lead_can_change_status=only_lead_can_change_status,
     )
-    task = Task(id=uuid4(), board_id=board.id, title="Task", status=task_status)
     agent = Agent(
         id=uuid4(),
         board_id=board.id,
@@ -69,6 +68,13 @@ async def _seed_board_task_and_agent(
         name="agent",
         status="online",
         is_board_lead=agent_is_board_lead,
+    )
+    task = Task(
+        id=uuid4(),
+        board_id=board.id,
+        title="Task",
+        status=task_status,
+        assigned_agent_id=agent.id,
     )
 
     session.add(Organization(id=organization_id, name=f"org-{organization_id}"))

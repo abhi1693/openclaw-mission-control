@@ -126,6 +126,16 @@ def _comment_validation_error() -> HTTPException:
     )
 
 
+def _task_update_forbidden_error(*, code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "message": message,
+            "code": code,
+        },
+    )
+
+
 def _blocked_task_error(blocked_by_task_ids: Sequence[UUID]) -> HTTPException:
     # NOTE: Keep this payload machine-readable; UI and automation rely on it.
     return HTTPException(
@@ -2051,7 +2061,29 @@ async def _apply_non_lead_agent_task_rules(
         and update.task.board_id
         and update.actor.agent.board_id != update.task.board_id
     ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise _task_update_forbidden_error(
+            code="task_board_mismatch",
+            message="Agent can only update tasks for their assigned board.",
+        )
+    if (
+        update.actor.agent
+        and "status" in update.updates
+        and (update.task.assigned_agent_id is None)
+    ):
+        raise _task_update_forbidden_error(
+            code="task_assignee_required",
+            message="Agents can only change status on tasks assigned to them.",
+        )
+    if (
+        update.actor.agent
+        and update.task.assigned_agent_id is not None
+        and update.task.assigned_agent_id != update.actor.agent.id
+        and "status" in update.updates
+    ):
+        raise _task_update_forbidden_error(
+            code="task_assignee_mismatch",
+            message="Agents can only change status on tasks assigned to them.",
+        )
     # Agents are limited to status/comment updates, and non-inbox status moves
     # must pass dependency checks before they can proceed.
     allowed_fields = {"status", "comment", "custom_field_values"}
@@ -2062,7 +2094,10 @@ async def _apply_non_lead_agent_task_rules(
             allowed_fields,
         )
     ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        raise _task_update_forbidden_error(
+            code="task_update_field_forbidden",
+            message="Agents may only update status, comment, and custom field values.",
+        )
     if "status" in update.updates:
         only_lead_can_change_status = (
             await session.exec(
