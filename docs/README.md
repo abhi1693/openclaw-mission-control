@@ -1,18 +1,23 @@
 # Mission Control docs
 
-This folder is the starting point for Mission Control documentation.
+This folder is the documentation home for **OpenClaw Mission Control**.
 
-## Sections
+## Start here
 
-- [Development workflow](./03-development.md)
-- [Testing guide](./testing/README.md)
-- [Coverage policy](./coverage-policy.md)
+- [Getting started](./getting-started/README.md)
+- [Development](./development/README.md)
+- [Testing](./testing/README.md)
 - [Deployment](./deployment/README.md)
-- [Production notes](./production/README.md)
+- [Release checklist](./release/README.md)
+- [Operations](./operations/README.md)
 - [Troubleshooting](./troubleshooting/README.md)
-- [Gateway WebSocket protocol](./openclaw_gateway_ws.md)
 
-## Status
+## Reference
 
-These pages are minimal placeholders so repo-relative links stay healthy. The actual docs
-information architecture will be defined in the Docs overhaul tasks.
+- [Configuration reference](./reference/configuration.md)
+- [Authentication](./reference/authentication.md)
+- [API notes](./reference/api.md)
+
+## Contributing to docs
+
+- [Docs style guide](./style-guide.md)

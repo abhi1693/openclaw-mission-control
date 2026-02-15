@@ -266,8 +266,9 @@ async def task_counts_for_board(
     for legacy_task_id, total, pending in list(await session.exec(legacy_statement)):
         if legacy_task_id is None:
             continue
-        previous = counts.get(legacy_task_id, (0, 0))
-        counts[legacy_task_id] = (
+        task_uuid = legacy_task_id
+        previous = counts.get(task_uuid, (0, 0))
+        counts[task_uuid] = (
             previous[0] + int(total or 0),
             previous[1] + int(pending or 0),
         )
