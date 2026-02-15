@@ -28,6 +28,7 @@ from sqlmodel import col, select
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.db.session import async_session_maker
 from app.models.approval_task_links import ApprovalTaskLink
 from app.models.approvals import Approval
 from app.models.boards import Board
@@ -370,6 +371,36 @@ async def reconcile_github_approval_checks_for_board(
         await sync_github_approval_check_for_pr_url(session, board_id=board_id, pr_url=pr_url)
 
     return len(pr_urls)
+
+
+async def reconcile_mission_control_approval_checks_for_all_boards() -> int:
+    """Reconcile approval checks for every board.
+
+    Returns total number of distinct PR URLs processed across boards.
+
+    This is intentionally a safety net: the primary, low-latency updates happen on
+    approval create/resolution and task github_pr_url updates.
+    """
+
+    async with async_session_maker() as session:
+        board_ids = list(
+            await session.exec(
+                select(col(Board.id)).order_by(col(Board.created_at).asc()),
+            ),
+        )
+        processed = 0
+        for board_id in board_ids:
+            try:
+                processed += await reconcile_github_approval_checks_for_board(
+                    session,
+                    board_id=board_id,
+                )
+            except Exception:
+                logger.exception(
+                    "github.approval_check.reconcile.board_failed",
+                    extra={"board_id": str(board_id)},
+                )
+        return processed
 
 
 def github_approval_check_enabled() -> bool:

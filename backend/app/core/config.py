@@ -57,6 +57,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GH_TOKEN", "GITHUB_TOKEN"),
     )
 
+    # Periodic reconciliation safety net for mission-control/approval checks.
+    github_approval_check_schedule_id: str = "mission-control-approval-check-reconcile"
+    github_approval_check_schedule_interval_seconds: int = 900
+
     # Database lifecycle
     db_auto_migrate: bool = False
 

@@ -95,7 +95,7 @@ services:
       - sh
       - -c
       - |
-          python -c "from app.services.webhooks.scheduler import bootstrap_webhook_dispatch_schedule; bootstrap_webhook_dispatch_schedule()" && \
+          python -c "from app.services.webhooks.scheduler import bootstrap_webhook_dispatch_schedule; from app.services.github.scheduler import bootstrap_mission_control_approval_check_schedule; bootstrap_webhook_dispatch_schedule(); bootstrap_mission_control_approval_check_schedule()" && \
           rqscheduler -u "${WEBHOOK_REDIS_URL:-redis://redis:6379/0}" -i 60
     depends_on:
       - redis
@@ -105,6 +105,8 @@ services:
       WEBHOOK_QUEUE_NAME: webhook-dispatch
       WEBHOOK_DISPATCH_SCHEDULE_ID: webhook-dispatch-batch
       WEBHOOK_DISPATCH_SCHEDULE_INTERVAL_SECONDS: ${WEBHOOK_DISPATCH_SCHEDULE_INTERVAL_SECONDS:-900}
+      GITHUB_APPROVAL_CHECK_SCHEDULE_ID: ${GITHUB_APPROVAL_CHECK_SCHEDULE_ID:-mission-control-approval-check-reconcile}
+      GITHUB_APPROVAL_CHECK_SCHEDULE_INTERVAL_SECONDS: ${GITHUB_APPROVAL_CHECK_SCHEDULE_INTERVAL_SECONDS:-900}
     restart: unless-stopped
 
 volumes:
