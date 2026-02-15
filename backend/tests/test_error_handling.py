@@ -219,6 +219,13 @@ def test_json_safe_handles_binary_inputs() -> None:
     assert _json_safe(memoryview(b"world")) == "world"
 
 
+def test_json_safe_replaces_invalid_utf8_bytes() -> None:
+    # Invalid UTF-8 should be replaced with U+FFFD, not crash error handling.
+    assert _json_safe(b"\xff") == "\ufffd"
+    assert _json_safe(bytearray(b"\xff")) == "\ufffd"
+    assert _json_safe(memoryview(b"\xff")) == "\ufffd"
+
+
 def test_json_safe_falls_back_to_string_for_unknown_objects() -> None:
     class Weird:
         def __str__(self) -> str:
