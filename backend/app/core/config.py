@@ -53,13 +53,11 @@ class Settings(BaseSettings):
     # Database lifecycle
     db_auto_migrate: bool = False
 
-    # Webhook queueing / dispatch
-    webhook_redis_url: str = "redis://localhost:6379/0"
-    webhook_queue_name: str = "webhook-dispatch"
-    webhook_dispatch_schedule_id: str = "webhook-dispatch-batch"
-    webhook_dispatch_throttle_seconds: float = 2.0
-    webhook_dispatch_schedule_interval_seconds: int = 900
-    webhook_dispatch_max_retries: int = 3
+    # RQ queueing / dispatch
+    rq_redis_url: str = "redis://localhost:6379/0"
+    rq_queue_name: str = "default"
+    rq_dispatch_throttle_seconds: float = 2.0
+    rq_dispatch_max_retries: int = 3
 
     # Logging
     log_level: str = "INFO"

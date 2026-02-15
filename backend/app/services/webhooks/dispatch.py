@@ -17,7 +17,7 @@ from app.models.board_webhooks import BoardWebhook
 from app.models.boards import Board
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.webhooks.queue import (
-    QueuedWebhookDelivery,
+    QueuedInboundDelivery,
     dequeue_webhook_delivery,
     requeue_if_failed,
 )
@@ -153,7 +153,7 @@ async def _load_webhook_payload(
     return board, webhook, payload
 
 
-async def _process_single_item(item: QueuedWebhookDelivery) -> None:
+async def _process_single_item(item: QueuedInboundDelivery) -> None:
     async with async_session_maker() as session:
         loaded = await _load_webhook_payload(
             session=session,
@@ -206,7 +206,7 @@ async def flush_webhook_delivery_queue() -> None:
                 },
             )
             requeue_if_failed(item)
-        time.sleep(settings.webhook_dispatch_throttle_seconds)
+        time.sleep(settings.rq_dispatch_throttle_seconds)
     logger.info("webhook.dispatch.batch_complete", extra={"count": processed})
 
 
@@ -214,7 +214,7 @@ def run_flush_webhook_delivery_queue() -> None:
     """RQ entrypoint for running the async queue flush from worker jobs."""
     logger.info(
         "webhook.dispatch.batch_started",
-        extra={"throttle_seconds": settings.webhook_dispatch_throttle_seconds},
+        extra={"throttle_seconds": settings.rq_dispatch_throttle_seconds},
     )
     start = time.time()
     asyncio.run(flush_webhook_delivery_queue())

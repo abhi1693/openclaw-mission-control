@@ -2,56 +2,73 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from typing import cast
-
-import redis
-
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.queue import QueuedTask, dequeue_task, enqueue_task, requeue_if_failed as generic_requeue_if_failed
 
 logger = get_logger(__name__)
+TASK_TYPE = "webhook_delivery"
 
 
 @dataclass(frozen=True)
-class QueuedWebhookDelivery:
+class QueuedInboundDelivery:
     """Payload metadata stored for deferred webhook lead dispatch."""
 
     board_id: UUID
     webhook_id: UUID
     payload_id: UUID
-    payload_event: str | None
     received_at: datetime
     attempts: int = 0
 
-    def to_json(self) -> str:
-        return json.dumps(
-            {
-                "board_id": str(self.board_id),
-                "webhook_id": str(self.webhook_id),
-                "payload_id": str(self.payload_id),
-                "payload_event": self.payload_event,
-                "received_at": self.received_at.isoformat(),
-                "attempts": self.attempts,
-            },
-            sort_keys=True,
+
+def _task_from_payload(payload: QueuedInboundDelivery) -> QueuedTask:
+    return QueuedTask(
+        task_type=TASK_TYPE,
+        payload={
+            "board_id": str(payload.board_id),
+            "webhook_id": str(payload.webhook_id),
+            "payload_id": str(payload.payload_id),
+            "received_at": payload.received_at.isoformat(),
+        },
+        created_at=payload.received_at,
+        attempts=payload.attempts,
+    )
+
+
+def _payload_from_task(task: QueuedTask) -> QueuedInboundDelivery:
+    if task.task_type not in {TASK_TYPE, "legacy"}:
+        raise ValueError(f"Unexpected task_type={task.task_type!r}; expected {TASK_TYPE!r}")
+
+    payload: dict[str, Any] = task.payload
+    if task.task_type == "legacy":
+        received_at = payload.get("received_at") or payload.get("created_at")
+        return QueuedInboundDelivery(
+            board_id=UUID(payload["board_id"]),
+            webhook_id=UUID(payload["webhook_id"]),
+            payload_id=UUID(payload["payload_id"]),
+            received_at=datetime.fromisoformat(received_at) if isinstance(received_at, str) else datetime.now(UTC),
+            attempts=int(payload.get("attempts", task.attempts)),
         )
 
+    return QueuedInboundDelivery(
+        board_id=UUID(payload["board_id"]),
+        webhook_id=UUID(payload["webhook_id"]),
+        payload_id=UUID(payload["payload_id"]),
+        received_at=datetime.fromisoformat(payload["received_at"]),
+        attempts=int(payload.get("attempts", task.attempts)),
+    )
 
-def _redis_client() -> redis.Redis:
-    return redis.Redis.from_url(settings.webhook_redis_url)
 
-
-def enqueue_webhook_delivery(payload: QueuedWebhookDelivery) -> bool:
+def enqueue_webhook_delivery(payload: QueuedInboundDelivery) -> bool:
     """Persist webhook metadata in a Redis queue for batch dispatch."""
     try:
-        client = _redis_client()
-        client.lpush(settings.webhook_queue_name, payload.to_json())
+        queued = _task_from_payload(payload)
+        enqueue_task(queued, settings.rq_queue_name, redis_url=settings.rq_redis_url)
         logger.info(
             "webhook.queue.enqueued",
             extra={
@@ -75,62 +92,44 @@ def enqueue_webhook_delivery(payload: QueuedWebhookDelivery) -> bool:
         return False
 
 
-def dequeue_webhook_delivery() -> QueuedWebhookDelivery | None:
+def dequeue_webhook_delivery() -> QueuedInboundDelivery | None:
     """Pop one queued webhook delivery payload."""
-    client = _redis_client()
-    raw = cast(str | bytes | None, client.rpop(settings.webhook_queue_name))
-    if raw is None:
-        return None
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8")
     try:
-        payload: dict[str, Any] = json.loads(raw)
-        event = payload.get("payload_event")
-        if event is not None:
-            event = str(event)
-        return QueuedWebhookDelivery(
-            board_id=UUID(payload["board_id"]),
-            webhook_id=UUID(payload["webhook_id"]),
-            payload_id=UUID(payload["payload_id"]),
-            payload_event=event,
-            received_at=datetime.fromisoformat(payload["received_at"]),
-            attempts=int(payload.get("attempts", 0)),
-        )
+        task = dequeue_task(settings.rq_queue_name, redis_url=settings.rq_redis_url)
+        if task is None:
+            return None
+        return _payload_from_task(task)
     except Exception as exc:
         logger.error(
             "webhook.queue.dequeue_failed",
-            extra={"raw_payload": str(raw), "error": str(exc)},
+            extra={
+                "queue_name": settings.rq_queue_name,
+                "error": str(exc),
+            },
         )
         raise
 
 
-def _requeue_with_attempt(payload: QueuedWebhookDelivery) -> None:
-    payload = QueuedWebhookDelivery(
-        board_id=payload.board_id,
-        webhook_id=payload.webhook_id,
-        payload_id=payload.payload_id,
-        payload_event=payload.payload_event,
-        received_at=payload.received_at,
-        attempts=payload.attempts + 1,
-    )
-    enqueue_webhook_delivery(payload)
-
-
-def requeue_if_failed(payload: QueuedWebhookDelivery) -> bool:
+def requeue_if_failed(payload: QueuedInboundDelivery) -> bool:
     """Requeue payload delivery with capped retries.
 
     Returns True if requeued.
     """
-    if payload.attempts >= settings.webhook_dispatch_max_retries:
+    try:
+        return generic_requeue_if_failed(
+            _task_from_payload(payload),
+            settings.rq_queue_name,
+            max_retries=settings.rq_dispatch_max_retries,
+            redis_url=settings.rq_redis_url,
+        )
+    except Exception as exc:
         logger.warning(
-            "webhook.queue.drop_failed_delivery",
+            "webhook.queue.requeue_failed",
             extra={
                 "board_id": str(payload.board_id),
                 "webhook_id": str(payload.webhook_id),
                 "payload_id": str(payload.payload_id),
-                "attempts": payload.attempts,
+                "error": str(exc),
             },
         )
-        return False
-    _requeue_with_attempt(payload)
-    return True
+        raise

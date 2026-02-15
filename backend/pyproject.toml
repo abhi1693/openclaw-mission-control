@@ -27,7 +27,6 @@ dependencies = [
     "websockets==16.0",
     "redis==6.3.0",
     "rq==2.6.0",
-    "rq-scheduler==0.14.0",
 ]
 
 [project.optional-dependencies]

@@ -29,7 +29,7 @@ from app.schemas.board_webhooks import (
 from app.schemas.common import OkResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
-from app.services.webhooks.queue import QueuedWebhookDelivery, enqueue_webhook_delivery
+from app.services.webhooks.queue import QueuedInboundDelivery, enqueue_webhook_delivery
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -165,12 +165,6 @@ def _captured_headers(request: Request) -> dict[str, str] | None:
         if normalized in {"content-type", "user-agent"} or normalized.startswith("x-"):
             captured[normalized] = value
     return captured or None
-
-
-def _extract_webhook_event(headers: dict[str, str] | None) -> str | None:
-    if not headers:
-        return None
-    return headers.get("x-github-event") or headers.get("x-event-type")
 
 
 def _payload_preview(
@@ -448,11 +442,10 @@ async def ingest_board_webhook(
     await session.commit()
 
     enqueued = enqueue_webhook_delivery(
-        QueuedWebhookDelivery(
+        QueuedInboundDelivery(
             board_id=board.id,
             webhook_id=webhook.id,
             payload_id=payload.id,
-            payload_event=_extract_webhook_event(headers),
             received_at=payload.received_at,
         ),
     )

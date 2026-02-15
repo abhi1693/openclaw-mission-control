@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -10,7 +11,7 @@ import pytest
 
 from app.services.webhooks import dispatch
 from app.services.webhooks.queue import (
-    QueuedWebhookDelivery,
+    QueuedInboundDelivery,
     dequeue_webhook_delivery,
     enqueue_webhook_delivery,
     requeue_if_failed,
@@ -34,22 +35,21 @@ class _FakeRedis:
 def test_webhook_queue_roundtrip(monkeypatch: pytest.MonkeyPatch, attempts: int) -> None:
     fake = _FakeRedis()
 
-    def _fake_redis() -> _FakeRedis:
+    def _fake_redis(*, redis_url: str | None = None) -> _FakeRedis:
         return fake
 
     board_id = uuid4()
     webhook_id = uuid4()
     payload_id = uuid4()
-    payload = QueuedWebhookDelivery(
+    payload = QueuedInboundDelivery(
         board_id=board_id,
         webhook_id=webhook_id,
         payload_id=payload_id,
-        payload_event="push",
         received_at=datetime.now(UTC),
         attempts=attempts,
     )
 
-    monkeypatch.setattr("app.services.webhooks.queue._redis_client", _fake_redis)
+    monkeypatch.setattr("app.services.queue._redis_client", _fake_redis)
     assert enqueue_webhook_delivery(payload)
 
     dequeued = dequeue_webhook_delivery()
@@ -57,24 +57,54 @@ def test_webhook_queue_roundtrip(monkeypatch: pytest.MonkeyPatch, attempts: int)
     assert dequeued.board_id == board_id
     assert dequeued.webhook_id == webhook_id
     assert dequeued.payload_id == payload_id
-    assert dequeued.payload_event == "push"
     assert dequeued.attempts == attempts
+
+
+def test_webhook_queue_dequeue_legacy_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeRedis()
+
+    def _fake_redis(*, redis_url: str | None = None) -> _FakeRedis:
+        return fake
+
+    payload_id = uuid4()
+    board_id = uuid4()
+    webhook_id = uuid4()
+    received_at = datetime.now(UTC)
+    fake.values.append(
+        json.dumps(
+            {
+                "board_id": str(board_id),
+                "webhook_id": str(webhook_id),
+                "payload_id": str(payload_id),
+                "received_at": received_at.isoformat(),
+                "attempts": 2,
+            }
+        )
+    )
+
+    monkeypatch.setattr("app.services.queue._redis_client", _fake_redis)
+    dequeued = dequeue_webhook_delivery()
+
+    assert dequeued is not None
+    assert dequeued.board_id == board_id
+    assert dequeued.webhook_id == webhook_id
+    assert dequeued.payload_id == payload_id
+    assert dequeued.attempts == 2
 
 
 @pytest.mark.parametrize("attempts", [0, 1, 2, 3])
 def test_requeue_respects_retry_cap(monkeypatch: pytest.MonkeyPatch, attempts: int) -> None:
     fake = _FakeRedis()
 
-    def _fake_redis() -> _FakeRedis:
+    def _fake_redis(*, redis_url: str | None = None) -> _FakeRedis:
         return fake
 
-    monkeypatch.setattr("app.services.webhooks.queue._redis_client", _fake_redis)
+    monkeypatch.setattr("app.services.queue._redis_client", _fake_redis)
 
-    payload = QueuedWebhookDelivery(
+    payload = QueuedInboundDelivery(
         board_id=uuid4(),
         webhook_id=uuid4(),
         payload_id=uuid4(),
-        payload_event="push",
         received_at=datetime.now(UTC),
         attempts=attempts,
     )
@@ -97,8 +127,8 @@ class _FakeQueuedItem:
         self.attempts = attempts
 
 
-def _patch_dequeue(monkeypatch: pytest.MonkeyPatch, items: list[QueuedWebhookDelivery | None]) -> None:
-    def _dequeue() -> QueuedWebhookDelivery | None:
+def _patch_dequeue(monkeypatch: pytest.MonkeyPatch, items: list[QueuedInboundDelivery | None]) -> None:
+    def _dequeue() -> QueuedInboundDelivery | None:
         if not items:
             return None
         return items.pop(0)
@@ -108,7 +138,7 @@ def _patch_dequeue(monkeypatch: pytest.MonkeyPatch, items: list[QueuedWebhookDel
 
 @pytest.mark.asyncio
 async def test_dispatch_flush_processes_items_and_throttles(monkeypatch: pytest.MonkeyPatch) -> None:
-    items: list[QueuedWebhookDelivery | None] = [
+    items: list[QueuedInboundDelivery | None] = [
         _FakeQueuedItem(),
         _FakeQueuedItem(),
         None,
@@ -118,11 +148,11 @@ async def test_dispatch_flush_processes_items_and_throttles(monkeypatch: pytest.
     processed: list[UUID] = []
     throttles: list[float] = []
 
-    async def _process(item: QueuedWebhookDelivery) -> None:
+    async def _process(item: QueuedInboundDelivery) -> None:
         processed.append(item.payload_id)
 
     monkeypatch.setattr(dispatch, "_process_single_item", _process)
-    monkeypatch.setattr(dispatch.settings, "webhook_dispatch_throttle_seconds", 0)
+    monkeypatch.setattr(dispatch.settings, "rq_dispatch_throttle_seconds", 0)
     monkeypatch.setattr(dispatch.time, "sleep", lambda seconds: throttles.append(seconds))
 
     await dispatch.flush_webhook_delivery_queue()
@@ -136,18 +166,18 @@ async def test_dispatch_flush_requeues_on_process_error(monkeypatch: pytest.Monk
     item = _FakeQueuedItem()
     _patch_dequeue(monkeypatch, [item, None])
 
-    async def _process(_: QueuedWebhookDelivery) -> None:
+    async def _process(_: QueuedInboundDelivery) -> None:
         raise RuntimeError("boom")
 
-    requeued: list[QueuedWebhookDelivery] = []
+    requeued: list[QueuedInboundDelivery] = []
 
-    def _requeue(payload: QueuedWebhookDelivery) -> bool:
+    def _requeue(payload: QueuedInboundDelivery) -> bool:
         requeued.append(payload)
         return True
 
     monkeypatch.setattr(dispatch, "_process_single_item", _process)
     monkeypatch.setattr(dispatch, "requeue_if_failed", _requeue)
-    monkeypatch.setattr(dispatch.settings, "webhook_dispatch_throttle_seconds", 0)
+    monkeypatch.setattr(dispatch.settings, "rq_dispatch_throttle_seconds", 0)
     monkeypatch.setattr(dispatch.time, "sleep", lambda seconds: None)
 
     await dispatch.flush_webhook_delivery_queue()
@@ -161,7 +191,7 @@ async def test_dispatch_flush_recovers_from_dequeue_error(monkeypatch: pytest.Mo
     item = _FakeQueuedItem()
     call_count = 0
 
-    def _dequeue() -> QueuedWebhookDelivery | None:
+    def _dequeue() -> QueuedInboundDelivery | None:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -174,12 +204,12 @@ async def test_dispatch_flush_recovers_from_dequeue_error(monkeypatch: pytest.Mo
 
     processed = 0
 
-    async def _process(_: QueuedWebhookDelivery) -> None:
+    async def _process(_: QueuedInboundDelivery) -> None:
         nonlocal processed
         processed += 1
 
     monkeypatch.setattr(dispatch, "_process_single_item", _process)
-    monkeypatch.setattr(dispatch.settings, "webhook_dispatch_throttle_seconds", 0)
+    monkeypatch.setattr(dispatch.settings, "rq_dispatch_throttle_seconds", 0)
     monkeypatch.setattr(dispatch.time, "sleep", lambda seconds: None)
 
     await dispatch.flush_webhook_delivery_queue()

@@ -23,7 +23,7 @@ from app.models.board_webhooks import BoardWebhook
 from app.models.boards import Board
 from app.models.gateways import Gateway
 from app.models.organizations import Organization
-from app.services.webhooks.queue import QueuedWebhookDelivery
+from app.services.webhooks.queue import QueuedInboundDelivery
 
 
 async def _make_engine() -> AsyncEngine:
@@ -129,14 +129,13 @@ async def test_ingest_board_webhook_stores_payload_and_enqueues_for_lead_dispatc
     async with session_maker() as session:
         board, webhook = await _seed_webhook(session, enabled=True)
 
-    def _fake_enqueue(payload: QueuedWebhookDelivery) -> bool:
+    def _fake_enqueue(payload: QueuedInboundDelivery) -> bool:
         enqueued.append(
             {
                 "board_id": str(payload.board_id),
                 "webhook_id": str(payload.webhook_id),
                 "payload_id": str(payload.payload_id),
                 "attempts": payload.attempts,
-                "event": payload.payload_event,
             },
         )
         return True

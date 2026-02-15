@@ -37,7 +37,7 @@ services:
       DB_AUTO_MIGRATE: ${DB_AUTO_MIGRATE:-true}
       AUTH_MODE: ${AUTH_MODE}
       LOCAL_AUTH_TOKEN: ${LOCAL_AUTH_TOKEN}
-      WEBHOOK_REDIS_URL: redis://redis:6379/0
+      RQ_REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
@@ -70,7 +70,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["rq", "worker", "webhook-dispatch", "-u", "redis://redis:6379/0"]
+    command: ["rq", "worker", "-u", "redis://redis:6379/0"]
     env_file:
       - ./backend/.env.example
     depends_on:
@@ -82,29 +82,10 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-mission_control}
       AUTH_MODE: ${AUTH_MODE}
       LOCAL_AUTH_TOKEN: ${LOCAL_AUTH_TOKEN}
-      WEBHOOK_REDIS_URL: redis://redis:6379/0
-      WEBHOOK_QUEUE_NAME: webhook-dispatch
-      WEBHOOK_DISPATCH_SCHEDULE_ID: webhook-dispatch-batch
-    restart: unless-stopped
-
-  webhook-dispatch-cron:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    command:
-      - sh
-      - -c
-      - |
-          python -c "from app.services.webhooks.scheduler import bootstrap_webhook_dispatch_schedule; bootstrap_webhook_dispatch_schedule()" && \
-          rqscheduler -u "${WEBHOOK_REDIS_URL:-redis://redis:6379/0}" -i 60
-    depends_on:
-      - redis
-      - webhook-worker
-    environment:
-      WEBHOOK_REDIS_URL: redis://redis:6379/0
-      WEBHOOK_QUEUE_NAME: webhook-dispatch
-      WEBHOOK_DISPATCH_SCHEDULE_ID: webhook-dispatch-batch
-      WEBHOOK_DISPATCH_SCHEDULE_INTERVAL_SECONDS: ${WEBHOOK_DISPATCH_SCHEDULE_INTERVAL_SECONDS:-900}
+      RQ_REDIS_URL: redis://redis:6379/0
+      RQ_QUEUE_NAME: ${RQ_QUEUE_NAME:-default}
+      RQ_DISPATCH_THROTTLE_SECONDS: ${RQ_DISPATCH_THROTTLE_SECONDS:-2.0}
+      RQ_DISPATCH_MAX_RETRIES: ${RQ_DISPATCH_MAX_RETRIES:-3}
     restart: unless-stopped
 
 volumes:
