@@ -1004,7 +1004,8 @@ def _should_include_bootstrap(
 def _wakeup_text(agent: Agent, *, verb: str) -> str:
     return (
         f"Hello {agent.name}. Your workspace has been {verb}.\n\n"
-        "Start the agent, read AGENTS.md, and begin heartbeats after startup."
+        "Start the agent. If BOOTSTRAP.md exists, read it first, then read AGENTS.md. "
+        "Begin heartbeats after startup."
     )
 
 

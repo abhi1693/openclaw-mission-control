@@ -56,6 +56,14 @@ def test_workspace_path_preserves_tilde_in_workspace_root():
     assert agent_provisioning._workspace_path(agent, "~/.openclaw") == "~/.openclaw/workspace-alice"
 
 
+def test_wakeup_text_includes_bootstrap_before_agents():
+    agent = _AgentStub(name="Alice")
+
+    text = agent_provisioning._wakeup_text(agent, verb="created")
+
+    assert "If BOOTSTRAP.md exists, read it first, then read AGENTS.md." in text
+
+
 def test_agent_lifecycle_workspace_path_preserves_tilde_in_workspace_root():
     assert (
         AgentLifecycleService.workspace_path("Alice", "~/.openclaw")
