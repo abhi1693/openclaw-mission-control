@@ -34,6 +34,7 @@ def _safe_error_detail(resp: httpx.Response) -> str:
         return text
     return f"{text[: _ERROR_DETAIL_MAX_CHARS - 3]}..."
 
+
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
 
