@@ -8,14 +8,27 @@ operate within a single scope (no `app.integrations.*` plumbing).
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 from uuid import uuid4
 
 import websockets
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+)
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
 from websockets.exceptions import WebSocketException
 
 from app.core.logging import TRACE_LEVEL, get_logger
@@ -26,7 +39,65 @@ GATEWAY_OPERATOR_SCOPES = (
     "operator.admin",
     "operator.approvals",
     "operator.pairing",
+    "operator.read",
 )
+
+# ---------------------------------------------------------------------------
+# Device-key authentication helpers
+# ---------------------------------------------------------------------------
+_DEVICE_KEY_DIR = Path(__file__).resolve().parent / ".device-keys"
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+
+def _get_or_create_device_keypair() -> tuple[Ed25519PrivateKey, bytes, str]:
+    """Return (private_key, raw_public_bytes, device_id).
+
+    Keys are persisted to ``_DEVICE_KEY_DIR`` so the device identity remains
+    stable across restarts (avoiding repeated pairing prompts).
+    """
+    _DEVICE_KEY_DIR.mkdir(parents=True, exist_ok=True)
+    key_path = _DEVICE_KEY_DIR / "device.key"
+    if key_path.exists():
+        raw = key_path.read_bytes()
+        private_key = Ed25519PrivateKey.from_private_bytes(raw[:32])
+    else:
+        private_key = Ed25519PrivateKey.generate()
+        raw = private_key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+        key_path.write_bytes(raw)
+        key_path.chmod(0o600)
+    pub_bytes = private_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    device_id = hashlib.sha256(pub_bytes).hexdigest()
+    return private_key, pub_bytes, device_id
+
+
+def _build_device_auth(
+    *,
+    token: str,
+    nonce: str,
+    scopes: list[str],
+    device_id: str,
+    private_key: Ed25519PrivateKey,
+    pub_bytes: bytes,
+) -> dict[str, Any]:
+    """Build the ``device`` block for the connect handshake."""
+    signed_at = int(time.time() * 1000)
+    scopes_str = ",".join(scopes)
+    payload = (
+        f"v2|{device_id}|gateway-client|ui|operator|"
+        f"{scopes_str}|{signed_at}|{token}|{nonce}"
+    )
+    signature = private_key.sign(payload.encode())
+    return {
+        "id": device_id,
+        "publicKey": _b64url(pub_bytes),
+        "signature": _b64url(signature),
+        "signedAt": signed_at,
+        "nonce": nonce,
+    }
+
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
@@ -230,12 +301,17 @@ async def _send_request(
     return await _await_response(ws, request_id)
 
 
-def _build_connect_params(config: GatewayConfig) -> dict[str, Any]:
+def _build_connect_params(
+    config: GatewayConfig,
+    *,
+    nonce: str = "",
+) -> dict[str, Any]:
+    scopes = list(GATEWAY_OPERATOR_SCOPES)
     params: dict[str, Any] = {
         "minProtocol": PROTOCOL_VERSION,
         "maxProtocol": PROTOCOL_VERSION,
         "role": "operator",
-        "scopes": list(GATEWAY_OPERATOR_SCOPES),
+        "scopes": scopes,
         "client": {
             "id": "gateway-client",
             "version": "1.0.0",
@@ -245,6 +321,20 @@ def _build_connect_params(config: GatewayConfig) -> dict[str, Any]:
     }
     if config.token:
         params["auth"] = {"token": config.token}
+        # Device-key auth: sign the challenge nonce so the gateway preserves
+        # the requested scopes (without this, scopes are stripped).
+        try:
+            private_key, pub_bytes, device_id = _get_or_create_device_keypair()
+            params["device"] = _build_device_auth(
+                token=config.token,
+                nonce=nonce,
+                scopes=scopes,
+                device_id=device_id,
+                private_key=private_key,
+                pub_bytes=pub_bytes,
+            )
+        except Exception:
+            logger.warning("gateway.rpc.device_auth_failed", exc_info=True)
     return params
 
 
@@ -253,11 +343,14 @@ async def _ensure_connected(
     first_message: str | bytes | None,
     config: GatewayConfig,
 ) -> None:
+    nonce = ""
     if first_message:
         if isinstance(first_message, bytes):
             first_message = first_message.decode("utf-8")
         data = json.loads(first_message)
-        if data.get("type") != "event" or data.get("event") != "connect.challenge":
+        if data.get("type") == "event" and data.get("event") == "connect.challenge":
+            nonce = data.get("payload", {}).get("nonce", "")
+        else:
             logger.warning(
                 "gateway.rpc.connect.unexpected_first_message type=%s event=%s",
                 data.get("type"),
@@ -268,7 +361,7 @@ async def _ensure_connected(
         "type": "req",
         "id": connect_id,
         "method": "connect",
-        "params": _build_connect_params(config),
+        "params": _build_connect_params(config, nonce=nonce),
     }
     await ws.send(json.dumps(response))
     await _await_response(ws, connect_id)
