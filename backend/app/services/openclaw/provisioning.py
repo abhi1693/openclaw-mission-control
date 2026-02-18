@@ -110,27 +110,47 @@ def _heartbeat_config(agent: Agent) -> dict[str, Any]:
 
 
 def _channel_heartbeat_visibility_patch(config_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Build a minimal patch ensuring channel default heartbeat visibility is configured.
+
+    Gateways may have existing channel config; we only want to fill missing keys rather than
+    overwrite operator intent.
+
+    Returns:
+    - `None` if no change is needed
+    - a shallow patch dict suitable for a config merge otherwise
+    """
+
     channels = config_data.get("channels")
     if not isinstance(channels, dict):
         return {"defaults": {"heartbeat": DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.copy()}}
+
     defaults = channels.get("defaults")
     if not isinstance(defaults, dict):
         return {"defaults": {"heartbeat": DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.copy()}}
+
     heartbeat = defaults.get("heartbeat")
     if not isinstance(heartbeat, dict):
         return {"defaults": {"heartbeat": DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.copy()}}
+
     merged = dict(heartbeat)
     changed = False
     for key, value in DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY.items():
         if key not in merged:
             merged[key] = value
             changed = True
+
     if not changed:
         return None
+
     return {"defaults": {"heartbeat": merged}}
 
 
 def _template_env() -> Environment:
+    """Create the Jinja environment used for gateway template rendering.
+
+    Note: we intentionally disable auto-escaping so markdown/plaintext templates render verbatim.
+    """
+
     return Environment(
         loader=FileSystemLoader(_templates_root()),
         # Render markdown verbatim (HTML escaping makes it harder for agents to read).
@@ -145,19 +165,34 @@ def _heartbeat_template_name(agent: Agent) -> str:
 
 
 def _workspace_path(agent: Agent, workspace_root: str) -> str:
+    """Return the absolute on-disk workspace directory for an agent.
+
+    Why this exists:
+    - We derive the folder name from a stable *agent key* (ultimately rooted in ids/session keys)
+      rather than display names to avoid collisions.
+    - We preserve a historical gateway-main naming quirk to avoid moving existing directories.
+
+    This path is later interpolated into template files (TOOLS.md, etc.) that agents treat as the
+    source of truth for where to read/write.
+    """
+
     if not workspace_root:
         msg = "gateway_workspace_root is required"
         raise ValueError(msg)
+
     root = workspace_root.rstrip("/")
+
     # Use agent key derived from session key when possible. This prevents collisions for
     # lead agents (session key includes board id) even if multiple boards share the same
     # display name (e.g. "Lead Agent").
     key = _agent_key(agent)
+
     # Backwards-compat: gateway-main agents historically used session keys that encoded
     # "gateway-<id>" while the gateway agent id is "mc-gateway-<id>".
     # Keep the on-disk workspace path stable so existing provisioned files aren't moved.
     if key.startswith("mc-gateway-"):
         key = key.removeprefix("mc-")
+
     return f"{root}/workspace-{slugify(key)}"
 
 

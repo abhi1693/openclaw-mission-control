@@ -318,22 +318,41 @@ async def has_valid_recent_comment(
 
 
 def _parse_since(value: str | None) -> datetime | None:
+    """Parse an optional ISO-8601 timestamp into a naive UTC `datetime`.
+
+    The API accepts either naive timestamps (treated as UTC) or timezone-aware values.
+    Returning naive UTC simplifies SQLModel comparisons against stored naive UTC values.
+    """
+
     if not value:
         return None
+
     normalized = value.strip()
     if not normalized:
         return None
+
+    # Allow common ISO-8601 `Z` suffix (UTC) even though `datetime.fromisoformat` expects `+00:00`.
     normalized = normalized.replace("Z", "+00:00")
+
     try:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
+
     if parsed.tzinfo is not None:
         return parsed.astimezone(UTC).replace(tzinfo=None)
+
+    # No tzinfo: interpret as UTC for consistency with other API timestamps.
     return parsed
 
 
 def _coerce_task_items(items: Sequence[object]) -> list[Task]:
+    """Validate/convert paginated query results to a concrete `list[Task]`.
+
+    SQLModel pagination helpers return `Sequence[object]`; we validate types early so the
+    rest of the route logic can assume real `Task` instances.
+    """
+
     tasks: list[Task] = []
     for item in items:
         if not isinstance(item, Task):
@@ -346,6 +365,15 @@ def _coerce_task_items(items: Sequence[object]) -> list[Task]:
 def _coerce_task_event_rows(
     items: Sequence[object],
 ) -> list[tuple[ActivityEvent, Task | None]]:
+    """Normalize DB rows into `(ActivityEvent, Task | None)` tuples.
+
+    Depending on the SQLAlchemy/SQLModel execution path, result rows may arrive as:
+    - real Python tuples, or
+    - row-like objects supporting `__len__` and `__getitem__`.
+
+    This helper centralizes validation so SSE/event-stream logic can assume a stable shape.
+    """
+
     rows: list[tuple[ActivityEvent, Task | None]] = []
     for item in items:
         first: object
@@ -382,6 +410,12 @@ async def _lead_was_mentioned(
     task: Task,
     lead: Agent,
 ) -> bool:
+    """Return `True` if the lead agent is mentioned in any comment on the task.
+
+    This is used to avoid redundant lead pings (especially in auto-created tasks) while still
+    ensuring escalation happens when explicitly requested.
+    """
+
     statement = (
         select(ActivityEvent.message)
         .where(col(ActivityEvent.task_id) == task.id)
@@ -398,6 +432,8 @@ async def _lead_was_mentioned(
 
 
 def _lead_created_task(task: Task, lead: Agent) -> bool:
+    """Return `True` if `task` was auto-created by the lead agent."""
+
     if not task.auto_created or not task.auto_reason:
         return False
     return task.auto_reason == f"lead_agent:{lead.id}"
@@ -411,6 +447,13 @@ async def _reconcile_dependents_for_dependency_toggle(
     previous_status: str,
     actor_agent_id: UUID | None,
 ) -> None:
+    """Apply dependency side-effects when a dependency task toggles done/undone.
+
+    The UI models dependencies as a DAG: when a dependency is reopened, dependents that were
+    previously marked done may need to be reopened or flagged. This helper keeps dependent state
+    consistent with the dependency graph without duplicating logic across endpoints.
+    """
+
     done_toggled = (previous_status == "done") != (dependency_task.status == "done")
     if not done_toggled:
         return
