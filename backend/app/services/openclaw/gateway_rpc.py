@@ -40,6 +40,7 @@ GATEWAY_OPERATOR_SCOPES = (
     "operator.approvals",
     "operator.pairing",
     "operator.read",
+    "operator.write",
 )
 
 # ---------------------------------------------------------------------------
