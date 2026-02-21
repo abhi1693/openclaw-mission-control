@@ -21,6 +21,7 @@ from app.db.pagination import paginate
 from app.db.session import get_session
 from app.models.agents import Agent
 from app.models.boards import Board
+from app.models.board_webhook_payloads import BoardWebhookPayload
 from app.models.tags import Tag
 from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
@@ -33,6 +34,7 @@ from app.schemas.agents import (
 from app.schemas.approvals import ApprovalCreate, ApprovalRead, ApprovalStatus
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.board_onboarding import BoardOnboardingAgentUpdate, BoardOnboardingRead
+from app.schemas.board_webhooks import BoardWebhookPayloadRead
 from app.schemas.boards import BoardRead
 from app.schemas.common import OkResponse
 from app.schemas.errors import LLMErrorResponse
@@ -570,6 +572,58 @@ async def list_tags(
         )
         for tag in tags
     ]
+
+
+@router.get(
+    "/boards/{board_id}/webhooks/{webhook_id}/payloads/{payload_id}",
+    response_model=BoardWebhookPayloadRead,
+    tags=AGENT_BOARD_TAGS,
+)
+async def get_webhook_payload(
+    webhook_id: UUID,
+    payload_id: UUID,
+    max_chars: int | None = Query(default=None, ge=1, le=1_000_000),
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> BoardWebhookPayloadRead:
+    """Fetch a stored webhook payload (agent-accessible, read-only).
+
+    This enables lead agents to backfill dropped webhook events and enforce
+    idempotency by inspecting previously received payloads.
+
+    If `max_chars` is provided and the serialized payload exceeds the limit,
+    the response payload is returned as a truncated string preview.
+    """
+
+    _guard_board_access(agent_ctx, board)
+
+    payload = (
+        await session.exec(
+            select(BoardWebhookPayload)
+            .where(col(BoardWebhookPayload.id) == payload_id)
+            .where(col(BoardWebhookPayload.board_id) == board.id)
+            .where(col(BoardWebhookPayload.webhook_id) == webhook_id),
+        )
+    ).first()
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    response = BoardWebhookPayloadRead.model_validate(payload, from_attributes=True)
+    if max_chars is not None and response.payload is not None:
+        import json
+
+        try:
+            raw = json.dumps(response.payload, ensure_ascii=True)
+        except TypeError:
+            raw = str(response.payload)
+        if len(raw) > max_chars:
+            if max_chars <= 3:
+                response.payload = raw[:max_chars]
+            else:
+                response.payload = f"{raw[: max_chars - 3]}..."
+
+    return response
 
 
 @router.post(
