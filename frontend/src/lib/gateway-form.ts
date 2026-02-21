@@ -12,7 +12,10 @@ export const validateGatewayUrl = (value: string) => {
     if (url.protocol !== "ws:" && url.protocol !== "wss:") {
       return "Gateway URL must start with ws:// or wss://.";
     }
-    if (!url.port) {
+    // url.port is empty for default ports (80 for ws:, 443 for wss:) — allow those
+    const defaultPorts: Record<string, string> = { "ws:": "80", "wss:": "443" };
+    const effectivePort = url.port || defaultPorts[url.protocol] || "";
+    if (!effectivePort) {
       return "Gateway URL must include an explicit port.";
     }
     return null;

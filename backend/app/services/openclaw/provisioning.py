@@ -43,6 +43,7 @@ from app.services.openclaw.gateway_rpc import (
     openclaw_call,
     send_message,
 )
+from app.services.openclaw.internal.retry import GatewayBackoff
 from app.services.openclaw.internal.agent_key import agent_key as _agent_key
 from app.services.openclaw.internal.agent_key import slugify
 from app.services.openclaw.internal.session_keys import (
@@ -1089,24 +1090,41 @@ class OpenClawGatewayProvisioner:
             session_label=agent.name or "Gateway Agent",
         )
 
+        client_config = GatewayClientConfig(url=gateway.url, token=gateway.token)
+        # Gateway may restart due to config.patch triggered by agents.create above.
+        # Use backoff for ALL post-provision gateway calls so we wait for it to come back up.
+        _post_provision_backoff = GatewayBackoff(
+            timeout_s=45,
+            base_delay_s=1.0,
+            max_delay_s=10.0,
+            timeout_context="post-provision session setup",
+        )
+
         if reset_session:
-            try:
-                await control_plane.reset_agent_session(session_key)
-            except OpenClawGatewayError as exc:
-                if not _is_missing_session_error(exc):
-                    raise
+            async def _reset_with_backoff() -> object:
+                try:
+                    await control_plane.reset_agent_session(session_key)
+                except OpenClawGatewayError as exc:
+                    if not _is_missing_session_error(exc):
+                        raise
+                return True
+
+            await _post_provision_backoff.run(_reset_with_backoff)
 
         if not wake:
             return
 
-        client_config = GatewayClientConfig(url=gateway.url, token=gateway.token)
-        await ensure_session(session_key, config=client_config, label=agent.name)
+        await _post_provision_backoff.run(
+            lambda: ensure_session(session_key, config=client_config, label=agent.name)
+        )
         verb = wakeup_verb or ("provisioned" if action == "provision" else "updated")
-        await send_message(
-            _wakeup_text(agent, verb=verb),
-            session_key=session_key,
-            config=client_config,
-            deliver=deliver_wakeup,
+        await _post_provision_backoff.run(
+            lambda: send_message(
+                _wakeup_text(agent, verb=verb),
+                session_key=session_key,
+                config=client_config,
+                deliver=deliver_wakeup,
+            )
         )
 
     async def delete_agent_lifecycle(
