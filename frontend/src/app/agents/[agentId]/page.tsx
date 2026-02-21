@@ -197,6 +197,14 @@ export default function AgentDetailPage() {
                   </Link>
                 ) : null}
                 {agent ? (
+                  <Link
+                    href={`/agents/${agent.id}/files`}
+                    className="inline-flex h-10 items-center justify-center rounded-xl border border-[color:var(--border)] px-4 text-sm font-semibold text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+                  >
+                    Files
+                  </Link>
+                ) : null}
+                {agent ? (
                   <Button variant="outline" onClick={() => setDeleteOpen(true)}>
                     Delete
                   </Button>
