@@ -18,6 +18,9 @@ node_modules/
 # Worktrees
 .worktrees/
 
+# Device keys (generated at runtime for gateway authentication)
+.device-keys/
+
 # Accidental literal "~" directories (e.g. when a configured path contains "~" but isn't expanded)
 backend/~/
 backend/coverage.*
