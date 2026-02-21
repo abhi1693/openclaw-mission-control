@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   Network,
   Settings,
+  Sparkles,
   Store,
   Tags,
 } from "lucide-react";
@@ -235,18 +236,43 @@ export function DashboardSidebar() {
                 </Link>
               ) : null}
               {isAdmin ? (
-                <Link
-                  href="/agents"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                    pathname.startsWith("/agents")
-                      ? "bg-blue-100 text-blue-800 font-medium"
-                      : "hover:bg-slate-100",
-                  )}
-                >
-                  <Bot className="h-4 w-4" />
-                  Agents
-                </Link>
+                <>
+                  <Link
+                    href="/agents"
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                      pathname === "/agents" || pathname.startsWith("/agents/new") || pathname.match(/^\/agents\/[^/]+$/)
+                        ? "bg-blue-100 text-blue-800 font-medium"
+                        : "hover:bg-slate-100",
+                    )}
+                  >
+                    <Bot className="h-4 w-4" />
+                    Agents
+                  </Link>
+                  <Link
+                    href="/agents/fleet"
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 pl-10 text-slate-700 transition",
+                      pathname === "/agents/fleet"
+                        ? "bg-blue-100 text-blue-800 font-medium"
+                        : "hover:bg-slate-100",
+                    )}
+                  >
+                    Agent Fleet
+                  </Link>
+                  <Link
+                    href="/souls"
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                      pathname.startsWith("/souls")
+                        ? "bg-blue-100 text-blue-800 font-medium"
+                        : "hover:bg-slate-100",
+                    )}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Souls
+                  </Link>
+                </>
               ) : null}
             </div>
           </div>

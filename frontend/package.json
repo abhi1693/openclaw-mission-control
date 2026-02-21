@@ -30,7 +30,10 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.7.0",
     "remark-breaks": "^4.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0"
   },
   "devDependencies": {
     "@clerk/testing": "^1.13.35",

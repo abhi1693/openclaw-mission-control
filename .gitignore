@@ -10,6 +10,10 @@ node_modules/
 # Env
 .env
 .env.local
+.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # IDE
 .idea/

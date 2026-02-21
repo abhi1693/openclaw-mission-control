@@ -9,6 +9,7 @@ import { useAuth } from "@/auth/clerk";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentsTable } from "@/components/agents/AgentsTable";
+import { AgentTerminalDialog } from "@/components/agents/AgentTerminalDialog";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
@@ -52,6 +53,7 @@ export default function AgentsPage() {
   });
 
   const [deleteTarget, setDeleteTarget] = useState<AgentRead | null>(null);
+  const [chatAgent, setChatAgent] = useState<AgentRead | null>(null);
 
   const boardsKey = getListBoardsApiV1BoardsGetQueryKey();
   const agentsKey = getListAgentsApiV1AgentsGetQueryKey();
@@ -151,6 +153,7 @@ export default function AgentsPage() {
             onSortingChange={onSortingChange}
             showActions
             stickyHeader
+            onChat={setChatAgent}
             onDelete={setDeleteTarget}
             emptyState={{
               title: "No agents yet",
@@ -186,6 +189,11 @@ export default function AgentsPage() {
         errorMessage={deleteMutation.error?.message}
         onConfirm={handleDelete}
         isConfirming={deleteMutation.isPending}
+      />
+
+      <AgentTerminalDialog
+        agent={chatAgent}
+        onClose={() => setChatAgent(null)}
       />
     </>
   );

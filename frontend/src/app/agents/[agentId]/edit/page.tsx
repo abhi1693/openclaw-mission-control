@@ -21,6 +21,7 @@ import type { AgentRead, AgentUpdate, BoardRead } from "@/api/generated/model";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import SearchableSelect, {
   type SearchableSelectOption,
 } from "@/components/ui/searchable-select";
@@ -32,11 +33,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DEFAULT_IDENTITY_PROFILE } from "@/lib/agent-templates";
+import { SoulSelectorDialog } from "@/components/souls/SoulSelectorDialog";
 
 type IdentityProfile = {
   role: string;
   communication_style: string;
   emoji: string;
+  intake_checklist: string;
+  execution_protocol: string;
+  verification_commands: string;
+  escalation_triggers: string;
+  purpose: string;
+  personality: string;
+  custom_instructions: string;
 };
 
 const EMOJI_OPTIONS = [
@@ -58,6 +67,13 @@ const getBoardOptions = (boards: BoardRead[]): SearchableSelectOption[] =>
     label: board.name,
   }));
 
+const normalizeProtocolBlock = (value: string): string =>
+  value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+
 const mergeIdentityProfile = (
   existing: unknown,
   patch: IdentityProfile,
@@ -70,6 +86,13 @@ const mergeIdentityProfile = (
     role: patch.role.trim(),
     communication_style: patch.communication_style.trim(),
     emoji: patch.emoji.trim(),
+    intake_checklist: normalizeProtocolBlock(patch.intake_checklist),
+    execution_protocol: normalizeProtocolBlock(patch.execution_protocol),
+    verification_commands: normalizeProtocolBlock(patch.verification_commands),
+    escalation_triggers: normalizeProtocolBlock(patch.escalation_triggers),
+    purpose: patch.purpose.trim(),
+    personality: patch.personality.trim(),
+    custom_instructions: patch.custom_instructions.trim(),
   };
   for (const [key, value] of Object.entries(updates)) {
     if (value) {
@@ -89,6 +112,14 @@ const withIdentityDefaults = (
     profile?.communication_style ??
     DEFAULT_IDENTITY_PROFILE.communication_style,
   emoji: profile?.emoji ?? DEFAULT_IDENTITY_PROFILE.emoji,
+  intake_checklist: profile?.intake_checklist ?? "",
+  execution_protocol: profile?.execution_protocol ?? "",
+  verification_commands: profile?.verification_commands ?? "",
+  escalation_triggers: profile?.escalation_triggers ?? "",
+  purpose: profile?.purpose ?? DEFAULT_IDENTITY_PROFILE.purpose,
+  personality: profile?.personality ?? DEFAULT_IDENTITY_PROFILE.personality,
+  custom_instructions:
+    profile?.custom_instructions ?? DEFAULT_IDENTITY_PROFILE.custom_instructions,
 });
 
 export default function EditAgentPage() {
@@ -109,6 +140,14 @@ export default function EditAgentPage() {
   const [identityProfile, setIdentityProfile] = useState<
     IdentityProfile | undefined
   >(undefined);
+  const [soulTemplate, setSoulTemplate] = useState<string | undefined>(
+    undefined,
+  );
+  const [identityTemplate, setIdentityTemplate] = useState<string | undefined>(
+    undefined,
+  );
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [soulSelectorOpen, setSoulSelectorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const boardsQuery = useListBoardsApiV1BoardsGet<
@@ -176,10 +215,46 @@ export default function EditAgentPage() {
             ? record.communication_style
             : undefined,
         emoji: typeof record.emoji === "string" ? record.emoji : undefined,
+        intake_checklist:
+          typeof record.intake_checklist === "string"
+            ? record.intake_checklist
+            : undefined,
+        execution_protocol:
+          typeof record.execution_protocol === "string"
+            ? record.execution_protocol
+            : undefined,
+        verification_commands:
+          typeof record.verification_commands === "string"
+            ? record.verification_commands
+            : undefined,
+        escalation_triggers:
+          typeof record.escalation_triggers === "string"
+            ? record.escalation_triggers
+            : undefined,
+        purpose:
+          typeof record.purpose === "string" ? record.purpose : undefined,
+        personality:
+          typeof record.personality === "string"
+            ? record.personality
+            : undefined,
+        custom_instructions:
+          typeof record.custom_instructions === "string"
+            ? record.custom_instructions
+            : undefined,
       });
     }
     return withIdentityDefaults(null);
   }, [loadedAgent?.identity_profile]);
+
+  const loadedSoulTemplate = useMemo(() => {
+    const soul = loadedAgent?.soul_template;
+    return typeof soul === "string" ? soul : "";
+  }, [loadedAgent?.soul_template]);
+
+  const loadedIdentityTemplate = useMemo(() => {
+    const identity = loadedAgent?.identity_template;
+    return typeof identity === "string" ? identity : "";
+  }, [loadedAgent?.identity_template]);
 
   const isLoading =
     boardsQuery.isLoading || agentQuery.isLoading || updateMutation.isPending;
@@ -191,6 +266,8 @@ export default function EditAgentPage() {
     isGatewayMain ?? Boolean(loadedAgent?.is_gateway_main);
   const resolvedHeartbeatEvery = heartbeatEvery ?? loadedHeartbeat.every;
   const resolvedIdentityProfile = identityProfile ?? loadedIdentityProfile;
+  const resolvedSoulTemplate = soulTemplate ?? loadedSoulTemplate;
+  const resolvedIdentityTemplate = identityTemplate ?? loadedIdentityTemplate;
 
   const resolvedBoardId = useMemo(() => {
     if (resolvedIsGatewayMain) return boardId ?? "";
@@ -243,6 +320,8 @@ export default function EditAgentPage() {
         loadedAgent.identity_profile,
         resolvedIdentityProfile,
       ) as unknown as Record<string, unknown> | null,
+      soul_template: resolvedSoulTemplate.trim() || null,
+      identity_template: resolvedIdentityTemplate.trim() || null,
     };
     if (!resolvedIsGatewayMain) {
       payload.board_id = resolvedBoardId || null;
@@ -415,7 +494,7 @@ export default function EditAgentPage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Personality & behavior
           </p>
-          <div className="mt-4">
+          <div className="mt-4 space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900">
                 Communication style
@@ -428,6 +507,139 @@ export default function EditAgentPage() {
                     communication_style: event.target.value,
                   })
                 }
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900">
+                  Intake checklist
+                </label>
+                <Textarea
+                  value={resolvedIdentityProfile.intake_checklist}
+                  onChange={(event) =>
+                    setIdentityProfile({
+                      ...resolvedIdentityProfile,
+                      intake_checklist: event.target.value,
+                    })
+                  }
+                  placeholder="One step per line"
+                  className="min-h-[120px]"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900">
+                  Execution protocol
+                </label>
+                <Textarea
+                  value={resolvedIdentityProfile.execution_protocol}
+                  onChange={(event) =>
+                    setIdentityProfile({
+                      ...resolvedIdentityProfile,
+                      execution_protocol: event.target.value,
+                    })
+                  }
+                  placeholder="One step per line"
+                  className="min-h-[120px]"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900">
+                  Verification commands
+                </label>
+                <Textarea
+                  value={resolvedIdentityProfile.verification_commands}
+                  onChange={(event) =>
+                    setIdentityProfile({
+                      ...resolvedIdentityProfile,
+                      verification_commands: event.target.value,
+                    })
+                  }
+                  placeholder="One step per line"
+                  className="min-h-[120px]"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900">
+                  Escalation triggers
+                </label>
+                <Textarea
+                  value={resolvedIdentityProfile.escalation_triggers}
+                  onChange={(event) =>
+                    setIdentityProfile({
+                      ...resolvedIdentityProfile,
+                      escalation_triggers: event.target.value,
+                    })
+                  }
+                  placeholder="One step per line"
+                  className="min-h-[120px]"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              These steps are shown in the agent UI and stored in the identity profile.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Purpose & personality
+          </p>
+          <div className="mt-4 space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Purpose
+              </label>
+              <Textarea
+                value={resolvedIdentityProfile.purpose}
+                onChange={(event) =>
+                  setIdentityProfile({
+                    ...resolvedIdentityProfile,
+                    purpose: event.target.value,
+                  })
+                }
+                placeholder="What is this agent's mission?"
+                className="min-h-[80px]"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Personality
+              </label>
+              <Textarea
+                value={resolvedIdentityProfile.personality}
+                onChange={(event) =>
+                  setIdentityProfile({
+                    ...resolvedIdentityProfile,
+                    personality: event.target.value,
+                  })
+                }
+                placeholder="Describe personality traits"
+                className="min-h-[80px]"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Custom instructions
+              </label>
+              <Textarea
+                value={resolvedIdentityProfile.custom_instructions}
+                onChange={(event) =>
+                  setIdentityProfile({
+                    ...resolvedIdentityProfile,
+                    custom_instructions: event.target.value,
+                  })
+                }
+                placeholder="Additional instructions for this agent"
+                className="min-h-[120px]"
                 disabled={isLoading}
               />
             </div>
@@ -454,6 +666,68 @@ export default function EditAgentPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between text-left"
+            onClick={() => setShowTemplates(!showTemplates)}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Templates (Advanced)
+            </p>
+            <span className="text-xs text-slate-400">
+              {showTemplates ? "Hide" : "Show"}
+            </span>
+          </button>
+          {showTemplates ? (
+            <div className="mt-4 space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-500">
+                  Override default templates. Leave blank to use defaults.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => setSoulSelectorOpen(true)}
+                >
+                  Import from souls directory
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900">
+                  Soul template
+                </label>
+                <Textarea
+                  value={resolvedSoulTemplate}
+                  onChange={(event) => setSoulTemplate(event.target.value)}
+                  placeholder="Custom SOUL.md content (Markdown)"
+                  className="min-h-[200px] font-mono text-sm"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900">
+                  Identity template
+                </label>
+                <Textarea
+                  value={resolvedIdentityTemplate}
+                  onChange={(event) => setIdentityTemplate(event.target.value)}
+                  placeholder="Custom IDENTITY.md content (Markdown)"
+                  className="min-h-[200px] font-mono text-sm"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <SoulSelectorDialog
+            open={soulSelectorOpen}
+            onOpenChange={setSoulSelectorOpen}
+            onSelect={(content) => setSoulTemplate(content)}
+          />
         </div>
 
         {errorMessage ? (

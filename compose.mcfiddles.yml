@@ -1,0 +1,234 @@
+# =============================================================================
+# Mission Control Deployment for mcfiddles.ai
+# =============================================================================
+#
+# This Docker Compose configuration deploys OpenClaw Mission Control as a
+# companion dashboard to the main OpenClaw platform. Mission Control provides
+# advanced orchestration features including approval workflows, gateway routing,
+# and webhook management.
+#
+# ARCHITECTURE
+# ------------
+#
+#   Browser → OpenClaw Platform (/control/*) → Mission Control (this stack)
+#                    │
+#                    ├── Auth middleware validates session
+#                    ├── Proxies to backend (localhost:8100)
+#                    └── Proxies to frontend (localhost:3100)
+#
+# SECURITY
+# --------
+#
+# - All ports are bound to 127.0.0.1 (localhost only)
+# - External access is through the platform's reverse proxy
+# - AUTH_MODE=local uses a shared token for machine-to-machine auth
+# - The platform handles user authentication (session + TOTP)
+# - User identity is passed via X-OpenClaw-* headers
+#
+# PORTS (internal only)
+# ---------------------
+#
+# - 8100: Backend API (proxied from /control/api/*)
+# - 3100: Frontend Next.js (proxied from /control/*)
+# - 5433: PostgreSQL (Mission Control's own database)
+# - 6380: Redis (background job queue)
+#
+# USAGE
+# -----
+#
+#   # Start all services
+#   docker compose -f compose.mcfiddles.yml --env-file .env up -d --build
+#
+#   # View logs
+#   docker compose -f compose.mcfiddles.yml logs -f
+#
+#   # Stop services
+#   docker compose -f compose.mcfiddles.yml down
+#
+#   # Rebuild after code changes
+#   docker compose -f compose.mcfiddles.yml up -d --build
+#
+# ENVIRONMENT VARIABLES
+# ---------------------
+#
+# Required (in .env file):
+#   POSTGRES_PASSWORD     - Database password (generate with: openssl rand -base64 32)
+#   LOCAL_AUTH_TOKEN      - Shared auth token (must match platform config, 50+ chars)
+#
+# Optional:
+#   FRONTEND_PORT         - Frontend container port (default: 3100)
+#   BACKEND_PORT          - Backend container port (default: 8100)
+#   POSTGRES_DB           - Database name (default: mission_control)
+#   CORS_ORIGINS          - Allowed origins (default: https://mcfiddles.ai)
+#   LOG_LEVEL             - Logging verbosity (default: INFO)
+#
+# RELATED FILES
+# -------------
+#
+# - .env.production         - Production environment configuration
+# - README.mcfiddles.md     - Complete deployment guide
+# - backend/Dockerfile      - Backend container build
+# - frontend/Dockerfile     - Frontend container build
+#
+# =============================================================================
+
+name: mission-control-mcfiddles
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  # Mission Control uses its own PostgreSQL database, separate from the main
+  # OpenClaw platform database. This allows independent schema management and
+  # prevents any interference between the two systems.
+  #
+  # Port 5433 is used to avoid conflicts with the platform's PostgreSQL (5432).
+  # The database stores: approval workflows, gateway rules, webhook configs.
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mission_control}
+      POSTGRES_USER: ${POSTGRES_USER:-mission_control}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - mc_postgres_data:/var/lib/postgresql/data
+    ports:
+      # Bound to localhost only - not accessible from outside the VM
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Redis (Job Queue)
+  # ---------------------------------------------------------------------------
+  # Redis provides the backing store for RQ (Redis Queue), used by the
+  # webhook-worker to process background jobs asynchronously.
+  #
+  # Port 6380 is used to avoid conflicts with any existing Redis instances.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Bound to localhost only - not accessible from outside the VM
+      - "127.0.0.1:6380:6379"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Mission Control Backend API
+  # ---------------------------------------------------------------------------
+  # The Python FastAPI backend handles all API requests. It's proxied from
+  # the OpenClaw platform at /control/api/* with an internal auth token.
+  #
+  # AUTH_MODE=local means the backend trusts requests with a valid
+  # Authorization: Bearer <LOCAL_AUTH_TOKEN> header. User identity is
+  # extracted from X-OpenClaw-* headers set by the platform proxy.
+  #
+  # DB_AUTO_MIGRATE=true runs Alembic migrations on startup.
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      # Database connection (uses Docker network hostname 'db')
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mission_control}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mission_control}
+      # CORS must include the public domain for preflight requests
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://mcfiddles.ai}
+      # Auto-run database migrations on startup
+      DB_AUTO_MIGRATE: ${DB_AUTO_MIGRATE:-true}
+      # Local auth mode - trusts internal bearer token from platform proxy
+      AUTH_MODE: ${AUTH_MODE:-local}
+      # Shared secret with the OpenClaw platform (must match exactly)
+      LOCAL_AUTH_TOKEN: ${LOCAL_AUTH_TOKEN}
+      # Redis connection for background job queue
+      RQ_REDIS_URL: redis://redis:6379/0
+      # Logging level (DEBUG, INFO, WARNING, ERROR)
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      # Internal port only - platform proxies to this from /control/api/*
+      - "127.0.0.1:${BACKEND_PORT:-8100}:8000"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Mission Control Frontend (Next.js)
+  # ---------------------------------------------------------------------------
+  # The Next.js frontend serves the dashboard UI. It's proxied from the
+  # OpenClaw platform at /control/* (excluding /control/api/*).
+  #
+  # NEXT_PUBLIC_API_URL must point to the public URL path where API requests
+  # should go. The browser makes requests to this URL, which the platform
+  # proxies to the backend container.
+  #
+  # Build args are baked into the static build; runtime env vars allow
+  # container-level overrides if needed.
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Public API URL for browser requests (goes through platform proxy)
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://mcfiddles.ai/control/api}
+        # Auth mode passed to frontend for conditional UI rendering
+        NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-local}
+        # Base path for serving under /control/ via platform proxy
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/control}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://mcfiddles.ai/control/api}
+      NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-local}
+      NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/control}
+    depends_on:
+      - backend
+    ports:
+      # Internal port only - platform proxies to this from /control/*
+      - "127.0.0.1:${FRONTEND_PORT:-3100}:3000"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Webhook Background Worker
+  # ---------------------------------------------------------------------------
+  # Processes background jobs from the Redis queue, primarily for sending
+  # outbound webhooks. This allows the API to respond immediately while
+  # webhook delivery happens asynchronously with retries.
+  #
+  # Uses the same backend image but runs the RQ worker command instead
+  # of the API server.
+  # ---------------------------------------------------------------------------
+  webhook-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    # Run RQ worker instead of the API server
+    command: ["rq", "worker", "-u", "redis://redis:6379/0"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mission_control}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mission_control}
+      AUTH_MODE: ${AUTH_MODE:-local}
+      LOCAL_AUTH_TOKEN: ${LOCAL_AUTH_TOKEN}
+      RQ_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+# -----------------------------------------------------------------------------
+# Named Volumes
+# -----------------------------------------------------------------------------
+# Docker-managed volumes persist data across container restarts and rebuilds.
+# The mc_postgres_data volume stores all Mission Control database state.
+#
+# To backup: docker run --rm -v mc_postgres_data:/data -v $(pwd):/backup alpine tar cvf /backup/mc_db.tar /data
+# To restore: docker run --rm -v mc_postgres_data:/data -v $(pwd):/backup alpine tar xvf /backup/mc_db.tar
+# -----------------------------------------------------------------------------
+volumes:
+  mc_postgres_data:

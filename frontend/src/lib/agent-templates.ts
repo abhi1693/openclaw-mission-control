@@ -2,6 +2,9 @@ export const DEFAULT_IDENTITY_PROFILE = {
   role: "Generalist",
   communication_style: "direct, concise, practical",
   emoji: ":gear:",
+  purpose: "",
+  personality: "",
+  custom_instructions: "",
 };
 
 export const DEFAULT_SOUL_TEMPLATE = `# SOUL.md

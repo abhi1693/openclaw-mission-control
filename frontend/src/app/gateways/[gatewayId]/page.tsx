@@ -8,6 +8,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/auth/clerk";
 import { useQueryClient } from "@tanstack/react-query";
 import { AgentsTable } from "@/components/agents/AgentsTable";
+import { GatewaySessionsPanel } from "@/components/gateways/GatewaySessionsPanel";
+import { TemplateSyncDialog } from "@/components/gateways/TemplateSyncDialog";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
@@ -52,6 +54,7 @@ export default function GatewayDetailPage() {
 
   const { isAdmin } = useOrganizationMembership(isSignedIn);
   const [deleteTarget, setDeleteTarget] = useState<AgentRead | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const agentsKey = getListAgentsApiV1AgentsGetQueryKey(
     gatewayId ? { gateway_id: gatewayId } : undefined,
   );
@@ -171,11 +174,19 @@ export default function GatewayDetailPage() {
               Back to gateways
             </Button>
             {isAdmin && gatewayId ? (
-              <Button
-                onClick={() => router.push(`/gateways/${gatewayId}/edit`)}
-              >
-                Edit gateway
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setSyncDialogOpen(true)}
+                >
+                  Sync templates
+                </Button>
+                <Button
+                  onClick={() => router.push(`/gateways/${gatewayId}/edit`)}
+                >
+                  Edit gateway
+                </Button>
+              </>
             ) : null}
           </div>
         }
@@ -293,6 +304,8 @@ export default function GatewayDetailPage() {
                 />
               </div>
             </div>
+
+            <GatewaySessionsPanel />
           </div>
         ) : null}
       </DashboardPageLayout>
@@ -315,6 +328,14 @@ export default function GatewayDetailPage() {
         onConfirm={handleDelete}
         isConfirming={deleteMutation.isPending}
       />
+
+      {gatewayId ? (
+        <TemplateSyncDialog
+          gatewayId={gatewayId}
+          open={syncDialogOpen}
+          onOpenChange={setSyncDialogOpen}
+        />
+      ) : null}
     </>
   );
 }

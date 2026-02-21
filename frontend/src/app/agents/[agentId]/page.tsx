@@ -46,6 +46,43 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+type ProtocolSectionKey =
+  | "intake_checklist"
+  | "execution_protocol"
+  | "verification_commands"
+  | "escalation_triggers";
+
+type ProtocolSection = {
+  key: ProtocolSectionKey;
+  label: string;
+};
+
+const PROTOCOL_SECTIONS: ProtocolSection[] = [
+  { key: "intake_checklist", label: "Intake checklist" },
+  { key: "execution_protocol", label: "Execution protocol" },
+  { key: "verification_commands", label: "Verification commands" },
+  { key: "escalation_triggers", label: "Escalation triggers" },
+];
+
+const parseProtocolSteps = (value: unknown): string[] => {
+  if (typeof value !== "string") return [];
+  const normalized = value.trim();
+  if (!normalized) return [];
+  if (normalized.includes("\n")) {
+    return normalized
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  if (normalized.includes(", ")) {
+    return normalized
+      .split(/,\s+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  return [normalized];
+};
+
 export default function AgentDetailPage() {
   const { isSignedIn } = useAuth();
   const router = useRouter();
@@ -115,6 +152,16 @@ export default function AgentDetailPage() {
     !agent?.board_id || agent?.is_gateway_main
       ? null
       : (boards.find((board) => board.id === agent.board_id) ?? null);
+
+  const protocolSections = useMemo(() => {
+    const identity = agent?.identity_profile;
+    if (!identity || typeof identity !== "object") return [];
+    const profile = identity as Record<string, unknown>;
+    return PROTOCOL_SECTIONS.map((section) => ({
+      label: section.label,
+      steps: parseProtocolSteps(profile[section.key]),
+    })).filter((section) => section.steps.length > 0);
+  }, [agent?.identity_profile]);
 
   const deleteMutation = useDeleteAgentApiV1AgentsAgentIdDelete<ApiError>({
     mutation: {
@@ -317,6 +364,70 @@ export default function AgentDetailPage() {
                       </div>
                     </div>
                   </div>
+
+                  {protocolSections.length > 0 ? (
+                    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-quiet">
+                        Behavior protocol
+                      </p>
+                      <p className="mt-1 text-xs text-quiet">
+                        Operational steps configured for this agent.
+                      </p>
+                      <div className="mt-4 space-y-4">
+                        {protocolSections.map((section) => (
+                          <div key={section.label}>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-quiet">
+                              {section.label}
+                            </p>
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
+                              {section.steps.map((step, index) => (
+                                <li key={`${section.label}-${index}`}>{step}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {(agent.soul_template || agent.identity_template) ? (
+                    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-quiet">
+                        Templates
+                      </p>
+                      <p className="mt-1 text-xs text-quiet">
+                        Custom templates configured for this agent.
+                      </p>
+                      <div className="mt-4 space-y-4">
+                        {agent.soul_template ? (
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-quiet">
+                              Soul template
+                            </p>
+                            <div className="mt-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-3 text-sm">
+                              <Markdown
+                                content={agent.soul_template as string}
+                                variant="comment"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                        {agent.identity_template ? (
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-quiet">
+                              Identity template
+                            </p>
+                            <div className="mt-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-3 text-sm">
+                              <Markdown
+                                content={agent.identity_template as string}
+                                variant="comment"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-5">

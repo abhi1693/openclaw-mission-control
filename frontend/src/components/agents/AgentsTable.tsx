@@ -41,6 +41,7 @@ type AgentsTableProps = {
   stickyHeader?: boolean;
   emptyMessage?: string;
   emptyState?: AgentsTableEmptyState;
+  onChat?: (agent: AgentRead) => void;
   onDelete?: (agent: AgentRead) => void;
 };
 
@@ -74,6 +75,7 @@ export function AgentsTable({
   stickyHeader = false,
   emptyMessage = "No agents found.",
   emptyState,
+  onChat,
   onDelete,
 }: AgentsTableProps) {
   const [internalSorting, setInternalSorting] = useState<SortingState>([
@@ -181,8 +183,31 @@ export function AgentsTable({
       rowActions={
         showActions
           ? {
-              getEditHref: (agent) => `/agents/${agent.id}/edit`,
-              onDelete,
+              actions: [
+                ...(onChat
+                  ? [
+                      {
+                        key: "chat",
+                        label: "Chat",
+                        onClick: onChat,
+                      },
+                    ]
+                  : []),
+                {
+                  key: "edit",
+                  label: "Edit",
+                  href: (agent: AgentRead) => `/agents/${agent.id}/edit`,
+                },
+                ...(onDelete
+                  ? [
+                      {
+                        key: "delete",
+                        label: "Delete",
+                        onClick: onDelete,
+                      },
+                    ]
+                  : []),
+              ],
             }
           : undefined
       }
