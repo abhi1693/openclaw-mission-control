@@ -45,6 +45,8 @@ services:
         condition: service_started
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - device_keys:/app/app/services/openclaw/.device-keys
 
   frontend:
     build:
@@ -90,3 +92,4 @@ services:
 
 volumes:
   postgres_data:
+  device_keys:

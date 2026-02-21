@@ -23,3 +23,6 @@ backend/~/
 backend/coverage.*
 backend/.coverage
 frontend/coverage
+
+# Device keys (generated at runtime, never commit)
+.device-keys/

@@ -18,6 +18,9 @@ from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 
 _T = TypeVar("_T")
 
+# Sentinel used to distinguish "function returned None" from "function raised".
+_UNSET: object = object()
+
 
 def _is_transient_gateway_error(exc: Exception) -> bool:
     if not isinstance(exc, OpenClawGatewayError):
@@ -70,11 +73,11 @@ class GatewayBackoff:
     @staticmethod
     async def _attempt(
         fn: Callable[[], Awaitable[_T]],
-    ) -> tuple[_T | None, OpenClawGatewayError | None]:
+    ) -> tuple[object, OpenClawGatewayError | None]:
         try:
             return await fn(), None
         except OpenClawGatewayError as exc:
-            return None, exc
+            return _UNSET, exc
 
     async def run(self, fn: Callable[[], Awaitable[_T]]) -> _T:
         deadline_s = asyncio.get_running_loop().time() + self._timeout_s
@@ -106,10 +109,10 @@ class GatewayBackoff:
                 self._delay_s = min(self._delay_s * 2.0, self._max_delay_s)
                 continue
             self.reset()
-            if value is None:
+            if value is _UNSET:
                 msg = "Gateway retry produced no value without an error"
                 raise RuntimeError(msg)
-            return value
+            return value  # type: ignore[return-value]
 
 
 async def with_coordination_gateway_retry(fn: Callable[[], Awaitable[_T]]) -> _T:

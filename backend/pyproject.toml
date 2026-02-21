@@ -24,6 +24,7 @@ dependencies = [
     "sqlmodel==0.0.32",
     "sse-starlette==3.2.0",
     "uvicorn[standard]==0.40.0",
+    "cryptography>=44.0",
     "websockets==16.0",
     "redis==6.3.0",
     "rq==2.6.0",
