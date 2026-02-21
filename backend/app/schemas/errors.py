@@ -55,6 +55,7 @@ class BlockedTaskDetail(SQLModel):
     """Error detail payload listing blocking dependency task identifiers."""
 
     message: str
+    code: str | None = None
     blocked_by_task_ids: list[str] = Field(default_factory=list)
 
 
