@@ -36,6 +36,7 @@ from app.core.logging import TRACE_LEVEL, get_logger
 PROTOCOL_VERSION = 3
 logger = get_logger(__name__)
 GATEWAY_OPERATOR_SCOPES = (
+    "operator.read",
     "operator.admin",
     "operator.approvals",
     "operator.pairing",
