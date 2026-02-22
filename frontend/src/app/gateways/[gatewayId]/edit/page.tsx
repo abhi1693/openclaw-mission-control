@@ -43,6 +43,9 @@ export default function EditGatewayPage() {
   const [workspaceRoot, setWorkspaceRoot] = useState<string | undefined>(
     undefined,
   );
+  const [allowInsecureTls, setAllowInsecureTls] = useState<boolean | undefined>(
+    undefined,
+  );
 
   const [gatewayUrlError, setGatewayUrlError] = useState<string | null>(null);
   const [gatewayCheckStatus, setGatewayCheckStatus] =
@@ -84,6 +87,8 @@ export default function EditGatewayPage() {
   const resolvedGatewayToken = gatewayToken ?? loadedGateway?.token ?? "";
   const resolvedWorkspaceRoot =
     workspaceRoot ?? loadedGateway?.workspace_root ?? DEFAULT_WORKSPACE_ROOT;
+  const resolvedAllowInsecureTls =
+    allowInsecureTls ?? loadedGateway?.allow_insecure_tls ?? false;
 
   const isLoading = gatewayQuery.isLoading || updateMutation.isPending;
   const errorMessage = error ?? gatewayQuery.error?.message ?? null;
@@ -140,6 +145,7 @@ export default function EditGatewayPage() {
       url: resolvedGatewayUrl.trim(),
       token: resolvedGatewayToken.trim() || null,
       workspace_root: resolvedWorkspaceRoot.trim(),
+      allow_insecure_tls: resolvedAllowInsecureTls,
     };
 
     updateMutation.mutate({ gatewayId, data: payload });
@@ -165,6 +171,7 @@ export default function EditGatewayPage() {
         gatewayUrl={resolvedGatewayUrl}
         gatewayToken={resolvedGatewayToken}
         workspaceRoot={resolvedWorkspaceRoot}
+        allowInsecureTls={resolvedAllowInsecureTls}
         gatewayUrlError={gatewayUrlError}
         gatewayCheckStatus={gatewayCheckStatus}
         gatewayCheckMessage={gatewayCheckMessage}
@@ -191,6 +198,7 @@ export default function EditGatewayPage() {
           setGatewayCheckMessage(null);
         }}
         onWorkspaceRootChange={setWorkspaceRoot}
+        onAllowInsecureTlsChange={setAllowInsecureTls}
       />
     </DashboardPageLayout>
   );

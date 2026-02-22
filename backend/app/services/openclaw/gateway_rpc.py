@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -160,6 +161,7 @@ class GatewayConfig:
 
     url: str
     token: str | None = None
+    allow_insecure_tls: bool = False
 
 
 def _build_gateway_url(config: GatewayConfig) -> str:
@@ -178,6 +180,27 @@ def _build_gateway_url(config: GatewayConfig) -> str:
 def _redacted_url_for_log(raw_url: str) -> str:
     parsed = urlparse(raw_url)
     return str(urlunparse(parsed._replace(query="", fragment="")))
+
+
+def _create_ssl_context(config: GatewayConfig) -> ssl.SSLContext | None:
+    """Create SSL context for websocket connection.
+
+    Returns None for non-SSL connections (ws://) or an SSL context for wss://.
+    If allow_insecure_tls is True, the context will not verify certificates.
+    """
+    parsed = urlparse(config.url)
+    if parsed.scheme != "wss":
+        return None
+    
+    if config.allow_insecure_tls:
+        # Create SSL context that doesn't verify certificates
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return ssl_context
+    
+    # Use default SSL context with certificate verification
+    return None
 
 
 async def _await_response(
@@ -283,14 +306,18 @@ async def openclaw_call(
 ) -> object:
     """Call a gateway RPC method and return the result payload."""
     gateway_url = _build_gateway_url(config)
+    ssl_context = _create_ssl_context(config)
     started_at = perf_counter()
     logger.debug(
-        "gateway.rpc.call.start method=%s gateway_url=%s",
+        "gateway.rpc.call.start method=%s gateway_url=%s allow_insecure_tls=%s",
         method,
         _redacted_url_for_log(gateway_url),
+        config.allow_insecure_tls,
     )
     try:
-        async with websockets.connect(gateway_url, ping_interval=None) as ws:
+        async with websockets.connect(
+            gateway_url, ping_interval=None, ssl=ssl_context
+        ) as ws:
             first_message = None
             try:
                 first_message = await asyncio.wait_for(ws.recv(), timeout=2)

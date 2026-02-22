@@ -12,5 +12,6 @@ export interface GatewayCreate {
   name: string;
   url: string;
   workspace_root: string;
+  allow_insecure_tls?: boolean;
   token?: string | null;
 }

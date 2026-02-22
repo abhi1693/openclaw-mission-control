@@ -167,7 +167,9 @@ class GatewayAdminLifecycleService(OpenClawDBService):
     async def gateway_has_main_agent_entry(self, gateway: Gateway) -> bool:
         if not gateway.url:
             return False
-        config = GatewayClientConfig(url=gateway.url, token=gateway.token)
+        config = GatewayClientConfig(
+            url=gateway.url, token=gateway.token, allow_insecure_tls=gateway.allow_insecure_tls
+        )
         target_id = GatewayAgentIdentity.openclaw_agent_id(gateway)
         try:
             await openclaw_call("agents.files.list", {"agentId": target_id}, config=config)
@@ -178,9 +180,11 @@ class GatewayAdminLifecycleService(OpenClawDBService):
             return True
         return True
 
-    async def assert_gateway_runtime_compatible(self, *, url: str, token: str | None) -> None:
+    async def assert_gateway_runtime_compatible(
+        self, *, url: str, token: str | None, allow_insecure_tls: bool = False
+    ) -> None:
         """Validate that a gateway runtime meets minimum supported version."""
-        config = GatewayClientConfig(url=url, token=token)
+        config = GatewayClientConfig(url=url, token=token, allow_insecure_tls=allow_insecure_tls)
         try:
             result = await check_gateway_runtime_compatibility(config)
         except OpenClawGatewayError as exc:

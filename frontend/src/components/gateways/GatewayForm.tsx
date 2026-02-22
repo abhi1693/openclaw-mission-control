@@ -10,6 +10,7 @@ type GatewayFormProps = {
   gatewayUrl: string;
   gatewayToken: string;
   workspaceRoot: string;
+  allowInsecureTls: boolean;
   gatewayUrlError: string | null;
   gatewayCheckStatus: GatewayCheckStatus;
   gatewayCheckMessage: string | null;
@@ -27,6 +28,7 @@ type GatewayFormProps = {
   onGatewayUrlChange: (next: string) => void;
   onGatewayTokenChange: (next: string) => void;
   onWorkspaceRootChange: (next: string) => void;
+  onAllowInsecureTlsChange: (next: boolean) => void;
 };
 
 export function GatewayForm({
@@ -34,6 +36,7 @@ export function GatewayForm({
   gatewayUrl,
   gatewayToken,
   workspaceRoot,
+  allowInsecureTls,
   gatewayUrlError,
   gatewayCheckStatus,
   gatewayCheckMessage,
@@ -51,6 +54,7 @@ export function GatewayForm({
   onGatewayUrlChange,
   onGatewayTokenChange,
   onWorkspaceRootChange,
+  onAllowInsecureTlsChange,
 }: GatewayFormProps) {
   return (
     <form
@@ -138,6 +142,24 @@ export function GatewayForm({
           placeholder={workspaceRootPlaceholder}
           disabled={isLoading}
         />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="allow-insecure-tls"
+          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+          checked={allowInsecureTls}
+          onChange={(event) => onAllowInsecureTlsChange(event.target.checked)}
+          disabled={isLoading}
+        />
+        <label
+          htmlFor="allow-insecure-tls"
+          className="text-sm text-slate-700 cursor-pointer"
+        >
+          Allow self-signed TLS certificates (for localhost or trusted local
+          networks)
+        </label>
       </div>
 
       {errorMessage ? (

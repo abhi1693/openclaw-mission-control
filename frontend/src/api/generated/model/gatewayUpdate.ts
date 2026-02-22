@@ -13,4 +13,5 @@ export interface GatewayUpdate {
   url?: string | null;
   token?: string | null;
   workspace_root?: string | null;
+  allow_insecure_tls?: boolean | null;
 }

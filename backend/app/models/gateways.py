@@ -24,5 +24,6 @@ class Gateway(QueryModel, table=True):
     url: str
     token: str | None = Field(default=None)
     workspace_root: str
+    allow_insecure_tls: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

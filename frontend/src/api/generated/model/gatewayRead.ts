@@ -12,6 +12,7 @@ export interface GatewayRead {
   name: string;
   url: string;
   workspace_root: string;
+  allow_insecure_tls: boolean;
   id: string;
   organization_id: string;
   token?: string | null;

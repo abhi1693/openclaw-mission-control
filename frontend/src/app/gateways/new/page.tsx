@@ -29,6 +29,7 @@ export default function NewGatewayPage() {
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
   const [workspaceRoot, setWorkspaceRoot] = useState(DEFAULT_WORKSPACE_ROOT);
+  const [allowInsecureTls, setAllowInsecureTls] = useState(false);
 
   const [gatewayUrlError, setGatewayUrlError] = useState<string | null>(null);
   const [gatewayCheckStatus, setGatewayCheckStatus] =
@@ -106,6 +107,7 @@ export default function NewGatewayPage() {
         url: gatewayUrl.trim(),
         token: gatewayToken.trim() || null,
         workspace_root: workspaceRoot.trim(),
+        allow_insecure_tls: allowInsecureTls,
       },
     });
   };
@@ -126,6 +128,7 @@ export default function NewGatewayPage() {
         gatewayUrl={gatewayUrl}
         gatewayToken={gatewayToken}
         workspaceRoot={workspaceRoot}
+        allowInsecureTls={allowInsecureTls}
         gatewayUrlError={gatewayUrlError}
         gatewayCheckStatus={gatewayCheckStatus}
         gatewayCheckMessage={gatewayCheckMessage}
@@ -152,6 +155,7 @@ export default function NewGatewayPage() {
           setGatewayCheckMessage(null);
         }}
         onWorkspaceRootChange={setWorkspaceRoot}
+        onAllowInsecureTlsChange={setAllowInsecureTls}
       />
     </DashboardPageLayout>
   );
