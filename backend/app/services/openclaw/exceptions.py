@@ -14,6 +14,9 @@ class GatewayOperation(str, Enum):
     NUDGE_AGENT = "nudge_agent"
     SOUL_READ = "soul_read"
     SOUL_WRITE = "soul_write"
+    FILES_LIST = "files_list"
+    FILE_READ = "file_read"
+    FILE_WRITE = "file_write"
     ASK_USER_DISPATCH = "ask_user_dispatch"
     LEAD_MESSAGE_DISPATCH = "lead_message_dispatch"
     LEAD_BROADCAST_DISPATCH = "lead_broadcast_dispatch"
@@ -41,6 +44,18 @@ _GATEWAY_ERROR_POLICIES: dict[GatewayOperation, GatewayErrorPolicy] = {
     GatewayOperation.SOUL_WRITE: GatewayErrorPolicy(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail_template="Gateway SOUL update failed: {error}",
+    ),
+    GatewayOperation.FILES_LIST: GatewayErrorPolicy(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail_template="Gateway files list failed: {error}",
+    ),
+    GatewayOperation.FILE_READ: GatewayErrorPolicy(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail_template="Gateway file read failed: {error}",
+    ),
+    GatewayOperation.FILE_WRITE: GatewayErrorPolicy(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail_template="Gateway file update failed: {error}",
     ),
     GatewayOperation.ASK_USER_DISPATCH: GatewayErrorPolicy(
         status_code=status.HTTP_502_BAD_GATEWAY,

@@ -24,6 +24,7 @@ from app.models.boards import Board
 from app.models.tags import Tag
 from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
+from app.schemas.agent_files import AgentFileUpdate
 from app.schemas.agents import (
     AgentCreate,
     AgentHeartbeat,
@@ -1534,6 +1535,190 @@ async def update_agent_soul(
         source_url=payload.source_url,
         actor_agent_id=agent_ctx.agent.id,
         correlation_id=f"soul.write:{board.id}:{agent_id}",
+    )
+    return OkResponse()
+
+
+@router.get(
+    "/boards/{board_id}/agents/{agent_id}/files",
+    response_model=list[dict[str, object]],
+    tags=AGENT_BOARD_TAGS,
+    summary="List agent files",
+    description="List available agent markdown files from the gateway workspace.",
+    operation_id="agent_board_list_files",
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_files_list",
+        when_to_use=[
+            "Discover available agent files before reading",
+            "Check which files can be edited",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "list agent configuration files",
+                    "required_privilege": "board_lead_or_same_actor",
+                },
+                "decision": "agent_board_list_files",
+            }
+        ],
+        side_effects=["No persisted side effects"],
+    ),
+)
+async def list_agent_files(
+    agent_id: str,
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> list[dict[str, object]]:
+    """List available agent files.
+
+    Allowed for board lead or for an agent listing its own files.
+    """
+    _guard_board_access(agent_ctx, board)
+    OpenClawAuthorizationPolicy.require_board_lead_or_same_actor(
+        actor_agent=agent_ctx.agent,
+        target_agent_id=agent_id,
+    )
+    coordination = GatewayCoordinationService(session)
+    return await coordination.list_agent_files(
+        board=board,
+        target_agent_id=agent_id,
+        correlation_id=f"files.list:{board.id}:{agent_id}",
+    )
+
+
+@router.get(
+    "/boards/{board_id}/agents/{agent_id}/files/{filename}",
+    response_model=str,
+    tags=AGENT_BOARD_TAGS,
+    summary="Read agent file",
+    description="Fetch content of a specific agent markdown file.",
+    operation_id="agent_board_read_file",
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_file_read",
+        when_to_use=[
+            "Read IDENTITY.md, BOOTSTRAP.md, or other agent configuration files",
+            "Review current agent file content before editing",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "read agent configuration file",
+                    "required_privilege": "board_lead_or_same_actor",
+                },
+                "decision": "agent_board_read_file",
+            }
+        ],
+        side_effects=["No persisted side effects"],
+    ),
+)
+async def read_agent_file(
+    agent_id: str,
+    filename: str,
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> str:
+    """Read content of an agent file.
+
+    Allowed for board lead or for an agent reading its own files.
+    """
+    _guard_board_access(agent_ctx, board)
+    OpenClawAuthorizationPolicy.require_board_lead_or_same_actor(
+        actor_agent=agent_ctx.agent,
+        target_agent_id=agent_id,
+    )
+    coordination = GatewayCoordinationService(session)
+    return await coordination.get_agent_file(
+        board=board,
+        target_agent_id=agent_id,
+        filename=filename,
+        correlation_id=f"file.read:{board.id}:{agent_id}:{filename}",
+    )
+
+
+@router.put(
+    "/boards/{board_id}/agents/{agent_id}/files/{filename}",
+    response_model=OkResponse,
+    tags=AGENT_LEAD_TAGS,
+    summary="Update agent file",
+    description=(
+        "Write content to an agent markdown file and persist it for reprovisioning.\n\n"
+        "Use this when agent configuration files need updates. While this endpoint can "
+        "handle SOUL.md, prefer the dedicated SOUL endpoint for better semantic clarity "
+        "and specialized SOUL operations."
+    ),
+    operation_id="agent_lead_update_file",
+    responses={
+        200: {"description": "File updated"},
+        403: {
+            "model": LLMErrorResponse,
+            "description": "Caller is not board lead",
+        },
+        404: {
+            "model": LLMErrorResponse,
+            "description": "Board or target agent not found",
+        },
+        422: {
+            "model": LLMErrorResponse,
+            "description": "File content is invalid or empty",
+        },
+        502: {
+            "model": LLMErrorResponse,
+            "description": "Gateway sync failed",
+        },
+    },
+    openapi_extra={
+        "x-llm-intent": "agent_file_authoring",
+        "x-when-to-use": [
+            "Update agent configuration files like IDENTITY.md, BOOTSTRAP.md, or AGENTS.md",
+            "Import existing agent files into mission control",
+        ],
+        "x-when-not-to-use": [
+            "Prefer dedicated SOUL endpoint for SOUL.md (though this endpoint can handle it)",
+            "Use task comments for transient guidance",
+        ],
+        "x-required-actor": "board_lead",
+        "x-prerequisites": [
+            "Authenticated board lead",
+            "Non-empty file content",
+            "Target agent scoped to board",
+        ],
+        "x-side-effects": [
+            "Updates file content in gateway workspace",
+            "Persists to database for certain files (IDENTITY.md, SOUL.md)",
+            "Creates activity log entry",
+        ],
+        "x-routing-policy": [
+            "Use when updating agent configuration files",
+            "Prefer dedicated SOUL endpoint for SOUL.md",
+        ],
+    },
+)
+async def update_agent_file(
+    agent_id: str,
+    filename: str,
+    payload: AgentFileUpdate,
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> OkResponse:
+    """Update an agent file in gateway and optionally persist to DB.
+
+    Lead-only endpoint. Persists IDENTITY.md and SOUL.md for reprovisioning.
+    """
+    _guard_board_access(agent_ctx, board)
+    _require_board_lead(agent_ctx)
+
+    coordination = GatewayCoordinationService(session)
+    await coordination.update_agent_file(
+        board=board,
+        target_agent_id=agent_id,
+        filename=filename,
+        content=payload.content,
+        reason=payload.reason,
+        actor_agent_id=agent_ctx.agent.id,
+        correlation_id=f"file.write:{board.id}:{agent_id}:{filename}",
     )
     return OkResponse()
 

@@ -49,6 +49,16 @@ from app.services.openclaw.shared import GatewayAgentIdentity
 
 _T = TypeVar("_T")
 
+# Files that can be edited via the agent file management API
+EDITABLE_AGENT_FILES = {
+    "IDENTITY.md",
+    "SOUL.md",
+    "BOOTSTRAP.md",
+    "AGENTS.md",
+    "TOOLS.md",
+    "HEARTBEAT.md",
+}
+
 
 class AbstractGatewayMessagingService(OpenClawDBService, ABC):
     """Shared gateway messaging primitives with retry semantics."""
@@ -405,6 +415,275 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             trace_id,
             board.id,
             target_agent_id,
+            actor_agent_id,
+        )
+
+    async def list_agent_files(
+        self,
+        *,
+        board: Board,
+        target_agent_id: str,
+        correlation_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        """List available agent files from the gateway."""
+        trace_id = GatewayDispatchService.resolve_trace_id(
+            correlation_id, prefix="coord.files.list"
+        )
+        self.logger.log(
+            TRACE_LEVEL,
+            "gateway.coordination.files_list.start trace_id=%s board_id=%s target_agent_id=%s",
+            trace_id,
+            board.id,
+            target_agent_id,
+        )
+        target = await self._board_agent_or_404(board=board, agent_id=target_agent_id)
+        _gateway, config = await GatewayDispatchService(
+            self.session
+        ).require_gateway_config_for_board(board)
+        try:
+
+            async def _do_list() -> object:
+                return await openclaw_call(
+                    "agents.files.list",
+                    {"agentId": agent_key(target)},
+                    config=config,
+                )
+
+            payload = await self._with_gateway_retry(_do_list)
+        except (OpenClawGatewayError, TimeoutError) as exc:
+            self.logger.error(
+                "gateway.coordination.files_list.failed trace_id=%s board_id=%s "
+                "target_agent_id=%s error=%s",
+                trace_id,
+                board.id,
+                target_agent_id,
+                str(exc),
+            )
+            raise map_gateway_error_to_http_exception(GatewayOperation.FILES_LIST, exc) from exc
+        except Exception as exc:  # pragma: no cover - defensive guard
+            self.logger.critical(
+                "gateway.coordination.files_list.failed_unexpected trace_id=%s board_id=%s "
+                "target_agent_id=%s error_type=%s error=%s",
+                trace_id,
+                board.id,
+                target_agent_id,
+                exc.__class__.__name__,
+                str(exc),
+            )
+            raise
+
+        # Parse the file list from gateway response
+        if isinstance(payload, dict):
+            files = payload.get("files", [])
+        elif isinstance(payload, list):
+            files = payload
+        else:
+            files = []
+
+        result = []
+        if isinstance(files, list):
+            for file in files:
+                if isinstance(file, str):
+                    result.append({"name": file, "editable": file in EDITABLE_AGENT_FILES})
+                elif isinstance(file, dict):
+                    name = file.get("name", "")
+                    if isinstance(name, str):
+                        result.append(
+                            {"name": name, "editable": name in EDITABLE_AGENT_FILES}
+                        )
+
+        self.logger.info(
+            "gateway.coordination.files_list.success trace_id=%s board_id=%s target_agent_id=%s "
+            "file_count=%s",
+            trace_id,
+            board.id,
+            target_agent_id,
+            len(result),
+        )
+        return result
+
+    async def get_agent_file(
+        self,
+        *,
+        board: Board,
+        target_agent_id: str,
+        filename: str,
+        correlation_id: str | None = None,
+    ) -> str:
+        """Get content of an agent file from the gateway."""
+        trace_id = GatewayDispatchService.resolve_trace_id(
+            correlation_id, prefix="coord.file.read"
+        )
+        self.logger.log(
+            TRACE_LEVEL,
+            "gateway.coordination.file_read.start trace_id=%s board_id=%s target_agent_id=%s "
+            "filename=%s",
+            trace_id,
+            board.id,
+            target_agent_id,
+            filename,
+        )
+        target = await self._board_agent_or_404(board=board, agent_id=target_agent_id)
+        _gateway, config = await GatewayDispatchService(
+            self.session
+        ).require_gateway_config_for_board(board)
+        try:
+
+            async def _do_get() -> object:
+                return await openclaw_call(
+                    "agents.files.get",
+                    {"agentId": agent_key(target), "name": filename},
+                    config=config,
+                )
+
+            payload = await self._with_gateway_retry(_do_get)
+        except (OpenClawGatewayError, TimeoutError) as exc:
+            self.logger.error(
+                "gateway.coordination.file_read.failed trace_id=%s board_id=%s "
+                "target_agent_id=%s filename=%s error=%s",
+                trace_id,
+                board.id,
+                target_agent_id,
+                filename,
+                str(exc),
+            )
+            raise map_gateway_error_to_http_exception(GatewayOperation.FILE_READ, exc) from exc
+        except Exception as exc:  # pragma: no cover - defensive guard
+            self.logger.critical(
+                "gateway.coordination.file_read.failed_unexpected trace_id=%s board_id=%s "
+                "target_agent_id=%s filename=%s error_type=%s error=%s",
+                trace_id,
+                board.id,
+                target_agent_id,
+                filename,
+                exc.__class__.__name__,
+                str(exc),
+            )
+            raise
+        content = self._gateway_file_content(payload)
+        if content is None:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Invalid gateway response",
+            )
+        self.logger.info(
+            "gateway.coordination.file_read.success trace_id=%s board_id=%s target_agent_id=%s "
+            "filename=%s",
+            trace_id,
+            board.id,
+            target_agent_id,
+            filename,
+        )
+        return content
+
+    async def update_agent_file(
+        self,
+        *,
+        board: Board,
+        target_agent_id: str,
+        filename: str,
+        content: str,
+        reason: str | None,
+        actor_agent_id: UUID,
+        correlation_id: str | None = None,
+    ) -> None:
+        """Update an agent file in the gateway and optionally persist to DB."""
+        trace_id = GatewayDispatchService.resolve_trace_id(
+            correlation_id, prefix="coord.file.write"
+        )
+        self.logger.log(
+            TRACE_LEVEL,
+            "gateway.coordination.file_write.start trace_id=%s board_id=%s target_agent_id=%s "
+            "filename=%s actor_agent_id=%s",
+            trace_id,
+            board.id,
+            target_agent_id,
+            filename,
+            actor_agent_id,
+        )
+        target = await self._board_agent_or_404(board=board, agent_id=target_agent_id)
+        normalized_content = content.strip()
+        if not normalized_content:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="content is required",
+            )
+
+        # Update database fields for specific files
+        db_updated = False
+        if filename == "SOUL.md":
+            target.soul_template = normalized_content
+            db_updated = True
+        elif filename == "IDENTITY.md":
+            target.identity_template = normalized_content
+            db_updated = True
+
+        if db_updated:
+            target.updated_at = utcnow()
+            self.session.add(target)
+            await self.session.commit()
+
+        _gateway, config = await GatewayDispatchService(
+            self.session
+        ).require_gateway_config_for_board(board)
+        try:
+
+            async def _do_set() -> object:
+                return await openclaw_call(
+                    "agents.files.set",
+                    {
+                        "agentId": agent_key(target),
+                        "name": filename,
+                        "content": normalized_content,
+                    },
+                    config=config,
+                )
+
+            await self._with_gateway_retry(_do_set)
+        except (OpenClawGatewayError, TimeoutError) as exc:
+            self.logger.error(
+                "gateway.coordination.file_write.failed trace_id=%s board_id=%s "
+                "target_agent_id=%s filename=%s actor_agent_id=%s error=%s",
+                trace_id,
+                board.id,
+                target_agent_id,
+                filename,
+                actor_agent_id,
+                str(exc),
+            )
+            raise map_gateway_error_to_http_exception(GatewayOperation.FILE_WRITE, exc) from exc
+        except Exception as exc:  # pragma: no cover - defensive guard
+            self.logger.critical(
+                "gateway.coordination.file_write.failed_unexpected trace_id=%s board_id=%s "
+                "target_agent_id=%s filename=%s actor_agent_id=%s error_type=%s error=%s",
+                trace_id,
+                board.id,
+                target_agent_id,
+                filename,
+                actor_agent_id,
+                exc.__class__.__name__,
+                str(exc),
+            )
+            raise
+
+        reason_text = (reason or "").strip()
+        note = f"{filename} updated for {target.name}."
+        if reason_text:
+            note = f"{note} Reason: {reason_text}"
+        record_activity(
+            self.session,
+            event_type="agent.file.updated",
+            message=note,
+            agent_id=actor_agent_id,
+        )
+        await self.session.commit()
+        self.logger.info(
+            "gateway.coordination.file_write.success trace_id=%s board_id=%s target_agent_id=%s "
+            "filename=%s actor_agent_id=%s",
+            trace_id,
+            board.id,
+            target_agent_id,
+            filename,
             actor_agent_id,
         )
 
