@@ -37,6 +37,73 @@ def test_evaluate_gateway_version_detects_old_runtime() -> None:
     assert "Minimum supported version is 2026.1.30" in (result.message or "")
 
 
+def test_parse_version_parts_handles_build_suffix() -> None:
+    """Test that version parsing works with build suffixes like -2."""
+    result = gateway_compat._parse_version_parts("2026.2.21-2")
+    assert result == (2026, 2, 21)
+
+
+def test_parse_version_parts_handles_zero_padded_month() -> None:
+    """Test that version parsing works with zero-padded months."""
+    result = gateway_compat._parse_version_parts("2026.02.21-2")
+    assert result == (2026, 2, 21)
+
+
+def test_parse_version_parts_handles_non_zero_padded_day() -> None:
+    """Test that version parsing works with non-zero-padded days."""
+    result = gateway_compat._parse_version_parts("2026.2.9")
+    assert result == (2026, 2, 9)
+
+
+def test_parse_version_parts_handles_zero_padded_day() -> None:
+    """Test that version parsing works with zero-padded days."""
+    result = gateway_compat._parse_version_parts("2026.02.09")
+    assert result == (2026, 2, 9)
+
+
+def test_evaluate_gateway_version_accepts_non_zero_padded_with_suffix() -> None:
+    """Test the exact scenario from the issue: non-zero-padded month with build suffix."""
+    result = gateway_compat.evaluate_gateway_version(
+        current_version="2026.2.21-2",
+        minimum_version="2026.02.9",
+    )
+
+    assert result.compatible is True
+    assert result.current_version == "2026.2.21-2"
+    assert result.minimum_version == "2026.02.9"
+
+
+def test_evaluate_gateway_version_accepts_zero_padded_with_suffix() -> None:
+    """Test that zero-padded version with suffix also works."""
+    result = gateway_compat.evaluate_gateway_version(
+        current_version="2026.02.21-2",
+        minimum_version="2026.02.9",
+    )
+
+    assert result.compatible is True
+    assert result.current_version == "2026.02.21-2"
+    assert result.minimum_version == "2026.02.9"
+
+
+def test_evaluate_gateway_version_compares_non_zero_padded_correctly() -> None:
+    """Test that non-zero-padded versions are compared correctly."""
+    # 2026.2.21 should be greater than 2026.2.9
+    result = gateway_compat.evaluate_gateway_version(
+        current_version="2026.2.21",
+        minimum_version="2026.2.9",
+    )
+
+    assert result.compatible is True
+
+    # 2026.2.5 should be less than 2026.2.9
+    result = gateway_compat.evaluate_gateway_version(
+        current_version="2026.2.5",
+        minimum_version="2026.2.9",
+    )
+
+    assert result.compatible is False
+
+
 @pytest.mark.asyncio
 async def test_check_gateway_runtime_compatibility_prefers_schema_version(
     monkeypatch: pytest.MonkeyPatch,

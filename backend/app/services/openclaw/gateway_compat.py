@@ -41,6 +41,16 @@ def _normalized_minimum_version() -> str:
 
 
 def _parse_version_parts(value: str) -> tuple[int, ...] | None:
+    """Parse version string into tuple of integers.
+
+    Supports various version formats including:
+    - Zero-padded: "2026.02.21-2" -> (2026, 2, 21)
+    - Non-zero-padded: "2026.2.21-2" -> (2026, 2, 21)
+    - With/without build suffix: "2026.2.9" or "2026.2.9-2"
+    - With/without 'v' prefix: "v2026.2.9" or "2026.2.9"
+
+    Build suffixes (e.g., "-2") are ignored during parsing.
+    """
     match = _VERSION_PATTERN.search(value.strip())
     if match is None:
         return None
@@ -138,7 +148,10 @@ def evaluate_gateway_version(
             current_version=None,
             message=(
                 "Unable to determine gateway version from runtime metadata. "
-                f"Minimum supported version is {min_version}."
+                "The gateway's config.schema, status, or health endpoints did not "
+                "return version information in any recognized format. "
+                f"Minimum supported version is {min_version}. "
+                "Please ensure your gateway is up to date and properly configured."
             ),
         )
 
