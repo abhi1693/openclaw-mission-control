@@ -43,3 +43,29 @@ def test_window_expiry_resets_limit() -> None:
     future = time.monotonic() + 2.0
     with patch("time.monotonic", return_value=future):
         assert limiter.is_allowed("client-a") is True
+
+
+def test_sweep_removes_expired_keys() -> None:
+    """Keys whose timestamps have all expired should be evicted during periodic sweep."""
+    from app.core.rate_limit import _CLEANUP_INTERVAL
+
+    limiter = InMemoryRateLimiter(max_requests=100, window_seconds=1.0)
+
+    # Fill with many unique IPs
+    for i in range(10):
+        limiter.is_allowed(f"stale-{i}")
+
+    assert len(limiter._buckets) == 10
+
+    # Advance time so all timestamps expire, then trigger enough calls to
+    # hit the cleanup interval.
+    future = time.monotonic() + 2.0
+    with patch("time.monotonic", return_value=future):
+        # Drive the call count up to a multiple of _CLEANUP_INTERVAL
+        remaining = _CLEANUP_INTERVAL - (limiter._call_count % _CLEANUP_INTERVAL)
+        for i in range(remaining):
+            limiter.is_allowed("trigger-sweep")
+
+    # Stale keys should have been swept; only "trigger-sweep" should remain
+    assert "stale-0" not in limiter._buckets
+    assert "trigger-sweep" in limiter._buckets

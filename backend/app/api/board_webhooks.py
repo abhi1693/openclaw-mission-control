@@ -501,6 +501,8 @@ async def ingest_board_webhook(
         )
 
     # Enforce a 1 MB payload size limit to prevent memory exhaustion.
+    # Read the body in chunks via request.stream() so an attacker cannot
+    # cause OOM by sending a huge body with a missing/spoofed Content-Length.
     max_payload_bytes = 1_048_576
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > max_payload_bytes:
@@ -508,12 +510,17 @@ async def ingest_board_webhook(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"Payload exceeds maximum size of {max_payload_bytes} bytes.",
         )
-    raw_body = await request.body()
-    if len(raw_body) > max_payload_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"Payload exceeds maximum size of {max_payload_bytes} bytes.",
-        )
+    chunks: list[bytes] = []
+    total_size = 0
+    async for chunk in request.stream():
+        total_size += len(chunk)
+        if total_size > max_payload_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"Payload exceeds maximum size of {max_payload_bytes} bytes.",
+            )
+        chunks.append(chunk)
+    raw_body = b"".join(chunks)
     _verify_webhook_signature(webhook, raw_body, request)
 
     content_type = request.headers.get("content-type")

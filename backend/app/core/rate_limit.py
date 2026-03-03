@@ -11,6 +11,9 @@ import time
 from collections import defaultdict
 from threading import Lock
 
+# Run a full sweep of all keys every 128 calls to is_allowed.
+_CLEANUP_INTERVAL = 128
+
 
 class InMemoryRateLimiter:
     """Token-bucket rate limiter keyed by arbitrary string (typically client IP)."""
@@ -20,14 +23,30 @@ class InMemoryRateLimiter:
         self._window_seconds = window_seconds
         self._buckets: dict[str, list[float]] = defaultdict(list)
         self._lock = Lock()
+        self._call_count = 0
+
+    def _sweep_expired(self, cutoff: float) -> None:
+        """Remove keys whose timestamps have all expired."""
+        expired_keys = [
+            k for k, ts_list in self._buckets.items()
+            if not ts_list or ts_list[-1] <= cutoff
+        ]
+        for k in expired_keys:
+            del self._buckets[k]
 
     def is_allowed(self, key: str) -> bool:
         """Return True if the request should be allowed, False if rate-limited."""
         now = time.monotonic()
         cutoff = now - self._window_seconds
         with self._lock:
+            self._call_count += 1
+            # Periodically sweep all keys to evict stale entries from
+            # clients that have stopped making requests.
+            if self._call_count % _CLEANUP_INTERVAL == 0:
+                self._sweep_expired(cutoff)
+
             timestamps = self._buckets[key]
-            # Prune expired entries
+            # Prune expired entries for the current key
             self._buckets[key] = [ts for ts in timestamps if ts > cutoff]
             if len(self._buckets[key]) >= self._max_requests:
                 return False
