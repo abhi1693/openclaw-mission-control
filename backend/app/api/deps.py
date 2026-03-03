@@ -30,7 +30,7 @@ from app.db.session import get_session
 from app.models.boards import Board
 from app.models.organizations import Organization
 from app.models.tasks import Task
-from app.services.admin_access import require_admin
+from app.services.admin_access import require_user_actor
 from app.services.organizations import (
     OrganizationContext,
     ensure_member_for_user,
@@ -52,8 +52,8 @@ SESSION_DEP = Depends(get_session)
 
 
 def require_admin_auth(auth: AuthContext = AUTH_DEP) -> AuthContext:
-    """Require an authenticated admin user."""
-    require_admin(auth)
+    """Require an authenticated human user (not an agent)."""
+    require_user_actor(auth)
     return auth
 
 
@@ -70,9 +70,9 @@ def require_admin_or_agent(
     auth: AuthContext | None = AUTH_OPTIONAL_DEP,
     agent_auth: AgentAuthContext | None = AGENT_AUTH_OPTIONAL_DEP,
 ) -> ActorContext:
-    """Authorize either an admin user or an authenticated agent."""
+    """Authorize either a human user or an authenticated agent."""
     if auth is not None:
-        require_admin(auth)
+        require_user_actor(auth)
         return ActorContext(actor_type="user", user=auth.user)
     if agent_auth is not None:
         return ActorContext(actor_type="agent", agent=agent_auth.agent)
