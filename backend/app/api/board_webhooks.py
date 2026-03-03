@@ -13,6 +13,7 @@ from sqlmodel import col, select
 
 from app.api.deps import get_board_for_user_read, get_board_for_user_write, get_board_or_404
 from app.core.config import settings
+from app.core.rate_limit import webhook_ingest_limiter
 from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db import crud
@@ -476,6 +477,9 @@ async def ingest_board_webhook(
     session: AsyncSession = SESSION_DEP,
 ) -> BoardWebhookIngestResponse:
     """Open inbound webhook endpoint that stores payloads and nudges the board lead."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not webhook_ingest_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     webhook = await _require_board_webhook(
         session,
         board_id=board.id,
