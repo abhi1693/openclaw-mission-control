@@ -23,6 +23,7 @@ from app.db.session import get_session
 from app.models.agents import Agent
 from app.models.board_webhook_payloads import BoardWebhookPayload
 from app.models.boards import Board
+from app.models.gateways import Gateway
 from app.models.tags import Tag
 from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
@@ -368,6 +369,14 @@ async def list_boards(
     statement = select(Board)
     if agent_ctx.agent.board_id:
         statement = statement.where(col(Board.id) == agent_ctx.agent.board_id)
+    else:
+        # Main agents (board_id=None) must be scoped to their organization
+        # via their gateway to prevent cross-tenant board leakage.
+        gateway = await Gateway.objects.by_id(agent_ctx.agent.gateway_id).first(session)
+        if gateway is not None:
+            statement = statement.where(
+                col(Board.organization_id) == gateway.organization_id,
+            )
     statement = statement.order_by(col(Board.created_at).desc())
     return await paginate(session, statement)
 
