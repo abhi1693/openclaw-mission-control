@@ -437,10 +437,10 @@ export default function DashboardPage() {
       <SignedIn>
         <DashboardSidebar />
         <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="border-b border-slate-200 bg-white px-8 py-6">
-            <div className="flex items-center justify-between gap-4">
+          <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="font-heading text-2xl font-semibold text-slate-900 tracking-tight">
+                <h2 className="font-heading text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
                   Dashboard
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -535,7 +535,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          <div className="p-8">
+          <div className="p-4 sm:p-6 lg:p-8">
             {metricsQuery.error ? (
               <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
                 {metricsQuery.error.message}

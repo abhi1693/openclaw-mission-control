@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   Activity,
   BarChart3,
@@ -15,6 +16,8 @@ import {
   Settings,
   Store,
   Tags,
+  Menu,
+  X,
 } from "lucide-react";
 
 import { useAuth } from "@/auth/clerk";
@@ -28,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { isSignedIn } = useAuth();
   const { isAdmin } = useOrganizationMembership(isSignedIn);
   const healthQuery = useHealthzHealthzGet<healthzHealthzGetResponse, ApiError>(
@@ -58,12 +62,39 @@ export function DashboardSidebar() {
         : "System degraded";
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
-      <div className="flex-1 px-3 py-4">
-        <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Navigation
-        </p>
-        <nav className="mt-3 space-y-4 text-sm">
+    <>
+      <button
+        type="button"
+        onClick={() => setMobileOpen((prev) => !prev)}
+        className="fixed left-3 top-3 z-50 inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm lg:hidden"
+        aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+      >
+        {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+      </button>
+
+      {mobileOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation overlay"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/30 lg:hidden"
+        />
+      ) : null}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:h-full lg:w-64 lg:max-w-none lg:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex-1 overflow-y-auto px-3 py-4">
+          <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Navigation
+          </p>
+          <nav
+            className="mt-3 space-y-4 text-sm"
+            onClick={() => setMobileOpen(false)}
+          >
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Overview
@@ -252,19 +283,20 @@ export function DashboardSidebar() {
           </div>
         </nav>
       </div>
-      <div className="border-t border-slate-200 p-4">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span
-            className={cn(
-              "h-2 w-2 rounded-full",
-              systemStatus === "operational" && "bg-emerald-500",
-              systemStatus === "degraded" && "bg-rose-500",
-              systemStatus === "unknown" && "bg-slate-300",
-            )}
-          />
-          {statusLabel}
+        <div className="border-t border-slate-200 p-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                systemStatus === "operational" && "bg-emerald-500",
+                systemStatus === "degraded" && "bg-rose-500",
+                systemStatus === "unknown" && "bg-slate-300",
+              )}
+            />
+            {statusLabel}
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
