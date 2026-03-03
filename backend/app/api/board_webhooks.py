@@ -70,7 +70,7 @@ def _to_webhook_read(webhook: BoardWebhook) -> BoardWebhookRead:
         agent_id=webhook.agent_id,
         description=webhook.description,
         enabled=webhook.enabled,
-        has_secret=webhook.secret is not None,
+        has_secret=bool(webhook.secret),
         endpoint_path=endpoint_path,
         endpoint_url=_webhook_endpoint_url(endpoint_path),
         created_at=webhook.created_at,
