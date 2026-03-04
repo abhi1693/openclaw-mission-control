@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from app.core.client_ip import (
     _extract_from_forwarded,
     _extract_from_x_forwarded_for,

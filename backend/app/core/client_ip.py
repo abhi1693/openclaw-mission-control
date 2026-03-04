@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
+from ipaddress import IPv4Network, IPv6Network
 from typing import TYPE_CHECKING
 
 from app.core.logging import get_logger
