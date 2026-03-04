@@ -121,14 +121,17 @@ backend-migration-check: ## Validate migration graph + reversible path on clean 
 		AUTH_MODE=local \
 		LOCAL_AUTH_TOKEN=ci-local-token-ci-local-token-ci-local-token-ci-local-token \
 		DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/migration_ci \
+		BASE_URL=http://localhost:8000 \
 		uv run alembic upgrade head && \
 		AUTH_MODE=local \
 		LOCAL_AUTH_TOKEN=ci-local-token-ci-local-token-ci-local-token-ci-local-token \
 		DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/migration_ci \
+		BASE_URL=http://localhost:8000 \
 		uv run alembic downgrade base && \
 		AUTH_MODE=local \
 		LOCAL_AUTH_TOKEN=ci-local-token-ci-local-token-ci-local-token-ci-local-token \
 		DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/migration_ci \
+		BASE_URL=http://localhost:8000 \
 		uv run alembic upgrade head
 
 .PHONY: build
