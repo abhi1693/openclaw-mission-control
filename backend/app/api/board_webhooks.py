@@ -203,10 +203,19 @@ def _verify_webhook_signature(
         )
 
 
+_REDACTED_HEADERS = frozenset({
+    "x-hub-signature-256",
+    "x-webhook-signature",
+    "authorization",
+})
+
+
 def _captured_headers(request: Request) -> dict[str, str] | None:
     captured: dict[str, str] = {}
     for header, value in request.headers.items():
         normalized = header.lower()
+        if normalized in _REDACTED_HEADERS:
+            continue
         if normalized in {"content-type", "user-agent"} or normalized.startswith("x-"):
             captured[normalized] = value
     return captured or None
