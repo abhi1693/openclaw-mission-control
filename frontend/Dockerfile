@@ -39,7 +39,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/next.config.ts ./next.config.ts
 
 # Run as non-root user
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
+RUN addgroup -S appgroup && adduser -S -G appgroup appuser \
   && chown -R appuser:appgroup /app
 USER appuser
 
