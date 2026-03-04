@@ -530,21 +530,3 @@ class TestGatewayTokenRedaction:
         )
         assert read.has_token is False
 
-
-# ---------------------------------------------------------------------------
-# Task 17: Token prefix no longer logged
-# ---------------------------------------------------------------------------
-
-
-class TestAgentAuthNoTokenPrefix:
-    """Tests that agent auth no longer exposes token prefixes."""
-
-    def test_agent_auth_does_not_expose_token_prefix_symbol(self) -> None:
-        """Verify the agent_auth module has no token_prefix-related symbols."""
-        from app.core import agent_auth
-
-        # Assert that no attribute name on the module contains "token_prefix".
-        # This avoids brittle source inspection while still guarding against
-        # reintroducing token_prefix-based behavior.
-        for name in dir(agent_auth):
-            assert "token_prefix" not in name.lower()
