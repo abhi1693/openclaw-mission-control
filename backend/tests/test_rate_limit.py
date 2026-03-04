@@ -283,9 +283,7 @@ def test_factory_returns_memory_by_default(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_factory_returns_redis_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.core.config.settings.rate_limit_backend", RateLimitBackend.REDIS)
-    monkeypatch.setattr(
-        "app.core.config.settings.rate_limit_redis_url", "redis://localhost:6379/0"
-    )
+    monkeypatch.setattr("app.core.config.settings.rate_limit_redis_url", "redis://localhost:6379/0")
     fake = _FakeRedis()
     with patch("redis.asyncio.from_url", return_value=fake):
         limiter = create_rate_limiter(namespace="test", max_requests=10, window_seconds=60.0)
