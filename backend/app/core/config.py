@@ -120,12 +120,19 @@ class Settings(BaseSettings):
         self.base_url = base_url.rstrip("/")
 
         # Rate-limit: fall back to rq_redis_url if using redis backend
-        # with no explicit rate-limit URL.
+        # with no explicit rate-limit URL. If both are blank, fail fast
+        # with a clear configuration error.
         if (
             self.rate_limit_backend == RateLimitBackend.REDIS
             and not self.rate_limit_redis_url.strip()
         ):
-            self.rate_limit_redis_url = self.rq_redis_url
+            fallback_url = self.rq_redis_url.strip()
+            if not fallback_url:
+                raise ValueError(
+                    "RATE_LIMIT_REDIS_URL or RQ_REDIS_URL must be set and non-empty "
+                    "when RATE_LIMIT_BACKEND=redis.",
+                )
+            self.rate_limit_redis_url = fallback_url
 
         # In dev, default to applying Alembic migrations at startup to avoid
         # schema drift (e.g. missing newly-added columns).
