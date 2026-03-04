@@ -125,6 +125,20 @@ class RedisRateLimiter(RateLimiter):
         return count <= self._max_requests
 
 
+def _redact_url(url: str) -> str:
+    """Strip userinfo (credentials) from a Redis URL for safe logging."""
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(url)
+    if parsed.username or parsed.password:
+        # Replace user:pass@host with ***@host
+        redacted_netloc = f"***@{parsed.hostname}"
+        if parsed.port:
+            redacted_netloc += f":{parsed.port}"
+        return urlunparse(parsed._replace(netloc=redacted_netloc))
+    return url
+
+
 def validate_rate_limit_redis(redis_url: str) -> None:
     """Verify Redis is reachable.  Raises ``ConnectionError`` on failure."""
     client = redis_lib.Redis.from_url(redis_url)
@@ -132,7 +146,7 @@ def validate_rate_limit_redis(redis_url: str) -> None:
         client.ping()
     except Exception as exc:
         raise ConnectionError(
-            f"Redis rate-limit backend configured but unreachable at {redis_url}: {exc}",
+            f"Redis rate-limit backend configured but unreachable at {_redact_url(redis_url)}: {exc}",
         ) from exc
     finally:
         client.close()
