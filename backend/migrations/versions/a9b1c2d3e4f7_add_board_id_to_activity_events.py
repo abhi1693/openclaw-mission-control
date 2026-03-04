@@ -1,7 +1,7 @@
 """add board_id to activity_events
 
 Revision ID: a9b1c2d3e4f7
-Revises: f1b2c3d4e5a6
+Revises: a1b2c3d4e5f6
 Create Date: 2026-03-04 18:20:00.000000
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "a9b1c2d3e4f7"
-down_revision = "f1b2c3d4e5a6"
+down_revision = "a1b2c3d4e5f6"
 branch_labels = None
 depends_on = None
 
