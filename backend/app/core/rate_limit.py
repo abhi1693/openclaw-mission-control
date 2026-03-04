@@ -32,7 +32,7 @@ def _get_async_redis(redis_url: str) -> aioredis.Redis:
     """Return a shared async Redis client for *redis_url*, creating one if needed."""
     client = _async_redis_clients.get(redis_url)
     if client is None:
-        client = aioredis.from_url(redis_url)
+        client = aioredis.from_url(redis_url)  # type: ignore[no-untyped-call]
         _async_redis_clients[redis_url] = client
     return client
 
