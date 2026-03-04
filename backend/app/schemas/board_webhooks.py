@@ -6,12 +6,17 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
+import re
+
 from pydantic import BeforeValidator
 from sqlmodel import SQLModel
 
 from app.schemas.common import NonEmptyStr
 
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID, NonEmptyStr)
+
+# RFC 7230 token characters: visible ASCII except delimiters.
+_HTTP_TOKEN_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
 
 def _normalize_secret(v: str | None) -> str | None:
@@ -22,7 +27,21 @@ def _normalize_secret(v: str | None) -> str | None:
     return stripped or None
 
 
+def _normalize_signature_header(v: str | None) -> str | None:
+    """Normalize and validate signature_header as a valid HTTP header name."""
+    if v is None:
+        return None
+    stripped = v.strip()
+    if not stripped:
+        return None
+    if not _HTTP_TOKEN_RE.match(stripped):
+        msg = "signature_header must be a valid HTTP header name (ASCII token characters only)"
+        raise ValueError(msg)
+    return stripped
+
+
 NormalizedSecret = Annotated[str | None, BeforeValidator(_normalize_secret)]
+NormalizedSignatureHeader = Annotated[str | None, BeforeValidator(_normalize_signature_header)]
 
 
 class BoardWebhookCreate(SQLModel):
@@ -32,7 +51,7 @@ class BoardWebhookCreate(SQLModel):
     enabled: bool = True
     agent_id: UUID | None = None
     secret: NormalizedSecret = None
-    signature_header: str | None = None
+    signature_header: NormalizedSignatureHeader = None
 
 
 class BoardWebhookUpdate(SQLModel):
@@ -42,7 +61,7 @@ class BoardWebhookUpdate(SQLModel):
     enabled: bool | None = None
     agent_id: UUID | None = None
     secret: NormalizedSecret = None
-    signature_header: str | None = None
+    signature_header: NormalizedSignatureHeader = None
 
 
 class BoardWebhookRead(SQLModel):
