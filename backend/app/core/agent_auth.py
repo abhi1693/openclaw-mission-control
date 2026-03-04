@@ -170,11 +170,13 @@ async def get_agent_auth_context_optional(
                 bool(authorization),
             )
         return None
-    # Rate-limit when a token is presented to prevent brute-force guessing
-    # via the optional auth path.
-    client_ip = request.client.host if request.client else "unknown"
-    if not agent_auth_limiter.is_allowed(client_ip):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+    # Rate-limit when an agent token header is presented to prevent brute-force
+    # guessing via the optional auth path. Scoped to X-Agent-Token so that
+    # normal user Authorization headers are not throttled.
+    if agent_token:
+        client_ip = request.client.host if request.client else "unknown"
+        if not agent_auth_limiter.is_allowed(client_ip):
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     agent = await _find_agent_for_token(session, resolved)
     if agent is None:
         if agent_token:
