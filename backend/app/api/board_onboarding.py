@@ -13,8 +13,8 @@ from app.api.deps import (
     get_board_for_user_read,
     get_board_for_user_write,
     get_board_or_404,
-    require_admin_auth,
-    require_admin_or_agent,
+    require_user_auth,
+    require_user_or_agent,
 )
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -54,8 +54,8 @@ BOARD_USER_READ_DEP = Depends(get_board_for_user_read)
 BOARD_USER_WRITE_DEP = Depends(get_board_for_user_write)
 BOARD_OR_404_DEP = Depends(get_board_or_404)
 SESSION_DEP = Depends(get_session)
-ACTOR_DEP = Depends(require_admin_or_agent)
-ADMIN_AUTH_DEP = Depends(require_admin_auth)
+ACTOR_DEP = Depends(require_user_or_agent)
+USER_AUTH_DEP = Depends(require_user_auth)
 
 
 def _parse_draft_user_profile(
@@ -426,7 +426,7 @@ async def confirm_onboarding(
     payload: BoardOnboardingConfirm,
     board: Board = BOARD_USER_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
-    auth: AuthContext = ADMIN_AUTH_DEP,
+    auth: AuthContext = USER_AUTH_DEP,
 ) -> Board:
     """Confirm onboarding results and provision the board lead agent."""
     onboarding = (

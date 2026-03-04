@@ -19,7 +19,7 @@ from app.api.deps import (
     ActorContext,
     get_board_for_actor_read,
     get_board_for_actor_write,
-    require_admin_or_agent,
+    require_user_or_agent,
     require_org_member,
 )
 from app.core.config import settings
@@ -65,7 +65,7 @@ SESSION_DEP = Depends(get_session)
 ORG_MEMBER_DEP = Depends(require_org_member)
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 IS_CHAT_QUERY = Query(default=None)
 SINCE_QUERY = Query(default=None)
 _RUNTIME_TYPE_REFERENCES = (UUID,)

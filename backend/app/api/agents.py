@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.deps import ActorContext, require_admin_or_agent, require_org_admin
+from app.api.deps import ActorContext, require_user_or_agent, require_org_admin
 from app.core.auth import AuthContext, get_auth_context
 from app.db.session import get_session
 from app.schemas.agents import (
@@ -35,7 +35,7 @@ GATEWAY_ID_QUERY = Query(default=None)
 SINCE_QUERY = Query(default=None)
 SESSION_DEP = Depends(get_session)
 ORG_ADMIN_DEP = Depends(require_org_admin)
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 AUTH_DEP = Depends(get_auth_context)
 
 

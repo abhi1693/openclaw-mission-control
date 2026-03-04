@@ -18,7 +18,7 @@ from app.api.deps import (
     get_board_for_actor_read,
     get_board_for_actor_write,
     get_board_for_user_write,
-    require_admin_or_agent,
+    require_user_or_agent,
 )
 from app.core.logging import get_logger
 from app.core.time import utcnow
@@ -58,7 +58,7 @@ BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 BOARD_USER_WRITE_DEP = Depends(get_board_for_user_write)
 SESSION_DEP = Depends(get_session)
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 
 
 def _parse_since(value: str | None) -> datetime | None:

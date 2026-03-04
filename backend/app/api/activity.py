@@ -14,7 +14,7 @@ from sqlalchemy import and_, asc, desc, func, or_
 from sqlmodel import col, select
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.deps import ActorContext, require_admin_or_agent, require_org_member
+from app.api.deps import ActorContext, require_user_or_agent, require_org_member
 from app.core.time import utcnow
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
@@ -42,7 +42,7 @@ SSE_SEEN_MAX = 2000
 STREAM_POLL_SECONDS = 2
 TASK_COMMENT_ROW_LEN = 4
 SESSION_DEP = Depends(get_session)
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 ORG_MEMBER_DEP = Depends(require_org_member)
 BOARD_ID_QUERY = Query(default=None)
 SINCE_QUERY = Query(default=None)

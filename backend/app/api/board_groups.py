@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlmodel import col, select
 
-from app.api.deps import ActorContext, require_admin_or_agent, require_org_admin, require_org_member
+from app.api.deps import ActorContext, require_user_or_agent, require_org_admin, require_org_member
 from app.core.time import utcnow
 from app.db import crud
 from app.db.pagination import paginate
@@ -52,7 +52,7 @@ router = APIRouter(prefix="/board-groups", tags=["board-groups"])
 SESSION_DEP = Depends(get_session)
 ORG_MEMBER_DEP = Depends(require_org_member)
 ORG_ADMIN_DEP = Depends(require_org_admin)
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 
 
 def _slugify(value: str) -> str:

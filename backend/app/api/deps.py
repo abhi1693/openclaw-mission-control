@@ -3,14 +3,14 @@
 These dependencies are the main "policy wiring" layer for the API.
 
 They:
-- resolve the authenticated actor (admin user vs agent)
+- resolve the authenticated actor (human user vs agent)
 - enforce organization/board access rules
 - provide common "load or 404" helpers (board/task)
 
 Why this exists:
 - Keeping authorization logic centralized makes it easier to reason about (and
   audit) permissions as the API surface grows.
-- Some routes allow either admin users or agents; others require user auth.
+- Some routes allow either human users or agents; others require user auth.
 
 If you're adding a new endpoint, prefer composing from these dependencies instead
 of re-implementing permission checks in the router.
@@ -51,7 +51,7 @@ AGENT_AUTH_OPTIONAL_DEP = Depends(get_agent_auth_context_optional)
 SESSION_DEP = Depends(get_session)
 
 
-def require_admin_auth(auth: AuthContext = AUTH_DEP) -> AuthContext:
+def require_user_auth(auth: AuthContext = AUTH_DEP) -> AuthContext:
     """Require an authenticated human user (not an agent)."""
     require_user_actor(auth)
     return auth
@@ -66,7 +66,7 @@ class ActorContext:
     agent: Agent | None = None
 
 
-def require_admin_or_agent(
+def require_user_or_agent(
     auth: AuthContext | None = AUTH_OPTIONAL_DEP,
     agent_auth: AgentAuthContext | None = AGENT_AUTH_OPTIONAL_DEP,
 ) -> ActorContext:
@@ -79,7 +79,7 @@ def require_admin_or_agent(
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 
 
 async def require_org_member(

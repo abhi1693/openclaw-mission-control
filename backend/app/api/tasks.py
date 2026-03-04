@@ -20,8 +20,8 @@ from app.api.deps import (
     get_board_for_actor_read,
     get_board_for_user_write,
     get_task_or_404,
-    require_admin_auth,
-    require_admin_or_agent,
+    require_user_auth,
+    require_user_or_agent,
 )
 from app.core.time import utcnow
 from app.db import crud
@@ -100,12 +100,12 @@ TASK_SNIPPET_MAX_LEN = 500
 TASK_SNIPPET_TRUNCATED_LEN = 497
 TASK_EVENT_ROW_LEN = 2
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
-ACTOR_DEP = Depends(require_admin_or_agent)
+ACTOR_DEP = Depends(require_user_or_agent)
 SINCE_QUERY = Query(default=None)
 STATUS_QUERY = Query(default=None, alias="status")
 BOARD_WRITE_DEP = Depends(get_board_for_user_write)
 SESSION_DEP = Depends(get_session)
-ADMIN_AUTH_DEP = Depends(require_admin_auth)
+USER_AUTH_DEP = Depends(require_user_auth)
 TASK_DEP = Depends(get_task_or_404)
 
 
@@ -1449,7 +1449,7 @@ async def create_task(
     payload: TaskCreate,
     board: Board = BOARD_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
-    auth: AuthContext = ADMIN_AUTH_DEP,
+    auth: AuthContext = USER_AUTH_DEP,
 ) -> TaskRead:
     """Create a task and initialize dependency rows."""
     data = payload.model_dump(exclude={"depends_on_task_ids", "tag_ids", "custom_field_values"})
@@ -1672,7 +1672,7 @@ async def delete_task_and_related_records(
 async def delete_task(
     session: AsyncSession = SESSION_DEP,
     task: Task = TASK_DEP,
-    auth: AuthContext = ADMIN_AUTH_DEP,
+    auth: AuthContext = USER_AUTH_DEP,
 ) -> OkResponse:
     """Delete a task and related records."""
     if task.board_id is None:
