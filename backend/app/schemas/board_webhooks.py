@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import field_validator
+from pydantic import BeforeValidator
 from sqlmodel import SQLModel
 
 from app.schemas.common import NonEmptyStr
@@ -21,15 +22,16 @@ def _normalize_secret(v: str | None) -> str | None:
     return stripped or None
 
 
+NormalizedSecret = Annotated[str | None, BeforeValidator(_normalize_secret)]
+
+
 class BoardWebhookCreate(SQLModel):
     """Payload for creating a board webhook."""
 
     description: NonEmptyStr
     enabled: bool = True
     agent_id: UUID | None = None
-    secret: str | None = None
-
-    _normalize_secret = field_validator("secret", mode="before")(_normalize_secret)
+    secret: NormalizedSecret = None
 
 
 class BoardWebhookUpdate(SQLModel):
@@ -38,9 +40,7 @@ class BoardWebhookUpdate(SQLModel):
     description: NonEmptyStr | None = None
     enabled: bool | None = None
     agent_id: UUID | None = None
-    secret: str | None = None
-
-    _normalize_secret = field_validator("secret", mode="before")(_normalize_secret)
+    secret: NormalizedSecret = None
 
 
 class BoardWebhookRead(SQLModel):
