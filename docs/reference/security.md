@@ -17,14 +17,21 @@ Set any `SECURITY_HEADER_*` variable to blank to disable that header.
 
 ## Rate limiting
 
-Per-IP rate limits are enforced in-memory on sensitive endpoints:
+Per-IP rate limits are enforced on sensitive endpoints:
 
 | Endpoint | Limit | Window | Status on exceed |
 | --- | --- | --- | --- |
 | Agent authentication (`X-Agent-Token`) | 20 requests | 60 seconds | `429` |
 | Webhook ingest (`POST .../webhooks/{id}`) | 60 requests | 60 seconds | `429` |
 
-These limits are per-process. In multi-process deployments, also apply rate limiting at the reverse proxy layer.
+Two backends are supported, selected via `RATE_LIMIT_BACKEND`:
+
+| Backend | Value | Notes |
+| --- | --- | --- |
+| In-memory (default) | `memory` | Per-process only; no external dependencies. Suitable for single-worker or dev setups. |
+| Redis | `redis` | Shared across workers/processes. Set `RATE_LIMIT_REDIS_URL` or it falls back to `RQ_REDIS_URL`. Redis connectivity is validated at startup. |
+
+The Redis backend fails open — if Redis becomes unreachable during a request, the request is allowed and a warning is logged. In multi-process deployments without Redis, also apply rate limiting at the reverse proxy layer.
 
 ## Webhook HMAC verification
 
@@ -65,7 +72,7 @@ This boundary helps LLM-based agents distinguish trusted instructions from untru
 
 ## Agent token logging
 
-Agent tokens are **not logged** on authentication failure — not even partially. This prevents token leakage via server logs. When debugging agent auth issues, verify the token value at the source.
+On authentication failure, only a short prefix of the presented token is logged to aid debugging. Full tokens are never written to logs.
 
 ## Cross-tenant isolation
 
