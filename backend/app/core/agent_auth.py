@@ -23,6 +23,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlmodel import col, select
 
 from app.core.agent_tokens import verify_agent_token
+from app.core.client_ip import get_client_ip
 from app.core.logging import get_logger
 from app.core.rate_limit import agent_auth_limiter
 from app.core.time import utcnow
@@ -113,7 +114,7 @@ async def get_agent_auth_context(
     session: AsyncSession = SESSION_DEP,
 ) -> AgentAuthContext:
     """Require and validate agent auth token from request headers."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not agent_auth_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     resolved = _resolve_agent_token(
@@ -174,7 +175,7 @@ async def get_agent_auth_context_optional(
     # guessing via the optional auth path. Scoped to X-Agent-Token so that
     # normal user Authorization headers are not throttled.
     if agent_token:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         if not agent_auth_limiter.is_allowed(client_ip):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     agent = await _find_agent_for_token(session, resolved)

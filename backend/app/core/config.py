@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     rate_limit_backend: RateLimitBackend = RateLimitBackend.MEMORY
     rate_limit_redis_url: str = ""
 
+    # Trusted reverse-proxy IPs/CIDRs for client-IP extraction from
+    # Forwarded / X-Forwarded-For headers.  Comma-separated.
+    # Leave empty to always use the direct peer address.
+    trusted_proxies: str = ""
+
     # Database lifecycle
     db_auto_migrate: bool = False
 

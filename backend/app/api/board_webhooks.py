@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import col, select
 
 from app.api.deps import get_board_for_user_read, get_board_for_user_write, get_board_or_404
+from app.core.client_ip import get_client_ip
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.rate_limit import webhook_ingest_limiter
@@ -507,7 +508,7 @@ async def ingest_board_webhook(
     session: AsyncSession = SESSION_DEP,
 ) -> BoardWebhookIngestResponse:
     """Open inbound webhook endpoint that stores payloads and nudges the board lead."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not webhook_ingest_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     webhook = await _require_board_webhook(
@@ -520,7 +521,7 @@ async def ingest_board_webhook(
         extra={
             "board_id": str(board.id),
             "webhook_id": str(webhook.id),
-            "source_ip": request.client.host if request.client else None,
+            "source_ip": client_ip,
             "content_type": request.headers.get("content-type"),
         },
     )
@@ -568,7 +569,7 @@ async def ingest_board_webhook(
         webhook_id=webhook.id,
         payload=payload_value,
         headers=headers,
-        source_ip=request.client.host if request.client else None,
+        source_ip=client_ip,
         content_type=content_type,
     )
     session.add(payload)
