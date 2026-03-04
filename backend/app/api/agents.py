@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.deps import ActorContext, require_user_or_agent, require_org_admin
+from app.api.deps import ActorContext, require_org_admin, require_user_or_agent
 from app.core.auth import AuthContext, get_auth_context
 from app.db.session import get_session
 from app.schemas.agents import (

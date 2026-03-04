@@ -14,7 +14,7 @@ from sqlalchemy import and_, asc, desc, func, or_
 from sqlmodel import col, select
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.deps import ActorContext, require_user_or_agent, require_org_member
+from app.api.deps import ActorContext, require_org_member, require_user_or_agent
 from app.core.time import utcnow
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session

@@ -19,8 +19,8 @@ from app.api.deps import (
     ActorContext,
     get_board_for_actor_read,
     get_board_for_actor_write,
-    require_user_or_agent,
     require_org_member,
+    require_user_or_agent,
 )
 from app.core.config import settings
 from app.core.time import utcnow
