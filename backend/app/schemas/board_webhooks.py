@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
-
-import re
 
 from pydantic import BeforeValidator
 from sqlmodel import SQLModel
