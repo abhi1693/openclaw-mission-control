@@ -75,7 +75,7 @@ Rollback typically means deploying a previous image/commit.
 
 ## Rate limiting
 
-The backend applies in-memory per-IP rate limits on sensitive endpoints:
+The backend applies per-IP rate limits on sensitive endpoints:
 
 | Endpoint | Limit | Window |
 | --- | --- | --- |
@@ -84,7 +84,14 @@ The backend applies in-memory per-IP rate limits on sensitive endpoints:
 
 Rate-limited requests receive HTTP `429 Too Many Requests`.
 
-The limiter is in-memory and per-process. If running multiple backend processes behind a load balancer, each process tracks limits independently. For production multi-process deployments, also apply rate limiting at the reverse proxy layer (nginx `limit_req`, Caddy rate limiting, etc.).
+Set `RATE_LIMIT_BACKEND` to choose the storage backend:
+
+| Backend | Value | Operational notes |
+| --- | --- | --- |
+| In-memory (default) | `memory` | Per-process limits; each worker tracks independently. No external dependencies. |
+| Redis | `redis` | Limits are shared across all workers. Set `RATE_LIMIT_REDIS_URL` or it falls back to `RQ_REDIS_URL`. Connectivity is validated at startup; transient Redis failures fail open (requests allowed, warning logged). |
+
+When using the in-memory backend in multi-process deployments, also apply rate limiting at the reverse proxy layer (nginx `limit_req`, Caddy rate limiting, etc.).
 
 ## Common issues
 
