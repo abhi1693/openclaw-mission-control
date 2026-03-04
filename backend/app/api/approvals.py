@@ -439,10 +439,21 @@ async def create_approval(
 async def update_approval(
     approval_id: str,
     payload: ApprovalUpdate,
-    board: Board = BOARD_USER_WRITE_DEP,
+    board: Board = BOARD_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
+    actor: ActorContext = ACTOR_DEP,
 ) -> ApprovalRead:
-    """Update an approval's status and resolution timestamp."""
+    """Update an approval's status and resolution timestamp.
+
+    Accessible by authenticated users with board write access, or by the board's
+    lead agent. Non-lead agents cannot resolve approvals.
+    """
+    if actor.actor_type == "agent":
+        if actor.agent is None or not actor.agent.is_board_lead:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only board lead agents can update approvals.",
+            )
     approval = await Approval.objects.by_id(approval_id).first(session)
     if approval is None or approval.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
