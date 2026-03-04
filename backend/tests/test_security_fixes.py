@@ -390,23 +390,29 @@ class TestPromptInjectionSanitization:
 class TestSecurityHeaderDefaults:
     """Tests for sensible security header defaults."""
 
+    _HERMETIC_SETTINGS = {
+        "_env_file": None,
+        "auth_mode": "local",
+        "local_auth_token": "x" * 50,
+        "base_url": "http://localhost:8000",
+    }
+
     def test_config_has_nosniff_default(self) -> None:
         from app.core.config import Settings
 
-        # Create a settings instance with minimal required fields
-        s = Settings(auth_mode="local", local_auth_token="x" * 50)
+        s = Settings(**self._HERMETIC_SETTINGS)
         assert s.security_header_x_content_type_options == "nosniff"
 
     def test_config_has_deny_default(self) -> None:
         from app.core.config import Settings
 
-        s = Settings(auth_mode="local", local_auth_token="x" * 50)
+        s = Settings(**self._HERMETIC_SETTINGS)
         assert s.security_header_x_frame_options == "DENY"
 
     def test_config_has_referrer_policy_default(self) -> None:
         from app.core.config import Settings
 
-        s = Settings(auth_mode="local", local_auth_token="x" * 50)
+        s = Settings(**self._HERMETIC_SETTINGS)
         assert s.security_header_referrer_policy == "strict-origin-when-cross-origin"
 
 
