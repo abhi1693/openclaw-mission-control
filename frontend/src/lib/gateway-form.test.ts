@@ -45,10 +45,10 @@ describe("validateGatewayUrl", () => {
     expect(validateGatewayUrl("wss://[2001:db8::1]:443")).toBeNull();
   });
 
-  it("accepts userinfo URLs with explicit port", () => {
+  it("rejects non-local ws:// URLs even with explicit port", () => {
     expect(
       validateGatewayUrl("ws://user:pass@gateway.example.com:8080"),
-    ).toBeNull();
+    ).toBe("Non-local gateways must use wss://.");
   });
 
   it("accepts userinfo URLs with IPv6 host and explicit port", () => {

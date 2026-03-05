@@ -4,7 +4,6 @@ import { SignedIn, SignedOut } from "@/auth/clerk";
 
 import { AdminOnlyNotice } from "@/components/auth/AdminOnlyNotice";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
-import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { cn } from "@/lib/utils";
 
 import { DashboardShell } from "./DashboardShell";
@@ -63,7 +62,6 @@ export function DashboardPageLayout({
         />
       </SignedOut>
       <SignedIn>
-        <DashboardSidebar />
         <main
           ref={mainRef}
           className={cn("flex-1 overflow-y-auto bg-slate-50", mainClassName)}
@@ -75,7 +73,7 @@ export function DashboardPageLayout({
               headerClassName,
             )}
           >
-            <div className="px-8 py-6">
+            <div className="px-4 py-4 sm:px-8 sm:py-6">
               {headerActions ? (
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -103,7 +101,7 @@ export function DashboardPageLayout({
             </div>
           </div>
 
-          <div className={cn("p-8", contentClassName)}>
+          <div className={cn("p-4 sm:p-8", contentClassName)}>
             {showAdminOnlyNotice ? (
               <AdminOnlyNotice message={adminOnlyMessage ?? ""} />
             ) : (

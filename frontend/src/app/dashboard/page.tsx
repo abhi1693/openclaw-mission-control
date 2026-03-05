@@ -18,7 +18,6 @@ import {
   Timer,
 } from "lucide-react";
 
-import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Markdown } from "@/components/atoms/Markdown";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
@@ -897,9 +896,8 @@ export default function DashboardPage() {
         />
       </SignedOut>
       <SignedIn>
-        <DashboardSidebar />
         <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="p-8">
+          <div className="p-4 sm:p-8">
             {metricsQuery.error ? (
               <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">
                 {metricsQuery.error.message}

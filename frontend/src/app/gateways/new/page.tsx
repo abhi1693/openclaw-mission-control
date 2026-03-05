@@ -16,6 +16,7 @@ import {
   DEFAULT_WORKSPACE_ROOT,
   checkGatewayConnection,
   type GatewayCheckStatus,
+  validateGatewaySecurity,
   validateGatewayUrl,
 } from "@/lib/gateway-form";
 
@@ -79,6 +80,18 @@ export default function NewGatewayPage() {
     }
     if (!workspaceRoot.trim()) {
       setError("Workspace root is required.");
+      return;
+    }
+
+    const securityError = validateGatewaySecurity({
+      gatewayUrl,
+      gatewayToken,
+      allowInsecureTls,
+    });
+    if (securityError) {
+      setError(securityError);
+      setGatewayCheckStatus("error");
+      setGatewayCheckMessage(securityError);
       return;
     }
 

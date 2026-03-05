@@ -21,6 +21,7 @@ import {
   DEFAULT_WORKSPACE_ROOT,
   checkGatewayConnection,
   type GatewayCheckStatus,
+  validateGatewaySecurity,
   validateGatewayUrl,
 } from "@/lib/gateway-form";
 
@@ -123,6 +124,18 @@ export default function EditGatewayPage() {
     }
     if (!resolvedWorkspaceRoot.trim()) {
       setError("Workspace root is required.");
+      return;
+    }
+
+    const securityError = validateGatewaySecurity({
+      gatewayUrl: resolvedGatewayUrl,
+      gatewayToken: resolvedGatewayToken,
+      allowInsecureTls: resolvedAllowInsecureTls,
+    });
+    if (securityError) {
+      setError(securityError);
+      setGatewayCheckStatus("error");
+      setGatewayCheckMessage(securityError);
       return;
     }
 

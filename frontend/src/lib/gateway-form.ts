@@ -54,6 +54,22 @@ function hasExplicitPort(urlString: string): boolean {
   }
 }
 
+const isLocalishHost = (host: string): boolean => {
+  const normalized = host.trim().toLowerCase();
+  if (["localhost", "host.docker.internal", "::1"].includes(normalized)) {
+    return true;
+  }
+  if (/^127\./.test(normalized) || /^10\./.test(normalized) || /^192\.168\./.test(normalized)) {
+    return true;
+  }
+  const octets = normalized.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (octets) {
+    const second = Number.parseInt(octets[2], 10);
+    return second >= 16 && second <= 31 && normalized.startsWith("172.");
+  }
+  return false;
+};
+
 export const validateGatewayUrl = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return "Gateway URL is required.";
@@ -64,6 +80,32 @@ export const validateGatewayUrl = (value: string) => {
     }
     if (!hasExplicitPort(trimmed)) {
       return "Gateway URL must include an explicit port.";
+    }
+    if (url.protocol === "ws:" && !isLocalishHost(url.hostname)) {
+      return "Non-local gateways must use wss://.";
+    }
+    return null;
+  } catch {
+    return "Enter a valid gateway URL including port.";
+  }
+};
+
+export const validateGatewaySecurity = (params: {
+  gatewayUrl: string;
+  gatewayToken: string;
+  allowInsecureTls: boolean;
+}): string | null => {
+  try {
+    const url = new URL(params.gatewayUrl.trim());
+    const localish = isLocalishHost(url.hostname);
+    if (!localish && !params.gatewayToken.trim()) {
+      return "Gateway token is required for non-local gateways.";
+    }
+    if (params.allowInsecureTls && url.protocol !== "wss:") {
+      return "Allow insecure TLS can only be used with wss:// URLs.";
+    }
+    if (params.allowInsecureTls && !localish) {
+      return "Allow insecure TLS is restricted to localhost/private-network gateways.";
     }
     return null;
   } catch {

@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/auth/clerk";
@@ -52,6 +52,16 @@ export default function AgentsPage() {
   });
 
   const [deleteTarget, setDeleteTarget] = useState<AgentRead | null>(null);
+  const [isCompactView, setIsCompactView] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 900px)");
+    const sync = () => setIsCompactView(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   const boardsKey = getListBoardsApiV1BoardsGetQueryKey();
   const agentsKey = getListAgentsApiV1AgentsGetQueryKey();
@@ -151,6 +161,11 @@ export default function AgentsPage() {
             onSortingChange={onSortingChange}
             showActions
             stickyHeader
+            hiddenColumns={
+              isCompactView
+                ? ["openclaw_session_id", "updated_at"]
+                : undefined
+            }
             onDelete={setDeleteTarget}
             emptyState={{
               title: "No agents yet",

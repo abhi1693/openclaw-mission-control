@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address, ip_network
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import col
 
 from app.api.deps import require_org_admin
@@ -45,6 +47,25 @@ OVERWRITE_QUERY = Query(default=False)
 LEAD_ONLY_QUERY = Query(default=False)
 BOARD_ID_QUERY = Query(default=None)
 _RUNTIME_TYPE_REFERENCES = (UUID,)
+_PRIVATE_CIDRS = (
+    ip_network("10.0.0.0/8"),
+    ip_network("172.16.0.0/12"),
+    ip_network("192.168.0.0/16"),
+    ip_network("127.0.0.0/8"),
+)
+
+
+def _is_localish_host(host: str | None) -> bool:
+    if not host:
+        return False
+    normalized = host.strip().lower()
+    if normalized in {"localhost", "host.docker.internal", "::1"}:
+        return True
+    try:
+        parsed = ip_address(normalized)
+    except ValueError:
+        return False
+    return any(parsed in network for network in _PRIVATE_CIDRS)
 
 
 def _template_sync_query(
@@ -155,6 +176,12 @@ async def update_gateway(
             updates.get("disable_device_pairing", gateway.disable_device_pairing),
         )
         if next_url:
+            parsed_next_url = urlparse(next_url)
+            if not _is_localish_host(parsed_next_url.hostname) and not bool((next_token or "").strip()):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Gateway token is required for non-local gateway URLs.",
+                )
             await service.assert_gateway_runtime_compatible(
                 url=next_url,
                 token=next_token,

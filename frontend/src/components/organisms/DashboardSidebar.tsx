@@ -26,7 +26,13 @@ import {
 } from "@/api/generated/default/default";
 import { cn } from "@/lib/utils";
 
-export function DashboardSidebar() {
+export function DashboardSidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+} = {}) {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const { isAdmin } = useOrganizationMembership(isSignedIn);
@@ -57,8 +63,14 @@ export function DashboardSidebar() {
         ? "System status unavailable"
         : "System degraded";
 
+  const navLinkClass = (active: boolean) =>
+    cn(
+      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+      active ? "bg-blue-100 text-blue-800 font-medium" : "hover:bg-slate-100",
+    );
+
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
+    <aside className={cn("flex h-full w-64 flex-col border-r border-slate-200 bg-white", className)}>
       <div className="flex-1 px-3 py-4">
         <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Navigation
@@ -69,27 +81,11 @@ export function DashboardSidebar() {
               Overview
             </p>
             <div className="mt-1 space-y-1">
-              <Link
-                href="/dashboard"
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                  pathname === "/dashboard"
-                    ? "bg-blue-100 text-blue-800 font-medium"
-                    : "hover:bg-slate-100",
-                )}
-              >
+              <Link href="/dashboard" onClick={onNavigate} className={navLinkClass(pathname === "/dashboard")}>
                 <BarChart3 className="h-4 w-4" />
                 Dashboard
               </Link>
-              <Link
-                href="/activity"
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                  pathname.startsWith("/activity")
-                    ? "bg-blue-100 text-blue-800 font-medium"
-                    : "hover:bg-slate-100",
-                )}
-              >
+              <Link href="/activity" onClick={onNavigate} className={navLinkClass(pathname.startsWith("/activity"))}>
                 <Activity className="h-4 w-4" />
                 Live feed
               </Link>
