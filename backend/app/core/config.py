@@ -69,6 +69,12 @@ class Settings(BaseSettings):
 
     # OpenClaw gateway runtime compatibility
     gateway_min_version: str = "2026.02.9"
+    # Comma-separated gateway UUIDs to force disable_device_pairing=True on startup.
+    # Use this to permanently override pairing mode for known gateways.
+    gateway_disable_device_pairing_ids: str = Field(
+        default="",
+        alias="GATEWAY_DISABLE_DEVICE_PAIRING_IDS",
+    )
 
     # Logging
     log_level: str = "INFO"

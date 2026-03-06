@@ -43,6 +43,9 @@ services:
       AUTH_MODE: ${AUTH_MODE}
       LOCAL_AUTH_TOKEN: ${LOCAL_AUTH_TOKEN}
       RQ_REDIS_URL: redis://redis:6379/0
+      # Force disable_device_pairing=true for specific gateways on startup.
+      # Prevents pairing-required loops after container restarts.
+      # GATEWAY_DISABLE_DEVICE_PAIRING_IDS: "uuid1,uuid2"
     depends_on:
       db:
         condition: service_healthy

@@ -35,8 +35,9 @@ from app.core.config import settings
 from app.core.error_handling import install_error_handling
 from app.core.logging import configure_logging, get_logger
 from app.core.security_headers import SecurityHeadersMiddleware
-from app.db.session import init_db
+from app.db.session import async_session_maker, init_db
 from app.schemas.health import HealthStatusResponse
+from app.services.openclaw.gateway_startup import apply_gateway_startup_overrides
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -437,6 +438,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         settings.db_auto_migrate,
     )
     await init_db()
+    async with async_session_maker() as session:
+        await apply_gateway_startup_overrides(session)
     logger.info("app.lifecycle.started")
     try:
         yield
