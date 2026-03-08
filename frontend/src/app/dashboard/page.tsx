@@ -379,7 +379,7 @@ function TopMetricCard({
           : "bg-green-50 text-green-600";
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5">
@@ -423,7 +423,7 @@ function InfoBlock({
   rows: SummaryRow[];
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
@@ -513,6 +513,8 @@ export default function DashboardPage() {
         enabled: Boolean(isSignedIn),
         refetchInterval: 15_000,
         refetchOnMount: "always",
+        retry: 3,
+        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
       },
     },
   );
@@ -899,10 +901,10 @@ export default function DashboardPage() {
       <SignedIn>
         <DashboardSidebar />
         <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="p-8">
+          <div className="p-4 md:p-8">
             {metricsQuery.error ? (
               <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">
-                {metricsQuery.error.message}
+                Load failed: {metricsQuery.error.message}
               </div>
             ) : null}
 
@@ -958,7 +960,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            <section className="mt-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-lg font-semibold text-slate-900">Pending Approvals</h3>
                 <Link
@@ -1016,7 +1018,7 @@ export default function DashboardPage() {
             </section>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-lg font-semibold text-slate-900">Sessions</h3>
                   <span className="text-xs text-slate-500">{formatCount(activeSessions)}</span>
@@ -1082,7 +1084,7 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-lg font-semibold text-slate-900">Recent Activity</h3>
                   <Link

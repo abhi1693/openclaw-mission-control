@@ -58,7 +58,7 @@ export function DashboardSidebar() {
         : "System degraded";
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-[280px] -translate-x-full flex-col border-r border-slate-200 bg-white pt-16 shadow-lg transition-transform duration-200 ease-in-out [[data-sidebar=open]_&]:translate-x-0 md:relative md:inset-auto md:z-auto md:w-64 md:translate-x-0 md:pt-0 md:shadow-none md:transition-none">
       <div className="flex-1 px-3 py-4">
         <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Navigation

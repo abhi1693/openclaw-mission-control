@@ -1508,7 +1508,7 @@ export default function ActivityPage() {
             <DashboardSidebar />
             <main className="flex-1 overflow-y-auto bg-slate-50">
               <div className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-                <div className="px-8 py-6">
+                <div className="px-4 py-4 md:px-8 md:py-6">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -1526,7 +1526,7 @@ export default function ActivityPage() {
                 </div>
               </div>
 
-              <div className="p-8">
+              <div className="p-4 md:p-8">
                 {hasUnresolvedDeepLink ? (
                   <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
                     Requested activity item is not in the current feed window yet.

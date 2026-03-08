@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Menu, X } from "lucide-react";
 
 import { SignedIn, useAuth } from "@/auth/clerk";
 
@@ -21,6 +22,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const isOnboardingPath = pathname === "/onboarding";
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const meQuery = useGetMeApiV1UsersMeGet<
     getMeApiV1UsersMeGetResponse,
@@ -35,6 +37,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const profile = meQuery.data?.status === 200 ? meQuery.data.data : null;
   const displayName = profile?.name ?? profile?.preferred_name ?? "Operator";
   const displayEmail = profile?.email ?? "";
+
+  // Close sidebar on navigation
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!isSignedIn || isOnboardingPath) return;
@@ -68,22 +75,32 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
+
   return (
-    <div className="min-h-screen bg-app text-strong">
+    <div className="min-h-screen bg-app text-strong" data-sidebar={sidebarOpen ? "open" : "closed"}>
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
-        <div className="grid grid-cols-[260px_1fr_auto] items-center gap-0 py-3">
-          <div className="flex items-center px-6">
+        <div className="flex items-center py-3">
+          <div className="flex items-center px-4 md:px-6 md:w-[260px]">
+            <button
+              type="button"
+              className="mr-3 rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+              onClick={toggleSidebar}
+              aria-label="Toggle navigation"
+            >
+              {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
             <BrandMark />
           </div>
           <SignedIn>
-            <div className="flex items-center">
+            <div className="hidden md:flex flex-1 items-center">
               <div className="max-w-[220px]">
                 <OrgSwitcher />
               </div>
             </div>
           </SignedIn>
           <SignedIn>
-            <div className="flex items-center gap-3 px-6">
+            <div className="ml-auto flex items-center gap-3 px-4 md:px-6">
               <div className="hidden text-right lg:block">
                 <p className="text-sm font-semibold text-slate-900">
                   {displayName}
@@ -95,7 +112,20 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </SignedIn>
         </div>
       </header>
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-[260px_1fr] bg-slate-50">
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen ? (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          onClick={toggleSidebar}
+          onKeyDown={(e) => e.key === "Escape" && toggleSidebar()}
+          role="button"
+          tabIndex={-1}
+          aria-label="Close navigation"
+        />
+      ) : null}
+
+      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[260px_1fr] bg-slate-50">
         {children}
       </div>
     </div>

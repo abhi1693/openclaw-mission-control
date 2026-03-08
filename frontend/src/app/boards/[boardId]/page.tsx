@@ -3101,7 +3101,7 @@ export default function BoardDetailPage() {
           )}
         >
           <div className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
-            <div className="px-8 py-6">
+            <div className="px-4 py-4 md:px-8 md:py-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h1 className="mt-2 text-2xl font-semibold text-slate-900 tracking-tight">
@@ -3237,9 +3237,9 @@ export default function BoardDetailPage() {
             </div>
           </div>
 
-          <div className="relative flex gap-6 p-6">
+          <div className="relative flex flex-col gap-4 p-4 md:flex-row md:gap-6 md:p-6">
             {isOrgAdmin ? (
-              <aside className="flex h-full w-64 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+              <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white shadow-sm md:h-full md:w-64">
                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -3680,12 +3680,12 @@ export default function BoardDetailPage() {
       ) : null}
       <aside
         className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[max(760px,45vw)] max-w-[99vw] transform bg-white shadow-2xl transition-transform",
+          "fixed right-0 top-0 z-50 h-full w-full max-w-[99vw] transform bg-white shadow-2xl transition-transform md:w-[max(760px,45vw)]",
           isDetailOpen ? "transform-none" : "translate-x-full",
         )}
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 md:px-6 md:py-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Task detail
@@ -3749,7 +3749,7 @@ export default function BoardDetailPage() {
                       return (
                         <div
                           key={definition.id}
-                          className="grid grid-cols-[160px_1fr] gap-3"
+                          className="grid grid-cols-1 gap-2 sm:grid-cols-[160px_1fr] sm:gap-3"
                         >
                           <dt className="text-xs font-semibold text-slate-600">
                             {definition.label || definition.field_key}
@@ -3993,12 +3993,12 @@ export default function BoardDetailPage() {
 
       <aside
         className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[560px] max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform",
+          "fixed right-0 top-0 z-50 h-full w-full max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform md:w-[560px]",
           isChatOpen ? "transform-none" : "translate-x-full",
         )}
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 md:px-6 md:py-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Board chat
@@ -4055,12 +4055,12 @@ export default function BoardDetailPage() {
 
       <aside
         className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[520px] max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform",
+          "fixed right-0 top-0 z-50 h-full w-full max-w-[96vw] transform border-l border-slate-200 bg-white shadow-2xl transition-transform md:w-[520px]",
           isLiveFeedOpen ? "transform-none" : "translate-x-full",
         )}
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 md:px-6 md:py-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Live feed

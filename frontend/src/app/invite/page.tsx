@@ -76,7 +76,7 @@ function InviteContent() {
       </header>
 
       <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-8 shadow-sm">
+        <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4 md:p-8 shadow-sm">
           <div className="flex flex-col gap-3">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-quiet">
               Organization Invite
@@ -158,7 +158,7 @@ export default function InvitePage() {
             </div>
           </header>
           <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-8 shadow-sm">
+            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4 md:p-8 shadow-sm">
               <div className="text-sm text-muted">Loading invite…</div>
             </div>
           </main>
