@@ -29,26 +29,28 @@ RUN uv sync --frozen --no-dev
 # --- runtime ---
 FROM base AS runtime
 
+# Create non-root user before COPY so --chown can reference it.
+# Using COPY --chown avoids a slow recursive chown on overlay2 (docker/for-linux#388).
+RUN groupadd --system appgroup && useradd --system --gid appgroup --create-home appuser \
+  && chown appuser:appgroup /app
+
 # Copy virtual environment from deps stage
-COPY --from=deps /app/.venv /app/.venv
+COPY --from=deps --chown=appuser:appgroup /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # Copy app source
-COPY backend/migrations ./migrations
-COPY backend/alembic.ini ./alembic.ini
-COPY backend/app ./app
+COPY --chown=appuser:appgroup backend/migrations ./migrations
+COPY --chown=appuser:appgroup backend/alembic.ini ./alembic.ini
+COPY --chown=appuser:appgroup backend/app ./app
 
 # Copy provisioning templates.
 # In-repo these live at `backend/templates/`; runtime path is `/app/templates`.
-COPY backend/templates ./templates
+COPY --chown=appuser:appgroup backend/templates ./templates
 
 # Copy worker scripts.
 # In-repo these live at `scripts/`; runtime path is `/app/scripts`.
-COPY scripts ./scripts
+COPY --chown=appuser:appgroup scripts ./scripts
 
-# Run as non-root user
-RUN groupadd --system appgroup && useradd --system --gid appgroup appuser \
-  && chown -R appuser:appgroup /app
 USER appuser
 
 # Default API port
