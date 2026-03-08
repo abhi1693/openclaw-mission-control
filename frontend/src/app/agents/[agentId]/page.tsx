@@ -162,13 +162,13 @@ export default function AgentDetailPage() {
       <SignedIn>
         <DashboardSidebar />
         {!isAdmin ? (
-          <div className="flex h-full flex-col gap-6 rounded-2xl surface-panel p-8">
+          <div className="flex h-full flex-col gap-6 rounded-2xl surface-panel p-4 md:p-8">
             <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-6 py-5 text-sm text-muted">
               Only organization owners and admins can access agents.
             </div>
           </div>
         ) : (
-          <div className="flex h-full flex-col gap-6 rounded-2xl surface-panel p-8">
+          <div className="flex h-full flex-col gap-6 rounded-2xl surface-panel p-4 md:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-quiet">

@@ -59,10 +59,10 @@ export function DataTable<TData>({
   stickyHeader = false,
   tableClassName = "w-full text-left text-sm",
   headerClassName,
-  headerCellClassName = "px-6 py-3",
+  headerCellClassName = "px-3 py-2 md:px-6 md:py-3",
   bodyClassName = "divide-y divide-slate-100",
   rowClassName = "hover:bg-slate-50",
-  cellClassName = "px-6 py-4",
+  cellClassName = "px-3 py-3 md:px-6 md:py-4",
 }: DataTableProps<TData>) {
   const resolvedRowActions = rowActions
     ? (rowActions.actions ??
