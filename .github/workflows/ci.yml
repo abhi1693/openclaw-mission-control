@@ -360,15 +360,6 @@ jobs:
           echo "Frontend did not start"
           exit 1
 
-      - name: Run mobile overflow + navigation gate
-        env:
-          NEXT_PUBLIC_API_URL: "http://localhost:8000"
-          NEXT_PUBLIC_AUTH_MODE: "local"
-          NEXT_TELEMETRY_DISABLED: "1"
-        run: |
-          cd frontend
-          npm run e2e -- --browser chrome --spec cypress/e2e/mobile_overflow_navigation_gate.cy.ts
-
       - name: Run Cypress E2E
         env:
           NEXT_PUBLIC_API_URL: "http://localhost:8000"
