@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Menu, X } from "lucide-react";
 
 import { SignedIn, useAuth } from "@/auth/clerk";
 
@@ -21,6 +22,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const isOnboardingPath = pathname === "/onboarding";
+  const [sidebarState, setSidebarState] = useState({ open: false, path: pathname });
+  // Close sidebar on navigation using React's "store info from previous
+  // renders" pattern — conditional setState during render resets immediately
+  // without extra commits, avoiding both set-state-in-effect and refs rules.
+  if (sidebarState.path !== pathname) {
+    setSidebarState({ open: false, path: pathname });
+  }
+  const sidebarOpen = sidebarState.open;
 
   const meQuery = useGetMeApiV1UsersMeGet<
     getMeApiV1UsersMeGetResponse,
@@ -68,22 +77,47 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const toggleSidebar = useCallback(
+    () => setSidebarState((prev) => ({ open: !prev.open, path: pathname })),
+    [pathname],
+  );
+
+  // Dismiss sidebar on Escape
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarState((prev) => ({ ...prev, open: false }));
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
+
   return (
-    <div className="min-h-screen bg-app text-strong">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
-        <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 sm:grid-cols-[220px_1fr_auto] sm:gap-0 sm:px-0 lg:grid-cols-[260px_1fr_auto]">
-          <div className="flex items-center sm:px-6">
+    <div className="min-h-screen bg-app text-strong" data-sidebar={sidebarOpen ? "open" : "closed"}>
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center py-3">
+          <div className="flex items-center px-4 md:px-6 md:w-[260px]">
+            {isSignedIn ? (
+              <button
+                type="button"
+                className="mr-3 rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+                onClick={toggleSidebar}
+                aria-label="Toggle navigation"
+              >
+                {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            ) : null}
             <BrandMark />
           </div>
           <SignedIn>
-            <div className="flex items-center sm:min-w-0">
-              <div className="max-w-[220px] sm:w-full">
+            <div className="hidden md:flex flex-1 items-center">
+              <div className="max-w-[220px]">
                 <OrgSwitcher />
               </div>
             </div>
           </SignedIn>
           <SignedIn>
-            <div className="flex items-center gap-3 sm:px-6">
+            <div className="ml-auto flex items-center gap-3 px-4 md:px-6">
               <div className="hidden text-right lg:block">
                 <p className="text-sm font-semibold text-slate-900">
                   {displayName}
@@ -95,7 +129,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </SignedIn>
         </div>
       </header>
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 bg-slate-50 md:grid-cols-[260px_minmax(0,1fr)]">
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          onClick={toggleSidebar}
+          aria-hidden="true"
+          data-cy="sidebar-backdrop"
+        />
+      ) : null}
+
+      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[260px_1fr] bg-slate-50">
         {children}
       </div>
     </div>

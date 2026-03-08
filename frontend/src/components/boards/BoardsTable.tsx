@@ -162,7 +162,7 @@ export function BoardsTable({
       stickyHeader={stickyHeader}
       emptyMessage={emptyMessage}
       rowClassName="transition hover:bg-slate-50"
-      cellClassName="px-6 py-4 align-top"
+      cellClassName="px-3 py-3 md:px-6 md:py-4 align-top"
       rowActions={
         showActions
           ? {

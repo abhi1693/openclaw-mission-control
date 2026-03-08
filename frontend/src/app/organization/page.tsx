@@ -704,7 +704,7 @@ export default function OrganizationPage() {
         <DashboardSidebar />
         <main className="flex-1 overflow-y-auto bg-slate-50">
           <div className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-            <div className="px-8 py-6">
+            <div className="px-4 py-4 md:px-8 md:py-6">
               <div className="flex flex-wrap items-center justify-between gap-6">
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
@@ -775,7 +775,7 @@ export default function OrganizationPage() {
             </div>
           </div>
 
-          <div className="px-8 py-8">
+          <div className="px-4 py-4 md:px-8 md:py-8">
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div>
