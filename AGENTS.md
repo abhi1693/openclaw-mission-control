@@ -37,3 +37,95 @@
 ## Security & Configuration Tips
 - Never commit secrets. Copy from `.env.example` and keep real values in local `.env`.
 - Report vulnerabilities privately via GitHub security advisories, not public issues.
+
+---
+
+## Mission Control Quick Reference
+
+### Core API Endpoints
+
+| Resource | Endpoint | Methods |
+|----------|----------|---------|
+| Gateways | `/api/v1/gateways` | GET, POST |
+| Boards | `/api/v1/boards` | GET, POST, PATCH, DELETE |
+| Tasks | `/api/v1/boards/{board_id}/tasks` | GET, POST, PATCH |
+| Agents | `/api/v1/agents` | GET, POST |
+| Tags | `/api/v1/tags` | GET, POST |
+| Approvals | `/api/v1/approvals` | GET, POST |
+
+### Authentication
+
+```bash
+# User auth (local mode)
+Authorization: Bearer <LOCAL_AUTH_TOKEN>
+
+# Agent auth
+X-Agent-Token: <agent-token>
+```
+
+### Task Lifecycle
+
+```
+inbox → in_progress → review → done
+```
+
+### Key Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `AUTH_MODE` | `local` or `clerk` |
+| `LOCAL_AUTH_TOKEN` | Bearer token (≥50 chars) |
+| `CORS_ORIGINS` | Allowed frontend origins |
+| `NEXT_PUBLIC_API_URL` | Backend URL (browser-reachable) |
+
+### Gateway Connection Checklist
+
+1. OpenClaw gateway running: `openclaw gateway`
+2. `gateway.controlUi.allowedOrigins` includes Mission Control origin
+3. `gateway.bind` set to `lan` for network access
+4. Device pairing approved: `openclaw devices approve <id>`
+5. Docker: `extra_hosts: ["host.docker.internal:host-gateway"]`
+
+### Common API Examples
+
+```bash
+# Create board
+curl -X POST http://localhost:8000/api/v1/boards \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Board","slug":"board","gateway_id":"<uuid>","description":"Desc"}'
+
+# Create task
+curl -X POST http://localhost:8000/api/v1/boards/{board_id}/tasks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Task","status":"inbox"}'
+
+# Update task status
+curl -X PATCH http://localhost:8000/api/v1/boards/{board_id}/tasks/{task_id} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"done"}'
+
+# Create agent
+curl -X POST http://localhost:8000/api/v1/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Agent","board_id":"<uuid>","interval":"10m"}'
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "origin not allowed" | Add origin to `gateway.controlUi.allowedOrigins` |
+| "pairing required" | `openclaw devices approve <request-id>` |
+| Frontend can't reach backend | Check `NEXT_PUBLIC_API_URL` and `CORS_ORIGINS` |
+| Task can't be marked done | Board has `require_approval_for_done: true` |
+
+### Documentation
+
+- [Gateway Connection Troubleshooting](./docs/troubleshooting/gateway-connection.md)
+- [API Reference](./docs/reference/api.md)
+- [Configuration Reference](./docs/reference/configuration.md)
+- [OpenClaw Baseline Config](./docs/openclaw_baseline_config.md)
