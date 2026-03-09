@@ -1,5 +1,6 @@
-"use client";
+'use client';
 
+import { useTranslations } from 'next-intl';
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -21,16 +22,19 @@ import { useAuth } from "@/auth/clerk";
 import { ApiError } from "@/api/mutator";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import {
-  type healthzHealthzGetResponse,
+  type healthzHealthzHealthzGetResponse,
   useHealthzHealthzGet,
 } from "@/api/generated/default/default";
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export function DashboardSidebar() {
+  const t = useTranslations('Navigation');
+  const common = useTranslations('Common');
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const { isAdmin } = useOrganizationMembership(isSignedIn);
-  const healthQuery = useHealthzHealthzGet<healthzHealthzGetResponse, ApiError>(
+  const healthQuery = useHealthzHealthzGet<healthzHealthzHealthzGetResponse, ApiError>(
     {
       query: {
         refetchInterval: 30_000,
@@ -61,8 +65,14 @@ export function DashboardSidebar() {
     <aside className="fixed inset-y-0 left-0 z-40 flex w-[280px] -translate-x-full flex-col border-r border-slate-200 bg-white pt-16 shadow-lg transition-transform duration-200 ease-in-out [[data-sidebar=open]_&]:translate-x-0 md:relative md:inset-auto md:z-auto md:w-[260px] md:translate-x-0 md:pt-0 md:shadow-none md:transition-none">
       <div className="flex-1 px-3 py-4">
         <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Navigation
+          {common('navigation')}
         </p>
+        
+        {/* Language Switcher */}
+        <div className="mt-3 mb-4 px-3">
+          <LanguageSwitcher />
+        </div>
+        
         <nav className="mt-3 space-y-4 text-sm">
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -79,7 +89,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <BarChart3 className="h-4 w-4" />
-                Dashboard
+                {t('dashboard')}
               </Link>
               <Link
                 href="/activity"
@@ -98,9 +108,77 @@ export function DashboardSidebar() {
 
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Boards
+              Work
             </p>
             <div className="mt-1 space-y-1">
+              <Link
+                href="/boards"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname.startsWith("/boards")
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                {t('boards')}
+              </Link>
+              <Link
+                href="/approvals"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname.startsWith("/approvals")
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Approvals
+              </Link>
+              <Link
+                href="/agents"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname.startsWith("/agents")
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <Bot className="h-4 w-4" />
+                {t('agents')}
+              </Link>
+              <Link
+                href="/gateways"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname.startsWith("/gateways")
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <Network className="h-4 w-4" />
+                Gateways
+              </Link>
+            </div>
+          </div>
+
+          <div>
+            <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Organization
+            </p>
+            <div className="mt-1 space-y-1">
+              <Link
+                href="/organizations"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname.startsWith("/organizations")
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <Building2 className="h-4 w-4" />
+                {t('organizations')}
+              </Link>
               <Link
                 href="/board-groups"
                 className={cn(
@@ -112,18 +190,6 @@ export function DashboardSidebar() {
               >
                 <Folder className="h-4 w-4" />
                 Board groups
-              </Link>
-              <Link
-                href="/boards"
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                  pathname.startsWith("/boards")
-                    ? "bg-blue-100 text-blue-800 font-medium"
-                    : "hover:bg-slate-100",
-                )}
-              >
-                <LayoutGrid className="h-4 w-4" />
-                Boards
               </Link>
               <Link
                 href="/tags"
@@ -138,69 +204,30 @@ export function DashboardSidebar() {
                 Tags
               </Link>
               <Link
-                href="/approvals"
+                href="/stores"
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                  pathname.startsWith("/approvals")
+                  pathname.startsWith("/stores")
                     ? "bg-blue-100 text-blue-800 font-medium"
                     : "hover:bg-slate-100",
                 )}
               >
-                <CheckCircle2 className="h-4 w-4" />
-                Approvals
+                <Store className="h-4 w-4" />
+                Stores
               </Link>
-              {isAdmin ? (
-                <Link
-                  href="/custom-fields"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                    pathname.startsWith("/custom-fields")
-                      ? "bg-blue-100 text-blue-800 font-medium"
-                      : "hover:bg-slate-100",
-                  )}
-                >
-                  <Settings className="h-4 w-4" />
-                  Custom fields
-                </Link>
-              ) : null}
+              <Link
+                href="/api-keys"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname.startsWith("/api-keys")
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <Boxes className="h-4 w-4" />
+                API Keys
+              </Link>
             </div>
-          </div>
-
-          <div>
-            {isAdmin ? (
-              <>
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Skills
-                </p>
-                <div className="mt-1 space-y-1">
-                  <Link
-                    href="/skills/marketplace"
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                      pathname === "/skills" ||
-                        pathname.startsWith("/skills/marketplace")
-                        ? "bg-blue-100 text-blue-800 font-medium"
-                        : "hover:bg-slate-100",
-                    )}
-                  >
-                    <Store className="h-4 w-4" />
-                    Marketplace
-                  </Link>
-                  <Link
-                    href="/skills/packs"
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                      pathname.startsWith("/skills/packs")
-                        ? "bg-blue-100 text-blue-800 font-medium"
-                        : "hover:bg-slate-100",
-                    )}
-                  >
-                    <Boxes className="h-4 w-4" />
-                    Packs
-                  </Link>
-                </div>
-              </>
-            ) : null}
           </div>
 
           <div>
@@ -209,60 +236,36 @@ export function DashboardSidebar() {
             </p>
             <div className="mt-1 space-y-1">
               <Link
-                href="/organization"
+                href="/settings"
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                  pathname.startsWith("/organization")
+                  pathname.startsWith("/settings")
                     ? "bg-blue-100 text-blue-800 font-medium"
                     : "hover:bg-slate-100",
                 )}
               >
-                <Building2 className="h-4 w-4" />
-                Organization
+                <Settings className="h-4 w-4" />
+                {t('settings')}
               </Link>
-              {isAdmin ? (
-                <Link
-                  href="/gateways"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                    pathname.startsWith("/gateways")
-                      ? "bg-blue-100 text-blue-800 font-medium"
-                      : "hover:bg-slate-100",
-                  )}
-                >
-                  <Network className="h-4 w-4" />
-                  Gateways
-                </Link>
-              ) : null}
-              {isAdmin ? (
-                <Link
-                  href="/agents"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                    pathname.startsWith("/agents")
-                      ? "bg-blue-100 text-blue-800 font-medium"
-                      : "hover:bg-slate-100",
-                  )}
-                >
-                  <Bot className="h-4 w-4" />
-                  Agents
-                </Link>
-              ) : null}
             </div>
           </div>
         </nav>
       </div>
-      <div className="border-t border-slate-200 p-4">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span
+
+      <div className="border-t border-slate-200 p-3">
+        <div className="flex items-center gap-2">
+          <div
             className={cn(
               "h-2 w-2 rounded-full",
-              systemStatus === "operational" && "bg-emerald-500",
-              systemStatus === "degraded" && "bg-rose-500",
-              systemStatus === "unknown" && "bg-slate-300",
+              systemStatus === "operational"
+                ? "bg-emerald-500"
+                : systemStatus === "degraded"
+                  ? "bg-amber-500"
+                  : "bg-slate-300",
             )}
+            aria-hidden="true"
           />
-          {statusLabel}
+          <span className="text-xs text-slate-600">{statusLabel}</span>
         </div>
       </div>
     </aside>

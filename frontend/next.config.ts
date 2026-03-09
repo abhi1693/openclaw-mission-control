@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // i18n configuration
+  i18n: {
+    locales: ['en', 'zh'],
+    defaultLocale: 'zh',
+    localeDetection: true,
+  },
 };
 
 export default nextConfig;

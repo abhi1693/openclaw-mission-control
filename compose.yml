@@ -35,6 +35,8 @@ services:
       dockerfile: backend/Dockerfile
     env_file:
       - ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Override localhost defaults for container networking
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-mission_control}
@@ -92,6 +94,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "scripts/rq-docker", "worker"]
     env_file:
       - ./backend/.env
