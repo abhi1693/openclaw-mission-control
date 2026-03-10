@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
+import { cn } from '@/lib/utils'
 import {
   Target, RefreshCw, DollarSign, TrendingUp, TrendingDown, PauseCircle,
   PlayCircle, ChevronDown, ChevronRight, ChevronUp, BarChart3, Zap, Filter,
@@ -173,34 +174,34 @@ function fmtNum(n: number): string {
 }
 
 function acosColor(acos: number): string {
-  if (acos <= 0) return 'text-[hsl(var(--muted-foreground))]'
-  if (acos < 25) return 'text-[hsl(var(--primary))]'
-  if (acos < 40) return 'text-[hsl(var(--zv-amber))]'
-  return 'text-[hsl(var(--destructive))]'
+  if (acos <= 0) return 'text-slate-500'
+  if (acos < 25) return 'text-blue-600'
+  if (acos < 40) return 'text-amber-600'
+  return 'text-rose-600'
 }
 
 function convColor(conv: number): string {
-  if (conv >= 15) return 'text-[hsl(var(--primary))]'
-  if (conv >= 5) return 'text-[hsl(var(--zv-amber))]'
-  return 'text-[hsl(var(--destructive))]'
+  if (conv >= 15) return 'text-blue-600'
+  if (conv >= 5) return 'text-amber-600'
+  return 'text-rose-600'
 }
 
 function acosBg(acos: number): string {
   if (acos <= 0) return ''
-  if (acos < 25) return 'bg-[hsl(var(--primary)/0.08)]'
-  if (acos < 40) return 'bg-[hsl(var(--zv-amber)/0.08)]'
-  return 'bg-[hsl(var(--destructive)/0.08)]'
+  if (acos < 25) return 'bg-emerald-50'
+  if (acos < 40) return 'bg-amber-50'
+  return 'bg-rose-50'
 }
 
 // ─── Period Selector ──────────────────────────────────────────────────────────
 
 function PeriodSelector({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
   return (
-    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[hsl(var(--secondary))]">
+    <div className="flex rounded-lg border border-slate-200 p-0.5">
       {([7, 30] as Period[]).map(p => (
         <button key={p} onClick={() => onChange(p)}
           className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-            value === p ? 'bg-[hsl(var(--primary))] text-black shadow-sm' : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+            value === p ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >{p === 7 ? '周 (7天)' : '月 (30天)'}</button>
       ))}
@@ -215,16 +216,16 @@ function KPICard({ label, value, sub, icon, accent }: {
 }) {
   return (
     <div className={`relative rounded-xl border p-4 overflow-hidden transition-all ${
-      accent ? 'border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--card))] shadow-[0_0_24px_hsl(var(--primary)/0.06)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
+      accent ? 'border-blue-200 bg-white shadow-sm' : 'border-slate-200 bg-white'
     }`}>
-      {accent && <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--primary)/0.5)] to-transparent" />}
+      {accent && <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-300 to-transparent" />}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-[hsl(var(--muted-foreground))] font-semibold">{label}</p>
-          <p className={`text-xl font-bold mt-1 leading-tight ${accent ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>{value}</p>
-          {sub && <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">{sub}</p>}
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">{label}</p>
+          <p className={`text-xl font-bold mt-1 leading-tight ${accent ? 'text-blue-600' : 'text-slate-900'}`}>{value}</p>
+          {sub && <p className="text-[10px] text-slate-500 mt-0.5">{sub}</p>}
         </div>
-        <div className={`p-2 rounded-lg flex-shrink-0 ${accent ? 'bg-[hsl(var(--primary)/0.12)]' : 'bg-[hsl(var(--secondary))]'}`}>
+        <div className={`p-2 rounded-lg flex-shrink-0 ${accent ? 'bg-blue-100' : 'bg-slate-100'}`}>
           {icon}
         </div>
       </div>
@@ -237,8 +238,8 @@ function KPICard({ label, value, sub, icon, accent }: {
 function EmptyState({ message, hint }: { message: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-10 text-center">
-      <p className="text-base text-[hsl(var(--muted-foreground))]">⏳ {message}</p>
-      {hint && <p className="text-xs text-[hsl(var(--muted-foreground)/0.6)] mt-2 font-mono">{hint}</p>}
+      <p className="text-base text-slate-500">⏳ {message}</p>
+      {hint && <p className="text-xs text-slate-400 mt-2 font-mono">{hint}</p>}
     </div>
   )
 }
@@ -272,20 +273,20 @@ function OverviewTab({ report }: { report: WeeklyReport | null }) {
       {/* Overview KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KPICard label="总花费" value={o.totalSpend !== null ? `$${fmtNum(o.totalSpend)}` : '—'}
-          icon={<DollarSign className="w-4 h-4 text-[hsl(var(--zv-amber))]" />} />
+          icon={<DollarSign className="w-4 h-4 text-amber-600" />} />
         <KPICard label="广告销售额" value={o.totalSales !== null ? `$${fmtNum(o.totalSales)}` : '—'}
-          icon={<ShoppingCart className="w-4 h-4 text-[hsl(var(--primary))]" />} accent />
+          icon={<ShoppingCart className="w-4 h-4 text-blue-600" />} accent />
         <KPICard label="总订单" value={o.totalOrders !== null ? String(o.totalOrders) : '—'}
-          icon={<CheckSquare className="w-4 h-4 text-[hsl(var(--primary))]" />} accent={!!o.totalOrders} />
+          icon={<CheckSquare className="w-4 h-4 text-blue-600" />} accent={!!o.totalOrders} />
         <KPICard label="ACOS" value={o.acos !== null ? `${o.acos}%` : '—'}
-          icon={<Percent className="w-4 h-4 text-[hsl(var(--zv-amber))]" />} accent={o.acos !== null && o.acos < 25} />
+          icon={<Percent className="w-4 h-4 text-amber-600" />} accent={o.acos !== null && o.acos < 25} />
         <KPICard label="ROAS" value={o.roas !== null ? `${o.roas}x` : '—'}
-          icon={<TrendingUp className="w-4 h-4 text-[hsl(var(--primary))]" />} accent={o.roas !== null && o.roas > 4} />
+          icon={<TrendingUp className="w-4 h-4 text-blue-600" />} accent={o.roas !== null && o.roas > 4} />
       </div>
 
       {/* Data period */}
       {report.dateRange?.start && (
-        <p className="text-[10px] text-[hsl(var(--muted-foreground))] -mt-2">
+        <p className="text-[10px] text-slate-500 -mt-2">
           数据范围: {report.dateRange.start} → {report.dateRange.end}
         </p>
       )}
@@ -293,26 +294,26 @@ function OverviewTab({ report }: { report: WeeklyReport | null }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Risk alerts */}
         {report.riskAlerts.length > 0 && (
-          <div className="rounded-xl border border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--card))] p-5">
+          <div className="rounded-xl border border-rose-200 bg-white p-5">
             <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-4 h-4 text-[hsl(var(--destructive))]" />
-              <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">风险预警</h3>
-              <Badge className="text-[9px] bg-[hsl(var(--destructive)/0.15)] text-[hsl(var(--destructive))] border-0 ml-auto">
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+              <h3 className="text-base font-semibold text-slate-900">风险预警</h3>
+              <Badge className="text-[9px] bg-rose-100 text-rose-600 border-0 ml-auto">
                 {report.summary.criticalAlerts} 紧急
               </Badge>
             </div>
             <div className="space-y-2.5">
               {report.riskAlerts.map((alert, i) => (
                 <div key={i} className={`rounded-lg border p-3 ${
-                  alert.severity === 'critical' ? 'border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--destructive)/0.05)]'
-                    : alert.severity === 'warning' ? 'border-[hsl(var(--zv-amber)/0.3)] bg-[hsl(var(--zv-amber)/0.05)]'
-                    : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
+                  alert.severity === 'critical' ? 'border-rose-200 bg-rose-50'
+                    : alert.severity === 'warning' ? 'border-amber-200 bg-amber-50'
+                    : 'border-slate-200 bg-white'
                 }`}>
                   <div className="flex items-start gap-2">
                     <span className="text-base">{alertIcon(alert.severity)}</span>
                     <div>
-                      <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{alert.type}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{alert.message}</p>
+                      <p className="text-sm font-semibold text-slate-900">{alert.type}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{alert.message}</p>
                       {alert.campaigns && alert.campaigns.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {alert.campaigns.map((c, j) => (
@@ -329,31 +330,31 @@ function OverviewTab({ report }: { report: WeeklyReport | null }) {
         )}
 
         {/* Action list */}
-        <div className="rounded-xl border border-[hsl(var(--zv-amber)/0.3)] bg-[hsl(var(--card))] p-5">
+        <div className="rounded-xl border border-amber-200 bg-white p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Lightbulb className="w-4 h-4 text-[hsl(var(--zv-amber))]" />
-            <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">关键行动清单</h3>
-            <Badge className="text-[9px] bg-[hsl(var(--zv-amber)/0.15)] text-[hsl(var(--zv-amber))] border-0 ml-auto">
+            <Lightbulb className="w-4 h-4 text-amber-600" />
+            <h3 className="text-base font-semibold text-slate-900">关键行动清单</h3>
+            <Badge className="text-[9px] bg-amber-100 text-amber-600 border-0 ml-auto">
               {report.actionItems.length} 条
             </Badge>
           </div>
           {report.actionItems.length === 0 ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无行动项</p>
+            <p className="text-sm text-slate-500 text-center py-4">暂无行动项</p>
           ) : (
             <div className="space-y-2 max-h-[360px] overflow-y-auto">
               {report.actionItems.map((item, i) => (
                 <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${
-                  item.priority === 'high' ? 'border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.04)]'
-                    : item.priority === 'medium' ? 'border-[hsl(var(--zv-amber)/0.25)] bg-[hsl(var(--zv-amber)/0.04)]'
-                    : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
+                  item.priority === 'high' ? 'border-rose-200 bg-rose-50'
+                    : item.priority === 'medium' ? 'border-amber-200 bg-amber-50'
+                    : 'border-slate-200 bg-white'
                 }`}>
                   <span className="text-sm mt-0.5">{priorityIcon(item.priority)}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="outline" className="text-[9px] h-4 px-1">{item.category}</Badge>
-                      <span className="text-sm font-medium text-[hsl(var(--foreground))]">{item.action}</span>
+                      <span className="text-sm font-medium text-slate-900">{item.action}</span>
                     </div>
-                    {item.detail && <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{item.detail}</p>}
+                    {item.detail && <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{item.detail}</p>}
                   </div>
                 </div>
               ))}
@@ -364,24 +365,24 @@ function OverviewTab({ report }: { report: WeeklyReport | null }) {
 
       {/* Money vs burn keywords */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--card))] p-4">
+        <div className="rounded-xl border border-blue-200 bg-white p-4">
           <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="w-4 h-4 text-[hsl(var(--primary))]" />
+            <TrendingUp className="w-4 h-4 text-blue-600" />
             <h3 className="text-base font-semibold">Top 5 赚钱词</h3>
           </div>
           {report.moneyKeywords.length === 0 ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无数据</p>
+            <p className="text-sm text-slate-500 text-center py-4">暂无数据</p>
           ) : (
             <div className="space-y-1.5">
               {report.moneyKeywords.map((kw, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.06)]">
+                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">"{kw.searchTerm}"</p>
-                    <p className="text-[9px] text-[hsl(var(--muted-foreground))]">{kw.orders} 单 · ${kw.sales.toFixed(0)} 销售额</p>
+                    <p className="text-[9px] text-slate-500">{kw.orders} 单 · ${kw.sales.toFixed(0)} 销售额</p>
                   </div>
                   <div className="text-right ml-2">
-                    <p className="text-xs font-bold text-[hsl(var(--primary))]">ROAS {kw.roas}x</p>
-                    <p className="text-[9px] text-[hsl(var(--muted-foreground))]">ACOS {kw.acos}%</p>
+                    <p className="text-xs font-bold text-blue-600">ROAS {kw.roas}x</p>
+                    <p className="text-[9px] text-slate-500">ACOS {kw.acos}%</p>
                   </div>
                 </div>
               ))}
@@ -389,23 +390,23 @@ function OverviewTab({ report }: { report: WeeklyReport | null }) {
           )}
         </div>
 
-        <div className="rounded-xl border border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--card))] p-4">
+        <div className="rounded-xl border border-rose-200 bg-white p-4">
           <div className="flex items-center gap-2 mb-3">
-            <TrendingDown className="w-4 h-4 text-[hsl(var(--destructive))]" />
+            <TrendingDown className="w-4 h-4 text-rose-600" />
             <h3 className="text-base font-semibold">Top 5 烧钱词</h3>
           </div>
           {report.burnKeywords.length === 0 ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无数据</p>
+            <p className="text-sm text-slate-500 text-center py-4">暂无数据</p>
           ) : (
             <div className="space-y-1.5">
               {report.burnKeywords.map((kw, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[hsl(var(--destructive)/0.06)]">
+                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-rose-50">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">"{kw.searchTerm}"</p>
-                    <p className="text-[9px] text-[hsl(var(--muted-foreground))]">{kw.clicks} 点击 · 0 转化</p>
+                    <p className="text-[9px] text-slate-500">{kw.clicks} 点击 · 0 转化</p>
                   </div>
                   <div className="text-right ml-2">
-                    <p className="text-xs font-bold text-[hsl(var(--destructive))]">${kw.spend.toFixed(0)}</p>
+                    <p className="text-xs font-bold text-rose-600">${kw.spend.toFixed(0)}</p>
                     <Badge variant="danger" className="text-[8px]">{kw.level}</Badge>
                   </div>
                 </div>
@@ -441,16 +442,16 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
               ? [{ label: '预估月节省', value: `$${analysisData.summary.estMonthlySavings.toFixed(0)}` }]
               : []),
           ].map(({ label, value, accent }) => (
-            <div key={label} className={`rounded-xl border p-3 ${accent ? 'border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.06)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'}`}>
-              <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold">{label}</p>
-              <p className={`text-lg font-bold mt-1 ${accent ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>{value}</p>
+            <div key={label} className={`rounded-xl border p-3 ${accent ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}>
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</p>
+              <p className={`text-lg font-bold mt-1 ${accent ? 'text-blue-600' : 'text-slate-900'}`}>{value}</p>
             </div>
           ))}
         </div>
       )}
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-[hsl(var(--border))]">
+      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5">
         {([
           { key: 'add-kw' as const, label: '加词建议', count: analysisData?.addKeywords.length ?? 0 },
           { key: 'neg-kw' as const, label: '否词建议', count: analysisData?.negativeKeywords.length ?? 0 },
@@ -459,11 +460,10 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
           { key: 'duplicate' as const, label: '重复投放', count: analysisData?.duplicateTargeting.length ?? 0 },
         ]).map(tab => (
           <button key={tab.key} onClick={() => setAnalysisTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={cn('flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors', 
               analysisTab === tab.key
-                ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]'
-                : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-            }`}
+                ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            )}`}
           >
             {tab.label}
             {tab.count > 0 && <Badge variant="outline" className="text-[8px] h-4 px-1">{tab.count}</Badge>}
@@ -480,16 +480,16 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
         <>
           {analysisTab === 'add-kw' && (
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-                <Plus className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                <Plus className="w-3.5 h-3.5 text-blue-600" />
                 <h3 className="text-base font-semibold">加词建议</h3>
-                <span className="text-[10px] text-[hsl(var(--muted-foreground))]">有转化、未作为关键词的搜索词</span>
+                <span className="text-[10px] text-slate-500">有转化、未作为关键词的搜索词</span>
               </div>
               {!analysisData?.addKeywords.length ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">暂无加词建议</p>
+                <p className="text-sm text-slate-500 text-center py-8">暂无加词建议</p>
               ) : (
                 <>
-                  <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold border-b border-[hsl(var(--border)/0.3)]">
+                  <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
                     <div className="flex-1">搜索词</div>
                     <div className="w-20 text-right">展示</div><div className="w-16 text-right">点击</div>
                     <div className="w-16 text-right">订单</div><div className="w-20 text-right">销售额</div>
@@ -497,13 +497,13 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
                   </div>
                   <div className="max-h-[500px] overflow-y-auto">
                     {analysisData?.addKeywords.map((item, i) => (
-                      <div key={i} className="flex items-center gap-2 px-4 py-2.5 border-b border-[hsl(var(--border)/0.2)] hover:bg-[hsl(var(--secondary)/0.2)] transition-colors">
+                      <div key={i} className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.searchTerm}</p></div>
                         <div className="w-20 text-right text-sm">{fmtNum(item.impressions)}</div>
                         <div className="w-16 text-right text-sm">{item.clicks}</div>
                         <div className="w-16 text-right text-sm font-medium">{item.orders}</div>
-                        <div className="w-20 text-right text-sm font-medium text-[hsl(var(--primary))]">${item.sales.toFixed(0)}</div>
-                        <div className={`w-16 text-right text-sm font-bold ${item.acos <= 20 ? 'text-[hsl(var(--primary))]' : item.acos <= 35 ? 'text-[hsl(var(--zv-amber))]' : 'text-[hsl(var(--destructive))]'}`}>{item.acos}%</div>
+                        <div className="w-20 text-right text-sm font-medium text-blue-600">${item.sales.toFixed(0)}</div>
+                        <div className={`w-16 text-right text-sm font-bold ${item.acos <= 20 ? 'text-blue-600' : item.acos <= 35 ? 'text-amber-600' : 'text-rose-600'}`}>{item.acos}%</div>
                         <div className="w-24 text-right"><Badge variant="outline" className="text-[9px] uppercase">{item.suggestedMatchType}</Badge></div>
                       </div>
                     ))}
@@ -517,27 +517,27 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
 
           {analysisTab === 'match-upgrade' && (
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-                <ArrowUpDown className="w-3.5 h-3.5 text-[hsl(var(--zv-blue))]" />
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                <ArrowUpDown className="w-3.5 h-3.5 text-blue-600" />
                 <h3 className="text-base font-semibold">匹配升级</h3>
-                <span className="text-[10px] text-[hsl(var(--muted-foreground))]">建议从 broad → phrase/exact 升级</span>
+                <span className="text-[10px] text-slate-500">建议从 broad → phrase/exact 升级</span>
               </div>
               {!analysisData?.matchUpgrades.length ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">暂无匹配升级建议</p>
+                <p className="text-sm text-slate-500 text-center py-8">暂无匹配升级建议</p>
               ) : (
                 <>
-                  <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold border-b border-[hsl(var(--border)/0.3)]">
+                  <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
                     <div className="flex-1">关键词</div><div className="w-24 text-right">当前匹配</div>
                     <div className="w-16 text-right">订单</div><div className="w-16 text-right">ACOS</div><div className="flex-1 text-right">建议</div>
                   </div>
                   <div className="max-h-[500px] overflow-y-auto">
                     {analysisData?.matchUpgrades.map((item, i) => (
-                      <div key={i} className="flex items-center gap-2 px-4 py-2.5 border-b border-[hsl(var(--border)/0.2)] hover:bg-[hsl(var(--secondary)/0.2)] transition-colors">
+                      <div key={i} className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.keyword}</p></div>
                         <div className="w-24 text-right"><Badge variant="outline" className="text-[9px] uppercase">{item.currentMatch}</Badge></div>
                         <div className="w-16 text-right text-sm">{item.orders}</div>
                         <div className={`w-16 text-right text-sm font-bold ${acosColor(item.acos)}`}>{item.acos}%</div>
-                        <div className="flex-1 text-right text-sm text-[hsl(var(--primary))]">{item.suggestion}</div>
+                        <div className="flex-1 text-right text-sm text-blue-600">{item.suggestion}</div>
                       </div>
                     ))}
                   </div>
@@ -550,17 +550,17 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
 
           {analysisTab === 'duplicate' && (
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-                <BarChart3 className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                <BarChart3 className="w-3.5 h-3.5 text-amber-600" />
                 <h3 className="text-base font-semibold">重复投放</h3>
-                <span className="text-[10px] text-[hsl(var(--muted-foreground))]">同一关键词出现在多个 Campaign</span>
+                <span className="text-[10px] text-slate-500">同一关键词出现在多个 Campaign</span>
               </div>
               {!analysisData?.duplicateTargeting.length ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">暂无重复投放数据</p>
+                <p className="text-sm text-slate-500 text-center py-8">暂无重复投放数据</p>
               ) : (
-                <div className="max-h-[500px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)]">
+                <div className="max-h-[500px] overflow-y-auto divide-y divide-slate-100">
                   {analysisData?.duplicateTargeting.map((item, i) => (
-                    <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)] transition-colors">
+                    <div key={i} className="px-4 py-3 hover:bg-slate-50/50 transition-colors">
                       <p className="text-sm font-semibold mb-1.5">{item.keyword}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {item.campaigns.map((c, j) => (
@@ -620,10 +620,10 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
             { label: '僵尸 Campaign', value: s.zombieCampaigns, alert: s.zombieCampaigns > 0 },
             { label: '命名不规范', value: s.namingIssues, alert: s.namingIssues > 0 },
           ].map(({ label, value, sub, alert }) => (
-            <div key={label} className={`rounded-xl border p-3 ${alert ? 'border-[hsl(var(--zv-amber)/0.4)] bg-[hsl(var(--zv-amber)/0.05)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'}`}>
-              <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold">{label}</p>
-              <p className={`text-2xl font-bold mt-1 ${alert ? 'text-[hsl(var(--zv-amber))]' : 'text-[hsl(var(--foreground))]'}`}>{value}</p>
-              {sub && <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{sub}</p>}
+            <div key={label} className={`rounded-xl border p-3 ${alert ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</p>
+              <p className={`text-2xl font-bold mt-1 ${alert ? 'text-amber-600' : 'text-slate-900'}`}>{value}</p>
+              {sub && <p className="text-[10px] text-slate-500">{sub}</p>}
             </div>
           ))}
         </div>
@@ -633,43 +633,43 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       {data.typeDistribution && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Layers className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+            <Layers className="w-3.5 h-3.5 text-blue-600" />
             <h3 className="text-sm font-semibold">Campaign 类型分布</h3>
           </div>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: 'Sponsored Products (SP)', data: data.typeDistribution.sp, color: 'var(--primary)' },
-              { label: 'Sponsored Brands (SB)', data: data.typeDistribution.sb, color: 'var(--zv-amber)' },
+              { label: 'Sponsored Products (SP)', data: data.typeDistribution.sp, color: '#2563eb' },
+              { label: 'Sponsored Brands (SB)', data: data.typeDistribution.sb, color: '#d97706' },
             ].map(({ label, data: d, color }) => (
               <div key={label} className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium" style={{ color: `hsl(${color})` }}>{label}</span>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{d.budgetShare}% 预算占比</span>
+                  <span className="text-sm font-medium" style={{ color }}>{label}</span>
+                  <span className="text-xs text-slate-500">{d.budgetShare}% 预算占比</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-[hsl(var(--secondary))] overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${d.budgetShare}%`, backgroundColor: `hsl(${color})` }} />
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${d.budgetShare}%`, backgroundColor: color }} />
                 </div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                <p className="text-xs text-slate-500">
                   {d.active} 活跃 · {d.total} 总 · ${d.dailyBudget}/天
                 </p>
               </div>
             ))}
           </div>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">总日预算: ${data.typeDistribution.totalDailyBudget}</p>
+          <p className="text-xs text-slate-500 mt-3">总日预算: ${data.typeDistribution.totalDailyBudget}</p>
         </div>
       )}
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-[hsl(var(--border))]">
+      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5">
         {subTabs.map(tab => (
           <button key={tab.key} onClick={() => setSubTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-              subTab === tab.key ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-            }`}
+            className={cn('flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors', 
+              subTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            )}`}
           >
             {tab.label}
             {tab.count > 0 && (
-              <Badge variant="outline" className={`text-[8px] h-4 px-1 ${tab.countLabel ? 'border-[hsl(var(--zv-amber)/0.4)]' : ''}`}>{tab.count}</Badge>
+              <Badge variant="outline" className={`text-[8px] h-4 px-1 ${tab.countLabel ? 'border-amber-300 bg-amber-50 text-amber-700' : ''}`}>{tab.count}</Badge>
             )}
           </button>
         ))}
@@ -678,20 +678,20 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       {/* Sub-tab content */}
       {subTab === 'duplicates' && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-            <BarChart3 className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <BarChart3 className="w-3.5 h-3.5 text-amber-600" />
             <h3 className="text-sm font-semibold">Campaign 间重复关键词</h3>
           </div>
           {!data.duplicates?.length ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">✅ 未发现重复投放</p>
+            <p className="text-sm text-slate-500 text-center py-8">✅ 未发现重复投放</p>
           ) : (
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)]">
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
               {data.duplicates.map((item, i) => (
-                <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)]">
+                <div key={i} className="px-4 py-3 hover:bg-slate-50/50">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-sm font-semibold">"{item.keyword}"</span>
                     <Badge variant="outline" className="text-[9px]">{item.matchType}</Badge>
-                    <Badge className="text-[9px] bg-[hsl(var(--zv-amber)/0.15)] text-[hsl(var(--zv-amber))] border-0">{item.occurrences}x</Badge>
+                    <Badge className="text-[9px] bg-amber-100 text-amber-600 border-0">{item.occurrences}x</Badge>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {item.campaigns.map((c, j) => <Badge key={j} variant="outline" className="text-[9px]">{c}</Badge>)}
@@ -706,57 +706,57 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       {subTab === 'asin' && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Target className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+            <Target className="w-3.5 h-3.5 text-blue-600" />
             <h3 className="text-sm font-semibold">ASIN 广告覆盖检查</h3>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <p className="text-xs text-[hsl(var(--primary))] font-semibold mb-2">✅ 已覆盖 ({data.asinCoverage?.covered.length})</p>
+              <p className="text-xs text-blue-600 font-semibold mb-2">✅ 已覆盖 ({data.asinCoverage?.covered.length})</p>
               <div className="flex flex-wrap gap-2">
                 {data.asinCoverage?.covered.map(asin => (
-                  <Badge key={asin} className="text-[10px] bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] border-[hsl(var(--primary)/0.3)]">{asin}</Badge>
+                  <Badge key={asin} className="text-[10px] bg-blue-100 text-blue-600 border-blue-200">{asin}</Badge>
                 ))}
-                {!data.asinCoverage?.covered.length && <p className="text-sm text-[hsl(var(--muted-foreground))]">无</p>}
+                {!data.asinCoverage?.covered.length && <p className="text-sm text-slate-500">无</p>}
               </div>
             </div>
             <div>
-              <p className="text-xs text-[hsl(var(--destructive))] font-semibold mb-2">⚠️ 未覆盖 ({data.asinCoverage?.uncovered.length})</p>
+              <p className="text-xs text-rose-600 font-semibold mb-2">⚠️ 未覆盖 ({data.asinCoverage?.uncovered.length})</p>
               <div className="flex flex-wrap gap-2">
                 {data.asinCoverage?.uncovered.map(asin => (
                   <Badge key={asin} variant="danger" className="text-[10px]">{asin}</Badge>
                 ))}
-                {!data.asinCoverage?.uncovered.length && <p className="text-sm text-[hsl(var(--muted-foreground))]">全部已覆盖</p>}
+                {!data.asinCoverage?.uncovered.length && <p className="text-sm text-slate-500">全部已覆盖</p>}
               </div>
             </div>
           </div>
           {data.asinCoverage?.note && (
-            <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-4 italic">{data.asinCoverage.note}</p>
+            <p className="text-[10px] text-slate-500 mt-4 italic">{data.asinCoverage.note}</p>
           )}
         </div>
       )}
 
       {subTab === 'zombies' && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-            <PauseCircle className="w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <PauseCircle className="w-3.5 h-3.5 text-slate-500" />
             <h3 className="text-sm font-semibold">僵尸 Campaign</h3>
-            <span className="text-[10px] text-[hsl(var(--muted-foreground))]">有预算但近期无流量</span>
+            <span className="text-[10px] text-slate-500">有预算但近期无流量</span>
           </div>
           {!data.zombieCampaigns?.length ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">✅ 未发现僵尸 Campaign</p>
+            <p className="text-sm text-slate-500 text-center py-8">✅ 未发现僵尸 Campaign</p>
           ) : (
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)]">
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
               {data.zombieCampaigns.map((camp, i) => (
-                <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)]">
+                <div key={i} className="px-4 py-3 hover:bg-slate-50/50">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium">{camp.name}</p>
-                      <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
+                      <p className="text-[10px] text-slate-500 mt-0.5">
                         {camp.type} · 启动 {camp.startDaysAgo} 天前 · 日预算 ${camp.dailyBudget}
                       </p>
-                      <p className="text-[10px] text-[hsl(var(--zv-amber))] mt-0.5">{camp.reason}</p>
+                      <p className="text-[10px] text-amber-600 mt-0.5">{camp.reason}</p>
                     </div>
-                    <Badge variant="outline" className="text-[9px] text-[hsl(var(--zv-amber))] border-[hsl(var(--zv-amber)/0.4)] flex-shrink-0">
+                    <Badge variant="outline" className="text-[9px] text-amber-600 border-amber-300 flex-shrink-0">
                       待审查
                     </Badge>
                   </div>
@@ -769,24 +769,24 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
 
       {subTab === 'naming' && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
             <h3 className="text-sm font-semibold">命名规范检查</h3>
             {data.naming?.dominantPattern && (
               <Badge variant="outline" className="text-[9px] ml-auto">{data.naming.dominantPattern}</Badge>
             )}
           </div>
           {!data.naming?.issues.length ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">✅ 命名规范一致</p>
+            <p className="text-sm text-slate-500 text-center py-8">✅ 命名规范一致</p>
           ) : (
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)]">
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
               {data.naming.issues.map((item, i) => (
-                <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)]">
+                <div key={i} className="px-4 py-3 hover:bg-slate-50/50">
                   <p className="text-sm font-medium">{item.name}</p>
                   <div className="flex items-center gap-1.5 mt-1">
                     <Badge variant="outline" className="text-[9px]">{item.type}</Badge>
                     {item.issues.map((issue, j) => (
-                      <Badge key={j} className="text-[9px] bg-[hsl(var(--zv-amber)/0.12)] text-[hsl(var(--zv-amber))] border-0">{issue}</Badge>
+                      <Badge key={j} className="text-[9px] bg-amber-100 text-amber-600 border-0">{issue}</Badge>
                     ))}
                   </div>
                 </div>
@@ -798,23 +798,23 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
 
       {/* Recommendations */}
       {data.recommendations && data.recommendations.length > 0 && (
-        <div className="rounded-xl border border-[hsl(var(--zv-amber)/0.3)] bg-[hsl(var(--card))] p-5">
+        <div className="rounded-xl border border-amber-200 bg-white p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Lightbulb className="w-4 h-4 text-[hsl(var(--zv-amber))]" />
+            <Lightbulb className="w-4 h-4 text-amber-600" />
             <h3 className="text-sm font-semibold">Campaign 结构建议</h3>
           </div>
           <div className="space-y-2">
             {data.recommendations.map((rec, i) => (
               <div key={i} className={`rounded-lg border p-3 ${
-                rec.priority === 'high' ? 'border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.04)]'
-                  : rec.priority === 'medium' ? 'border-[hsl(var(--zv-amber)/0.25)] bg-[hsl(var(--zv-amber)/0.04)]'
-                  : 'border-[hsl(var(--border))]'
+                rec.priority === 'high' ? 'border-rose-200 bg-rose-50'
+                  : rec.priority === 'medium' ? 'border-amber-200 bg-amber-50'
+                  : 'border-slate-200'
               }`}>
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant="outline" className="text-[9px]">{rec.category}</Badge>
                   <span className="text-sm font-medium">{rec.action}</span>
                 </div>
-                <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{rec.detail}</p>
+                <p className="text-[10px] text-slate-500">{rec.detail}</p>
               </div>
             ))}
           </div>
@@ -864,21 +864,21 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
             { label: 'ACOS 恶化', value: s.acosWorseningCount, alert: s.acosWorseningCount > 0 },
             { label: '亏损预警', value: s.breakevenAlerts, alert: s.breakevenAlerts > 0 },
           ].map(({ label, value, alert, accent }) => (
-            <div key={label} className={`rounded-xl border p-3 ${alert ? 'border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.05)]' : accent ? 'border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.05)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'}`}>
-              <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold">{label}</p>
-              <p className={`text-2xl font-bold mt-1 ${alert ? 'text-[hsl(var(--destructive))]' : accent ? 'text-[hsl(var(--primary))]' : ''}`}>{value}</p>
+            <div key={label} className={`rounded-xl border p-3 ${alert ? 'border-rose-300 bg-rose-50' : accent ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white'}`}>
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</p>
+              <p className={`text-2xl font-bold mt-1 ${alert ? 'text-rose-600' : accent ? 'text-blue-600' : ''}`}>{value}</p>
             </div>
           ))}
         </div>
       )}
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-[hsl(var(--border))] overflow-x-auto">
+      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5 overflow-x-auto">
         {subTabs.map(tab => (
           <button key={tab.key} onClick={() => setSubTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              subTab === tab.key ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-            }`}
+            className={cn('flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors', 
+              subTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            )}`}
           >
             {tab.label}
             {tab.count > 0 && <Badge variant="outline" className="text-[8px] h-4 px-1">{tab.count}</Badge>}
@@ -894,26 +894,26 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
           ) : (
             <>
               {data.bidEfficiency?.overbidding.length > 0 && (
-                <div className="rounded-xl border border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--card))] overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-                    <ArrowDown className="w-3.5 h-3.5 text-[hsl(var(--destructive))]" />
+                <div className="rounded-xl border border-rose-200 bg-white overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                    <ArrowDown className="w-3.5 h-3.5 text-rose-600" />
                     <h3 className="text-sm font-semibold">出价过高 (Overbidding)</h3>
-                    <Badge className="text-[9px] bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-0">{data.bidEfficiency.overbidding.length}</Badge>
+                    <Badge className="text-[9px] bg-rose-100 text-rose-600 border-0">{data.bidEfficiency.overbidding.length}</Badge>
                   </div>
-                  <div className="max-h-[300px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.2)]">
+                  <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
                     {data.bidEfficiency.overbidding.map((kw, i) => (
-                      <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)]">
+                      <div key={i} className="px-4 py-3 hover:bg-slate-50/50">
                         <div className="flex items-center justify-between gap-2">
                           <div>
                             <p className="text-sm font-medium">"{kw.keyword}"</p>
-                            <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{kw.campaignName} · {kw.matchType}</p>
+                            <p className="text-[10px] text-slate-500">{kw.campaignName} · {kw.matchType}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm"><span className="text-[hsl(var(--destructive))]">${kw.bid}</span> 出价 → <span className="text-[hsl(var(--primary))]">${kw.actualCpc}</span> 实际</p>
-                            <p className="text-[10px] text-[hsl(var(--muted-foreground))]">花费 ${kw.spend}</p>
+                            <p className="text-sm"><span className="text-rose-600">${kw.bid}</span> 出价 → <span className="text-blue-600">${kw.actualCpc}</span> 实际</p>
+                            <p className="text-[10px] text-slate-500">花费 ${kw.spend}</p>
                           </div>
                         </div>
-                        <p className="text-[10px] text-[hsl(var(--zv-amber))] mt-1">{kw.suggestion}</p>
+                        <p className="text-[10px] text-amber-600 mt-1">{kw.suggestion}</p>
                       </div>
                     ))}
                   </div>
@@ -921,25 +921,25 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
               )}
 
               {data.bidEfficiency?.underbidding.length > 0 && (
-                <div className="rounded-xl border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--card))] overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-                    <ArrowUp className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                <div className="rounded-xl border border-blue-200 bg-white overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                    <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
                     <h3 className="text-sm font-semibold">出价不足 (Underbidding)</h3>
-                    <Badge className="text-[9px] bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] border-0">{data.bidEfficiency.underbidding.length}</Badge>
+                    <Badge className="text-[9px] bg-blue-100 text-blue-600 border-0">{data.bidEfficiency.underbidding.length}</Badge>
                   </div>
-                  <div className="max-h-[300px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.2)]">
+                  <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
                     {data.bidEfficiency.underbidding.map((kw, i) => (
-                      <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)]">
+                      <div key={i} className="px-4 py-3 hover:bg-slate-50/50">
                         <div className="flex items-center justify-between gap-2">
                           <div>
                             <p className="text-sm font-medium">"{kw.keyword}"</p>
-                            <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{kw.campaignName}</p>
+                            <p className="text-[10px] text-slate-500">{kw.campaignName}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-medium text-[hsl(var(--primary))]">ACOS {kw.acos}% · {kw.orders} 单</p>
+                            <p className="text-xs font-medium text-blue-600">ACOS {kw.acos}% · {kw.orders} 单</p>
                           </div>
                         </div>
-                        <p className="text-[10px] text-[hsl(var(--primary))] mt-1">{kw.suggestion}</p>
+                        <p className="text-[10px] text-blue-600 mt-1">{kw.suggestion}</p>
                       </div>
                     ))}
                   </div>
@@ -953,40 +953,40 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
       {/* Budget utilization */}
       {subTab === 'utilization' && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-            <CreditCard className="w-3.5 h-3.5 text-[hsl(var(--zv-blue))]" />
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <CreditCard className="w-3.5 h-3.5 text-blue-600" />
             <h3 className="text-sm font-semibold">Budget 利用率</h3>
             <div className="ml-auto flex items-center gap-2 text-[9px]">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[hsl(var(--destructive))] inline-block"/> 满载 &gt;90%</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[hsl(var(--primary))] inline-block"/> 健康 60-90%</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] inline-block"/> 低利用</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-600 inline-block"/> 满载 &gt;90%</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600 inline-block"/> 健康 60-90%</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400 inline-block"/> 低利用</span>
             </div>
           </div>
           {!data.budgetUtilization?.campaigns.length ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">暂无数据（需要性能报告）</p>
+            <p className="text-sm text-slate-500 text-center py-8">暂无数据（需要性能报告）</p>
           ) : (
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.2)]">
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
               {data.budgetUtilization.campaigns.map((camp, i) => {
                 const util = camp.utilization ?? 0
-                const barColor = util >= 90 ? 'hsl(var(--destructive))' : util >= 60 ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'
+                const barColor = util >= 90 ? '#e11d48' : util >= 60 ? '#2563eb' : '#94a3b8'
                 return (
-                  <div key={i} className="px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)]">
+                  <div key={i} className="px-4 py-3 hover:bg-slate-50/50">
                     <div className="flex items-center justify-between gap-3 mb-1.5">
                       <p className="text-sm font-medium truncate flex-1">{camp.name}</p>
                       <div className="flex items-center gap-3 text-sm flex-shrink-0">
-                        <span className="text-[hsl(var(--muted-foreground))]">${camp.dailyBudget}/天</span>
+                        <span className="text-slate-500">${camp.dailyBudget}/天</span>
                         <span className="font-bold" style={{ color: barColor }}>
                           {camp.utilization !== null ? `${camp.utilization}%` : '—'}
                         </span>
                       </div>
                     </div>
                     {camp.utilization !== null && (
-                      <div className="h-1 rounded-full bg-[hsl(var(--secondary))] overflow-hidden">
+                      <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(camp.utilization, 100)}%`, backgroundColor: barColor }} />
                       </div>
                     )}
                     {camp.acos !== null && (
-                      <p className="text-[9px] text-[hsl(var(--muted-foreground))] mt-1">
+                      <p className="text-[9px] text-slate-500 mt-1">
                         花费 ${camp.totalSpend} · 销售 ${camp.totalSales} · ACOS {camp.acos}% · ROAS {camp.roas}x
                       </p>
                     )}
@@ -1006,21 +1006,21 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
           ) : (
             <>
               {data.acosAnalysis?.breakeven && data.acosAnalysis.breakeven.length > 0 && (
-                <div className="rounded-xl border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.04)] p-5">
+                <div className="rounded-xl border border-rose-300 bg-rose-50 p-5">
                   <div className="flex items-center gap-2 mb-3">
-                    <AlertTriangle className="w-4 h-4 text-[hsl(var(--destructive))]" />
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
                     <h3 className="text-sm font-semibold">亏损 Campaign (ACOS &gt; {data.acosAnalysis.breakevenAcos}%)</h3>
                   </div>
                   <div className="space-y-2">
                     {data.acosAnalysis.breakeven.map((c, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[hsl(var(--card))] border border-[hsl(var(--destructive)/0.2)]">
+                      <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-white border border-rose-200">
                         <div>
                           <p className="text-sm font-medium">{c.name}</p>
-                          <p className="text-[10px] text-[hsl(var(--muted-foreground))]">花费 ${c.spend}</p>
+                          <p className="text-[10px] text-slate-500">花费 ${c.spend}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-base font-bold text-[hsl(var(--destructive))]">ACOS {c.acos}%</p>
-                          <Badge className="text-[8px] bg-[hsl(var(--destructive)/0.15)] text-[hsl(var(--destructive))] border-0">
+                          <p className="text-base font-bold text-rose-600">ACOS {c.acos}%</p>
+                          <Badge className="text-[8px] bg-rose-100 text-rose-600 border-0">
                             {c.severity === 'critical' ? '严重' : '预警'}
                           </Badge>
                         </div>
@@ -1031,18 +1031,18 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
               )}
 
               {data.acosAnalysis?.deteriorating && data.acosAnalysis.deteriorating.length > 0 && (
-                <div className="rounded-xl border border-[hsl(var(--zv-amber)/0.3)] bg-[hsl(var(--card))] p-5">
+                <div className="rounded-xl border border-amber-200 bg-white p-5">
                   <div className="flex items-center gap-2 mb-3">
-                    <TrendingDown className="w-4 h-4 text-[hsl(var(--zv-amber))]" />
+                    <TrendingDown className="w-4 h-4 text-amber-600" />
                     <h3 className="text-sm font-semibold">ACOS 恶化 (超目标 {data.acosAnalysis.targetAcos}% 50%+)</h3>
                   </div>
                   <div className="space-y-2">
                     {data.acosAnalysis.deteriorating.map((c, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[hsl(var(--zv-amber)/0.05)] border border-[hsl(var(--zv-amber)/0.2)]">
+                      <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
                         <p className="text-sm font-medium">{c.name}</p>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-[hsl(var(--zv-amber))]">ACOS {c.acos}%</p>
-                          <p className="text-[9px] text-[hsl(var(--muted-foreground))]">超目标 +{c.gap}%</p>
+                          <p className="text-sm font-bold text-amber-600">ACOS {c.acos}%</p>
+                          <p className="text-[9px] text-slate-500">超目标 +{c.gap}%</p>
                         </div>
                       </div>
                     ))}
@@ -1057,24 +1057,24 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
       {/* Performers */}
       {subTab === 'performers' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--card))] p-4">
+          <div className="rounded-xl border border-blue-200 bg-white p-4">
             <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="w-4 h-4 text-[hsl(var(--primary))]" />
+              <TrendingUp className="w-4 h-4 text-blue-600" />
               <h3 className="text-sm font-semibold">Top 5 高绩效 Campaign</h3>
             </div>
             {!data.performers?.top5.length ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无数据</p>
+              <p className="text-sm text-slate-500 text-center py-4">暂无数据</p>
             ) : (
               <div className="space-y-2">
                 {data.performers.top5.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[hsl(var(--primary)/0.06)]">
+                  <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-blue-50">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{c.name}</p>
-                      <p className="text-[9px] text-[hsl(var(--muted-foreground))]">花费 ${c.spend}</p>
+                      <p className="text-[9px] text-slate-500">花费 ${c.spend}</p>
                     </div>
                     <div className="text-right ml-2">
-                      <p className="text-sm font-bold text-[hsl(var(--primary))]">ROAS {c.roas}x</p>
-                      {c.acos !== null && <p className="text-[9px] text-[hsl(var(--muted-foreground))]">ACOS {c.acos}%</p>}
+                      <p className="text-sm font-bold text-blue-600">ROAS {c.roas}x</p>
+                      {c.acos !== null && <p className="text-[9px] text-slate-500">ACOS {c.acos}%</p>}
                     </div>
                   </div>
                 ))}
@@ -1082,24 +1082,24 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
             )}
           </div>
 
-          <div className="rounded-xl border border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--card))] p-4">
+          <div className="rounded-xl border border-rose-200 bg-white p-4">
             <div className="flex items-center gap-2 mb-3">
-              <TrendingDown className="w-4 h-4 text-[hsl(var(--destructive))]" />
+              <TrendingDown className="w-4 h-4 text-rose-600" />
               <h3 className="text-sm font-semibold">Bottom 5 低绩效 Campaign</h3>
             </div>
             {!data.performers?.bottom5.length ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无数据</p>
+              <p className="text-sm text-slate-500 text-center py-4">暂无数据</p>
             ) : (
               <div className="space-y-2">
                 {data.performers.bottom5.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[hsl(var(--destructive)/0.06)]">
+                  <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-rose-50">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{c.name}</p>
-                      <p className="text-[9px] text-[hsl(var(--muted-foreground))]">花费 ${c.spend}</p>
+                      <p className="text-[9px] text-slate-500">花费 ${c.spend}</p>
                     </div>
                     <div className="text-right ml-2">
-                      <p className="text-sm font-bold text-[hsl(var(--destructive))]">ROAS {c.roas}x</p>
-                      {c.acos !== null && <p className="text-[9px] text-[hsl(var(--muted-foreground))]">ACOS {c.acos}%</p>}
+                      <p className="text-sm font-bold text-rose-600">ROAS {c.roas}x</p>
+                      {c.acos !== null && <p className="text-[9px] text-slate-500">ACOS {c.acos}%</p>}
                     </div>
                   </div>
                 ))}
@@ -1113,36 +1113,36 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
       {subTab === 'realloc' && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-4 h-4 text-[hsl(var(--zv-blue))]" />
+            <Activity className="w-4 h-4 text-blue-600" />
             <h3 className="text-sm font-semibold">Budget 重分配建议</h3>
           </div>
           {!data.reallocations?.length ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无重分配建议</p>
+            <p className="text-sm text-slate-500 text-center py-4">暂无重分配建议</p>
           ) : (
             <div className="space-y-3">
               {data.reallocations.map((r, i) => (
-                <div key={i} className={`rounded-lg border p-4 ${r.fromCampaign ? 'border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.03)]' : 'border-[hsl(var(--primary)/0.25)] bg-[hsl(var(--primary)/0.03)]'}`}>
+                <div key={i} className={`rounded-lg border p-4 ${r.fromCampaign ? 'border-rose-200 bg-rose-50' : 'border-blue-200 bg-blue-50'}`}>
                   {r.fromCampaign ? (
                     <>
                       <div className="flex items-center gap-2 mb-1">
-                        <ArrowDown className="w-3.5 h-3.5 text-[hsl(var(--destructive))]" />
+                        <ArrowDown className="w-3.5 h-3.5 text-rose-600" />
                         <span className="text-sm font-medium">{r.fromCampaign}</span>
-                        <span className="text-sm text-[hsl(var(--muted-foreground))]">${r.currentBudget} → ${r.suggestedBudget}/天</span>
-                        <Badge className="text-[9px] bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] border-0 ml-auto">释放 ${r.freedBudget}</Badge>
+                        <span className="text-sm text-slate-500">${r.currentBudget} → ${r.suggestedBudget}/天</span>
+                        <Badge className="text-[9px] bg-blue-100 text-blue-600 border-0 ml-auto">释放 ${r.freedBudget}</Badge>
                       </div>
-                      <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{r.reason}</p>
+                      <p className="text-[10px] text-slate-500">{r.reason}</p>
                     </>
                   ) : (
                     <>
                       <div className="flex items-center gap-2 mb-2">
-                        <ArrowUp className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                        <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
                         <span className="text-sm font-medium">{r.action}</span>
-                        <Badge className="text-[9px] bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] border-0 ml-auto">${r.budgetToDistribute} 可分配</Badge>
+                        <Badge className="text-[9px] bg-blue-100 text-blue-600 border-0 ml-auto">${r.budgetToDistribute} 可分配</Badge>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {r.targetCampaigns?.map((c, j) => <Badge key={j} variant="outline" className="text-[9px]">{c}</Badge>)}
                       </div>
-                      <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1">{r.reason}</p>
+                      <p className="text-[10px] text-slate-500 mt-1">{r.reason}</p>
                     </>
                   )}
                 </div>
@@ -1197,7 +1197,7 @@ function KeywordsTable({ keywords, loading }: { keywords: Keyword[]; loading: bo
     return (
       <button onClick={() => toggleSort(col.key)}
         className={`flex items-center gap-0.5 text-[10px] uppercase tracking-wider font-semibold ${col.align ?? ''} ${
-          active ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+          active ? 'text-blue-600' : 'text-slate-600 hover:bg-slate-100'
         }`}
       >
         {col.label}
@@ -1213,39 +1213,39 @@ function KeywordsTable({ keywords, loading }: { keywords: Keyword[]; loading: bo
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-semibold">关键词/投放表现</h2>
-          <p className="text-[10px] text-[hsl(var(--muted-foreground))]">按花费排序 · 点击列头可排序</p>
+          <p className="text-[10px] text-slate-500">按花费排序 · 点击列头可排序</p>
         </div>
         <Badge variant="outline" className="text-[9px]">{keywords.length} 个关键词</Badge>
       </div>
       <div className="mb-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="搜索关键词…" className="w-full pl-9 pr-3 py-2 rounded-lg bg-[hsl(var(--secondary)/0.5)] border border-[hsl(var(--border))] text-base text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
+            placeholder="搜索关键词…" className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-base text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-blue-300"
           />
         </div>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border))]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200">
         {cols.map(col => (
           <div key={col.key} className={col.width}><SortHeader col={col} /></div>
         ))}
       </div>
       <div className="max-h-[600px] overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">暂无关键词数据</p>
+          <p className="text-sm text-slate-500 text-center py-8">暂无关键词数据</p>
         ) : (
           filtered.slice(0, limit).map((k, i) => (
-            <div key={i} className={`flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border)/0.3)] hover:bg-[hsl(var(--secondary)/0.2)] transition-colors ${acosBg(k.acos)}`}>
+            <div key={i} className={`flex items-center gap-2 px-3 py-2 border-b border-slate-200 hover:bg-slate-50/50 transition-colors ${acosBg(k.acos)}`}>
               <div className="flex-1 min-w-[200px]">
                 <p className="text-sm font-medium truncate">{k.keyword}</p>
-                <p className="text-[9px] text-[hsl(var(--muted-foreground))] truncate">{k.matchType} · {k.campaignName}</p>
+                <p className="text-[9px] text-slate-500 truncate">{k.matchType} · {k.campaignName}</p>
               </div>
               <div className="w-20 text-right text-sm">{fmtNum(k.impressions)}</div>
               <div className="w-16 text-right text-sm">{fmtNum(k.clicks)}</div>
-              <div className="w-16 text-right text-sm text-[hsl(var(--muted-foreground))]">{k.ctr}%</div>
+              <div className="w-16 text-right text-sm text-slate-500">{k.ctr}%</div>
               <div className="w-16 text-right text-sm">${k.cpc}</div>
               <div className="w-20 text-right text-sm font-medium">${k.cost.toFixed(0)}</div>
-              <div className="w-20 text-right text-sm font-medium text-[hsl(var(--primary))]">${k.sales.toFixed(0)}</div>
+              <div className="w-20 text-right text-sm font-medium text-blue-600">${k.sales.toFixed(0)}</div>
               <div className="w-16 text-right text-sm">{k.orders}</div>
               <div className={`w-18 text-right text-sm font-bold ${acosColor(k.acos)}`}>{k.acos > 900 ? '∞' : `${k.acos}%`}</div>
               <div className={`w-18 text-right text-sm font-medium ${convColor(k.convRate)}`}>{k.convRate}%</div>
@@ -1254,7 +1254,7 @@ function KeywordsTable({ keywords, loading }: { keywords: Keyword[]; loading: bo
         )}
       </div>
       {filtered.length > limit && (
-        <button onClick={() => setLimit(l => l + 50)} className="w-full py-2 text-sm text-[hsl(var(--primary))] hover:underline">
+        <button onClick={() => setLimit(l => l + 50)} className="w-full py-2 text-sm text-blue-600 hover:underline">
           加载更多 ({filtered.length - limit} 条剩余)
         </button>
       )}
@@ -1283,57 +1283,57 @@ function SearchTermsPanel({ period }: { period: Period }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="rounded-xl border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--card))] p-4">
+      <div className="rounded-xl border border-blue-200 bg-white p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Plus className="w-4 h-4 text-[hsl(var(--primary))]" />
+          <Plus className="w-4 h-4 text-blue-600" />
           <h3 className="text-base font-semibold">优质搜索词</h3>
-          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">建议添加为关键词</span>
+          <span className="text-[10px] text-slate-500">建议添加为关键词</span>
         </div>
         {loading ? (
           <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
         ) : error ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">搜索词报告加载失败</p>
+          <p className="text-sm text-slate-500 text-center py-4">搜索词报告加载失败</p>
         ) : goodTerms.length ? (
           <div className="space-y-1.5">
             {goodTerms.map((t, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.06)]">
+              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">"{t.searchTerm}"</p>
-                  <p className="text-[9px] text-[hsl(var(--muted-foreground))]">{t.orders} 单 · ${t.sales.toFixed(0)} 销售额</p>
+                  <p className="text-[9px] text-slate-500">{t.orders} 单 · ${t.sales.toFixed(0)} 销售额</p>
                 </div>
-                <Badge className="text-[8px] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] border-0">ACOS {t.acos}%</Badge>
+                <Badge className="text-[8px] bg-blue-100 text-blue-600 border-0">ACOS {t.acos}%</Badge>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无数据</p>
+          <p className="text-sm text-slate-500 text-center py-4">暂无数据</p>
         )}
       </div>
 
-      <div className="rounded-xl border border-[hsl(var(--destructive)/0.3)] bg-[hsl(var(--card))] p-4">
+      <div className="rounded-xl border border-rose-200 bg-white p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Minus className="w-4 h-4 text-[hsl(var(--destructive))]" />
+          <Minus className="w-4 h-4 text-rose-600" />
           <h3 className="text-base font-semibold">浪费搜索词</h3>
-          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">建议添加为否词</span>
+          <span className="text-[10px] text-slate-500">建议添加为否词</span>
         </div>
         {loading ? (
           <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
         ) : error ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">搜索词报告加载失败</p>
+          <p className="text-sm text-slate-500 text-center py-4">搜索词报告加载失败</p>
         ) : badTerms.length ? (
           <div className="space-y-1.5">
             {badTerms.map((t, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[hsl(var(--destructive)/0.06)]">
+              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-rose-50">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">"{t.searchTerm}"</p>
-                  <p className="text-[9px] text-[hsl(var(--muted-foreground))]">{t.clicks} 点击 · 浪费 ${t.cost.toFixed(0)}</p>
+                  <p className="text-[9px] text-slate-500">{t.clicks} 点击 · 浪费 ${t.cost.toFixed(0)}</p>
                 </div>
                 <Badge variant="danger" className="text-[8px]">0 转化</Badge>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">暂无数据</p>
+          <p className="text-sm text-slate-500 text-center py-4">暂无数据</p>
         )}
       </div>
     </div>
@@ -1347,18 +1347,18 @@ function LongTailTab({ items }: { items: LongTailItem[] }) {
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-8 text-center">
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">暂无长尾机会数据</p>
+        <p className="text-sm text-slate-500">暂无长尾机会数据</p>
       </div>
     )
   }
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-        <Search className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+      <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+        <Search className="w-3.5 h-3.5 text-blue-600" />
         <h3 className="text-base font-semibold">长尾机会</h3>
         <Badge variant="outline" className="text-[8px] ml-auto">{items.length} 条</Badge>
       </div>
-      <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold border-b border-[hsl(var(--border)/0.3)]">
+      <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
         <div className="flex-1">搜索词</div>
         <div className="w-16 text-right">订单</div><div className="w-20 text-right">展示</div>
         <div className="w-16 text-right">点击</div><div className="w-16 text-right">ACOS</div>
@@ -1366,20 +1366,20 @@ function LongTailTab({ items }: { items: LongTailItem[] }) {
       </div>
       <div className="max-h-[500px] overflow-y-auto">
         {items.slice(0, limit).map((item, i) => (
-          <div key={i} className="flex items-center gap-2 px-4 py-2.5 border-b border-[hsl(var(--border)/0.2)] hover:bg-[hsl(var(--secondary)/0.2)] transition-colors">
+          <div key={i} className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
             <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.searchTerm}</p></div>
             <div className="w-16 text-right text-sm">{item.orders}</div>
             <div className="w-20 text-right text-sm">{fmtNum(item.impressions)}</div>
             <div className="w-16 text-right text-sm">{item.clicks}</div>
-            <div className={`w-16 text-right text-sm font-medium ${item.acos > 0 && item.acos <= 20 ? 'text-[hsl(var(--primary))]' : item.acos <= 35 ? 'text-[hsl(var(--zv-amber))]' : item.acos > 35 ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}`}>
+            <div className={`w-16 text-right text-sm font-medium ${item.acos > 0 && item.acos <= 20 ? 'text-blue-600' : item.acos <= 35 ? 'text-amber-600' : item.acos > 35 ? 'text-rose-600' : 'text-slate-500'}`}>
               {item.acos > 0 ? `${item.acos.toFixed(1)}%` : '—'}
             </div>
-            <div className="flex-1 text-right text-sm text-[hsl(var(--primary))]">{item.suggestion}</div>
+            <div className="flex-1 text-right text-sm text-blue-600">{item.suggestion}</div>
           </div>
         ))}
       </div>
       {items.length > limit && (
-        <button onClick={() => setLimit(l => l + 50)} className="w-full py-2.5 text-sm text-[hsl(var(--primary))] hover:underline border-t border-[hsl(var(--border)/0.3)]">
+        <button onClick={() => setLimit(l => l + 50)} className="w-full py-2.5 text-sm text-blue-600 hover:underline border-t border-slate-200">
           加载更多 ({items.length - limit} 条剩余)
         </button>
       )}
@@ -1395,7 +1395,7 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-8 text-center">
-        <p className="text-base text-[hsl(var(--muted-foreground))]">暂无否词建议</p>
+        <p className="text-base text-slate-500">暂无否词建议</p>
       </div>
     )
   }
@@ -1408,15 +1408,15 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
-        <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--destructive))]" />
+      <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
         <h3 className="text-base font-semibold">否词建议</h3>
         <div className="ml-auto flex items-center gap-2">
-          <Badge className="text-[10px] bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-0">⚠️ 警告 {warnItems.length}</Badge>
-          <Badge className="text-[10px] bg-[hsl(var(--zv-amber)/0.12)] text-[hsl(var(--zv-amber))] border-0">📋 标记 {flagItems.length}</Badge>
+          <Badge className="text-[10px] bg-rose-100 text-rose-600 border-0">⚠️ 警告 {warnItems.length}</Badge>
+          <Badge className="text-[10px] bg-amber-100 text-amber-600 border-0">📋 标记 {flagItems.length}</Badge>
         </div>
       </div>
-      <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold border-b border-[hsl(var(--border)/0.3)] bg-[hsl(var(--secondary)/0.3)]">
+      <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold bg-slate-50/80 border-b border-slate-200">
         <div className="w-16 flex-shrink-0">级别</div>
         <div className="flex-1">搜索词</div>
         <div className="w-20 text-right">展示</div>
@@ -1432,19 +1432,19 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
           const g = Math.round(80 * (1 - intensity))
           const b = Math.round(60 * (1 - intensity))
           return (
-            <div key={i} className={`flex items-start gap-2 px-4 py-2.5 border-b border-[hsl(var(--border)/0.2)] transition-colors ${
-              isWarn ? 'bg-[hsl(var(--destructive)/0.04)] hover:bg-[hsl(var(--destructive)/0.08)]' : 'bg-[hsl(var(--zv-amber)/0.03)] hover:bg-[hsl(var(--zv-amber)/0.07)]'
+            <div key={i} className={`flex items-start gap-2 px-4 py-2.5 border-b border-slate-100 transition-colors ${
+              isWarn ? 'bg-rose-50 hover:bg-rose-50' : 'bg-amber-50 hover:bg-amber-100'
             }`}>
               <div className="w-16 flex-shrink-0 pt-0.5">
                 {isWarn ? (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/0.12)] px-1.5 py-0.5 rounded-md">⚠️ 警告</span>
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded-md">⚠️ 警告</span>
                 ) : (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[hsl(var(--zv-amber))] bg-[hsl(var(--zv-amber)/0.12)] px-1.5 py-0.5 rounded-md">📋 标记</span>
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md">📋 标记</span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-base font-medium truncate">{item.searchTerm}</p>
-                {item.action && <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">{item.action}</p>}
+                {item.action && <p className="text-[10px] text-slate-500 mt-0.5">{item.action}</p>}
               </div>
               <div className="w-20 text-right text-base pt-0.5">{fmtNum(item.impressions)}</div>
               <div className="w-16 text-right text-base pt-0.5">{item.clicks}</div>
@@ -1454,7 +1454,7 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
                   <Badge key={j} variant="outline" className="text-[9px] h-4 px-1 max-w-[140px] truncate">{c}</Badge>
                 ))}
                 {(item.campaigns?.length ?? 0) > 3 && (
-                  <span className="text-[9px] text-[hsl(var(--muted-foreground))] self-center">+{(item.campaigns?.length ?? 0) - 3}</span>
+                  <span className="text-[9px] text-slate-500 self-center">+{(item.campaigns?.length ?? 0) - 3}</span>
                 )}
               </div>
             </div>
@@ -1463,8 +1463,8 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
       </div>
       {flagItems.length > 0 && (
         <button onClick={() => setShowFlags(f => !f)}
-          className={`w-full py-2.5 text-base font-medium transition-colors border-t border-[hsl(var(--border)/0.3)] flex items-center justify-center gap-1.5 ${
-            showFlags ? 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]' : 'text-[hsl(var(--zv-amber))] hover:text-[hsl(var(--zv-amber)/0.8)]'
+          className={`w-full py-2.5 text-base font-medium transition-colors border-t border-slate-200 flex items-center justify-center gap-1.5 ${
+            showFlags ? 'text-slate-600 hover:bg-slate-100' : 'text-amber-600 hover:text-amber-700'
           }`}>
           {showFlags ? <><ChevronUp className="w-3.5 h-3.5" /> 收起标记项</> : <><ChevronDown className="w-3.5 h-3.5" /> 显示标记项 ({flagItems.length})</>}
         </button>
@@ -1488,12 +1488,12 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 text-center space-y-3">
         <p className="text-4xl">🤖</p>
-        <p className="text-base font-semibold text-[hsl(var(--foreground))]">{data.message ?? '暂无 AI 洞察'}</p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+        <p className="text-base font-semibold text-slate-900">{data.message ?? '暂无 AI 洞察'}</p>
+        <p className="text-xs text-slate-500">
           先生成洞察输入数据，再让 PPC agent 分析并输出结果
         </p>
         {data.hint && (
-          <div className="inline-block mt-2 px-4 py-2 rounded-lg bg-[hsl(var(--secondary))] font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
+          <div className="inline-block mt-2 px-4 py-2 rounded-lg bg-slate-100 font-mono text-[10px] text-slate-500">
             {data.hint}
           </div>
         )}
@@ -1502,16 +1502,16 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
   }
 
   const verdictColor = (v: string) => {
-    if (v === '否定')        return 'bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-[hsl(var(--destructive)/0.3)]'
-    if (v === '观察')        return 'bg-[hsl(var(--zv-amber)/0.12)] text-[hsl(var(--zv-amber))] border-[hsl(var(--zv-amber)/0.3)]'
-    if (v === '优化listing') return 'bg-[hsl(var(--zv-blue,220,90%,55%)/0.12)] text-blue-600 border-blue-400/30'
-    return 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] border-[hsl(var(--border))]'
+    if (v === '否定')        return 'bg-rose-100 text-rose-600 border-rose-200'
+    if (v === '观察')        return 'bg-amber-100 text-amber-600 border-amber-200'
+    if (v === '优化listing') return 'bg-blue-100 text-blue-600 border-blue-200'
+    return 'bg-slate-100 text-slate-500 border-slate-200'
   }
 
   const priorityLabel = (p: number) => {
-    if (p <= 0) return { label: 'P0', cls: 'bg-[hsl(var(--destructive)/0.15)] text-[hsl(var(--destructive))]' }
-    if (p === 1) return { label: 'P1', cls: 'bg-[hsl(var(--zv-amber)/0.15)] text-[hsl(var(--zv-amber))]' }
-    return { label: `P${p}`, cls: 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]' }
+    if (p <= 0) return { label: 'P0', cls: 'bg-rose-100 text-rose-600' }
+    if (p === 1) return { label: 'P1', cls: 'bg-amber-100 text-amber-600' }
+    return { label: `P${p}`, cls: 'bg-slate-100 text-slate-500' }
   }
 
   const kg = data.keywordGrouping
@@ -1520,19 +1520,19 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
     <div className="space-y-6">
       {/* ── Info bar ── */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3">
-        <div className="flex items-center gap-1.5 text-[10px] text-[hsl(var(--muted-foreground))]">
-          <span className="font-semibold text-[hsl(var(--foreground))]">生成时间</span>
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <span className="font-semibold text-slate-900">生成时间</span>
           {data.generatedAt ? new Date(data.generatedAt).toLocaleString('zh-CN') : '—'}
         </div>
         {data.dateRange && (
-          <div className="flex items-center gap-1.5 text-[10px] text-[hsl(var(--muted-foreground))]">
-            <span className="font-semibold text-[hsl(var(--foreground))]">数据范围</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+            <span className="font-semibold text-slate-900">数据范围</span>
             {data.dateRange.start} → {data.dateRange.end}
           </div>
         )}
         {data.model && (
-          <div className="flex items-center gap-1.5 text-[10px] text-[hsl(var(--muted-foreground))]">
-            <span className="font-semibold text-[hsl(var(--foreground))]">模型</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+            <span className="font-semibold text-slate-900">模型</span>
             {data.model}
           </div>
         )}
@@ -1547,27 +1547,27 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {([
-              { key: 'brandTerms',         label: '品牌词',   color: 'var(--primary)',          icon: '🏷️' },
-              { key: 'categoryTerms',      label: '品类词',   color: 'var(--zv-amber)',         icon: '📦' },
-              { key: 'competitorTerms',    label: '竞品词',   color: 'var(--destructive)',      icon: '⚔️' },
-              { key: 'problemSolvingTerms',label: '问题解决', color: 'var(--muted-foreground)', icon: '🔧' },
+              { key: 'brandTerms',         label: '品牌词',   color: '#2563eb', icon: '🏷️' },
+              { key: 'categoryTerms',      label: '品类词',   color: '#d97706', icon: '📦' },
+              { key: 'competitorTerms',    label: '竞品词',   color: '#e11d48', icon: '⚔️' },
+              { key: 'problemSolvingTerms',label: '问题解决', color: '#64748b', icon: '🔧' },
             ] as const).map(({ key, label, color, icon }) => {
               const items = (kg[key] ?? []) as AiTermStrategy[]
               return (
                 <div key={key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-[hsl(var(--border)/0.5)]" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}>
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200" style={{ borderLeftWidth: 3, borderLeftColor: color }}>
                     <span>{icon}</span>
-                    <h3 className="text-sm font-semibold" style={{ color: `hsl(${color})` }}>{label}</h3>
+                    <h3 className="text-sm font-semibold" style={{ color }}>{label}</h3>
                     <Badge variant="outline" className="text-[8px] h-4 px-1 ml-auto">{items.length}</Badge>
                   </div>
                   {items.length === 0 ? (
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-4">暂无词汇</p>
+                    <p className="text-xs text-slate-500 text-center py-4">暂无词汇</p>
                   ) : (
-                    <div className="divide-y divide-[hsl(var(--border)/0.3)] max-h-[240px] overflow-y-auto">
+                    <div className="divide-y divide-slate-100 max-h-[240px] overflow-y-auto">
                       {items.map((item, i) => (
-                        <div key={i} className="px-4 py-2.5 hover:bg-[hsl(var(--secondary)/0.3)] transition-colors">
+                        <div key={i} className="px-4 py-2.5 hover:bg-slate-50/80 transition-colors">
                           <p className="text-sm font-medium">{item.term}</p>
-                          <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5 leading-relaxed">{item.strategy}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{item.strategy}</p>
                         </div>
                       ))}
                     </div>
@@ -1585,18 +1585,18 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">⚠️</span>
             <h2 className="text-base font-semibold">否词风险评估</h2>
-            <Badge className="text-[9px] bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-0">{data.negativeRiskAssessment.length} 词</Badge>
+            <Badge className="text-[9px] bg-rose-100 text-rose-600 border-0">{data.negativeRiskAssessment.length} 词</Badge>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold border-b border-[hsl(var(--border)/0.3)] bg-[hsl(var(--secondary)/0.3)]">
+            <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold bg-slate-50/80 border-b border-slate-200">
               <div className="flex-1">搜索词</div>
               <div className="w-20 text-right">花费</div>
               <div className="w-24 text-center">建议</div>
               <div className="flex-[2] pl-4">理由</div>
             </div>
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-[hsl(var(--border)/0.2)]">
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
               {data.negativeRiskAssessment.map((item, i) => (
-                <div key={i} className="flex items-start gap-2 px-4 py-3 hover:bg-[hsl(var(--secondary)/0.2)] transition-colors">
+                <div key={i} className="flex items-start gap-2 px-4 py-3 hover:bg-slate-50/50 transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{item.term}</p>
                   </div>
@@ -1608,7 +1608,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
                       {item.verdict}
                     </span>
                   </div>
-                  <div className="flex-[2] pl-4 text-[11px] text-[hsl(var(--muted-foreground))] leading-relaxed pt-0.5">
+                  <div className="flex-[2] pl-4 text-[11px] text-slate-500 leading-relaxed pt-0.5">
                     {item.reason}
                   </div>
                 </div>
@@ -1624,26 +1624,26 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">🔍</span>
             <h2 className="text-base font-semibold">异常归因分析</h2>
-            <Badge className="text-[9px] bg-[hsl(var(--zv-amber)/0.12)] text-[hsl(var(--zv-amber))] border-0">{data.anomalyAnalysis.length} 个</Badge>
+            <Badge className="text-[9px] bg-amber-100 text-amber-600 border-0">{data.anomalyAnalysis.length} 个</Badge>
           </div>
           <div className="space-y-3">
             {data.anomalyAnalysis.map((item, i) => (
-              <div key={i} className="rounded-xl border border-[hsl(var(--zv-amber)/0.3)] bg-[hsl(var(--card))] p-4">
+              <div key={i} className="rounded-xl border border-amber-200 bg-white p-4">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
-                    <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.campaign}</p>
-                    <p className="text-xs text-[hsl(var(--destructive))] mt-0.5">{item.issue}</p>
+                    <p className="text-sm font-semibold text-slate-900">{item.campaign}</p>
+                    <p className="text-xs text-rose-600 mt-0.5">{item.issue}</p>
                   </div>
-                  <Badge className="text-[9px] bg-[hsl(var(--zv-amber)/0.12)] text-[hsl(var(--zv-amber))] border-0 flex-shrink-0">异常</Badge>
+                  <Badge className="text-[9px] bg-amber-100 text-amber-600 border-0 flex-shrink-0">异常</Badge>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-[hsl(var(--secondary)/0.5)] p-3">
-                    <p className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-1">根因</p>
-                    <p className="text-xs text-[hsl(var(--foreground))] leading-relaxed">{item.rootCause}</p>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">根因</p>
+                    <p className="text-xs text-slate-900 leading-relaxed">{item.rootCause}</p>
                   </div>
-                  <div className="rounded-lg bg-[hsl(var(--primary)/0.06)] border border-[hsl(var(--primary)/0.2)] p-3">
-                    <p className="text-[10px] font-semibold text-[hsl(var(--primary))] uppercase tracking-wider mb-1">修复建议</p>
-                    <p className="text-xs text-[hsl(var(--foreground))] leading-relaxed">{item.fix}</p>
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                    <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-1">修复建议</p>
+                    <p className="text-xs text-slate-900 leading-relaxed">{item.fix}</p>
                   </div>
                 </div>
               </div>
@@ -1658,7 +1658,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">✅</span>
             <h2 className="text-base font-semibold">本周行动清单</h2>
-            <Badge className="text-[9px] bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] border-0">{data.weeklyActionPlan.length} 项</Badge>
+            <Badge className="text-[9px] bg-blue-100 text-blue-600 border-0">{data.weeklyActionPlan.length} 项</Badge>
           </div>
           <div className="space-y-3">
             {data.weeklyActionPlan.map((item, i) => {
@@ -1667,21 +1667,21 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
                 <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 flex items-center gap-2">
-                      <span className="text-lg font-bold text-[hsl(var(--muted-foreground))]">
+                      <span className="text-lg font-bold text-slate-500">
                         {String(item.priority).padStart(2, '0')}
                       </span>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cls}`}>{label}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.action}</p>
+                      <p className="text-sm font-semibold text-slate-900">{item.action}</p>
                       <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                         <div>
-                          <p className="text-[9px] uppercase tracking-wider font-semibold text-[hsl(var(--primary))] mb-0.5">预期影响</p>
-                          <p className="text-[11px] text-[hsl(var(--muted-foreground))] leading-relaxed">{item.impact}</p>
+                          <p className="text-[9px] uppercase tracking-wider font-semibold text-blue-600 mb-0.5">预期影响</p>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">{item.impact}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] uppercase tracking-wider font-semibold text-[hsl(var(--zv-amber))] mb-0.5">优先理由</p>
-                          <p className="text-[11px] text-[hsl(var(--muted-foreground))] leading-relaxed">{item.reason}</p>
+                          <p className="text-[9px] uppercase tracking-wider font-semibold text-amber-600 mb-0.5">优先理由</p>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">{item.reason}</p>
                         </div>
                       </div>
                     </div>
@@ -1710,9 +1710,7 @@ const TOP_TABS: { key: TopTab; label: string; icon: string }[] = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-function PPCPageContent() {
-  const [period, setPeriod]     = useState<Period>(7)
-  const [topTab, setTopTab]     = useState<TopTab>('overview')
+function PPCPageContent({ period, topTab }: { period: Period; topTab: TopTab }) {
   const [kpi, setKpi]           = useState<KPI | null>(null)
   const [keywords, setKeywords] = useState<Keyword[]>([])
   const [kwLoading, setKwLoading] = useState(true)
@@ -1801,72 +1799,35 @@ function PPCPageContent() {
   }
 
   return (
-    <div className="flex flex-col">
-      {/* ─── Sticky Controls ── */}
-      <div className="sticky top-0 z-20 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="flex items-center justify-end gap-3 pt-4 pb-3">
-          <Badge variant="accent" className="text-[10px]">
-            <Zap className="mr-1 h-2.5 w-2.5" /> Advertising API
-          </Badge>
-          <PeriodSelector value={period} onChange={setPeriod} />
-        </div>
-
-        {/* KPI strip */}
-        <div className="grid grid-cols-4 lg:grid-cols-7 gap-2 pb-3">
+    <div className="space-y-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-7">
           <KPICard label="广告花费" value={kpi ? `$${fmtNum(kpi.spend)}` : '—'} sub={`日均 $${kpi ? (kpi.spend / period).toFixed(0) : '—'}`}
-            icon={<DollarSign className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />} />
+            icon={<DollarSign className="w-3.5 h-3.5 text-amber-600" />} />
           <KPICard label="广告销售额" value={kpi ? `$${fmtNum(kpi.sales)}` : '—'} sub={`${kpi?.orders ?? 0} 订单`}
-            icon={<ShoppingCart className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />} accent />
+            icon={<ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />} accent />
           <KPICard label="ACOS" value={kpi ? `${kpi.acos}%` : '—'}
-            icon={<Percent className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />} accent={kpi ? kpi.acos < 25 : false} />
+            icon={<Percent className="w-3.5 h-3.5 text-amber-600" />} accent={kpi ? kpi.acos < 25 : false} />
           <KPICard label="ROAS" value={kpi ? `${kpi.roas}x` : '—'}
-            icon={<TrendingUp className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />} accent={kpi ? kpi.roas > 4 : false} />
+            icon={<TrendingUp className="w-3.5 h-3.5 text-emerald-600" />} accent={kpi ? kpi.roas > 4 : false} />
           <KPICard label="总点击" value={kpi ? fmtNum(kpi.clicks) : '—'} sub={`CTR ${kpi?.ctr ?? 0}%`}
-            icon={<MousePointerClick className="w-3.5 h-3.5 text-[hsl(var(--zv-blue))]" />} />
+            icon={<MousePointerClick className="w-3.5 h-3.5 text-blue-600" />} />
           <KPICard label="平均 CPC" value={kpi ? `$${kpi.cpc}` : '—'}
-            icon={<Target className="w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />} />
+            icon={<Target className="w-3.5 h-3.5 text-slate-500" />} />
           <KPICard label="转化率" value={kpi ? `${kpi.convRate}%` : '—'}
-            icon={<BarChart3 className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />} accent={kpi ? kpi.convRate > 10 : false} />
+            icon={<BarChart3 className="w-3.5 h-3.5 text-emerald-600" />} accent={kpi ? kpi.convRate > 10 : false} />
         </div>
+      </section>
 
-        {/* Top-level Tab Nav */}
-        <div className="flex items-center gap-0 overflow-x-auto">
-          {TOP_TABS.map(tab => {
-            const badgeCount = tabBadges[tab.key] ?? 0
-            const isActive = topTab === tab.key
-            return (
-              <button key={tab.key} onClick={() => setTopTab(tab.key)}
-                className={`group relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap ${
-                  isActive
-                    ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]'
-                    : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:border-[hsl(var(--border))]'
-                }`}
-              >
-                <span className="text-base">{tab.icon}</span>
-                {tab.label}
-                {badgeCount > 0 && (
-                  <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold ${
-                    isActive ? 'bg-[hsl(var(--primary)/0.2)] text-[hsl(var(--primary))]' : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]'
-                  }`}>
-                    {badgeCount}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ─── Tab Content ── */}
-      <div className="max-w-7xl mx-auto pt-6">
+      <div className="max-w-7xl mx-auto">
         {/* Error banner */}
         {error && (
-          <div className="rounded-xl border border-[hsl(var(--zv-amber)/0.3)] bg-[hsl(var(--zv-amber)/0.08)] p-4 mb-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />
-              <p className="text-sm text-[hsl(var(--zv-amber))]">{error}</p>
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              <p className="text-sm text-amber-600">{error}</p>
             </div>
-            <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1">首次加载需要 1-2 分钟生成报告，请稍后刷新页面</p>
+            <p className="text-[10px] text-slate-500 mt-1">首次加载需要 1-2 分钟生成报告，请稍后刷新页面</p>
           </div>
         )}
 
@@ -1910,13 +1871,69 @@ function PPCPageContent() {
   )
 }
 export default function PPCPage() {
+  const [period, setPeriod] = useState<Period>(7)
+  const [topTab, setTopTab] = useState<TopTab>('overview')
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    window.location.reload()
+  }
+
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+        <Zap className="mr-1 h-2.5 w-2.5" /> Advertising API
+      </Badge>
+      <div className="flex rounded-lg border border-slate-200 p-0.5">
+        {([7, 30] as Period[]).map((value) => (
+          <button
+            key={value}
+            onClick={() => setPeriod(value)}
+            className={cn(
+              'rounded-md px-3 py-1 text-sm font-medium transition-colors',
+              period === value ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            )}
+          >
+            {value === 7 ? '周 (7天)' : '月 (30天)'}
+          </button>
+        ))}
+      </div>
+      <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5">
+        {TOP_TABS.map((tab) => {
+          const isActive = topTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setTopTab(tab.key)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              )}
+            >
+              <span className="mr-1">{tab.icon}</span>{tab.label}
+            </button>
+          )
+        })}
+      </div>
+      <button
+        onClick={handleRefresh}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
+        刷新数据
+      </button>
+    </div>
+  )
+
   return (
     <DashboardPageLayout
       signedOut={{ message: 'Sign in to view ppc', forceRedirectUrl: '/ppc' }}
       title="PPC"
       description="广告投放"
+      headerActions={headerActions}
     >
-      <PPCPageContent />
+      <PPCPageContent period={period} topTab={topTab} />
     </DashboardPageLayout>
   )
 }
