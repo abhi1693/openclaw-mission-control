@@ -159,7 +159,7 @@ function ListingDetail({
         <p className="text-base font-mono text-[hsl(var(--muted-foreground))] truncate flex-1">{file.filename}</p>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">{file.sizeKb} KB</span>
       </div>
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
         {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
@@ -278,7 +278,7 @@ function ListingTab() {
 
       {loading ? (
         <div className="space-y-3">{[1,2,3].map(i=> (
-          <div key={i} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+          <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
             <Skeleton className="h-4 w-48 mb-2"/><Skeleton className="h-3 w-32"/>
           </div>
         ))}</div>
@@ -335,7 +335,7 @@ function ListingTab() {
                     placeholder="搜索 ASIN / 报告…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white shadow-sm text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                   />
                 </div>
                 <div className="h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-3">
@@ -475,7 +475,7 @@ function DiscoveryDetail({
         <p className="text-base font-mono text-[hsl(var(--muted-foreground))] truncate flex-1">{file.filename}</p>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">{file.sizeKb} KB</span>
       </div>
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
         {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
@@ -569,7 +569,7 @@ function DiscoveryTab() {
 
       {loading ? (
         <div className="space-y-3">{[1,2,3].map(i=>(
-          <div key={i} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+          <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
             <Skeleton className="h-4 w-48 mb-2"/><Skeleton className="h-3 w-32"/>
           </div>
         ))}</div>
@@ -621,7 +621,7 @@ function DiscoveryTab() {
                     placeholder="搜索报告…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white shadow-sm text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                   />
                 </div>
                 {prefixes.length > 0 && (
@@ -757,7 +757,7 @@ function PpcDetail({
         <p className="text-base font-mono text-[hsl(var(--muted-foreground))] truncate flex-1">{file.filename}</p>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">{file.sizeKb} KB</span>
       </div>
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
         {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
@@ -851,7 +851,7 @@ function PpcTab() {
 
       {loading ? (
         <div className="space-y-3">{[1,2,3].map(i=>(
-          <div key={i} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+          <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
             <Skeleton className="h-4 w-48 mb-2"/><Skeleton className="h-3 w-32"/>
           </div>
         ))}</div>
@@ -904,7 +904,7 @@ function PpcTab() {
                     placeholder="搜索报告…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white shadow-sm text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                   />
                 </div>
                 {prefixes.length > 1 && (
@@ -1044,7 +1044,7 @@ function StrategyDetail({
         <p className="text-base font-mono text-[hsl(var(--muted-foreground))] truncate flex-1">{file.filename}</p>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">{file.sizeKb} KB</span>
       </div>
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
         {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
@@ -1137,7 +1137,7 @@ function StrategyTab() {
 
       {loading ? (
         <div className="space-y-3">{[1,2,3].map(i=>(
-          <div key={i} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+          <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
             <Skeleton className="h-4 w-48 mb-2"/><Skeleton className="h-3 w-32"/>
           </div>
         ))}</div>
@@ -1189,7 +1189,7 @@ function StrategyTab() {
                     placeholder="搜索报告…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white shadow-sm text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                   />
                 </div>
                 {prefixes.length > 1 && (
@@ -1383,7 +1383,7 @@ function IntelQueueManager() {
   const completed = queue?.completed ?? []
 
   return (
-    <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4 space-y-3">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -1471,15 +1471,15 @@ function IntelQueueManager() {
             onClick={() => setShowCompleted(!showCompleted)}
             className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
-            <CheckCircle2 className="w-3.5 h-3.5 text-green-500"/>
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500"/>
             <span>已完成 ({completed.length})</span>
             {showCompleted ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
           </button>
           {showCompleted && (
             <div className="mt-2 space-y-1">
               {completed.map((item, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/5 border border-green-500/15">
-                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0"/>
+                <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0"/>
                   <p className="flex-1 text-xs text-[hsl(var(--muted-foreground))] truncate line-through">{item.topic}</p>
                   <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{item.completedAt}</span>
                 </div>
@@ -1523,7 +1523,7 @@ function IntelDetail({
         <p className="text-base font-mono text-[hsl(var(--muted-foreground))] truncate flex-1">{file.filename}</p>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">{file.sizeKb} KB</span>
       </div>
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
         {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
@@ -1625,7 +1625,7 @@ function IntelTab() {
 
       {loading ? (
         <div className="space-y-3">{[1,2,3].map(i=>(
-          <div key={i} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+          <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
             <Skeleton className="h-4 w-48 mb-2"/><Skeleton className="h-3 w-32"/>
           </div>
         ))}</div>
@@ -1680,7 +1680,7 @@ function IntelTab() {
                     placeholder="搜索报告…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white shadow-sm text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                   />
                 </div>
                 {/* Type filter */}

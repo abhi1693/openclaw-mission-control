@@ -88,7 +88,7 @@ function calcLanded(item: CostItem) {
 
 function SummaryCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl px-5 py-4 flex items-center gap-4 flex-1 min-w-0">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-4 flex items-center gap-4 flex-1 min-w-0">
       <div className="w-10 h-10 rounded-lg bg-[hsl(var(--primary)/0.15)] flex items-center justify-center flex-shrink-0 text-[hsl(var(--primary))]">
         {icon}
       </div>
@@ -155,7 +155,7 @@ function DashboardTab() {
       </div>
 
       {/* Table */}
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
           <h2 className="font-semibold text-slate-900">SKU 利润明细 <span className="text-[hsl(var(--muted-foreground))] text-sm font-normal">· 近 30 天</span></h2>
           <div className="flex items-center gap-3">
@@ -314,7 +314,7 @@ function CogsEditorTab() {
 
   if (items.length === 0) {
     return (
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-12 text-center space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 text-center space-y-4">
         <p className="text-[hsl(var(--muted-foreground))]">请先录入产品成本数据</p>
         <button
           onClick={loadProducts}
@@ -332,7 +332,7 @@ function CogsEditorTab() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
           <h2 className="font-semibold text-slate-900">成本录入 <span className="text-[hsl(var(--muted-foreground))] text-sm font-normal">· {items.length} 个产品</span></h2>
           <button

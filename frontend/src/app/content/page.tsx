@@ -262,7 +262,7 @@ function HistoryEntry({
             <Badge variant="accent" className="text-[9px]">
               {entry.platform}
             </Badge>
-            {entry.starred && <Star className="w-3 h-3 text-amber-600 fill-yellow-400" />}
+            {entry.starred && <Star className="w-3 h-3 text-amber-600 fill-amber-400" />}
           </div>
           <p className="text-xs font-medium text-slate-900 truncate">{entry.productName.split(',')[0]}</p>
           <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
@@ -274,7 +274,7 @@ function HistoryEntry({
             onClick={() => onToggleStar(entry.id, !entry.starred)}
             className="p-1 hover:bg-[hsl(var(--secondary))] rounded transition-colors"
           >
-            <Star className={`w-3.5 h-3.5 ${entry.starred ? 'text-amber-600 fill-yellow-400' : 'text-[hsl(var(--muted-foreground))]'}`} />
+            <Star className={`w-3.5 h-3.5 ${entry.starred ? 'text-amber-600 fill-amber-400' : 'text-[hsl(var(--muted-foreground))]'}`} />
           </button>
           <button
             onClick={() => onDelete(entry.id)}

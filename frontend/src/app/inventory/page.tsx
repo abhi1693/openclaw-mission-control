@@ -145,7 +145,7 @@ function BarTooltip({ active, payload, label }: { active?: boolean; payload?: Ar
   if (!active || !payload?.length) return null
   const total = payload.reduce((s, p) => s + p.value, 0)
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-xl text-sm min-w-[160px]">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-3 shadow-xl text-sm min-w-[160px]">
       <p className="font-semibold text-[hsl(var(--foreground))] mb-2 truncate max-w-[200px]">{label}</p>
       {payload.map(p => (
         <div key={p.name} className="flex justify-between gap-4 text-xs">
@@ -170,7 +170,7 @@ function PieTooltip({ active, payload }: { active?: boolean; payload?: Array<{ n
   if (!active || !payload?.length) return null
   const item = payload[0]
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-xl text-sm">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-3 shadow-xl text-sm">
       <div className="flex items-center gap-2">
         <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: item.payload.fill }} />
         <span className="font-medium text-[hsl(var(--foreground))]">{item.name}</span>
@@ -789,7 +789,7 @@ function USFCMap({ fcDetails, bySkuMap, skuFilter }: {
         </ComposableMap>
         {tooltip && (
           <div
-            className="absolute z-10 pointer-events-none rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl p-3 text-xs min-w-[180px]"
+            className="absolute z-10 pointer-events-none rounded-xl border border-slate-200 bg-white shadow-sm shadow-xl p-3 text-xs min-w-[180px]"
             style={{ left: tooltip.x + 8, top: tooltip.y - 8, transform: 'translateY(-100%)' }}
           >
             <p className="font-semibold text-[hsl(var(--foreground))] mb-1">{tooltip.fc.fc_id}</p>
@@ -1389,7 +1389,7 @@ function InventoryStatusPageContent() {
               {(barData.length > 0 || pieData.length > 0) && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                   {/* Stacked bar chart */}
-                  <div className="xl:col-span-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+                  <div className="xl:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                     <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
                       <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">库存构成 (Top 20 SKUs)</h3>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">

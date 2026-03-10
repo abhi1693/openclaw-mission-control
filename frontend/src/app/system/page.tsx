@@ -217,7 +217,7 @@ function SystemPageContent() {
               {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
             </div>
           ) : usage && usage.models.length > 0 ? (
-            <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               {/* Table header */}
               <div className="grid grid-cols-[2fr_80px_1fr_1fr_1fr_1fr_110px] gap-3 px-4 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.5)]">
                 {['模型', 'Provider', '输入', '输出', '总计', '会话', '占比'].map(h => (
@@ -300,7 +300,7 @@ function SystemPageContent() {
               </div>
             </div>
           ) : (
-            <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 text-center">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-8 text-center">
               <Bot className="w-8 h-8 mx-auto text-[hsl(var(--muted-foreground))] mb-2 opacity-40" />
               <p className="text-base text-[hsl(var(--muted-foreground))]">暂无模型用量数据</p>
             </div>

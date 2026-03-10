@@ -80,9 +80,9 @@ function DashboardTab() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: '紧急补货', value: criticalCount, icon: '🔴', cls: 'border-rose-500/30 bg-red-500/5' },
-          { label: '即将断货', value: warningCount,  icon: '🟡', cls: 'border-amber-500/30 bg-yellow-500/5' },
-          { label: '库存充足', value: okCount,        icon: '🟢', cls: 'border-emerald-500/30 bg-green-500/5' },
+          { label: '紧急补货', value: criticalCount, icon: '🔴', cls: 'border-rose-500/30 bg-rose-500/5' },
+          { label: '即将断货', value: warningCount,  icon: '🟡', cls: 'border-amber-500/30 bg-amber-500/5' },
+          { label: '库存充足', value: okCount,        icon: '🟢', cls: 'border-emerald-500/30 bg-emerald-500/5' },
         ].map(({ label, value, icon, cls }) => (
           <div key={label} className={cn('rounded-xl border p-4', cls)}>
             <p className="text-2xl mb-1">{icon}</p>
@@ -110,7 +110,7 @@ function DashboardTab() {
 
       {/* Table */}
       {!loading && sorted.length > 0 && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[hsl(var(--border))]">
             <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">补货建议列表</h3>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">按紧急度排序 · critical 行红色高亮 · warning 行黄色高亮</p>
@@ -137,7 +137,7 @@ function DashboardTab() {
                       item.urgency === 'critical'
                         ? 'bg-rose-500/8 hover:bg-rose-500/12'
                         : item.urgency === 'warning'
-                        ? 'bg-yellow-500/8 hover:bg-yellow-500/12'
+                        ? 'bg-amber-500/8 hover:bg-amber-500/12'
                         : 'hover:bg-[hsl(var(--secondary))]'
                     )}
                   >
@@ -252,7 +252,7 @@ function ConfigTab() {
       )}
 
       {configs.length > 0 && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[hsl(var(--border))]">
             <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">补货参数配置</h3>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">直接编辑数值 · 点击「保存配置」提交</p>

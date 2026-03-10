@@ -130,7 +130,7 @@ function CompetitorCard({
   const priceChangePct = prevPrice && priceChange ? (priceChange / prevPrice) * 100 : null
 
   return (
-    <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4 flex flex-col gap-3">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -173,7 +173,7 @@ function CompetitorCard({
         <div className="bg-[hsl(var(--secondary))] rounded-lg p-2">
           <p className="text-[9px] text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-0.5">Rating</p>
           <div className="flex items-center gap-0.5">
-            <Star className="w-3 h-3 text-amber-600 fill-yellow-400" />
+            <Star className="w-3 h-3 text-amber-600 fill-amber-400" />
             <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
               {snapshot.rating?.toFixed(1) ?? 'N/A'}
             </p>
@@ -234,7 +234,7 @@ function HistoryChart({ history, field, label, color }: {
 
   if (asins.length === 0 || history.length === 0) {
     return (
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-2">{label}</p>
         <div className="h-24 flex items-center justify-center text-sm text-[hsl(var(--muted-foreground))]">
           No data yet — run Refresh Snapshot to populate
@@ -246,7 +246,7 @@ function HistoryChart({ history, field, label, color }: {
   const allValues = history.map(h => h[field]).filter((v): v is number => v !== null)
   if (allValues.length === 0) {
     return (
-      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-2">{label}</p>
         <div className="h-24 flex items-center justify-center text-xs text-[hsl(var(--muted-foreground))]">
           {field === 'bsr' ? 'BSR data not available (requires Product Advertising API)' : 'No price data yet'}
@@ -265,7 +265,7 @@ function HistoryChart({ history, field, label, color }: {
   const allTimes = [...new Set(history.map(h => h.snapshotTime))].sort()
 
   return (
-    <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
       <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-3">{label}</p>
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 300, height: 100 }}>
@@ -439,7 +439,7 @@ function CompetitorsPageContent() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4 space-y-3">
+              <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
                 <Skeleton className="h-5 w-2/3" />
                 <Skeleton className="h-4 w-1/2" />
                 <Skeleton className="h-8 w-1/3" />
@@ -452,7 +452,7 @@ function CompetitorsPageContent() {
             ))}
           </div>
         ) : snapshots.length === 0 ? (
-          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-8 text-center">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-8 text-center">
             <Swords className="w-8 h-8 text-[hsl(var(--muted-foreground))] mx-auto mb-3" />
             <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No snapshot data yet</p>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">

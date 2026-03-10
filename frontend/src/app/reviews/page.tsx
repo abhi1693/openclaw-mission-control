@@ -312,7 +312,7 @@ function ReviewsPageContent() {
           </div>
 
           {/* ── Product table ── */}
-          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-[hsl(var(--border))]">
               <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">产品评分一览</h3>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">评分 &lt; 4.0 时红色高亮 · 点击行展开最近 Reviews</p>

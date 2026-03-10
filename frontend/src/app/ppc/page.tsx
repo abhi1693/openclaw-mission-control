@@ -236,7 +236,7 @@ function KPICard({ label, value, sub, icon, accent }: {
 
 function EmptyState({ message, hint }: { message: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-10 text-center">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-10 text-center">
       <p className="text-base text-[hsl(var(--muted-foreground))]">⏳ {message}</p>
       {hint && <p className="text-xs text-[hsl(var(--muted-foreground)/0.6)] mt-2 font-mono">{hint}</p>}
     </div>
@@ -479,7 +479,7 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
       ) : (
         <>
           {analysisTab === 'add-kw' && (
-            <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
                 <Plus className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
                 <h3 className="text-base font-semibold">加词建议</h3>
@@ -516,7 +516,7 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
           {analysisTab === 'neg-kw' && <MergedNegativeTable items={analysisData?.negativeKeywords ?? []} />}
 
           {analysisTab === 'match-upgrade' && (
-            <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
                 <ArrowUpDown className="w-3.5 h-3.5 text-[hsl(var(--zv-blue))]" />
                 <h3 className="text-base font-semibold">匹配升级</h3>
@@ -549,7 +549,7 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
           {analysisTab === 'long-tail' && <LongTailTab items={analysisData?.longTail ?? []} />}
 
           {analysisTab === 'duplicate' && (
-            <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
                 <BarChart3 className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />
                 <h3 className="text-base font-semibold">重复投放</h3>
@@ -631,7 +631,7 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
 
       {/* Type distribution */}
       {data.typeDistribution && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
           <div className="flex items-center gap-2 mb-3">
             <Layers className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
             <h3 className="text-sm font-semibold">Campaign 类型分布</h3>
@@ -677,7 +677,7 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
 
       {/* Sub-tab content */}
       {subTab === 'duplicates' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
             <BarChart3 className="w-3.5 h-3.5 text-[hsl(var(--zv-amber))]" />
             <h3 className="text-sm font-semibold">Campaign 间重复关键词</h3>
@@ -704,7 +704,7 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       )}
 
       {subTab === 'asin' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <Target className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
             <h3 className="text-sm font-semibold">ASIN 广告覆盖检查</h3>
@@ -736,7 +736,7 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       )}
 
       {subTab === 'zombies' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
             <PauseCircle className="w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
             <h3 className="text-sm font-semibold">僵尸 Campaign</h3>
@@ -768,7 +768,7 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       )}
 
       {subTab === 'naming' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
             <h3 className="text-sm font-semibold">命名规范检查</h3>
@@ -952,7 +952,7 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
 
       {/* Budget utilization */}
       {subTab === 'utilization' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
             <CreditCard className="w-3.5 h-3.5 text-[hsl(var(--zv-blue))]" />
             <h3 className="text-sm font-semibold">Budget 利用率</h3>
@@ -1111,7 +1111,7 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
 
       {/* Reallocation */}
       {subTab === 'realloc' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-4 h-4 text-[hsl(var(--zv-blue))]" />
             <h3 className="text-sm font-semibold">Budget 重分配建议</h3>
@@ -1209,7 +1209,7 @@ function KeywordsTable({ keywords, loading }: { keywords: Keyword[]; loading: bo
   if (loading) return <div className="space-y-2">{[...Array(10)].map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-semibold">关键词/投放表现</h2>
@@ -1346,13 +1346,13 @@ function LongTailTab({ items }: { items: LongTailItem[] }) {
   const [limit, setLimit] = useState(50)
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 text-center">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-8 text-center">
         <p className="text-sm text-[hsl(var(--muted-foreground))]">暂无长尾机会数据</p>
       </div>
     )
   }
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
         <Search className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
         <h3 className="text-base font-semibold">长尾机会</h3>
@@ -1394,7 +1394,7 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
 
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 text-center">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-8 text-center">
         <p className="text-base text-[hsl(var(--muted-foreground))]">暂无否词建议</p>
       </div>
     )
@@ -1407,7 +1407,7 @@ function MergedNegativeTable({ items }: { items: NegativeKeywordItem[] }) {
   const maxSpend = Math.max(...sorted.map(i => i.spend), 1)
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-[hsl(var(--border)/0.5)] flex items-center gap-2">
         <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--destructive))]" />
         <h3 className="text-base font-semibold">否词建议</h3>
@@ -1486,7 +1486,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
 
   if (data.empty) {
     return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-12 text-center space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 text-center space-y-3">
         <p className="text-4xl">🤖</p>
         <p className="text-base font-semibold text-[hsl(var(--foreground))]">{data.message ?? '暂无 AI 洞察'}</p>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
@@ -1519,7 +1519,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
   return (
     <div className="space-y-6">
       {/* ── Info bar ── */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3">
         <div className="flex items-center gap-1.5 text-[10px] text-[hsl(var(--muted-foreground))]">
           <span className="font-semibold text-[hsl(var(--foreground))]">生成时间</span>
           {data.generatedAt ? new Date(data.generatedAt).toLocaleString('zh-CN') : '—'}
@@ -1554,7 +1554,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
             ] as const).map(({ key, label, color, icon }) => {
               const items = (kg[key] ?? []) as AiTermStrategy[]
               return (
-                <div key={key} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+                <div key={key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="flex items-center gap-2 px-4 py-3 border-b border-[hsl(var(--border)/0.5)]" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}>
                     <span>{icon}</span>
                     <h3 className="text-sm font-semibold" style={{ color: `hsl(${color})` }}>{label}</h3>
@@ -1587,7 +1587,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
             <h2 className="text-base font-semibold">否词风险评估</h2>
             <Badge className="text-[9px] bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-0">{data.negativeRiskAssessment.length} 词</Badge>
           </div>
-          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] font-semibold border-b border-[hsl(var(--border)/0.3)] bg-[hsl(var(--secondary)/0.3)]">
               <div className="flex-1">搜索词</div>
               <div className="w-20 text-right">花费</div>
@@ -1664,7 +1664,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
             {data.weeklyActionPlan.map((item, i) => {
               const { label, cls } = priorityLabel(item.priority)
               return (
-                <div key={i} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+                <div key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 flex items-center gap-2">
                       <span className="text-lg font-bold text-[hsl(var(--muted-foreground))]">

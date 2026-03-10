@@ -111,7 +111,7 @@ function KeywordsPageContent() {
   }
 
   return (
-    <div className="flex-1 overflow-auto bg-[hsl(var(--background))] p-6">
+    <div className="space-y-6">
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-[hsl(var(--border))]">
         {(['tracker', 'manager'] as const).map(tab => (
@@ -180,7 +180,7 @@ function KeywordsPageContent() {
               <p className="text-xs mt-1">前往 Keyword Manager 添加关键词</p>
             </div>
           ) : (
-            <div className="rounded-lg border border-[hsl(var(--border))] overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-[hsl(var(--secondary))] border-b border-[hsl(var(--border))]">
@@ -282,7 +282,7 @@ function KeywordsPageContent() {
       {activeTab === 'manager' && (
         <div>
           {/* Add form */}
-          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg p-5 mb-6">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 mb-6">
             <h2 className="text-sm font-semibold text-slate-900 mb-4">添加关键词</h2>
             <div className="flex gap-3 items-end flex-wrap">
               <div className="flex flex-col gap-1.5">
@@ -333,7 +333,7 @@ function KeywordsPageContent() {
           ) : (
             <div className="space-y-4">
               {Object.entries(keywordsByAsin).map(([asin, kwList]) => (
-                <div key={asin} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg overflow-hidden">
+                <div key={asin} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="px-4 py-3 bg-[hsl(var(--secondary))] border-b border-[hsl(var(--border))] flex items-center gap-2">
                     <Badge variant="outline" className="font-mono text-xs">{asin}</Badge>
                     <span className="text-sm text-[hsl(var(--muted-foreground))] truncate">{getProductName(asin)}</span>
