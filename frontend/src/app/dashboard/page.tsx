@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
+import { useDashboardView } from "@/components/providers/DashboardViewProvider";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Markdown } from "@/components/atoms/Markdown";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
@@ -478,6 +479,7 @@ function InfoBlock({
 export default function DashboardPage() {
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { isAdvanced } = useDashboardView();
 
   const boardsQuery = useListBoardsApiV1BoardsGet<listBoardsApiV1BoardsGetResponse, ApiError>(
     { limit: 200 },
@@ -940,7 +942,11 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div
+              className={`mt-4 grid grid-cols-1 gap-4 ${
+                isAdvanced ? "xl:grid-cols-3" : "xl:grid-cols-2"
+              }`}
+            >
               <InfoBlock
                 title="Workload"
                 rows={workloadRows}
@@ -950,14 +956,16 @@ export default function DashboardPage() {
                 infoText={`All throughput values are calculated for ${DASHBOARD_RANGE_LABEL}`}
                 rows={throughputRows}
               />
-              <InfoBlock
-                title="Gateway Health"
-                badge={{
-                  text: gatewayStatusLabel,
-                  tone: gatewayBadgeTone,
-                }}
-                rows={gatewayRows}
-              />
+              {isAdvanced ? (
+                <InfoBlock
+                  title="Gateway Health"
+                  badge={{
+                    text: gatewayStatusLabel,
+                    tone: gatewayBadgeTone,
+                  }}
+                  rows={gatewayRows}
+                />
+              ) : null}
             </div>
 
             <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
@@ -1017,73 +1025,78 @@ export default function DashboardPage() {
               )}
             </section>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold text-slate-900">Sessions</h3>
-                  <span className="text-xs text-slate-500">{formatCount(activeSessions)}</span>
-                </div>
-                <div className="max-h-[310px] space-y-2 overflow-x-hidden overflow-y-auto pr-1">
-                  {!hasConfiguredGateways ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
-                      No gateways are configured for any board yet.
-                    </div>
-                  ) : gatewayStatusesQuery.isLoading ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
-                      Loading sessions...
-                    </div>
-                  ) : sessionSummaries.length > 0 ? (
-                    <>
-                      {gatewayUnavailableCount > 0 ? (
-                        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                          {formatCount(gatewayUnavailableCount)} gateway
-                          {gatewayUnavailableCount === 1 ? "" : "s"} unavailable; showing sessions
-                          from reachable gateways.
-                        </div>
-                      ) : null}
-                      {sessionSummaries.map((session) => (
-                        <div
-                          key={session.key}
-                          className="overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-slate-900">
-                                <span
-                                  className={`mr-2 inline-block h-2 w-2 rounded-full ${
-                                    session.isMain ? "bg-emerald-500" : "bg-slate-400"
-                                  }`}
-                                />
-                                {session.title}
-                              </p>
-                              <p className="mt-0.5 truncate text-xs text-slate-500">{session.subtitle}</p>
-                            </div>
-                            <div className="min-w-0 max-w-[45%] text-right">
-                              <p className="truncate text-xs font-medium text-slate-700">
-                                {session.usage === DASH ? "Usage unavailable" : session.usage}
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                {session.lastSeenAt
-                                  ? formatRelativeTimestamp(session.lastSeenAt)
-                                  : "Activity unavailable"}
-                              </p>
+            <div
+              className={`mt-4 grid grid-cols-1 gap-4 ${
+                isAdvanced ? "md:grid-cols-2" : ""
+              }`}
+            >
+              {isAdvanced ? (
+                <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-semibold text-slate-900">Sessions</h3>
+                    <span className="text-xs text-slate-500">{formatCount(activeSessions)}</span>
+                  </div>
+                  <div className="max-h-[310px] space-y-2 overflow-x-hidden overflow-y-auto pr-1">
+                    {!hasConfiguredGateways ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                        No gateways are configured for any board yet.
+                      </div>
+                    ) : gatewayStatusesQuery.isLoading ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                        Loading sessions...
+                      </div>
+                    ) : sessionSummaries.length > 0 ? (
+                      <>
+                        {gatewayUnavailableCount > 0 ? (
+                          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                            {formatCount(gatewayUnavailableCount)} gateway
+                            {gatewayUnavailableCount === 1 ? "" : "s"} unavailable; showing sessions
+                            from reachable gateways.
+                          </div>
+                        ) : null}
+                        {sessionSummaries.map((session) => (
+                          <div
+                            key={session.key}
+                            className="overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-slate-900">
+                                  <span
+                                    className={`mr-2 inline-block h-2 w-2 rounded-full ${
+                                      session.isMain ? "bg-emerald-500" : "bg-slate-400"
+                                    }`}
+                                  />
+                                  {session.title}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-slate-500">{session.subtitle}</p>
+                              </div>
+                              <div className="min-w-0 max-w-[45%] text-right">
+                                <p className="truncate text-xs font-medium text-slate-700">
+                                  {session.usage === DASH ? "Usage unavailable" : session.usage}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  {session.lastSeenAt
+                                    ? formatRelativeTimestamp(session.lastSeenAt)
+                                    : "Activity unavailable"}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </>
-                  ) : gatewayUnavailableCount === gatewayTargets.length ? (
-                    <div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">
-                      Session data is unavailable for all configured gateways.
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
-                      No active sessions detected.
-                    </div>
-                  )}
-                </div>
-              </section>
-
+                        ))}
+                      </>
+                    ) : gatewayUnavailableCount === gatewayTargets.length ? (
+                      <div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">
+                        Session data is unavailable for all configured gateways.
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                        No active sessions detected.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              ) : null}
               <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-lg font-semibold text-slate-900">Recent Activity</h3>

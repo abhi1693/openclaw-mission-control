@@ -24,12 +24,14 @@ import {
   type healthzHealthzGetResponse,
   useHealthzHealthzGet,
 } from "@/api/generated/default/default";
+import { useDashboardView } from "@/components/providers/DashboardViewProvider";
 import { cn } from "@/lib/utils";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const { isAdmin } = useOrganizationMembership(isSignedIn);
+  const { mode, setMode, isAdvanced } = useDashboardView();
   const healthQuery = useHealthzHealthzGet<healthzHealthzGetResponse, ApiError>(
     {
       query: {
@@ -60,6 +62,37 @@ export function DashboardSidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-[280px] -translate-x-full flex-col border-r border-slate-200 bg-white pt-16 shadow-lg transition-transform duration-200 ease-in-out [[data-sidebar=open]_&]:translate-x-0 md:relative md:inset-auto md:z-auto md:w-[260px] md:translate-x-0 md:pt-0 md:shadow-none md:transition-none">
       <div className="flex-1 px-3 py-4">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-2 md:hidden">
+          <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            View
+          </p>
+          <div className="mt-2 inline-flex w-full items-center rounded-lg border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setMode("basic")}
+              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition ${
+                mode === "basic"
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+              aria-pressed={mode === "basic"}
+            >
+              Basic
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("advanced")}
+              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition ${
+                mode === "advanced"
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+              aria-pressed={mode === "advanced"}
+            >
+              Advanced
+            </button>
+          </div>
+        </div>
         <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Navigation
         </p>
@@ -149,7 +182,7 @@ export function DashboardSidebar() {
                 <CheckCircle2 className="h-4 w-4" />
                 Approvals
               </Link>
-              {isAdmin ? (
+              {isAdmin && isAdvanced ? (
                 <Link
                   href="/custom-fields"
                   className={cn(
@@ -166,42 +199,40 @@ export function DashboardSidebar() {
             </div>
           </div>
 
-          <div>
-            {isAdmin ? (
-              <>
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Skills
-                </p>
-                <div className="mt-1 space-y-1">
-                  <Link
-                    href="/skills/marketplace"
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                      pathname === "/skills" ||
-                        pathname.startsWith("/skills/marketplace")
-                        ? "bg-blue-100 text-blue-800 font-medium"
-                        : "hover:bg-slate-100",
-                    )}
-                  >
-                    <Store className="h-4 w-4" />
-                    Marketplace
-                  </Link>
-                  <Link
-                    href="/skills/packs"
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
-                      pathname.startsWith("/skills/packs")
-                        ? "bg-blue-100 text-blue-800 font-medium"
-                        : "hover:bg-slate-100",
-                    )}
-                  >
-                    <Boxes className="h-4 w-4" />
-                    Packs
-                  </Link>
-                </div>
-              </>
-            ) : null}
-          </div>
+          {isAdmin && isAdvanced ? (
+            <div>
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Skills
+              </p>
+              <div className="mt-1 space-y-1">
+                <Link
+                  href="/skills/marketplace"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                    pathname === "/skills" ||
+                      pathname.startsWith("/skills/marketplace")
+                      ? "bg-blue-100 text-blue-800 font-medium"
+                      : "hover:bg-slate-100",
+                  )}
+                >
+                  <Store className="h-4 w-4" />
+                  Marketplace
+                </Link>
+                <Link
+                  href="/skills/packs"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                    pathname.startsWith("/skills/packs")
+                      ? "bg-blue-100 text-blue-800 font-medium"
+                      : "hover:bg-slate-100",
+                  )}
+                >
+                  <Boxes className="h-4 w-4" />
+                  Packs
+                </Link>
+              </div>
+            </div>
+          ) : null}
 
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -220,7 +251,7 @@ export function DashboardSidebar() {
                 <Building2 className="h-4 w-4" />
                 Organization
               </Link>
-              {isAdmin ? (
+              {isAdmin && isAdvanced ? (
                 <Link
                   href="/gateways"
                   className={cn(
@@ -234,7 +265,7 @@ export function DashboardSidebar() {
                   Gateways
                 </Link>
               ) : null}
-              {isAdmin ? (
+              {isAdmin && isAdvanced ? (
                 <Link
                   href="/agents"
                   className={cn(

@@ -15,12 +15,25 @@ import {
 import { BrandMark } from "@/components/atoms/BrandMark";
 import { OrgSwitcher } from "@/components/organisms/OrgSwitcher";
 import { UserMenu } from "@/components/organisms/UserMenu";
+import {
+  DashboardViewProvider,
+  useDashboardView,
+} from "@/components/providers/DashboardViewProvider";
 import { isOnboardingComplete } from "@/lib/onboarding";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
+  return (
+    <DashboardViewProvider>
+      <DashboardShellInner>{children}</DashboardShellInner>
+    </DashboardViewProvider>
+  );
+}
+
+function DashboardShellInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
+  const { mode, setMode } = useDashboardView();
   const isOnboardingPath = pathname === "/onboarding";
   const [sidebarState, setSidebarState] = useState({ open: false, path: pathname });
   // Close sidebar on navigation using React's "store info from previous
@@ -113,6 +126,32 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <div className="hidden md:flex flex-1 items-center">
               <div className="max-w-[220px]">
                 <OrgSwitcher />
+              </div>
+              <div className="ml-4 inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode("basic")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    mode === "basic"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                  aria-pressed={mode === "basic"}
+                >
+                  Basic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("advanced")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    mode === "advanced"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                  aria-pressed={mode === "advanced"}
+                >
+                  Advanced
+                </button>
               </div>
             </div>
           </SignedIn>
