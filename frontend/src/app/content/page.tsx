@@ -262,7 +262,7 @@ function HistoryEntry({
             <Badge variant="accent" className="text-[9px]">
               {entry.platform}
             </Badge>
-            {entry.starred && <Star className="w-3 h-3 text-yellow-600 fill-yellow-400" />}
+            {entry.starred && <Star className="w-3 h-3 text-amber-600 fill-yellow-400" />}
           </div>
           <p className="text-xs font-medium text-slate-900 truncate">{entry.productName.split(',')[0]}</p>
           <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
@@ -274,11 +274,11 @@ function HistoryEntry({
             onClick={() => onToggleStar(entry.id, !entry.starred)}
             className="p-1 hover:bg-[hsl(var(--secondary))] rounded transition-colors"
           >
-            <Star className={`w-3.5 h-3.5 ${entry.starred ? 'text-yellow-600 fill-yellow-400' : 'text-[hsl(var(--muted-foreground))]'}`} />
+            <Star className={`w-3.5 h-3.5 ${entry.starred ? 'text-amber-600 fill-yellow-400' : 'text-[hsl(var(--muted-foreground))]'}`} />
           </button>
           <button
             onClick={() => onDelete(entry.id)}
-            className="p-1 hover:bg-[hsl(var(--secondary))] rounded text-[hsl(var(--muted-foreground))] hover:text-red-600 transition-colors"
+            className="p-1 hover:bg-[hsl(var(--secondary))] rounded text-[hsl(var(--muted-foreground))] hover:text-rose-600 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -464,7 +464,7 @@ function AplusTab() {
           <Button
             onClick={handleGenerate}
             disabled={!selectedAsin || generating}
-            className="w-full bg-green-600 hover:bg-green-500 text-slate-900 border-0 flex items-center justify-center gap-2"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-900 border-0 flex items-center justify-center gap-2"
             size="sm"
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -671,7 +671,7 @@ function StoreTab() {
           <Button
             onClick={handleGenerate}
             disabled={generating}
-            className="w-full bg-green-600 hover:bg-green-500 text-slate-900 border-0 flex items-center justify-center gap-2"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-900 border-0 flex items-center justify-center gap-2"
             size="sm"
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -920,7 +920,7 @@ function CampaignTab() {
           <Button
             onClick={handleGenerate}
             disabled={generating}
-            className="w-full bg-green-600 hover:bg-green-500 text-slate-900 border-0 flex items-center justify-center gap-2"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-900 border-0 flex items-center justify-center gap-2"
             size="sm"
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -1422,7 +1422,7 @@ function ContentPageContent() {
                         </span>
                       )}
                       {tab === 'starred' && prompts.filter(p => p.starred).length > 0 && (
-                        <span className="ml-1.5 bg-yellow-400/20 text-yellow-600 text-[9px] rounded-full px-1.5 py-0.5">
+                        <span className="ml-1.5 bg-amber-400/20 text-amber-600 text-[9px] rounded-full px-1.5 py-0.5">
                           {prompts.filter(p => p.starred).length}
                         </span>
                       )}

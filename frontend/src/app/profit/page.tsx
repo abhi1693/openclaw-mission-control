@@ -75,9 +75,9 @@ function minutesAgo(iso?: string) {
 }
 
 function marginColor(pct: number) {
-  if (pct >= 30) return 'text-green-600'
-  if (pct >= 15) return 'text-yellow-600'
-  return 'text-red-600'
+  if (pct >= 30) return 'text-emerald-600'
+  if (pct >= 15) return 'text-amber-600'
+  return 'text-rose-600'
 }
 
 function calcLanded(item: CostItem) {
@@ -140,7 +140,7 @@ function DashboardTab() {
     <div className="space-y-6">
       {/* Warnings */}
       {data?.warnings?.length ? (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 text-sm">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {data.warnings.join(' · ')}
         </div>
@@ -197,7 +197,7 @@ function DashboardTab() {
                     key={item.sku + i}
                     className={cn(
                       'border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--secondary)/0.5)] transition-colors',
-                      item.netProfit < 0 && 'bg-red-500/10'
+                      item.netProfit < 0 && 'bg-rose-500/10'
                     )}
                   >
                     <td className="px-5 py-3">
@@ -208,7 +208,7 @@ function DashboardTab() {
                     <td className="px-4 py-3 text-right text-[hsl(var(--muted-foreground))]">{fmtUSD(item.landedCost)}</td>
                     <td className="px-4 py-3 text-right text-[hsl(var(--muted-foreground))]">{fmtUSD(item.fbaFee + item.referralFee)}</td>
                     <td className="px-4 py-3 text-right text-[hsl(var(--muted-foreground))]">{fmtUSD(item.adSpend)}</td>
-                    <td className={cn('px-4 py-3 text-right font-semibold', item.netProfit >= 0 ? 'text-green-600' : 'text-red-600')}>
+                    <td className={cn('px-4 py-3 text-right font-semibold', item.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600')}>
                       {fmtUSD(item.netProfit)}
                     </td>
                     <td className={cn('px-4 py-3 text-right font-medium', marginColor(item.profitMargin))}>
@@ -413,7 +413,7 @@ function CogsEditorTab() {
       </div>
 
       <div className="flex items-center justify-end gap-4">
-        {saveMsg && <span className="text-sm text-green-600">{saveMsg}</span>}
+        {saveMsg && <span className="text-sm text-emerald-600">{saveMsg}</span>}
         <button
           onClick={save}
           disabled={saving}

@@ -121,7 +121,7 @@ const LISTING_READ_KEY = 'listing-reports-read'
 
 function listingTypeLabel(type: string): { label: string; color: string } {
   if (type.includes('search-term')) return { label: 'Search Terms', color: 'bg-blue-500/15 text-blue-600 border-blue-500/30' }
-  if (type.includes('listing'))    return { label: 'Listing',       color: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' }
+  if (type.includes('listing'))    return { label: 'Listing',       color: 'bg-amber-500/15 text-amber-600 border-amber-500/30' }
   return { label: type || 'Report', color: 'bg-zinc-500/15 text-slate-500 border-zinc-500/30' }
 }
 
@@ -161,7 +161,7 @@ function ListingDetail({
       </div>
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
-        {error && <div className="flex items-center gap-2 text-red-600"><X className="w-4 h-4"/><span>{error}</span></div>}
+        {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
       </div>
     </div>
@@ -387,7 +387,7 @@ function ListingTab() {
                                   </button>
                                   <button
                                     onClick={(e) => handleDelete(e, f)}
-                                    className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
                                   >删除</button>
                                 </div>
                               )
@@ -437,8 +437,8 @@ const DISCOVERY_READ_KEY = 'discovery-reports-read'
 const DISCOVERY_BADGE: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   trends:        { label: '趋势研究', color: 'bg-blue-500/15 text-blue-600 border-blue-500/30',     icon: TrendingUp },
   'trends-deep': { label: '深度趋势', color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',    icon: TrendingUp },
-  competitors:   { label: '竞品对比', color: 'bg-red-500/15 text-red-600 border-red-500/30',        icon: Users },
-  voc:           { label: '客户之声', color: 'bg-green-500/15 text-green-600 border-green-500/30',  icon: Megaphone },
+  competitors:   { label: '竞品对比', color: 'bg-rose-500/15 text-rose-600 border-rose-500/30',        icon: Users },
+  voc:           { label: '客户之声', color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',  icon: Megaphone },
   industry:      { label: '行业动态', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30', icon: LayoutGrid },
 }
 
@@ -477,7 +477,7 @@ function DiscoveryDetail({
       </div>
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
-        {error && <div className="flex items-center gap-2 text-red-600"><X className="w-4 h-4"/><span>{error}</span></div>}
+        {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
       </div>
     </div>
@@ -674,7 +674,7 @@ function DiscoveryTab() {
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, f)}
-                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
                         >删除</button>
                       </div>
                     )
@@ -719,8 +719,8 @@ const PPC_READ_KEY = 'ppc-reports-read'
 const PPC_BADGE: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   'ai-insights':       { label: 'AI 洞察',   color: 'bg-blue-500/15 text-blue-600 border-blue-500/30',     icon: Zap },
   'weekly-report':     { label: '周报',       color: 'bg-purple-500/15 text-purple-400 border-purple-500/30', icon: BarChart2 },
-  'bid-analysis':      { label: '出价分析',   color: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30', icon: TrendingUp },
-  'campaign-analysis': { label: '广告活动',   color: 'bg-green-500/15 text-green-600 border-green-500/30',  icon: Megaphone },
+  'bid-analysis':      { label: '出价分析',   color: 'bg-amber-500/15 text-amber-600 border-amber-500/30', icon: TrendingUp },
+  'campaign-analysis': { label: '广告活动',   color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',  icon: Megaphone },
   'search-terms':      { label: '搜索词',     color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', icon: Search },
 }
 
@@ -759,7 +759,7 @@ function PpcDetail({
       </div>
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
-        {error && <div className="flex items-center gap-2 text-red-600"><X className="w-4 h-4"/><span>{error}</span></div>}
+        {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
       </div>
     </div>
@@ -957,7 +957,7 @@ function PpcTab() {
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, f)}
-                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
                         >删除</button>
                       </div>
                     )
@@ -1005,9 +1005,9 @@ function strategyBadge(filename: string) {
   if (name.includes('deep-dive'))
     return { label: '🔬 深度调研',   color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',     icon: Search }
   if (name.includes('feasibility'))
-    return { label: '📋 可行性分析', color: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30', icon: BarChart2 }
+    return { label: '📋 可行性分析', color: 'bg-amber-500/15 text-amber-600 border-amber-500/30', icon: BarChart2 }
   if (name.includes('roadmap'))
-    return { label: '🗺️ 路线图',     color: 'bg-green-500/15 text-green-600 border-green-500/30',   icon: LayoutGrid }
+    return { label: '🗺️ 路线图',     color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',   icon: LayoutGrid }
   if (name.includes('growth-plan') || name.includes('strategy'))
     return { label: '🎯 战略规划',   color: 'bg-purple-500/15 text-purple-400 border-purple-500/30', icon: TrendingUp }
   if (name.includes('market-entry'))
@@ -1046,7 +1046,7 @@ function StrategyDetail({
       </div>
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
-        {error && <div className="flex items-center gap-2 text-red-600"><X className="w-4 h-4"/><span>{error}</span></div>}
+        {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
       </div>
     </div>
@@ -1242,7 +1242,7 @@ function StrategyTab() {
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, f)}
-                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
                         >删除</button>
                       </div>
                     )
@@ -1454,7 +1454,7 @@ function IntelQueueManager() {
                 </button>
                 <button
                   onClick={() => handleDelete(i)}
-                  className="p-0.5 rounded hover:bg-red-500/15 text-[hsl(var(--muted-foreground))] hover:text-red-600 ml-0.5"
+                  className="p-0.5 rounded hover:bg-rose-500/15 text-[hsl(var(--muted-foreground))] hover:text-rose-600 ml-0.5"
                 >
                   <X className="w-3 h-3"/>
                 </button>
@@ -1525,7 +1525,7 @@ function IntelDetail({
       </div>
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6">
         {loading && <div className="space-y-3">{[1,2,3,4].map(i=><Skeleton key={i} className="h-4"/>)}</div>}
-        {error && <div className="flex items-center gap-2 text-red-600"><X className="w-4 h-4"/><span>{error}</span></div>}
+        {error && <div className="flex items-center gap-2 text-rose-600"><X className="w-4 h-4"/><span>{error}</span></div>}
         {content && <MarkdownView content={content} />}
       </div>
     </div>
@@ -1732,7 +1732,7 @@ function IntelTab() {
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, f)}
-                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))] hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
                         >删除</button>
                       </div>
                     )

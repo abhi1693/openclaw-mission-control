@@ -33,9 +33,9 @@ const urgencyOrder: Record<Urgency, number> = { critical: 0, warning: 1, ok: 2 }
 
 function UrgencyBadge({ urgency }: { urgency: Urgency }) {
   const map: Record<Urgency, { label: string; cls: string }> = {
-    critical: { label: '🔴 紧急', cls: 'bg-red-500/20 text-red-600 border border-red-500/30' },
-    warning:  { label: '🟡 预警', cls: 'bg-yellow-500/20 text-yellow-600 border border-yellow-500/30' },
-    ok:       { label: '🟢 充足', cls: 'bg-green-500/20 text-green-600 border border-green-500/30' },
+    critical: { label: '🔴 紧急', cls: 'bg-rose-500/20 text-rose-600 border border-rose-500/30' },
+    warning:  { label: '🟡 预警', cls: 'bg-amber-500/20 text-amber-600 border border-amber-500/30' },
+    ok:       { label: '🟢 充足', cls: 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30' },
   }
   const { label, cls } = map[urgency]
   return (
@@ -78,11 +78,11 @@ function DashboardTab() {
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: '紧急补货', value: criticalCount, icon: '🔴', cls: 'border-red-500/30 bg-red-500/5' },
-          { label: '即将断货', value: warningCount,  icon: '🟡', cls: 'border-yellow-500/30 bg-yellow-500/5' },
-          { label: '库存充足', value: okCount,        icon: '🟢', cls: 'border-green-500/30 bg-green-500/5' },
+          { label: '紧急补货', value: criticalCount, icon: '🔴', cls: 'border-rose-500/30 bg-red-500/5' },
+          { label: '即将断货', value: warningCount,  icon: '🟡', cls: 'border-amber-500/30 bg-yellow-500/5' },
+          { label: '库存充足', value: okCount,        icon: '🟢', cls: 'border-emerald-500/30 bg-green-500/5' },
         ].map(({ label, value, icon, cls }) => (
           <div key={label} className={cn('rounded-xl border p-4', cls)}>
             <p className="text-2xl mb-1">{icon}</p>
@@ -135,7 +135,7 @@ function DashboardTab() {
                     className={cn(
                       'border-b border-[hsl(var(--border)/0.5)] transition-colors',
                       item.urgency === 'critical'
-                        ? 'bg-red-500/8 hover:bg-red-500/12'
+                        ? 'bg-rose-500/8 hover:bg-rose-500/12'
                         : item.urgency === 'warning'
                         ? 'bg-yellow-500/8 hover:bg-yellow-500/12'
                         : 'hover:bg-[hsl(var(--secondary))]'
@@ -146,7 +146,7 @@ function DashboardTab() {
                     <td className="px-4 py-3 text-right">{item.currentStock.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">{item.dailySales.toFixed(1)}</td>
                     <td className={cn('px-4 py-3 text-right font-semibold',
-                      item.urgency === 'critical' ? 'text-red-600' : item.urgency === 'warning' ? 'text-yellow-600' : 'text-green-600'
+                      item.urgency === 'critical' ? 'text-rose-600' : item.urgency === 'warning' ? 'text-amber-600' : 'text-emerald-600'
                     )}>
                       {item.daysUntilStockout}
                     </td>
@@ -238,7 +238,7 @@ function ConfigTab() {
       )}
 
       {success && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-sm text-green-600">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-600">
           <CheckCircle className="w-4 h-4 flex-shrink-0" />
           配置已保存
         </div>

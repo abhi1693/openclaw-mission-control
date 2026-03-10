@@ -72,7 +72,7 @@ function timeAgo(iso: string) {
 function alertTypeColor(type: CompetitorAlert['type']) {
   switch (type) {
     case 'price_drop': return 'text-rose-600'
-    case 'price_increase': return 'text-yellow-600'
+    case 'price_increase': return 'text-amber-600'
     case 'bsr_improvement': return 'text-blue-600'
     case 'deal_active': return 'text-orange-400'
     case 'review_surge': return 'text-purple-400'
@@ -155,7 +155,7 @@ function CompetitorCard({
           <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{fmtPrice(snapshot.price, snapshot.currency)}</p>
         </div>
         {priceChangePct !== null && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${priceChangePct < 0 ? 'text-rose-600' : 'text-green-600'}`}>
+          <div className={`flex items-center gap-1 text-sm font-medium ${priceChangePct < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
             {priceChangePct < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
             {Math.abs(priceChangePct).toFixed(1)}%
           </div>
@@ -173,7 +173,7 @@ function CompetitorCard({
         <div className="bg-[hsl(var(--secondary))] rounded-lg p-2">
           <p className="text-[9px] text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-0.5">Rating</p>
           <div className="flex items-center gap-0.5">
-            <Star className="w-3 h-3 text-yellow-600 fill-yellow-400" />
+            <Star className="w-3 h-3 text-amber-600 fill-yellow-400" />
             <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
               {snapshot.rating?.toFixed(1) ?? 'N/A'}
             </p>
