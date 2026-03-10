@@ -185,6 +185,32 @@ class OpenClawProvisioningService(OpenClawDBService):
                 self.session.add(existing)
                 await self.session.commit()
                 await self.session.refresh(existing)
+
+            # Re-provision if the agent is stuck (gateway provisioning failed earlier).
+            needs_reprovision = (
+                existing.status == "provisioning" and existing.last_seen_at is None
+            )
+            if needs_reprovision:
+                raw_token = mint_agent_token(existing)
+                mark_provision_requested(
+                    existing, action="provision", status="provisioning",
+                )
+                self.session.add(existing)
+                await self.session.commit()
+                await self.session.refresh(existing)
+                await self._gateway.apply_agent_lifecycle(
+                    agent=existing,
+                    gateway=request.gateway,
+                    board=board,
+                    auth_token=raw_token,
+                    user=request.user,
+                    action="provision",
+                    wake=True,
+                    deliver_wakeup=True,
+                )
+                mark_provision_complete(existing, status="online")
+                await self.add_commit_refresh(existing)
+
             return existing, False
 
         merged_identity_profile: dict[str, Any] = {

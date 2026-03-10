@@ -194,18 +194,18 @@ def _redacted_url_for_log(raw_url: str) -> str:
     return str(urlunparse(parsed._replace(query="", fragment="")))
 
 
-def _create_ssl_context(config: GatewayConfig) -> ssl.SSLContext | None:
-    """Create an insecure SSL context override for explicit opt-in TLS bypass.
+def _create_ssl_context(config: GatewayConfig) -> ssl.SSLContext | bool | None:
+    """Build the SSL parameter for ``websockets.connect()``.
 
-    This behavior is intentionally host-agnostic: when ``allow_insecure_tls`` is
-    enabled for a ``wss://`` gateway, certificate and hostname verification are
-    disabled for that gateway connection.
+    Returns ``None`` for plain ``ws://`` (no TLS), ``True`` for ``wss://`` with
+    default certificate verification, or a permissive ``SSLContext`` when the
+    user has explicitly opted into ``allow_insecure_tls``.
     """
     parsed = urlparse(config.url)
     if parsed.scheme != "wss":
         return None
     if not config.allow_insecure_tls:
-        return None
+        return True
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE

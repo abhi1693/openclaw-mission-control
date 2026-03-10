@@ -1,0 +1,7 @@
+[build]
+dockerfilePath = "webhook-worker/Dockerfile"
+
+[deploy]
+startCommand = "sh -c 'rq worker --url $RQ_REDIS_URL'"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

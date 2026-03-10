@@ -15,12 +15,16 @@ def test_create_ssl_context_returns_none_for_ws_protocol() -> None:
     assert ssl_context is None
 
 
-def test_create_ssl_context_returns_none_for_wss_with_secure_mode() -> None:
-    """SSL context should be None for wss:// with default verification (secure mode)."""
+def test_create_ssl_context_returns_true_for_wss_with_secure_mode() -> None:
+    """SSL context should be True for wss:// with default verification (secure mode).
+
+    ``websockets.connect()`` requires ``ssl=True`` (or an ``SSLContext``) for
+    ``wss://`` URIs — passing ``None`` raises an error.
+    """
     config = GatewayConfig(url="wss://gateway.example:18789/ws", allow_insecure_tls=False)
     ssl_context = _create_ssl_context(config)
 
-    assert ssl_context is None
+    assert ssl_context is True
 
 
 def test_create_ssl_context_disables_verification_when_allow_insecure_tls_true() -> None:
