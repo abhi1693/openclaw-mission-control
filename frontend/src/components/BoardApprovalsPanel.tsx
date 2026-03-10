@@ -65,22 +65,22 @@ const formatTimestamp = (value?: string | null) => {
 
 const statusBadgeClass = (status: string) => {
   if (status === "approved") {
-    return "bg-emerald-50 text-emerald-700";
+    return "bg-[var(--status-online-bg)] text-[var(--status-online-text)]";
   }
   if (status === "rejected") {
-    return "bg-rose-50 text-rose-700";
+    return "bg-[var(--status-offline-bg)] text-[var(--status-offline-text)]";
   }
-  return "bg-amber-100 text-amber-700";
+  return "bg-[var(--task-approval-bg)] border-[var(--task-approval-border)] border text-[var(--warning)]";
 };
 
 const confidenceBadgeClass = (confidence: number) => {
   if (confidence >= 90) {
-    return "bg-emerald-50 text-emerald-700";
+    return "bg-[var(--status-online-bg)] text-[var(--status-online-text)]";
   }
   if (confidence >= 80) {
-    return "bg-amber-100 text-amber-700";
+    return "bg-[var(--task-approval-bg)] text-[var(--warning)]";
   }
-  return "bg-orange-100 text-orange-700";
+  return "bg-[var(--task-blocked-bg)] text-[var(--danger)]";
 };
 
 const humanizeAction = (value: string) =>
@@ -633,7 +633,7 @@ export function BoardApprovalsPanel({
                     onClick={() => setSelectedId(approval.id)}
                     className={cn(
                       "w-full px-4 py-4 text-left transition hover:bg-[var(--surface-muted)]",
-                      isSelected && "bg-amber-50 border-l-2 border-amber-500",
+                      isSelected && "bg-[var(--surface-muted)] border-l-2 border-[var(--warning)]",
                       !isPending && "opacity-60",
                     )}
                   >
