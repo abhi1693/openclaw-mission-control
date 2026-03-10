@@ -251,19 +251,8 @@ function ReviewsPageContent() {
 
   return (
     <div className="flex flex-col">
-      {/* ── Header ── */}
-      <div className="border-b border-[hsl(var(--border))] py-4 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-[hsl(var(--primary)/0.15)]">
-            <MessageSquare className="w-5 h-5 text-[hsl(var(--primary))]" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">Reviews</h1>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">评价监控 · Product Review Monitor</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
+      {/* ── Actions ── */}
+      <div className="flex items-center justify-end gap-2">
           <button
             onClick={handleCrawl}
             disabled={crawling || loading}
@@ -273,7 +262,6 @@ function ReviewsPageContent() {
             {crawling ? '爬取中…' : '立即爬取'}
           </button>
         </div>
-      </div>
 
       {/* ── Error ── */}
       {error && (
@@ -295,7 +283,7 @@ function ReviewsPageContent() {
       {!loading && products.length > 0 && (
         <div className="space-y-6 pt-6">
           {/* ── KPI cards ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
               label="平均评分"
               value={`⭐ ${avgRating.toFixed(2)}`}

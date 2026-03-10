@@ -1775,7 +1775,7 @@ function ReportsContent() {
   }
 
   return (
-    <div className="max-w-full">
+    <div className="max-w-full space-y-6">
       {/* Compact Header + Tab Bar */}
       <div className="flex items-center gap-1 mb-4 border-b border-[hsl(var(--border))]">
         {TABS.map(tab => (

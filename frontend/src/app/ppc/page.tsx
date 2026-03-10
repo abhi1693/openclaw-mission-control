@@ -1802,20 +1802,13 @@ function PPCPageContent() {
 
   return (
     <div className="flex flex-col">
-      {/* ─── Sticky Header ── */}
+      {/* ─── Sticky Controls ── */}
       <div className="sticky top-0 z-20 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        {/* Page title + controls */}
-        <div className="flex items-center justify-between pt-4 pb-3">
-          <div>
-            <h1 className="text-xl font-bold">PPC</h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">Amazon 广告投放中心</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-[10px] border-[hsl(var(--primary)/0.5)] text-[hsl(var(--primary))]">
-              <Zap className="w-2.5 h-2.5 mr-1" /> Advertising API
-            </Badge>
-            <PeriodSelector value={period} onChange={setPeriod} />
-          </div>
+        <div className="flex items-center justify-end gap-3 pt-4 pb-3">
+          <Badge variant="accent" className="text-[10px]">
+            <Zap className="mr-1 h-2.5 w-2.5" /> Advertising API
+          </Badge>
+          <PeriodSelector value={period} onChange={setPeriod} />
         </div>
 
         {/* KPI strip */}

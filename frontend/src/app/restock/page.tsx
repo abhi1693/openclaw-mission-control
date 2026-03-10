@@ -328,20 +328,9 @@ function RestockPageContent() {
   ]
 
   return (
-    <div className="flex flex-col">
-      {/* Header */}
-      <div className="border-b border-[hsl(var(--border))] py-4 flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-[hsl(var(--primary)/0.15)]">
-          <Package className="w-5 h-5 text-[hsl(var(--primary))]" />
-        </div>
-        <div>
-          <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">Restock</h1>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">补货预测 · Inventory Restock Forecasting</p>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Tabs */}
-      <div className="flex gap-1 mt-4 p-1 bg-[hsl(var(--secondary))] rounded-lg w-fit">
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
         {tabs.map(({ id, label }) => (
           <button
             key={id}

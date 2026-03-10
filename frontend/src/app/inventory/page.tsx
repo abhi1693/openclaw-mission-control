@@ -1258,16 +1258,6 @@ function InventoryStatusPageContent() {
     <div className="flex flex-col">
       {/* layout header actions handled by DashboardPageLayout */}
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-[hsl(var(--primary)/0.15)]">
-            <Activity className="w-5 h-5 text-[hsl(var(--primary))]" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">Inventory</h1>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">库存 · GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA</p>
-          </div>
-        </div>
-
         {/* Tab switcher - shown in header area */}
         <div className="flex items-center gap-1 p-1 rounded-xl bg-[hsl(var(--secondary))] border border-[hsl(var(--border))]">
           <button
@@ -1367,7 +1357,7 @@ function InventoryStatusPageContent() {
               )}
 
               {/* ── KPI cards ── */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <KpiCard
                   title="Fulfillable" accent="green"
                   value={fmtNum(data.summary.totalFulfillable)}

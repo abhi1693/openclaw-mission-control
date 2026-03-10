@@ -71,7 +71,7 @@ function timeAgo(iso: string) {
 
 function alertTypeColor(type: CompetitorAlert['type']) {
   switch (type) {
-    case 'price_drop': return 'text-red-600'
+    case 'price_drop': return 'text-rose-600'
     case 'price_increase': return 'text-yellow-600'
     case 'bsr_improvement': return 'text-blue-600'
     case 'deal_active': return 'text-orange-400'
@@ -155,7 +155,7 @@ function CompetitorCard({
           <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{fmtPrice(snapshot.price, snapshot.currency)}</p>
         </div>
         {priceChangePct !== null && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${priceChangePct < 0 ? 'text-red-600' : 'text-green-600'}`}>
+          <div className={`flex items-center gap-1 text-sm font-medium ${priceChangePct < 0 ? 'text-rose-600' : 'text-green-600'}`}>
             {priceChangePct < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
             {Math.abs(priceChangePct).toFixed(1)}%
           </div>
@@ -377,16 +377,8 @@ function CompetitorsPageContent() {
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Swords className="w-5 h-5 text-[hsl(var(--primary))]" />
-            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Competitor War Room</h1>
-          </div>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">竞品实时监控 — 追踪价格、BSR、评分、促销动态</p>
-        </div>
-        <div className="flex items-center gap-3">
+      {/* Controls */}
+      <div className="flex items-center justify-end gap-3 flex-wrap">
           {lastUpdated && (
             <span className="text-xs text-[hsl(var(--muted-foreground))]">
               Last updated: {timeAgo(lastUpdated)}
@@ -402,27 +394,26 @@ function CompetitorsPageContent() {
             {refreshing ? 'Refreshing…' : 'Refresh Snapshot'}
           </Button>
         </div>
-      </div>
 
       {/* Alert Banner */}
       {recentAlerts.length > 0 && (
-        <div className="bg-red-950/40 border border-red-800/50 rounded-xl overflow-hidden">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 shadow-sm overflow-hidden">
           <button
             onClick={() => setAlertsOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-red-950/60 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-rose-100 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-600" />
-              <span className="text-sm font-semibold text-red-300">
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+              <span className="text-sm font-semibold text-rose-600">
                 {recentAlerts.length} Alert{recentAlerts.length !== 1 ? 's' : ''} Detected
               </span>
             </div>
-            {alertsOpen ? <ChevronUp className="w-4 h-4 text-red-600" /> : <ChevronDown className="w-4 h-4 text-red-600" />}
+            {alertsOpen ? <ChevronUp className="w-4 h-4 text-rose-600" /> : <ChevronDown className="w-4 h-4 text-rose-600" />}
           </button>
           {alertsOpen && (
             <div className="px-4 pb-3 space-y-2">
               {recentAlerts.slice(0, 5).map((alert, i) => (
-                <div key={i} className="flex items-start justify-between gap-3 py-1.5 border-t border-red-900/30">
+                <div key={i} className="flex items-start justify-between gap-3 py-1.5 border-t border-rose-100">
                   <div className="flex items-start gap-2">
                     <span className={`text-xs font-medium ${alertTypeColor(alert.type)} mt-0.5`}>
                       {alertTypeLabel(alert.type)}

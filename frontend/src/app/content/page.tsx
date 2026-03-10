@@ -1132,18 +1132,7 @@ function ContentPageContent() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 pb-10">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <Clapperboard className="w-5 h-5 text-[hsl(var(--primary))]" />
-          Content Studio
-        </h2>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Generate AI-ready image prompts for Gemini & Midjourney
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Tab Bar */}
       <div className="flex items-center gap-1 border-b border-[hsl(var(--border))]">
         {CONTENT_TABS.map(tab => (

@@ -118,15 +118,10 @@ function SystemPageContent() {
   const maxTokens = usage?.models[0]?.totalTokens ?? 1
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="space-y-6 max-w-6xl mx-auto">
 
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">System</h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">硬件监控 & AI 模型用量</p>
-          </div>
-          <div className="flex items-center gap-3">
+        {/* ── Actions ── */}
+        <div className="flex items-center justify-end gap-3">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))] animate-pulse" />
               <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
@@ -140,7 +135,6 @@ function SystemPageContent() {
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
-        </div>
 
         {/* ── Section: Mac Hardware ── */}
         <section>

@@ -436,16 +436,8 @@ function ProfitPageContent() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header */}
-      <div className="flex-shrink-0 px-6 pt-6 pb-0">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Profit Analytics</h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">利润分析 · 近 30 天</p>
-          </div>
-        </div>
-
-        {/* Tabs */}
+      {/* Tabs */}
+      <div className="flex-shrink-0 px-6 pt-2 pb-0">
         <div className="flex gap-1 border-b border-[hsl(var(--border))]">
           {(['dashboard', 'cogs'] as Tab[]).map(t => (
             <button

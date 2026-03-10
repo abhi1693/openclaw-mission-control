@@ -112,15 +112,6 @@ function KeywordsPageContent() {
 
   return (
     <div className="flex-1 overflow-auto bg-[hsl(var(--background))] p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <Search className="w-5 h-5 text-[hsl(var(--primary))]" />
-          <h1 className="text-xl font-bold text-slate-900">Keywords</h1>
-        </div>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] ml-8">关键词排名追踪</p>
-      </div>
-
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-[hsl(var(--border))]">
         {(['tracker', 'manager'] as const).map(tab => (
@@ -153,13 +144,13 @@ function KeywordsPageContent() {
               <span className="text-[hsl(var(--muted-foreground))]">关键词</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[hsl(var(--secondary))] text-sm">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400 font-medium">{upCount}</span>
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="text-emerald-600 font-medium">{upCount}</span>
               <span className="text-[hsl(var(--muted-foreground))]">排名上升</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[hsl(var(--secondary))] text-sm">
-              <TrendingDown className="w-3.5 h-3.5 text-red-600" />
-              <span className="text-red-600 font-medium">{downCount}</span>
+              <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+              <span className="text-rose-600 font-medium">{downCount}</span>
               <span className="text-[hsl(var(--muted-foreground))]">排名下降</span>
             </div>
             {lastCrawled && (
@@ -233,7 +224,7 @@ function KeywordsPageContent() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             {row.change7d !== 0 ? (
-                              <span className={row.change7d > 0 ? 'text-emerald-400 font-medium' : 'text-red-600 font-medium'}>
+                              <span className={row.change7d > 0 ? 'text-emerald-600 font-medium' : 'text-rose-600 font-medium'}>
                                 {row.change7d > 0 ? '+' : ''}{row.change7d}
                               </span>
                             ) : (
@@ -241,8 +232,8 @@ function KeywordsPageContent() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {row.trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-400 mx-auto" />}
-                            {row.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-600 mx-auto" />}
+                            {row.trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-600 mx-auto" />}
+                            {row.trend === 'down' && <TrendingDown className="w-4 h-4 text-rose-600 mx-auto" />}
                             {row.trend === 'stable' && <Minus className="w-4 h-4 text-[hsl(var(--muted-foreground))] mx-auto" />}
                           </td>
                         </tr>
@@ -357,7 +348,7 @@ function KeywordsPageContent() {
                         </span>
                         <button
                           onClick={() => handleDelete(kw.asin, kw.keyword)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[hsl(var(--muted-foreground))] hover:text-red-600"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[hsl(var(--muted-foreground))] hover:text-rose-600"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
