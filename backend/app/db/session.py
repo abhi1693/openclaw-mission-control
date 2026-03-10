@@ -57,7 +57,7 @@ def run_migrations() -> None:
     from alembic import command
 
     logger.info("Running database migrations.")
-    command.upgrade(_alembic_config(), "head")
+    command.upgrade(_alembic_config(), "heads")
     logger.info("Database migrations complete.")
 
 

@@ -16,6 +16,7 @@ from app.schemas.agents import (
     AgentCreate,
     AgentHeartbeat,
     AgentHeartbeatCreate,
+    AgentLinkRequest,
     AgentRead,
     AgentUpdate,
 )
@@ -155,6 +156,28 @@ async def heartbeat_or_create_agent(
     """Heartbeat an existing agent or create/provision one if needed."""
     service = AgentLifecycleService(session)
     return await service.heartbeat_or_create_agent(payload=payload, actor=actor)
+
+
+@router.post("/link", response_model=AgentRead)
+async def link_existing_agent(
+    payload: AgentLinkRequest,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> AgentRead:
+    """Link an existing gateway agent to Mission Control."""
+    service = AgentLifecycleService(session)
+    return await service.link_existing_agent(payload=payload, ctx=ctx)
+
+
+@router.post("/{agent_id}/unlink", response_model=OkResponse)
+async def unlink_agent(
+    agent_id: str,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> OkResponse:
+    """Unlink an agent from Mission Control without deleting it from the gateway."""
+    service = AgentLifecycleService(session)
+    return await service.unlink_agent(agent_id=agent_id, ctx=ctx)
 
 
 @router.delete("/{agent_id}", response_model=OkResponse)

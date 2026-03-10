@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import col
 
 from app.api.deps import require_org_admin
@@ -17,6 +17,7 @@ from app.models.agents import Agent
 from app.models.gateways import Gateway
 from app.models.skills import GatewayInstalledSkill
 from app.schemas.common import OkResponse
+from app.schemas.agents import GatewayAgentDiscovery
 from app.schemas.gateways import (
     GatewayCreate,
     GatewayRead,
@@ -183,6 +184,80 @@ async def sync_gateway_templates(
         organization_id=ctx.organization.id,
     )
     return await service.sync_templates(gateway, query=sync_query, auth=auth)
+
+
+@router.get("/{gateway_id}/discover-agents", response_model=list[GatewayAgentDiscovery])
+async def discover_agents(
+    gateway_id: UUID,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> list[GatewayAgentDiscovery]:
+    """Discover agents on the gateway that are available for linking."""
+    from app.services.openclaw.gateway_rpc import openclaw_call
+    from app.services.openclaw.gateway_resolver import gateway_client_config
+
+    service = GatewayAdminLifecycleService(session)
+    gateway = await service.require_gateway(
+        gateway_id=gateway_id,
+        organization_id=ctx.organization.id,
+    )
+
+    # Call gateway RPC to get list of all agents
+    try:
+        agents_response = await openclaw_call(
+            "agents.list",
+            config=gateway_client_config(gateway),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch agents from gateway: {str(exc)}",
+        ) from exc
+
+    if not isinstance(agents_response, dict):
+        return []
+
+    agents_data = agents_response.get("agents", [])
+    if not isinstance(agents_data, list):
+        return []
+
+    # Get existing linked agents from the database
+    linked_agents = await Agent.objects.filter_by(
+        gateway_id=gateway.id,
+    ).all(session)
+    linked_agent_ids = {agent.openclaw_session_id for agent in linked_agents if agent.openclaw_session_id}
+    
+    # Format and return discovered agents
+    result = []
+    for agent_data in agents_data:
+        if not isinstance(agent_data, dict):
+            continue
+            
+        agent_id = agent_data.get("id")
+        if not agent_id or not isinstance(agent_id, str):
+            continue
+            
+        workspace = agent_data.get("workspace")
+        session_id = f"agent:{agent_id}"
+        
+        # Check if already linked
+        linked = session_id in linked_agent_ids
+        linked_agent_name = None
+        if linked:
+            # Find the linked agent's display name
+            for agent in linked_agents:
+                if agent.openclaw_session_id == session_id:
+                    linked_agent_name = agent.name
+                    break
+        
+        result.append(GatewayAgentDiscovery(
+            agent_id=agent_id,
+            workspace=workspace,
+            linked=linked,
+            linked_agent_name=linked_agent_name,
+        ))
+
+    return result
 
 
 @router.delete("/{gateway_id}", response_model=OkResponse)

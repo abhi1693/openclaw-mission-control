@@ -1,0 +1,84 @@
+## Mission Control Integration
+
+**API:** `{{ mc_url }}`
+**Board:** {{ board_name }} (`{{ board_id }}`)
+**Agent:** {{ agent_name }}
+
+## Authentication
+
+For **task CRUD** (create, update, list):
+```
+Authorization: Bearer {{ org_token }}
+```
+
+For **comments** (so your name shows correctly):
+```
+X-Agent-Token: {{ agent_token }}
+```
+
+## Quick Reference
+
+### Environment
+```bash
+MC_URL="{{ mc_url }}"
+MC_TOKEN="{{ org_token }}"
+AGENT_TOKEN="{{ agent_token }}"
+BOARD_ID="{{ board_id }}"
+```
+
+### List Tasks
+```bash
+curl -s -H "Authorization: Bearer $MC_TOKEN" \
+  "$MC_URL/api/v1/boards/$BOARD_ID/tasks"
+```
+
+### Create Task
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $MC_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Task title", "description": "Details", "priority": "medium", "status": "inbox"}' \
+  "$MC_URL/api/v1/boards/$BOARD_ID/tasks"
+```
+
+### Update Task Status
+```bash
+curl -s -X PATCH \
+  -H "Authorization: Bearer $MC_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "in_progress"}' \
+  "$MC_URL/api/v1/boards/$BOARD_ID/tasks/<TASK_ID>"
+```
+
+### Add Comment
+**IMPORTANT: Use X-Agent-Token so your name shows correctly.**
+```bash
+curl -s -X POST \
+  -H "X-Agent-Token: $AGENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Comment text"}' \
+  "$MC_URL/api/v1/boards/$BOARD_ID/tasks/<TASK_ID>/comments"
+```
+
+### Get Task Details
+```bash
+curl -s -H "Authorization: Bearer $MC_TOKEN" \
+  "$MC_URL/api/v1/boards/$BOARD_ID/tasks/<TASK_ID>"
+```
+
+## Priorities
+- `low`, `medium`, `high`, `urgent`
+
+## Task Workflow (MANDATORY)
+
+Every agent MUST follow this flow:
+
+1. **Pick up a task** → Move to `in_progress`
+2. **Work on it** → Add comments for progress or blockers
+3. **Complete** → Move to `review`
+4. **Board lead approves** → Moves to `done`
+
+### Rules
+- **Tasks first, then work** — create an MC task before starting any work
+- **Post links in comments** — use clickable URLs, not file paths
+- Don't skip statuses — follow the flow
