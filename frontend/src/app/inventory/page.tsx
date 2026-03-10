@@ -9,13 +9,12 @@ import { KpiCard } from '@/components/shared/KpiCard'
 import {
   Package, TrendingUp, AlertTriangle, RefreshCw,
   Search, X, ChevronUp, ChevronDown, ArrowUpDown,
-  Archive, Truck, BoxIcon, Activity, MapPin,
+  Archive, Truck, BoxIcon, Activity,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 // @ts-ignore
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps'
 import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
-import { Button } from '@/components/ui/button'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,26 +138,35 @@ function fmtNum(n: number): string {
   return String(n)
 }
 
+function formatCacheAge(cachedAt: string): string {
+  const diffMs = Date.now() - new Date(cachedAt).getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins} 分钟前`
+  const hrs = Math.floor(mins / 60)
+  return `${hrs} 小时前`
+}
+
 // ─── Custom Tooltip for Stacked Bar ──────────────────────────────────────────
 
 function BarTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; fill: string }>; label?: string }) {
   if (!active || !payload?.length) return null
   const total = payload.reduce((s, p) => s + p.value, 0)
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-3 shadow-xl text-sm min-w-[160px]">
-      <p className="font-semibold text-[hsl(var(--foreground))] mb-2 truncate max-w-[200px]">{label}</p>
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl text-sm min-w-[160px]">
+      <p className="font-semibold text-slate-900 mb-2 truncate max-w-[200px]">{label}</p>
       {payload.map(p => (
         <div key={p.name} className="flex justify-between gap-4 text-xs">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-2 h-2 rounded-full" style={{ background: p.fill }} />
-            <span className="text-[hsl(var(--muted-foreground))]">{p.name}</span>
+            <span className="text-slate-500">{p.name}</span>
           </span>
-          <span className="font-medium text-[hsl(var(--foreground))]">{fmtNum(p.value)}</span>
+          <span className="font-medium text-slate-900">{fmtNum(p.value)}</span>
         </div>
       ))}
-      <div className="border-t border-[hsl(var(--border))] mt-2 pt-1.5 flex justify-between text-xs font-semibold">
-        <span className="text-[hsl(var(--muted-foreground))]">Total</span>
-        <span className="text-[hsl(var(--foreground))]">{fmtNum(total)}</span>
+      <div className="border-t border-slate-100 mt-2 pt-1.5 flex justify-between text-xs font-semibold">
+        <span className="text-slate-500">Total</span>
+        <span className="text-slate-900">{fmtNum(total)}</span>
       </div>
     </div>
   )
@@ -170,12 +178,12 @@ function PieTooltip({ active, payload }: { active?: boolean; payload?: Array<{ n
   if (!active || !payload?.length) return null
   const item = payload[0]
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-3 shadow-xl text-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl text-sm">
       <div className="flex items-center gap-2">
         <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: item.payload.fill }} />
-        <span className="font-medium text-[hsl(var(--foreground))]">{item.name}</span>
+        <span className="font-medium text-slate-900">{item.name}</span>
       </div>
-      <p className="text-xl font-bold text-[hsl(var(--foreground))] mt-1">{fmtNum(item.value)}</p>
+      <p className="text-xl font-bold text-slate-900 mt-1">{fmtNum(item.value)}</p>
     </div>
   )
 }
@@ -209,61 +217,57 @@ function InboundPipeline({ summary }: { summary: InventorySummary }) {
   const total = stages.reduce((s, st) => s + st.value, 0)
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
-        <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Inbound Pipeline</h3>
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">入库进度 — Working → Shipped → Receiving</p>
-      </div>
-      <div className="p-4 md:p-6">
-        <div className="flex items-stretch gap-0">
-          {stages.map((stage, i) => (
-            <div key={stage.label} className="flex items-stretch gap-0 flex-1">
-              {/* Stage card */}
-              <div className="flex-1 rounded-xl p-4 bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-center">
-                <div
-                  className="w-10 h-10 rounded-xl mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: `${stage.color}20`, color: stage.color }}
-                >
-                  {stage.icon}
-                </div>
-                <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{fmtNum(stage.value)}</p>
-                <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5">{stage.label}</p>
-                <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">{stage.sub}</p>
-                {total > 0 && (
-                  <div className="mt-2 text-xs" style={{ color: stage.color }}>
-                    {((stage.value / total) * 100).toFixed(0)}%
-                  </div>
-                )}
+    <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
+      <h3 className="mb-1 text-lg font-semibold text-slate-900">Inbound Pipeline</h3>
+      <p className="mb-4 text-sm text-slate-500">入库进度 — Working → Shipped → Receiving</p>
+      <div className="flex items-stretch gap-0">
+        {stages.map((stage, i) => (
+          <div key={stage.label} className="flex items-stretch gap-0 flex-1">
+            {/* Stage card */}
+            <div className="flex-1 rounded-xl p-4 bg-slate-50 border border-slate-200 text-center">
+              <div
+                className="w-10 h-10 rounded-xl mx-auto mb-3 flex items-center justify-center"
+                style={{ background: `${stage.color}20`, color: stage.color }}
+              >
+                {stage.icon}
               </div>
-              {/* Arrow connector */}
-              {i < stages.length - 1 && (
-                <div className="flex items-center px-2 text-[hsl(var(--muted-foreground))] text-xl font-thin">
-                  →
+              <p className="text-2xl font-bold text-slate-900">{fmtNum(stage.value)}</p>
+              <p className="text-sm font-medium text-slate-900 mt-0.5">{stage.label}</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">{stage.sub}</p>
+              {total > 0 && (
+                <div className="mt-2 text-xs" style={{ color: stage.color }}>
+                  {((stage.value / total) * 100).toFixed(0)}%
                 </div>
               )}
             </div>
+            {/* Arrow connector */}
+            {i < stages.length - 1 && (
+              <div className="flex items-center px-2 text-slate-400 text-xl font-thin">
+                →
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {/* Progress bar */}
+      {total > 0 && (
+        <div className="mt-4 h-2 rounded-full overflow-hidden bg-slate-100 flex">
+          {stages.map(stage => (
+            <div
+              key={stage.label}
+              className="h-full transition-all"
+              style={{
+                width: `${(stage.value / total) * 100}%`,
+                background: stage.color,
+              }}
+            />
           ))}
         </div>
-        {/* Progress bar */}
-        {total > 0 && (
-          <div className="mt-4 h-2 rounded-full overflow-hidden bg-[hsl(var(--secondary))] flex">
-            {stages.map(stage => (
-              <div
-                key={stage.label}
-                className="h-full transition-all"
-                style={{
-                  width: `${(stage.value / total) * 100}%`,
-                  background: stage.color,
-                }}
-              />
-            ))}
-          </div>
-        )}
-        {total === 0 && (
-          <p className="text-center text-xs text-[hsl(var(--muted-foreground))] mt-3">No inbound shipments</p>
-        )}
-      </div>
-    </div>
+      )}
+      {total === 0 && (
+        <p className="text-center text-xs text-slate-400 mt-3">No inbound shipments</p>
+      )}
+    </section>
   )
 }
 
@@ -321,7 +325,7 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
   const Th = ({ col, label, right }: { col: SortKey; label: string; right?: boolean }) => (
     <th
       className={cn(
-        'px-3 py-2 font-medium cursor-pointer hover:text-[hsl(var(--foreground))] transition-colors select-none',
+        'px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 cursor-pointer hover:text-slate-900 transition-colors select-none',
         right ? 'text-right' : 'text-left'
       )}
       onClick={() => handleSort(col)}
@@ -333,27 +337,28 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
   )
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3 flex-wrap">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      {/* Table header bar */}
+      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">SKU 明细表</h3>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+          <h3 className="text-lg font-semibold text-slate-900">SKU 明细表</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
             {filtered.length} / {items.length} SKUs
           </p>
         </div>
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input
             type="text"
             placeholder="Search SKU / ASIN / name…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-8 pr-8 py-1.5 text-sm bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-lg w-56 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
+            className="pl-8 pr-8 py-1.5 text-sm bg-white border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-900 placeholder:text-slate-400"
           />
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
             >
               <X className="w-3 h-3" />
             </button>
@@ -364,8 +369,8 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] text-xs uppercase tracking-wide">
-              <th className="px-3 py-2 text-left font-medium">#</th>
+            <tr className="border-b border-slate-200 bg-slate-50/80">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">#</th>
               <Th col="sku" label="SKU / ASIN" />
               <Th col="productName" label="Product" />
               <Th col="yourPrice" label="Price" right />
@@ -379,28 +384,28 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
               <Th col="afnResearchingQuantity" label="Research" right />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {rows.map((item, i) => (
               <tr
                 key={item.sku || item.asin}
-                className="border-b border-[hsl(var(--border)/0.5)] hover:bg-[hsl(var(--secondary))] transition-colors"
+                className="hover:bg-slate-50/50 transition-colors"
               >
-                <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">{i + 1}</td>
-                <td className="px-3 py-2.5">
-                  <p className="font-mono text-xs font-semibold text-[hsl(var(--foreground))] leading-tight">{item.sku || '—'}</p>
+                <td className="px-4 py-3 text-xs text-slate-400">{i + 1}</td>
+                <td className="px-4 py-3">
+                  <p className="font-mono text-xs font-semibold text-slate-900 leading-tight">{item.sku || '—'}</p>
                   {item.asin && (
-                    <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">{item.asin}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{item.asin}</p>
                   )}
                   {item.condition && item.condition !== 'NewItem' && (
-                    <span className="text-[9px] px-1 rounded bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]">
+                    <span className="text-[9px] px-1 rounded bg-slate-100 text-slate-500">
                       {item.condition}
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))] max-w-[160px]">
+                <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px]">
                   <p className="truncate" title={item.productName}>{item.productName || '—'}</p>
                 </td>
-                <td className="px-3 py-2.5 text-right text-xs text-[hsl(var(--foreground))]">
+                <td className="px-4 py-3 text-right text-xs text-slate-900">
                   {item.yourPrice > 0 ? `$${item.yourPrice.toFixed(2)}` : '—'}
                 </td>
                 <NumCell value={item.afnFulfillableQuantity} color={COLORS.fulfillable} />
@@ -415,7 +420,7 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                <td colSpan={12} className="px-4 py-8 text-center text-sm text-slate-400">
                   No matching SKUs
                 </td>
               </tr>
@@ -427,7 +432,7 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
       {sorted.length > 10 && (
         <button
           onClick={() => setExpanded(e => !e)}
-          className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))] transition-all"
+          className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-all border-t border-slate-100"
         >
           {expanded
             ? <><ChevronUp className="w-3.5 h-3.5" /> Show less</>
@@ -448,13 +453,13 @@ function NumCell({
 }) {
   if (value === 0) {
     return (
-      <td className="px-3 py-2.5 text-right text-xs text-[hsl(var(--muted-foreground))] opacity-30">—</td>
+      <td className="px-4 py-3 text-right text-xs text-slate-400 opacity-30">—</td>
     )
   }
   return (
     <td
       className={cn(
-        'px-3 py-2.5 text-right text-xs tabular-nums',
+        'px-4 py-3 text-right text-xs tabular-nums',
         bold && 'font-semibold',
         dim && 'opacity-70'
       )}
@@ -463,73 +468,6 @@ function NumCell({
       {fmtNum(value)}
     </td>
   )
-}
-
-// ─── Filter Bar ───────────────────────────────────────────────────────────────
-
-function FilterBar({
-  skuFilter, asinFilter, onSkuChange, onAsinChange, onApply, onClear, loading,
-}: {
-  skuFilter: string; asinFilter: string
-  onSkuChange: (v: string) => void
-  onAsinChange: (v: string) => void
-  onApply: () => void
-  onClear: () => void
-  loading: boolean
-}) {
-  const hasFilter = skuFilter.trim() || asinFilter.trim()
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
-        <input
-          type="text"
-          placeholder="Filter by SKU…"
-          value={skuFilter}
-          onChange={e => onSkuChange(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && onApply()}
-          className="pl-8 pr-3 py-1.5 text-sm bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-lg w-40 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
-        />
-      </div>
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
-        <input
-          type="text"
-          placeholder="Filter by ASIN…"
-          value={asinFilter}
-          onChange={e => onAsinChange(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && onApply()}
-          className="pl-8 pr-3 py-1.5 text-sm bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-lg w-40 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
-        />
-      </div>
-      <button
-        onClick={onApply}
-        disabled={loading}
-        className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        {loading ? 'Loading…' : 'Apply'}
-      </button>
-      {hasFilter && (
-        <button
-          onClick={onClear}
-          className="px-3 py-1.5 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100"
-        >
-          <X className="w-3 h-3" /> Clear
-        </button>
-      )}
-    </div>
-  )
-}
-
-// ─── Cache time helper ────────────────────────────────────────────────────────
-
-function formatCacheAge(cachedAt: string): string {
-  const diffMs = Date.now() - new Date(cachedAt).getTime()
-  const mins = Math.floor(diffMs / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins} 分钟前`
-  const hrs = Math.floor(mins / 60)
-  return `${hrs} 小时前`
 }
 
 // ─── FC Region Colors ─────────────────────────────────────────────────────────
@@ -717,17 +655,17 @@ function USFCMap({ fcDetails, bySkuMap, skuFilter }: {
   const unknownCount = filteredDetails.length - mapPoints.length
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">🗺️ FC Geographic Distribution</h3>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+          <h3 className="text-lg font-semibold text-slate-900">🗺️ FC Geographic Distribution</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
             {mapPoints.length} FCs mapped · {unknownCount > 0 ? `${unknownCount} unknown locations (see table)` : 'all locations resolved'}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {(Object.entries(FC_REGION_COLORS) as [string, string][]).map(([region, color]) => (
-            <div key={region} className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+            <div key={region} className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: color }} />
               {region.charAt(0).toUpperCase() + region.slice(1)}
             </div>
@@ -789,29 +727,29 @@ function USFCMap({ fcDetails, bySkuMap, skuFilter }: {
         </ComposableMap>
         {tooltip && (
           <div
-            className="absolute z-10 pointer-events-none rounded-xl border border-slate-200 bg-white shadow-sm shadow-xl p-3 text-xs min-w-[180px]"
+            className="absolute z-10 pointer-events-none rounded-xl border border-slate-200 bg-white shadow-xl p-3 text-xs min-w-[180px]"
             style={{ left: tooltip.x + 8, top: tooltip.y - 8, transform: 'translateY(-100%)' }}
           >
-            <p className="font-semibold text-[hsl(var(--foreground))] mb-1">{tooltip.fc.fc_id}</p>
-            <p className="text-[hsl(var(--muted-foreground))]">{tooltip.fc.city}, {tooltip.fc.state}</p>
-            <p className="text-[hsl(var(--muted-foreground))] capitalize">{tooltip.fc.region} region</p>
-            <div className="border-t border-[hsl(var(--border))] mt-2 pt-1.5 space-y-0.5">
+            <p className="font-semibold text-slate-900 mb-1">{tooltip.fc.fc_id}</p>
+            <p className="text-slate-500">{tooltip.fc.city}, {tooltip.fc.state}</p>
+            <p className="text-slate-500 capitalize">{tooltip.fc.region} region</p>
+            <div className="border-t border-slate-100 mt-2 pt-1.5 space-y-0.5">
               <div className="flex justify-between gap-4">
-                <span className="text-[hsl(var(--muted-foreground))]">Sellable</span>
-                <span className="font-medium text-[hsl(var(--foreground))]">{tooltip.fc.sellable}</span>
+                <span className="text-slate-500">Sellable</span>
+                <span className="font-medium text-slate-900">{tooltip.fc.sellable}</span>
               </div>
               {tooltip.fc.customer_damaged > 0 && (
                 <div className="flex justify-between gap-4">
-                  <span className="text-[hsl(var(--muted-foreground))]">Damaged</span>
-                  <span className="font-medium text-orange-400">{tooltip.fc.customer_damaged}</span>
+                  <span className="text-slate-500">Damaged</span>
+                  <span className="font-medium text-amber-600">{tooltip.fc.customer_damaged}</span>
                 </div>
               )}
               <div className="flex justify-between gap-4">
-                <span className="text-[hsl(var(--muted-foreground))]">SKU</span>
-                <span className="font-mono text-[hsl(var(--foreground))] text-[10px]">{tooltip.fc.sku}</span>
+                <span className="text-slate-500">SKU</span>
+                <span className="font-mono text-slate-900 text-[10px]">{tooltip.fc.sku}</span>
               </div>
             </div>
-            <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1.5 max-w-[200px] truncate" title={tooltip.productName}>
+            <p className="text-[10px] text-slate-400 mt-1.5 max-w-[200px] truncate" title={tooltip.productName}>
               {tooltip.productName}
             </p>
           </div>
@@ -906,22 +844,22 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
   return (
     <div className="space-y-6">
       {/* ── Region Balance Dashboard ── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between flex-wrap gap-2">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">📊 Region Balance Dashboard</h3>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+            <h3 className="text-lg font-semibold text-slate-900">📊 Region Balance Dashboard</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
               {skuFilter === 'all' ? '所有 SKU 区域分布' : `SKU: ${skuFilter}`}
             </p>
           </div>
           {skuMeta && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">Balance Score:</span>
+              <span className="text-xs text-slate-500">Balance Score:</span>
               <span className={cn(
                 'text-sm font-bold px-2 py-0.5 rounded-lg',
-                (skuMeta.balance_score ?? 0) >= 80 ? 'bg-emerald-500/20 text-emerald-600' :
-                (skuMeta.balance_score ?? 0) >= 60 ? 'bg-amber-500/20 text-amber-600' :
-                'bg-rose-500/20 text-rose-600'
+                (skuMeta.balance_score ?? 0) >= 80 ? 'bg-emerald-50 text-emerald-600' :
+                (skuMeta.balance_score ?? 0) >= 60 ? 'bg-amber-50 text-amber-600' :
+                'bg-rose-50 text-rose-600'
               )}>
                 {skuMeta.balance_score ?? '—'}
               </span>
@@ -931,7 +869,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
         <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Donut chart */}
           <div className="flex flex-col items-center">
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">区域占比</p>
+            <p className="text-xs text-slate-500 mb-2">区域占比</p>
             <div className="relative" style={{ height: 220 }}>
               <ResponsiveContainer width={220} height={220}>
                 <PieChart>
@@ -951,8 +889,8 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
                   </Pie>
                   <RechartsTooltip
                     contentStyle={{
-                      background: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
                       borderRadius: 8,
                       fontSize: 12,
                     }}
@@ -961,8 +899,8 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
               </ResponsiveContainer>
               {skuMeta?.balance_score != null && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-2xl font-bold text-[hsl(var(--foreground))]">{skuMeta.balance_score}</span>
-                  <span className="text-[10px] text-[hsl(var(--muted-foreground))]">balance</span>
+                  <span className="text-2xl font-bold text-slate-900">{skuMeta.balance_score}</span>
+                  <span className="text-[10px] text-slate-400">balance</span>
                 </div>
               )}
             </div>
@@ -970,8 +908,8 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
               {regionChartData.map(d => (
                 <div key={d.region} className="flex items-center gap-1.5 text-xs">
                   <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                  <span className="text-[hsl(var(--muted-foreground))]">{d.region}</span>
-                  <span className="font-medium text-[hsl(var(--foreground))]">{d.pct}%</span>
+                  <span className="text-slate-500">{d.region}</span>
+                  <span className="font-medium text-slate-900">{d.pct}%</span>
                 </div>
               ))}
             </div>
@@ -979,17 +917,17 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
 
           {/* Bar chart + guidance */}
           <div>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">各区域库存对比（理想线 25%）</p>
+            <p className="text-xs text-slate-500 mb-2">各区域库存对比（理想线 25%）</p>
             <div style={{ height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={regionChartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="region" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} width={36} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="region" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={36} />
                   <RechartsTooltip
                     contentStyle={{
-                      background: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
                       borderRadius: 8,
                       fontSize: 12,
                     }}
@@ -1006,9 +944,9 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
               <div className="mt-3 space-y-2">
                 {skuMeta.gap_regions && skuMeta.gap_regions.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">Gap regions:</span>
+                    <span className="text-xs text-slate-500">Gap regions:</span>
                     {skuMeta.gap_regions.map(r => (
-                      <span key={r} className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-600 border border-rose-500/30">
+                      <span key={r} className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-600 border border-rose-200">
                         {r}
                       </span>
                     ))}
@@ -1016,12 +954,12 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
                 )}
                 {skuMeta.ad_guidance && (
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">Ad guidance:</span>
+                    <span className="text-xs text-slate-500">Ad guidance:</span>
                     {Object.entries(skuMeta.ad_guidance).map(([action, regions]) => {
                       if (!Array.isArray(regions) || regions.length === 0) return null
                       return (
-                        <span key={action} className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {AD_GUIDANCE_ICONS[action] ?? '⬜'} <strong className="text-[hsl(var(--foreground))]">{action}</strong>: {(regions as string[]).join(', ')}
+                        <span key={action} className="text-xs text-slate-500">
+                          {AD_GUIDANCE_ICONS[action] ?? '⬜'} <strong className="text-slate-900">{action}</strong>: {(regions as string[]).join(', ')}
                         </span>
                       )
                     })}
@@ -1031,27 +969,27 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
             )}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ── FC Detail Table ── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3 flex-wrap">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">FC 明细表</h3>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{filteredFcDetails.length} records</p>
+            <h3 className="text-lg font-semibold text-slate-900">FC 明细表</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{filteredFcDetails.length} records</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
                 type="text"
                 placeholder="FC ID / City / SKU…"
                 value={tableSearch}
                 onChange={e => setTableSearch(e.target.value)}
-                className="pl-8 pr-8 py-1.5 text-sm bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-lg w-44 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
+                className="pl-8 pr-8 py-1.5 text-sm bg-white border border-slate-200 rounded-lg w-44 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-900 placeholder:text-slate-400"
               />
               {tableSearch && (
-                <button onClick={() => setTableSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                <button onClick={() => setTableSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                   <X className="w-3 h-3" />
                 </button>
               )}
@@ -1059,7 +997,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
             <select
               value={regionFilter}
               onChange={e => setRegionFilter(e.target.value)}
-              className="px-3 py-1.5 text-sm bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none"
+              className="px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none"
             >
               <option value="all">All Regions</option>
               <option value="west">West</option>
@@ -1072,7 +1010,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] text-xs uppercase tracking-wide">
+              <tr className="border-b border-slate-200 bg-slate-50/80">
                 {([
                   ['fc_id', 'FC ID'],
                   ['city', 'City, State'],
@@ -1085,7 +1023,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
                 ] as [keyof FCDetail, string][]).map(([key, label]) => (
                   <th
                     key={key}
-                    className="px-3 py-2 text-left font-medium cursor-pointer hover:text-[hsl(var(--foreground))] transition-colors select-none"
+                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 cursor-pointer hover:text-slate-900 transition-colors select-none"
                     onClick={() => handleTableSort(key)}
                   >
                     <span className="flex items-center gap-1">
@@ -1099,40 +1037,40 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {filteredFcDetails.slice(0, 50).map((fc, i) => {
                 const regionColor = FC_REGION_COLORS[fc.region as RegionKey] ?? '#94a3b8'
                 const productName = bySku[fc.sku]?.name ?? fc.sku
                 return (
-                  <tr key={`${fc.fc_id}-${fc.sku}-${i}`} className="border-b border-[hsl(var(--border)/0.5)] hover:bg-[hsl(var(--secondary))] transition-colors">
-                    <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[hsl(var(--foreground))]">{fc.fc_id}</td>
-                    <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">{fc.city}, {fc.state}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="flex items-center gap-1.5 text-xs text-[hsl(var(--foreground))]">
+                  <tr key={`${fc.fc_id}-${fc.sku}-${i}`} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900">{fc.fc_id}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{fc.city}, {fc.state}</td>
+                    <td className="px-4 py-3">
+                      <span className="flex items-center gap-1.5 text-xs text-slate-900">
                         <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: regionColor }} />
                         {fc.region.charAt(0).toUpperCase() + fc.region.slice(1)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <p className="font-mono text-[10px] text-[hsl(var(--foreground))]">{fc.sku}</p>
-                      <p className="text-[10px] text-[hsl(var(--muted-foreground))] truncate max-w-[120px]" title={productName}>{productName}</p>
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-[10px] text-slate-900">{fc.sku}</p>
+                      <p className="text-[10px] text-slate-400 truncate max-w-[120px]" title={productName}>{productName}</p>
                     </td>
-                    <td className="px-3 py-2.5 text-right text-xs font-medium" style={{ color: '#22C55E' }}>{fc.sellable || '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-xs">{fc.customer_damaged > 0 ? <span className="text-orange-400">{fc.customer_damaged}</span> : <span className="opacity-30 text-[hsl(var(--muted-foreground))]">—</span>}</td>
-                    <td className="px-3 py-2.5 text-right text-xs">{fc.defective > 0 ? <span className="text-rose-600">{fc.defective}</span> : <span className="opacity-30 text-[hsl(var(--muted-foreground))]">—</span>}</td>
-                    <td className="px-3 py-2.5 text-right text-xs font-semibold text-[hsl(var(--foreground))]">{fc.total}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-emerald-600">{fc.sellable || '—'}</td>
+                    <td className="px-4 py-3 text-right text-xs">{fc.customer_damaged > 0 ? <span className="text-amber-600">{fc.customer_damaged}</span> : <span className="opacity-30 text-slate-400">—</span>}</td>
+                    <td className="px-4 py-3 text-right text-xs">{fc.defective > 0 ? <span className="text-rose-600">{fc.defective}</span> : <span className="opacity-30 text-slate-400">—</span>}</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold text-slate-900">{fc.total}</td>
                   </tr>
                 )
               })}
               {filteredFcDetails.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">No matching records</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">No matching records</td>
                 </tr>
               )}
             </tbody>
           </table>
           {filteredFcDetails.length > 50 && (
-            <p className="text-center text-xs text-[hsl(var(--muted-foreground))] py-2.5 border-t border-[hsl(var(--border))]">
+            <p className="text-center text-xs text-slate-400 py-2.5 border-t border-slate-100">
               Showing 50 of {filteredFcDetails.length} records — use search or filters to narrow down
             </p>
           )}
@@ -1144,7 +1082,8 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-function InventoryStatusPageContent() {
+export default function InventoryStatusPage() {
+  // ── Inventory state ──
   const [data, setData] = useState<InventoryStatusData | null>(null)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -1154,7 +1093,7 @@ function InventoryStatusPageContent() {
   const [activeFilter, setActiveFilter] = useState({ sku: '', asin: '' })
 
   // ── FC Distribution state ──
-  const [activeTab, setActiveTab] = useState<'inventory' | 'fc-distribution'>('inventory')
+  const [activeTab, setActiveTab] = useState<'inventory' | 'fc'>('inventory')
   const [fcData, setFcData] = useState<FCDistributionData | null>(null)
   const [fcLoading, setFcLoading] = useState(false)
   const [fcError, setFcError] = useState<string | null>(null)
@@ -1206,7 +1145,6 @@ function InventoryStatusPageContent() {
     }
   }, [])
 
-  // Auto-fetch on mount (will hit cache if available)
   useEffect(() => {
     fetchData('', '')
     fetchFcData()
@@ -1223,7 +1161,7 @@ function InventoryStatusPageContent() {
     fetchData('', '')
   }
 
-  // Chart data: top 20 SKUs by total quantity for the bar chart
+  // Chart data
   const barData = useMemo(() => {
     if (!data?.items) return []
     return [...data.items]
@@ -1237,7 +1175,6 @@ function InventoryStatusPageContent() {
       }))
   }, [data])
 
-  // Pie chart data
   const pieData = useMemo(() => {
     if (!data?.summary) return []
     const s = data.summary
@@ -1254,318 +1191,332 @@ function InventoryStatusPageContent() {
     ? data.summary.totalInboundWorking + data.summary.totalInboundShipped + data.summary.totalInboundReceiving
     : 0
 
-  return (
-    <div className="flex flex-col">
-      {/* layout header actions handled by DashboardPageLayout */}
-      <div className="space-y-6">
-        {/* Tab switcher - shown in header area */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-[hsl(var(--secondary))] border border-[hsl(var(--border))]">
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-lg transition-all',
-              activeTab === 'inventory'
-                ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm'
-                : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-            )}
-          >
-            📦 Inventory
-          </button>
-          <button
-            onClick={() => setActiveTab('fc-distribution')}
-            className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-lg transition-all',
-              activeTab === 'fc-distribution'
-                ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm'
-                : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-            )}
-          >
-            🗺️ FC Distribution
-          </button>
-        </div>
-
-        {/* The existing filter bar and refresh button - only show on inventory tab */}
-        {activeTab === 'inventory' && (
-          <div className="flex items-center gap-3 flex-wrap">
-            {data?.cachedAt && (
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                {data.fromCache ? '🗂 缓存' : '🔄 实时'} · 数据更新于 {formatCacheAge(data.cachedAt)}
-              </span>
-            )}
-            <FilterBar
-              skuFilter={skuFilter}
-              asinFilter={asinFilter}
-              onSkuChange={setSkuFilter}
-              onAsinChange={setAsinFilter}
-              onApply={handleApply}
-              onClear={handleClear}
-              loading={loading}
-            />
-            <button
-              onClick={forceRefresh}
-              disabled={loading || refreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              title="强制刷新（忽略缓存）"
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
-              {refreshing ? '刷新中…' : '刷新数据'}
-            </button>
-          </div>
-        )}
+  // ── Header Actions ────────────────────────────────────────────────────────
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Tab toggle */}
+      <div className="flex rounded-lg border border-slate-200 p-0.5">
+        <button
+          className={cn(
+            'rounded-md px-3 py-1 text-sm font-medium transition-colors',
+            activeTab === 'inventory'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          )}
+          onClick={() => setActiveTab('inventory')}
+        >
+          🟢 Inventory
+        </button>
+        <button
+          className={cn(
+            'rounded-md px-3 py-1 text-sm font-medium transition-colors',
+            activeTab === 'fc'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          )}
+          onClick={() => setActiveTab('fc')}
+        >
+          🗺️ FC Distribution
+        </button>
       </div>
 
-      {/* ── TAB 1: Inventory Status (existing content) ── */}
+      {/* Cache status */}
+      {data?.cachedAt && (
+        <span className="text-xs text-slate-400">
+          {data.fromCache ? '🗃 缓存' : '🔄 实时'} · 数据更新于 {formatCacheAge(data.cachedAt)}
+        </span>
+      )}
+
+      {/* Filters — only on inventory tab */}
       {activeTab === 'inventory' && (
         <>
-          {/* ── Loading state ── */}
-          {loading && !data && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 p-12">
-              <div className="w-10 h-10 rounded-full border-2 border-[hsl(var(--primary)/0.3)] border-t-[hsl(var(--primary))] animate-spin" />
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                加载库存数据中… 缓存命中将秒开，否则可能需 1-3 分钟
-              </p>
-            </div>
-          )}
-
-          {/* ── Refreshing overlay notice ── */}
-          {refreshing && data && (
-            <div className="mx-6 mt-4 flex items-center gap-2 p-2.5 rounded-lg bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)] text-xs text-[hsl(var(--primary))]">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-              正在从 SP-API 拉取最新数据，约需 1-3 分钟…
-            </div>
-          )}
-
-          {/* ── Error ── */}
-          {error && (
-            <div className="m-6 flex items-center gap-2 p-3 rounded-lg bg-[hsl(var(--destructive)/0.1)] border border-[hsl(var(--destructive)/0.3)] text-sm text-[hsl(var(--destructive))]">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
-
-          {/* ── Main content ── */}
-          {data && !loading && (
-            <div className="space-y-6 pt-6">
-              {/* API error notice */}
-              {data.error && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-[hsl(var(--destructive)/0.1)] border border-[hsl(var(--destructive)/0.3)] text-sm text-[hsl(var(--destructive))]">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong>SP-API error:</strong> {data.errorMessage || 'Unknown error'}
-                  </div>
-                </div>
-              )}
-
-              {/* ── KPI cards ── */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KpiCard
-                  title="Fulfillable" accent="green"
-                  value={fmtNum(data.summary.totalFulfillable)}
-                  sub="可售库存"
-                  icon={<Package />}
-                  highlight
-                />
-                <KpiCard
-                  title="Reserved" accent="blue"
-                  value={fmtNum(data.summary.totalReserved)}
-                  sub="预留库存"
-                  icon={<Archive />}
-                />
-                <KpiCard
-                  title="Unsellable" accent="amber"
-                  value={fmtNum(data.summary.totalUnsellable)}
-                  sub="不可售库存"
-                  icon={<AlertTriangle />}
-                />
-                <KpiCard
-                  title="Total Inbound" accent="violet"
-                  value={fmtNum(totalInbound)}
-                  sub={`Working ${fmtNum(data.summary.totalInboundWorking)} · Shipped ${fmtNum(data.summary.totalInboundShipped)} · Receiving ${fmtNum(data.summary.totalInboundReceiving)}`}
-                  icon={<TrendingUp />}
-                />
-              </div>
-
-              {/* ── Charts row: Bar + Pie ── */}
-              {(barData.length > 0 || pieData.length > 0) && (
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                  {/* Stacked bar chart */}
-                  <div className="xl:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
-                      <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">库存构成 (Top 20 SKUs)</h3>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                        Fulfillable / Reserved / Unsellable per SKU
-                      </p>
-                    </div>
-                    <div className="p-4 md:p-6" style={{ height: 320 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 60 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                          <XAxis
-                            dataKey="name"
-                            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                            angle={-45}
-                            textAnchor="end"
-                            interval={0}
-                            height={70}
-                          />
-                          <YAxis
-                            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                            tickFormatter={fmtNum}
-                            width={40}
-                          />
-                          <RechartsTooltip content={<BarTooltip />} />
-                          <Legend
-                            wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--muted-foreground))' }}
-                          />
-                          <Bar dataKey="Fulfillable" stackId="a" fill={COLORS.fulfillable} radius={[0, 0, 0, 0]} />
-                          <Bar dataKey="Reserved"    stackId="a" fill={COLORS.reserved} />
-                          <Bar dataKey="Unsellable"  stackId="a" fill={COLORS.unsellable} radius={[3, 3, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Pie chart */}
-                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
-                      <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">库存状态占比</h3>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                        Fulfillable / Reserved / Unsellable / Inbound
-                      </p>
-                    </div>
-                    <div className="p-4 flex flex-col items-center" style={{ height: 320 }}>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <PieChart>
-                          <Pie
-                            data={pieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={55}
-                            outerRadius={90}
-                            paddingAngle={2}
-                            dataKey="value"
-                          >
-                            {pieData.map((entry, i) => (
-                              <Cell key={i} fill={entry.fill} stroke="transparent" />
-                            ))}
-                          </Pie>
-                          <RechartsTooltip content={<PieTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      {/* Legend */}
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mt-2">
-                        {pieData.map(entry => {
-                          const total = pieData.reduce((s, d) => s + d.value, 0)
-                          return (
-                            <div key={entry.name} className="flex items-center gap-1.5 text-xs">
-                              <span
-                                className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                                style={{ background: entry.fill }}
-                              />
-                              <span className="text-[hsl(var(--muted-foreground))]">{entry.name}</span>
-                              <span className="font-medium text-[hsl(var(--foreground))]">
-                                {total > 0 ? `${((entry.value / total) * 100).toFixed(1)}%` : '0%'}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Inbound Pipeline ── */}
-              <InboundPipeline summary={data.summary} />
-
-              {/* ── SKU Detail Table ── */}
-              {data.items.length > 0 && <SkuDetailTable items={data.items} />}
-
-              {/* Empty data */}
-              {data.items.length === 0 && !data.error && (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Package className="w-10 h-10 text-[hsl(var(--muted-foreground))] mb-3 opacity-50" />
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                    No inventory data returned.{' '}
-                    {activeFilter.sku || activeFilter.asin
-                      ? 'Try clearing the filter.'
-                      : 'Check SP-API permissions.'}
-                  </p>
-                </div>
-              )}
-            </div>
+          <input
+            type="text"
+            placeholder="Filter by SKU..."
+            value={skuFilter}
+            onChange={e => setSkuFilter(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleApply()}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-900 bg-white"
+          />
+          <input
+            type="text"
+            placeholder="Filter by ASIN..."
+            value={asinFilter}
+            onChange={e => setAsinFilter(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleApply()}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-900 bg-white"
+          />
+          <button
+            onClick={handleApply}
+            disabled={loading}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Loading…' : 'Apply'}
+          </button>
+          {(skuFilter || asinFilter) && (
+            <button
+              onClick={handleClear}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <X className="h-3 w-3" /> Clear
+            </button>
           )}
         </>
       )}
 
-      {/* ── TAB 2: FC Distribution ── */}
-      {activeTab === 'fc-distribution' && (
-        <div className="space-y-6 pt-6">
-          {fcLoading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-10 h-10 rounded-full border-2 border-[hsl(var(--primary)/0.3)] border-t-[hsl(var(--primary))] animate-spin" />
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">加载 FC 分布数据…</p>
-            </div>
-          )}
-          {fcError && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[hsl(var(--destructive)/0.1)] border border-[hsl(var(--destructive)/0.3)] text-sm text-[hsl(var(--destructive))]">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              {fcError}
-            </div>
-          )}
-          {fcData && !fcLoading && (
-            <>
-              {/* Summary KPI cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                <KpiCard title="Total Units" accent="green" value={fmtNum(fcData.account_summary.total_units)} sub="所有 FC 合计" icon={<Package />} highlight />
-                <KpiCard title="Sellable" accent="blue" value={fmtNum(fcData.account_summary.total_sellable)} sub="可售库存" icon={<TrendingUp />} />
-                <KpiCard title="Damaged" accent="amber" value={fmtNum(fcData.account_summary.customer_damaged)} sub="顾客损坏" icon={<AlertTriangle />} />
-                <KpiCard title="FC Count" accent="violet" value={String(fcData.account_summary.fc_count)} sub="配送中心数" icon={<BoxIcon />} />
-                <KpiCard title="SKU Count" accent="blue" value={String(fcData.account_summary.sku_count)} sub="SKU 数" icon={<Archive />} />
-                <KpiCard title="Updated" accent="violet" value={fcData.updated} sub={`来源: ${fcData.source}`} icon={<Activity />} />
-              </div>
-
-              {/* SKU filter dropdown */}
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium text-[hsl(var(--muted-foreground))]">产品筛选:</label>
-                <select
-                  value={fcSkuFilter}
-                  onChange={e => setFcSkuFilter(e.target.value)}
-                  className="px-3 py-1.5 text-sm bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)]"
-                >
-                  <option value="all">All Products</option>
-                  {Object.entries(fcData.by_sku).map(([sku, info]) => (
-                    <option key={sku} value={sku}>{info.name || sku}</option>
-                  ))}
-                </select>
-              </div>
-
-              <USFCMap
-                fcDetails={fcData.fc_details}
-                bySkuMap={fcData.by_sku}
-                skuFilter={fcSkuFilter}
-              />
-
-              <FCRegionDashboard
-                bySku={fcData.by_sku}
-                fcDetails={fcData.fc_details}
-                skuFilter={fcSkuFilter}
-              />
-            </>
-          )}
-        </div>
-      )}
+      {/* Refresh button */}
+      <button
+        onClick={forceRefresh}
+        disabled={loading || refreshing}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        title="强制刷新（忽略缓存）"
+      >
+        <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
+        {refreshing ? '刷新中…' : '刷新数据'}
+      </button>
     </div>
   )
-}
-export default function InventoryStatusPage() {
+
   return (
     <DashboardPageLayout
       signedOut={{ message: 'Sign in to view inventory', forceRedirectUrl: '/inventory' }}
       title="Inventory"
       description="库存"
+      headerActions={headerActions}
     >
-      <InventoryStatusPageContent />
+      <div className="space-y-6">
+
+        {/* ── TAB 1: Inventory ── */}
+        {activeTab === 'inventory' && (
+          <>
+            {/* Loading */}
+            {loading && !data && (
+              <div className="flex flex-col items-center justify-center gap-3 p-12">
+                <div className="w-10 h-10 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin" />
+                <p className="text-sm text-slate-500">
+                  加载库存数据中… 缓存命中将秒开，否则可能需 1-3 分钟
+                </p>
+              </div>
+            )}
+
+            {/* Refreshing notice */}
+            {refreshing && data && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-600">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                正在从 SP-API 拉取最新数据，约需 1-3 分钟…
+              </div>
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-600">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
+            {/* Main content */}
+            {data && !loading && (
+              <>
+                {/* API error */}
+                {data.error && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-600">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <strong>SP-API error:</strong> {data.errorMessage || 'Unknown error'}
+                    </div>
+                  </div>
+                )}
+
+                {/* KPI Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <KpiCard
+                    title="FULFILLABLE"
+                    accent="green"
+                    value={fmtNum(data.summary.totalFulfillable)}
+                    sub="可售库存"
+                    icon={<Package />}
+                    highlight
+                  />
+                  <KpiCard
+                    title="RESERVED"
+                    accent="blue"
+                    value={fmtNum(data.summary.totalReserved)}
+                    sub="预留库存"
+                    icon={<Archive />}
+                  />
+                  <KpiCard
+                    title="UNSELLABLE"
+                    accent="amber"
+                    value={fmtNum(data.summary.totalUnsellable)}
+                    sub="不可售库存"
+                    icon={<AlertTriangle />}
+                  />
+                  <KpiCard
+                    title="TOTAL INBOUND"
+                    accent="violet"
+                    value={fmtNum(totalInbound)}
+                    sub={`Working ${fmtNum(data.summary.totalInboundWorking)} · Shipped ${fmtNum(data.summary.totalInboundShipped)} · Receiving ${fmtNum(data.summary.totalInboundReceiving)}`}
+                    icon={<TrendingUp />}
+                  />
+                </div>
+
+                {/* Charts row */}
+                {(barData.length > 0 || pieData.length > 0) && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Stacked bar chart */}
+                    <section className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
+                      <h3 className="mb-4 text-lg font-semibold text-slate-900">库存构成 (Top 20 SKUs)</h3>
+                      <div style={{ height: 300 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 60 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                            <XAxis
+                              dataKey="name"
+                              tick={{ fontSize: 10, fill: '#94a3b8' }}
+                              angle={-45}
+                              textAnchor="end"
+                              interval={0}
+                              height={70}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 10, fill: '#94a3b8' }}
+                              tickFormatter={fmtNum}
+                              width={40}
+                            />
+                            <RechartsTooltip content={<BarTooltip />} />
+                            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: '#64748b' }} />
+                            <Bar dataKey="Fulfillable" stackId="a" fill={COLORS.fulfillable} radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="Reserved"    stackId="a" fill={COLORS.reserved} />
+                            <Bar dataKey="Unsellable"  stackId="a" fill={COLORS.unsellable} radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </section>
+
+                    {/* Pie chart */}
+                    <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
+                      <h3 className="mb-4 text-lg font-semibold text-slate-900">库存状态占比</h3>
+                      <div className="flex flex-col items-center">
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={55}
+                              outerRadius={90}
+                              paddingAngle={2}
+                              dataKey="value"
+                            >
+                              {pieData.map((entry, i) => (
+                                <Cell key={i} fill={entry.fill} stroke="transparent" />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip content={<PieTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mt-2">
+                          {pieData.map(entry => {
+                            const total = pieData.reduce((s, d) => s + d.value, 0)
+                            return (
+                              <div key={entry.name} className="flex items-center gap-1.5 text-xs">
+                                <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.fill }} />
+                                <span className="text-slate-500">{entry.name}</span>
+                                <span className="font-medium text-slate-900">
+                                  {total > 0 ? `${((entry.value / total) * 100).toFixed(1)}%` : '0%'}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {/* Inbound Pipeline */}
+                <InboundPipeline summary={data.summary} />
+
+                {/* SKU Detail Table */}
+                {data.items.length > 0 && <SkuDetailTable items={data.items} />}
+
+                {/* Empty state */}
+                {data.items.length === 0 && !data.error && (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Package className="w-10 h-10 text-slate-400 mb-3 opacity-50" />
+                    <p className="text-sm text-slate-500">
+                      No inventory data returned.{' '}
+                      {activeFilter.sku || activeFilter.asin
+                        ? 'Try clearing the filter.'
+                        : 'Check SP-API permissions.'}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── TAB 2: FC Distribution ── */}
+        {activeTab === 'fc' && (
+          <>
+            {fcLoading && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-10 h-10 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin" />
+                <p className="text-sm text-slate-500">加载 FC 分布数据…</p>
+              </div>
+            )}
+            {fcError && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-600">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {fcError}
+              </div>
+            )}
+            {fcData && !fcLoading && (
+              <>
+                {/* FC Summary KPI cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                  <KpiCard title="TOTAL UNITS"  accent="green"  value={fmtNum(fcData.account_summary.total_units)}    sub="所有 FC 合计"  icon={<Package />}    highlight />
+                  <KpiCard title="SELLABLE"     accent="blue"   value={fmtNum(fcData.account_summary.total_sellable)} sub="可售库存"    icon={<TrendingUp />} />
+                  <KpiCard title="DAMAGED"      accent="amber"  value={fmtNum(fcData.account_summary.customer_damaged)} sub="顾客损坏"  icon={<AlertTriangle />} />
+                  <KpiCard title="FC COUNT"     accent="violet" value={String(fcData.account_summary.fc_count)}       sub="配送中心数"  icon={<BoxIcon />} />
+                  <KpiCard title="SKU COUNT"    accent="blue"   value={String(fcData.account_summary.sku_count)}      sub="SKU 数"    icon={<Archive />} />
+                  <KpiCard title="UPDATED"      accent="violet" value={fcData.updated}                                sub={`来源: ${fcData.source}`} icon={<Activity />} />
+                </div>
+
+                {/* SKU filter */}
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium text-slate-500">产品筛选:</label>
+                  <select
+                    value={fcSkuFilter}
+                    onChange={e => setFcSkuFilter(e.target.value)}
+                    className="px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                  >
+                    <option value="all">All Products</option>
+                    {Object.entries(fcData.by_sku).map(([sku, info]) => (
+                      <option key={sku} value={sku}>{info.name || sku}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <USFCMap
+                  fcDetails={fcData.fc_details}
+                  bySkuMap={fcData.by_sku}
+                  skuFilter={fcSkuFilter}
+                />
+
+                <FCRegionDashboard
+                  bySku={fcData.by_sku}
+                  fcDetails={fcData.fc_details}
+                  skuFilter={fcSkuFilter}
+                />
+              </>
+            )}
+          </>
+        )}
+
+      </div>
     </DashboardPageLayout>
   )
 }
