@@ -10,11 +10,21 @@ import {
   CheckCircle2,
   Folder,
   Building2,
+  Clapperboard,
+  Cpu,
+  DollarSign,
+  FileText,
   LayoutGrid,
+  Map,
+  MessageSquare,
   Network,
+  Package,
+  Search,
   Settings,
   Store,
+  Swords,
   Tags,
+  Target,
 } from "lucide-react";
 
 import { useAuth } from "@/auth/clerk";
@@ -149,6 +159,48 @@ export function DashboardSidebar() {
                 <CheckCircle2 className="h-4 w-4" />
                 Approvals
               </Link>
+              <div className="my-3 border-t border-slate-200" />
+              <div>
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  ZOVIRO Business
+                </p>
+                <div className="mt-1 space-y-1">
+                  {[
+                    { href: "/inventory", icon: Map, label: "Inventory", sub: "库存" },
+                    { href: "/ppc", icon: Target, label: "PPC", sub: "广告投放" },
+                    { href: "/keywords", icon: Search, label: "Keywords", sub: "关键词排名" },
+                    { href: "/reviews", icon: MessageSquare, label: "Reviews", sub: "评价监控" },
+                    { href: "/competitors", icon: Swords, label: "Competitors", sub: "竞品监控" },
+                    { href: "/restock", icon: Package, label: "Restock", sub: "补货预测" },
+                    { href: "/profit", icon: DollarSign, label: "Profit", sub: "利润分析" },
+                    { href: "/content", icon: Clapperboard, label: "Content", sub: "内容营销矩阵" },
+                    { href: "/reports", icon: FileText, label: "Reports", sub: "报告中心" },
+                    { href: "/system", icon: Cpu, label: "System", sub: "系统 & 模型用量" },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-start gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                          active ? "bg-blue-100 text-blue-800 font-medium" : "hover:bg-slate-100",
+                        )}
+                      >
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                        <div className="min-w-0">
+                          <div>{item.label}</div>
+                          <div className={cn("text-xs", active ? "text-blue-700" : "text-slate-500")}>
+                            {item.sub}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
               {isAdmin ? (
                 <Link
                   href="/custom-fields"
