@@ -1,69 +1,45 @@
-import { cn } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { ReactNode } from 'react'
+import { cn } from "@/lib/utils"
+import type { ReactNode } from "react"
+
+type Accent = "blue" | "green" | "violet" | "amber" | "rose"
+
+const accentStyles: Record<Accent, string> = {
+  blue: "bg-blue-50 text-blue-600",
+  green: "bg-emerald-50 text-emerald-600",
+  violet: "bg-violet-50 text-violet-600",
+  amber: "bg-amber-50 text-amber-600",
+  rose: "bg-rose-50 text-rose-600",
+}
 
 interface KpiCardProps {
-  label: string
-  value: string
+  title?: string
+  label?: string
+  value: string | number
+  subtitle?: string
   sub?: string
-  change?: number      // percent change vs prev period
   icon?: ReactNode
-  highlight?: boolean  // green glow for primary metric
+  accent?: Accent
+  highlight?: boolean
   className?: string
 }
 
-export function KpiCard({ label, value, sub, change, icon, highlight, className }: KpiCardProps) {
-  const positive = change !== undefined && change > 0
-  const negative = change !== undefined && change < 0
-  const neutral  = change !== undefined && change === 0
-
+export function KpiCard({ title, label, value, subtitle, sub, icon, accent, highlight, className }: KpiCardProps) {
+  const resolvedAccent = accent ?? (highlight ? "green" : "blue")
   return (
-    <div className={cn(
-      'relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-slate-300',
-      highlight && 'border-[hsl(var(--primary)/0.4)] shadow-[0_0_30px_hsl(var(--primary)/0.08)]',
-      className
+    <section className={cn(
+      "rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
+      className,
     )}>
-      {/* Subtle top gradient for highlight cards */}
-      {highlight && (
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--primary)/0.5)] to-transparent" />
-      )}
-
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="truncate text-sm font-medium uppercase tracking-wide text-slate-500">{label}</p>
-          <p className={cn(
-            'text-2xl font-bold mt-1.5 leading-none',
-            highlight ? 'text-[hsl(var(--primary))] metric-glow' : 'text-slate-900'
-          )}>
-            {value}
-          </p>
-          {sub && <p className="mt-1 text-sm text-slate-500">{sub}</p>}
-        </div>
-        {icon && (
-          <div className={cn(
-            'p-2 rounded-lg flex-shrink-0',
-            highlight ? 'bg-[hsl(var(--primary)/0.12)]' : 'bg-slate-100'
-          )}>
-            <span className={cn('block h-4 w-4', highlight ? 'text-[hsl(var(--primary))]' : 'text-slate-500')}>
-              {icon}
-            </span>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title ?? label}</p>
+          <div className="mt-2 flex items-end gap-2">
+            <p className="font-heading text-3xl font-bold text-slate-900">{value}</p>
+            {(subtitle ?? sub) && <p className="pb-1 text-xs text-slate-500">{subtitle ?? sub}</p>}
           </div>
-        )}
-      </div>
-
-      {change !== undefined && (
-        <div className={cn(
-          'flex items-center gap-1 mt-3 text-sm font-medium',
-          positive && 'text-[hsl(var(--primary))]',
-          negative && 'text-[hsl(var(--destructive))]',
-          neutral  && 'text-slate-500',
-        )}>
-          {positive && <TrendingUp className="w-3 h-3" />}
-          {negative && <TrendingDown className="w-3 h-3" />}
-          {neutral  && <Minus className="w-3 h-3" />}
-          <span>{positive ? '+' : ''}{change.toFixed(1)}% vs 上周</span>
         </div>
-      )}
-    </div>
+        {icon && <div className={cn("rounded-lg p-2", accentStyles[resolvedAccent])}>{icon}</div>}
+      </div>
+    </section>
   )
 }

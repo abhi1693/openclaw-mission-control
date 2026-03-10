@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 // @ts-ignore
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps'
 import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
+import { Button } from '@/components/ui/button'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -208,12 +209,12 @@ function InboundPipeline({ summary }: { summary: InventorySummary }) {
   const total = stages.reduce((s, st) => s + st.value, 0)
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
-      <div className="px-4 py-3 border-b border-[hsl(var(--border))]">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
         <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Inbound Pipeline</h3>
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">入库进度 — Working → Shipped → Receiving</p>
       </div>
-      <div className="p-4">
+      <div className="p-4 md:p-6">
         <div className="flex items-stretch gap-0">
           {stages.map((stage, i) => (
             <div key={stage.label} className="flex items-stretch gap-0 flex-1">
@@ -332,7 +333,7 @@ function SkuDetailTable({ items }: { items: InventoryItem[] }) {
   )
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">SKU 明细表</h3>
@@ -504,14 +505,14 @@ function FilterBar({
       <button
         onClick={onApply}
         disabled={loading}
-        className="px-3 py-1.5 text-sm font-medium bg-[hsl(var(--primary))] text-black rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
+        className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
       >
         {loading ? 'Loading…' : 'Apply'}
       </button>
       {hasFilter && (
         <button
           onClick={onClear}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--secondary))] transition-all"
+          className="px-3 py-1.5 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100"
         >
           <X className="w-3 h-3" /> Clear
         </button>
@@ -716,7 +717,7 @@ function USFCMap({ fcDetails, bySkuMap, skuFilter }: {
   const unknownCount = filteredDetails.length - mapPoints.length
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">🗺️ FC Geographic Distribution</h3>
@@ -905,7 +906,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
   return (
     <div className="space-y-6">
       {/* ── Region Balance Dashboard ── */}
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">📊 Region Balance Dashboard</h3>
@@ -1033,7 +1034,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
       </div>
 
       {/* ── FC Detail Table ── */}
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">FC 明细表</h3>
@@ -1255,8 +1256,8 @@ function InventoryStatusPageContent() {
 
   return (
     <div className="flex flex-col">
-      {/* ── Header ── */}
-      <div className="border-b border-[hsl(var(--border))] py-4 flex items-center justify-between gap-4 flex-wrap">
+      {/* layout header actions handled by DashboardPageLayout */}
+      <div className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-[hsl(var(--primary)/0.15)]">
             <Activity className="w-5 h-5 text-[hsl(var(--primary))]" />
@@ -1313,7 +1314,7 @@ function InventoryStatusPageContent() {
             <button
               onClick={forceRefresh}
               disabled={loading || refreshing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--border))] disabled:opacity-40 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               title="强制刷新（忽略缓存）"
             >
               <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
@@ -1368,26 +1369,26 @@ function InventoryStatusPageContent() {
               {/* ── KPI cards ── */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <KpiCard
-                  label="Fulfillable"
+                  title="Fulfillable" accent="green"
                   value={fmtNum(data.summary.totalFulfillable)}
                   sub="可售库存"
                   icon={<Package />}
                   highlight
                 />
                 <KpiCard
-                  label="Reserved"
+                  title="Reserved" accent="blue"
                   value={fmtNum(data.summary.totalReserved)}
                   sub="预留库存"
                   icon={<Archive />}
                 />
                 <KpiCard
-                  label="Unsellable"
+                  title="Unsellable" accent="amber"
                   value={fmtNum(data.summary.totalUnsellable)}
                   sub="不可售库存"
                   icon={<AlertTriangle />}
                 />
                 <KpiCard
-                  label="Total Inbound"
+                  title="Total Inbound" accent="violet"
                   value={fmtNum(totalInbound)}
                   sub={`Working ${fmtNum(data.summary.totalInboundWorking)} · Shipped ${fmtNum(data.summary.totalInboundShipped)} · Receiving ${fmtNum(data.summary.totalInboundReceiving)}`}
                   icon={<TrendingUp />}
@@ -1399,13 +1400,13 @@ function InventoryStatusPageContent() {
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                   {/* Stacked bar chart */}
                   <div className="xl:col-span-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
-                    <div className="px-4 py-3 border-b border-[hsl(var(--border))]">
+                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
                       <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">库存构成 (Top 20 SKUs)</h3>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                         Fulfillable / Reserved / Unsellable per SKU
                       </p>
                     </div>
-                    <div className="p-4" style={{ height: 320 }}>
+                    <div className="p-4 md:p-6" style={{ height: 320 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 60 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -1435,8 +1436,8 @@ function InventoryStatusPageContent() {
                   </div>
 
                   {/* Pie chart */}
-                  <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
-                    <div className="px-4 py-3 border-b border-[hsl(var(--border))]">
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80">
                       <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">库存状态占比</h3>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                         Fulfillable / Reserved / Unsellable / Inbound
@@ -1526,12 +1527,12 @@ function InventoryStatusPageContent() {
             <>
               {/* Summary KPI cards */}
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                <KpiCard label="Total Units" value={fmtNum(fcData.account_summary.total_units)} sub="所有 FC 合计" icon={<Package />} highlight />
-                <KpiCard label="Sellable" value={fmtNum(fcData.account_summary.total_sellable)} sub="可售库存" icon={<TrendingUp />} />
-                <KpiCard label="Damaged" value={fmtNum(fcData.account_summary.customer_damaged)} sub="顾客损坏" icon={<AlertTriangle />} />
-                <KpiCard label="FC Count" value={String(fcData.account_summary.fc_count)} sub="配送中心数" icon={<BoxIcon />} />
-                <KpiCard label="SKU Count" value={String(fcData.account_summary.sku_count)} sub="SKU 数" icon={<Archive />} />
-                <KpiCard label="Updated" value={fcData.updated} sub={`来源: ${fcData.source}`} icon={<Activity />} />
+                <KpiCard title="Total Units" accent="green" value={fmtNum(fcData.account_summary.total_units)} sub="所有 FC 合计" icon={<Package />} highlight />
+                <KpiCard title="Sellable" accent="blue" value={fmtNum(fcData.account_summary.total_sellable)} sub="可售库存" icon={<TrendingUp />} />
+                <KpiCard title="Damaged" accent="amber" value={fmtNum(fcData.account_summary.customer_damaged)} sub="顾客损坏" icon={<AlertTriangle />} />
+                <KpiCard title="FC Count" accent="violet" value={String(fcData.account_summary.fc_count)} sub="配送中心数" icon={<BoxIcon />} />
+                <KpiCard title="SKU Count" accent="blue" value={String(fcData.account_summary.sku_count)} sub="SKU 数" icon={<Archive />} />
+                <KpiCard title="Updated" accent="violet" value={fcData.updated} sub={`来源: ${fcData.source}`} icon={<Activity />} />
               </div>
 
               {/* SKU filter dropdown */}
