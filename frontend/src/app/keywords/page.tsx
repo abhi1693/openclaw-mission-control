@@ -5,6 +5,7 @@ import { Search, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronRight, Tra
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 interface KeywordEntry {
   asin: string
@@ -32,7 +33,7 @@ interface Product {
   name: string
 }
 
-export default function KeywordsPage() {
+function KeywordsPageContent() {
   const [activeTab, setActiveTab] = useState<'tracker' | 'manager'>('tracker')
   const [rankings, setRankings] = useState<RankingRow[]>([])
   const [lastCrawled, setLastCrawled] = useState<string | null>(null)
@@ -115,7 +116,7 @@ export default function KeywordsPage() {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <Search className="w-5 h-5 text-[hsl(var(--primary))]" />
-          <h1 className="text-xl font-bold text-white">Keywords</h1>
+          <h1 className="text-xl font-bold text-slate-900">Keywords</h1>
         </div>
         <p className="text-sm text-[hsl(var(--muted-foreground))] ml-8">关键词排名追踪</p>
       </div>
@@ -130,7 +131,7 @@ export default function KeywordsPage() {
               'px-4 py-2 text-sm font-medium transition-colors relative',
               activeTab === tab
                 ? 'text-[hsl(var(--primary))]'
-                : 'text-[hsl(var(--muted-foreground))] hover:text-white'
+                : 'text-[hsl(var(--muted-foreground))] hover:text-slate-900'
             )}
           >
             {tab === 'tracker' ? 'Rank Tracker' : 'Keyword Manager'}
@@ -148,7 +149,7 @@ export default function KeywordsPage() {
           <div className="flex items-center gap-4 mb-5 flex-wrap">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[hsl(var(--secondary))] text-sm">
               <Search className="w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
-              <span className="text-white font-medium">{rankings.length}</span>
+              <span className="text-slate-900 font-medium">{rankings.length}</span>
               <span className="text-[hsl(var(--muted-foreground))]">关键词</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[hsl(var(--secondary))] text-sm">
@@ -157,8 +158,8 @@ export default function KeywordsPage() {
               <span className="text-[hsl(var(--muted-foreground))]">排名上升</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[hsl(var(--secondary))] text-sm">
-              <TrendingDown className="w-3.5 h-3.5 text-red-400" />
-              <span className="text-red-400 font-medium">{downCount}</span>
+              <TrendingDown className="w-3.5 h-3.5 text-red-600" />
+              <span className="text-red-600 font-medium">{downCount}</span>
               <span className="text-[hsl(var(--muted-foreground))]">排名下降</span>
             </div>
             {lastCrawled && (
@@ -220,19 +221,19 @@ export default function KeywordsPage() {
                           <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                             {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </td>
-                          <td className="px-4 py-3 text-white font-medium">{row.keyword}</td>
+                          <td className="px-4 py-3 text-slate-900 font-medium">{row.keyword}</td>
                           <td className="px-4 py-3 text-[hsl(var(--muted-foreground))] font-mono text-xs">{row.asin}</td>
                           <td className="px-4 py-3 text-[hsl(var(--muted-foreground))] max-w-[200px] truncate">{getProductName(row.asin)}</td>
                           <td className="px-4 py-3 text-right">
                             {row.currentRank !== null ? (
-                              <span className="text-white font-semibold">#{row.currentRank}</span>
+                              <span className="text-slate-900 font-semibold">#{row.currentRank}</span>
                             ) : (
                               <span className="text-[hsl(var(--muted-foreground))]">—</span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             {row.change7d !== 0 ? (
-                              <span className={row.change7d > 0 ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
+                              <span className={row.change7d > 0 ? 'text-emerald-400 font-medium' : 'text-red-600 font-medium'}>
                                 {row.change7d > 0 ? '+' : ''}{row.change7d}
                               </span>
                             ) : (
@@ -241,7 +242,7 @@ export default function KeywordsPage() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             {row.trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-400 mx-auto" />}
-                            {row.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-400 mx-auto" />}
+                            {row.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-600 mx-auto" />}
                             {row.trend === 'stable' && <Minus className="w-4 h-4 text-[hsl(var(--muted-foreground))] mx-auto" />}
                           </td>
                         </tr>
@@ -263,7 +264,7 @@ export default function KeywordsPage() {
                                     </thead>
                                     <tbody>
                                       {[...row.history].reverse().map(h => (
-                                        <tr key={h.date} className="text-white">
+                                        <tr key={h.date} className="text-slate-900">
                                           <td className="pr-8 py-0.5 text-[hsl(var(--muted-foreground))]">{h.date}</td>
                                           <td className="pr-8 py-0.5 text-right">#{h.organicRank}</td>
                                           <td className="py-0.5 text-right">#{h.adRank}</td>
@@ -291,14 +292,14 @@ export default function KeywordsPage() {
         <div>
           {/* Add form */}
           <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg p-5 mb-6">
-            <h2 className="text-sm font-semibold text-white mb-4">添加关键词</h2>
+            <h2 className="text-sm font-semibold text-slate-900 mb-4">添加关键词</h2>
             <div className="flex gap-3 items-end flex-wrap">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs text-[hsl(var(--muted-foreground))]">ASIN</label>
                 <select
                   value={newAsin}
                   onChange={e => setNewAsin(e.target.value)}
-                  className="bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] min-w-[260px]"
+                  className="bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] min-w-[260px]"
                 >
                   <option value="">选择产品 ASIN...</option>
                   {products.map(p => (
@@ -316,7 +317,7 @@ export default function KeywordsPage() {
                   onChange={e => setNewKeyword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddKeyword()}
                   placeholder="e.g. foaming hand sanitizer"
-                  className="bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm text-white placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
+                  className="bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm text-slate-900 placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
                 />
               </div>
               <Button
@@ -350,13 +351,13 @@ export default function KeywordsPage() {
                   <div className="divide-y divide-[hsl(var(--border))]">
                     {kwList.map(kw => (
                       <div key={kw.keyword} className="flex items-center px-4 py-3 group hover:bg-[hsl(var(--secondary)/0.3)] transition-colors">
-                        <span className="text-sm text-white flex-1">{kw.keyword}</span>
+                        <span className="text-sm text-slate-900 flex-1">{kw.keyword}</span>
                         <span className="text-xs text-[hsl(var(--muted-foreground))] mr-4">
                           {new Date(kw.addedAt).toLocaleDateString('zh-CN')}
                         </span>
                         <button
                           onClick={() => handleDelete(kw.asin, kw.keyword)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[hsl(var(--muted-foreground))] hover:text-red-400"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[hsl(var(--muted-foreground))] hover:text-red-600"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -370,5 +371,16 @@ export default function KeywordsPage() {
         </div>
       )}
     </div>
+  )
+}
+export default function KeywordsPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view keywords', forceRedirectUrl: '/keywords' }}
+      title="Keywords"
+      description="关键词追踪"
+    >
+      <KeywordsPageContent />
+    </DashboardPageLayout>
   )
 }

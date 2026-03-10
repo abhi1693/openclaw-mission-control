@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { KpiCard } from '@/components/shared/KpiCard'
 import { Star, MessageSquare, AlertTriangle, Clock, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ function ProductRow({ product }: { product: ReviewCache }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function ReviewsPage() {
+function ReviewsPageContent() {
   const [products, setProducts] = useState<ReviewCache[]>([])
   const [loading, setLoading] = useState(false)
   const [crawling, setCrawling] = useState(false)
@@ -360,5 +361,16 @@ export default function ReviewsPage() {
         </div>
       )}
     </div>
+  )
+}
+export default function ReviewsPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view reviews', forceRedirectUrl: '/reviews' }}
+      title="Reviews"
+      description="评价分析"
+    >
+      <ReviewsPageContent />
+    </DashboardPageLayout>
   )
 }

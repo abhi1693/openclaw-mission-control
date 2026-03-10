@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Package, AlertTriangle, Clock, CheckCircle, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,9 +33,9 @@ const urgencyOrder: Record<Urgency, number> = { critical: 0, warning: 1, ok: 2 }
 
 function UrgencyBadge({ urgency }: { urgency: Urgency }) {
   const map: Record<Urgency, { label: string; cls: string }> = {
-    critical: { label: '🔴 紧急', cls: 'bg-red-500/20 text-red-400 border border-red-500/30' },
-    warning:  { label: '🟡 预警', cls: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
-    ok:       { label: '🟢 充足', cls: 'bg-green-500/20 text-green-400 border border-green-500/30' },
+    critical: { label: '🔴 紧急', cls: 'bg-red-500/20 text-red-600 border border-red-500/30' },
+    warning:  { label: '🟡 预警', cls: 'bg-yellow-500/20 text-yellow-600 border border-yellow-500/30' },
+    ok:       { label: '🟢 充足', cls: 'bg-green-500/20 text-green-600 border border-green-500/30' },
   }
   const { label, cls } = map[urgency]
   return (
@@ -145,7 +146,7 @@ function DashboardTab() {
                     <td className="px-4 py-3 text-right">{item.currentStock.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">{item.dailySales.toFixed(1)}</td>
                     <td className={cn('px-4 py-3 text-right font-semibold',
-                      item.urgency === 'critical' ? 'text-red-400' : item.urgency === 'warning' ? 'text-yellow-400' : 'text-green-400'
+                      item.urgency === 'critical' ? 'text-red-600' : item.urgency === 'warning' ? 'text-yellow-600' : 'text-green-600'
                     )}>
                       {item.daysUntilStockout}
                     </td>
@@ -237,7 +238,7 @@ function ConfigTab() {
       )}
 
       {success && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-sm text-green-400">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-sm text-green-600">
           <CheckCircle className="w-4 h-4 flex-shrink-0" />
           配置已保存
         </div>
@@ -318,7 +319,7 @@ function ConfigTab() {
 
 type Tab = 'dashboard' | 'config'
 
-export default function RestockPage() {
+function RestockPageContent() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
 
   const tabs: { id: Tab; label: string }[] = [
@@ -362,5 +363,16 @@ export default function RestockPage() {
         {activeTab === 'dashboard' ? <DashboardTab /> : <ConfigTab />}
       </div>
     </div>
+  )
+}
+export default function RestockPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view restock', forceRedirectUrl: '/restock' }}
+      title="Restock"
+      description="补货预测"
+    >
+      <RestockPageContent />
+    </DashboardPageLayout>
   )
 }

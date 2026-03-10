@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 import {
   Target, RefreshCw, DollarSign, TrendingUp, TrendingDown, PauseCircle,
   PlayCircle, ChevronDown, ChevronRight, ChevronUp, BarChart3, Zap, Filter,
@@ -1503,7 +1504,7 @@ function AiInsightsTab({ data }: { data: AiInsights | null }) {
   const verdictColor = (v: string) => {
     if (v === '否定')        return 'bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-[hsl(var(--destructive)/0.3)]'
     if (v === '观察')        return 'bg-[hsl(var(--zv-amber)/0.12)] text-[hsl(var(--zv-amber))] border-[hsl(var(--zv-amber)/0.3)]'
-    if (v === '优化listing') return 'bg-[hsl(var(--zv-blue,220,90%,55%)/0.12)] text-blue-400 border-blue-400/30'
+    if (v === '优化listing') return 'bg-[hsl(var(--zv-blue,220,90%,55%)/0.12)] text-blue-600 border-blue-400/30'
     return 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] border-[hsl(var(--border))]'
   }
 
@@ -1709,7 +1710,7 @@ const TOP_TABS: { key: TopTab; label: string; icon: string }[] = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PPCPage() {
+function PPCPageContent() {
   const [period, setPeriod]     = useState<Period>(7)
   const [topTab, setTopTab]     = useState<TopTab>('overview')
   const [kpi, setKpi]           = useState<KPI | null>(null)
@@ -1913,5 +1914,16 @@ export default function PPCPage() {
         )}
       </div>
     </div>
+  )
+}
+export default function PPCPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view ppc', forceRedirectUrl: '/ppc' }}
+      title="PPC"
+      description="广告投放"
+    >
+      <PPCPageContent />
+    </DashboardPageLayout>
   )
 }

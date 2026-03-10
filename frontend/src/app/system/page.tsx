@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Cpu, MemoryStick, HardDrive, Clock, Monitor, Zap, RefreshCw, Bot, Coins, MessageSquare } from 'lucide-react'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ function fmt(n: number): string {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function SystemPage() {
+function SystemPageContent() {
   const [hw,  setHw]  = useState<HardwareData | null>(null)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [hwLoading,    setHwLoading]    = useState(true)
@@ -313,5 +314,16 @@ export default function SystemPage() {
         </section>
 
     </div>
+  )
+}
+export default function SystemPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view system', forceRedirectUrl: '/system' }}
+      title="System"
+      description="系统与模型用量"
+    >
+      <SystemPageContent />
+    </DashboardPageLayout>
   )
 }

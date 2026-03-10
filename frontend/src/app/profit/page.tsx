@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, DollarSign, TrendingUp, Megaphone, Leaf, AlertTriangle, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,9 +75,9 @@ function minutesAgo(iso?: string) {
 }
 
 function marginColor(pct: number) {
-  if (pct >= 30) return 'text-green-400'
-  if (pct >= 15) return 'text-yellow-400'
-  return 'text-red-400'
+  if (pct >= 30) return 'text-green-600'
+  if (pct >= 15) return 'text-yellow-600'
+  return 'text-red-600'
 }
 
 function calcLanded(item: CostItem) {
@@ -93,7 +94,7 @@ function SummaryCard({ icon, label, value, sub }: { icon: React.ReactNode; label
       </div>
       <div className="min-w-0">
         <p className="text-[11px] text-[hsl(var(--muted-foreground))] uppercase tracking-wider">{label}</p>
-        <p className="text-xl font-bold text-white truncate">{value}</p>
+        <p className="text-xl font-bold text-slate-900 truncate">{value}</p>
         {sub && <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{sub}</p>}
       </div>
     </div>
@@ -139,7 +140,7 @@ function DashboardTab() {
     <div className="space-y-6">
       {/* Warnings */}
       {data?.warnings?.length ? (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {data.warnings.join(' · ')}
         </div>
@@ -156,7 +157,7 @@ function DashboardTab() {
       {/* Table */}
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
-          <h2 className="font-semibold text-white">SKU 利润明细 <span className="text-[hsl(var(--muted-foreground))] text-sm font-normal">· 近 30 天</span></h2>
+          <h2 className="font-semibold text-slate-900">SKU 利润明细 <span className="text-[hsl(var(--muted-foreground))] text-sm font-normal">· 近 30 天</span></h2>
           <div className="flex items-center gap-3">
             {data?.cachedAt && (
               <span className="text-[11px] text-[hsl(var(--muted-foreground))]">更新于 {minutesAgo(data.cachedAt)}</span>
@@ -200,14 +201,14 @@ function DashboardTab() {
                     )}
                   >
                     <td className="px-5 py-3">
-                      <p className="font-medium text-white truncate max-w-[220px]">{item.productName || item.sku}</p>
+                      <p className="font-medium text-slate-900 truncate max-w-[220px]">{item.productName || item.sku}</p>
                       <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{item.sku} · {item.unitsSold} units</p>
                     </td>
-                    <td className="px-4 py-3 text-right text-white">{fmtUSD(item.revenue)}</td>
+                    <td className="px-4 py-3 text-right text-slate-900">{fmtUSD(item.revenue)}</td>
                     <td className="px-4 py-3 text-right text-[hsl(var(--muted-foreground))]">{fmtUSD(item.landedCost)}</td>
                     <td className="px-4 py-3 text-right text-[hsl(var(--muted-foreground))]">{fmtUSD(item.fbaFee + item.referralFee)}</td>
                     <td className="px-4 py-3 text-right text-[hsl(var(--muted-foreground))]">{fmtUSD(item.adSpend)}</td>
-                    <td className={cn('px-4 py-3 text-right font-semibold', item.netProfit >= 0 ? 'text-green-400' : 'text-red-400')}>
+                    <td className={cn('px-4 py-3 text-right font-semibold', item.netProfit >= 0 ? 'text-green-600' : 'text-red-600')}>
                       {fmtUSD(item.netProfit)}
                     </td>
                     <td className={cn('px-4 py-3 text-right font-medium', marginColor(item.profitMargin))}>
@@ -327,17 +328,17 @@ function CogsEditorTab() {
     )
   }
 
-  const numInput = 'w-20 bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded px-2 py-1 text-right text-sm text-white focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]'
+  const numInput = 'w-20 bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] rounded px-2 py-1 text-right text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]'
 
   return (
     <div className="space-y-4">
       <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-          <h2 className="font-semibold text-white">成本录入 <span className="text-[hsl(var(--muted-foreground))] text-sm font-normal">· {items.length} 个产品</span></h2>
+          <h2 className="font-semibold text-slate-900">成本录入 <span className="text-[hsl(var(--muted-foreground))] text-sm font-normal">· {items.length} 个产品</span></h2>
           <button
             onClick={loadProducts}
             disabled={loadingProducts}
-            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-white transition-colors disabled:opacity-50"
+            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-slate-900 transition-colors disabled:opacity-50"
           >
             重新加载产品列表
           </button>
@@ -363,7 +364,7 @@ function CogsEditorTab() {
               {items.map((item, i) => (
                 <tr key={item.sku + i} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--secondary)/0.3)] transition-colors">
                   <td className="px-4 py-2.5 max-w-[160px]">
-                    <p className="text-white truncate">{item.productName || item.sku}</p>
+                    <p className="text-slate-900 truncate">{item.productName || item.sku}</p>
                   </td>
                   <td className="px-3 py-2.5 text-[hsl(var(--muted-foreground))] text-xs">{item.sku}</td>
                   {(['unitCost', 'shippingToPort', 'freight', 'customs'] as const).map(f => (
@@ -412,7 +413,7 @@ function CogsEditorTab() {
       </div>
 
       <div className="flex items-center justify-end gap-4">
-        {saveMsg && <span className="text-sm text-green-400">{saveMsg}</span>}
+        {saveMsg && <span className="text-sm text-green-600">{saveMsg}</span>}
         <button
           onClick={save}
           disabled={saving}
@@ -430,7 +431,7 @@ function CogsEditorTab() {
 
 type Tab = 'dashboard' | 'cogs'
 
-export default function ProfitPage() {
+function ProfitPageContent() {
   const [tab, setTab] = useState<Tab>('dashboard')
 
   return (
@@ -439,7 +440,7 @@ export default function ProfitPage() {
       <div className="flex-shrink-0 px-6 pt-6 pb-0">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-2xl font-bold text-white">Profit Analytics</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Profit Analytics</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">利润分析 · 近 30 天</p>
           </div>
         </div>
@@ -454,7 +455,7 @@ export default function ProfitPage() {
                 'px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
                 tab === t
                   ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]'
-                  : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-white'
+                  : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-slate-900'
               )}
             >
               {t === 'dashboard' ? '📊 Profit Dashboard' : '✏️ COGS Editor'}
@@ -468,5 +469,16 @@ export default function ProfitPage() {
         {tab === 'dashboard' ? <DashboardTab /> : <CogsEditorTab />}
       </div>
     </div>
+  )
+}
+export default function ProfitPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view profit', forceRedirectUrl: '/profit' }}
+      title="Profit"
+      description="利润分析"
+    >
+      <ProfitPageContent />
+    </DashboardPageLayout>
   )
 }

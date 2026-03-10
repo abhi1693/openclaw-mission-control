@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 import {
   RefreshCw, ChevronDown, ChevronUp, TrendingDown, TrendingUp,
   Star, MessageSquare, Tag, AlertTriangle, Swords, BarChart3
@@ -70,12 +71,12 @@ function timeAgo(iso: string) {
 
 function alertTypeColor(type: CompetitorAlert['type']) {
   switch (type) {
-    case 'price_drop': return 'text-red-400'
-    case 'price_increase': return 'text-yellow-400'
-    case 'bsr_improvement': return 'text-blue-400'
+    case 'price_drop': return 'text-red-600'
+    case 'price_increase': return 'text-yellow-600'
+    case 'bsr_improvement': return 'text-blue-600'
     case 'deal_active': return 'text-orange-400'
     case 'review_surge': return 'text-purple-400'
-    default: return 'text-gray-400'
+    default: return 'text-slate-500'
   }
 }
 
@@ -154,7 +155,7 @@ function CompetitorCard({
           <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{fmtPrice(snapshot.price, snapshot.currency)}</p>
         </div>
         {priceChangePct !== null && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${priceChangePct < 0 ? 'text-red-400' : 'text-green-400'}`}>
+          <div className={`flex items-center gap-1 text-sm font-medium ${priceChangePct < 0 ? 'text-red-600' : 'text-green-600'}`}>
             {priceChangePct < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
             {Math.abs(priceChangePct).toFixed(1)}%
           </div>
@@ -172,7 +173,7 @@ function CompetitorCard({
         <div className="bg-[hsl(var(--secondary))] rounded-lg p-2">
           <p className="text-[9px] text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-0.5">Rating</p>
           <div className="flex items-center gap-0.5">
-            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+            <Star className="w-3 h-3 text-yellow-600 fill-yellow-400" />
             <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
               {snapshot.rating?.toFixed(1) ?? 'N/A'}
             </p>
@@ -312,7 +313,7 @@ function HistoryChart({ history, field, label, color }: {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function CompetitorsPage() {
+function CompetitorsPageContent() {
   const [snapshots, setSnapshots] = useState<CompetitorSnapshot[]>([])
   const [alerts, setAlerts] = useState<CompetitorAlert[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -411,12 +412,12 @@ export default function CompetitorsPage() {
             className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-red-950/60 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <AlertTriangle className="w-4 h-4 text-red-600" />
               <span className="text-sm font-semibold text-red-300">
                 {recentAlerts.length} Alert{recentAlerts.length !== 1 ? 's' : ''} Detected
               </span>
             </div>
-            {alertsOpen ? <ChevronUp className="w-4 h-4 text-red-400" /> : <ChevronDown className="w-4 h-4 text-red-400" />}
+            {alertsOpen ? <ChevronUp className="w-4 h-4 text-red-600" /> : <ChevronDown className="w-4 h-4 text-red-600" />}
           </button>
           {alertsOpen && (
             <div className="px-4 pb-3 space-y-2">
@@ -427,7 +428,7 @@ export default function CompetitorsPage() {
                       {alertTypeLabel(alert.type)}
                     </span>
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      <span className="text-white font-medium">{alert.name}</span> — {alert.message}
+                      <span className="text-slate-900 font-medium">{alert.name}</span> — {alert.message}
                     </span>
                   </div>
                   <span className="text-[10px] text-[hsl(var(--muted-foreground))] flex-shrink-0">{timeAgo(alert.timestamp)}</span>
@@ -487,5 +488,16 @@ export default function CompetitorsPage() {
         </div>
       </div>
     </div>
+  )
+}
+export default function CompetitorsPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view competitors', forceRedirectUrl: '/competitors' }}
+      title="Competitors"
+      description="竞品监控"
+    >
+      <CompetitorsPageContent />
+    </DashboardPageLayout>
   )
 }

@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 // @ts-ignore
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -917,9 +918,9 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
               <span className="text-xs text-[hsl(var(--muted-foreground))]">Balance Score:</span>
               <span className={cn(
                 'text-sm font-bold px-2 py-0.5 rounded-lg',
-                (skuMeta.balance_score ?? 0) >= 80 ? 'bg-green-500/20 text-green-400' :
-                (skuMeta.balance_score ?? 0) >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
-                'bg-red-500/20 text-red-400'
+                (skuMeta.balance_score ?? 0) >= 80 ? 'bg-green-500/20 text-green-600' :
+                (skuMeta.balance_score ?? 0) >= 60 ? 'bg-yellow-500/20 text-yellow-600' :
+                'bg-red-500/20 text-red-600'
               )}>
                 {skuMeta.balance_score ?? '—'}
               </span>
@@ -1006,7 +1007,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">Gap regions:</span>
                     {skuMeta.gap_regions.map(r => (
-                      <span key={r} className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/30">
+                      <span key={r} className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/15 text-red-600 border border-red-500/30">
                         {r}
                       </span>
                     ))}
@@ -1117,7 +1118,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
                     </td>
                     <td className="px-3 py-2.5 text-right text-xs font-medium" style={{ color: '#22C55E' }}>{fc.sellable || '—'}</td>
                     <td className="px-3 py-2.5 text-right text-xs">{fc.customer_damaged > 0 ? <span className="text-orange-400">{fc.customer_damaged}</span> : <span className="opacity-30 text-[hsl(var(--muted-foreground))]">—</span>}</td>
-                    <td className="px-3 py-2.5 text-right text-xs">{fc.defective > 0 ? <span className="text-red-400">{fc.defective}</span> : <span className="opacity-30 text-[hsl(var(--muted-foreground))]">—</span>}</td>
+                    <td className="px-3 py-2.5 text-right text-xs">{fc.defective > 0 ? <span className="text-red-600">{fc.defective}</span> : <span className="opacity-30 text-[hsl(var(--muted-foreground))]">—</span>}</td>
                     <td className="px-3 py-2.5 text-right text-xs font-semibold text-[hsl(var(--foreground))]">{fc.total}</td>
                   </tr>
                 )
@@ -1142,7 +1143,7 @@ function FCRegionDashboard({ bySku, fcDetails, skuFilter }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function InventoryStatusPage() {
+function InventoryStatusPageContent() {
   const [data, setData] = useState<InventoryStatusData | null>(null)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -1564,5 +1565,16 @@ export default function InventoryStatusPage() {
         </div>
       )}
     </div>
+  )
+}
+export default function InventoryStatusPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view inventory', forceRedirectUrl: '/inventory' }}
+      title="Inventory"
+      description="库存"
+    >
+      <InventoryStatusPageContent />
+    </DashboardPageLayout>
   )
 }

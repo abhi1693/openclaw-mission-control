@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { DashboardPageLayout } from '@/components/templates/DashboardPageLayout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -183,7 +184,7 @@ function UploadModal({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-white flex items-center gap-2">
+          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <ImageIcon className="w-4 h-4 text-[hsl(var(--primary))]" />
             Reference Images — {asin}
           </h3>
@@ -225,7 +226,7 @@ function UploadModal({
                     onClick={() => handleDelete(img.name)}
                     className="absolute top-1 right-1 p-0.5 rounded bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                   >
-                    <Trash2 className="w-3 h-3 text-white" />
+                    <Trash2 className="w-3 h-3 text-slate-900" />
                   </button>
                 </div>
               ))}
@@ -261,9 +262,9 @@ function HistoryEntry({
             <Badge variant="accent" className="text-[9px]">
               {entry.platform}
             </Badge>
-            {entry.starred && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />}
+            {entry.starred && <Star className="w-3 h-3 text-yellow-600 fill-yellow-400" />}
           </div>
-          <p className="text-xs font-medium text-white truncate">{entry.productName.split(',')[0]}</p>
+          <p className="text-xs font-medium text-slate-900 truncate">{entry.productName.split(',')[0]}</p>
           <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
             {new Date(entry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
           </p>
@@ -273,11 +274,11 @@ function HistoryEntry({
             onClick={() => onToggleStar(entry.id, !entry.starred)}
             className="p-1 hover:bg-[hsl(var(--secondary))] rounded transition-colors"
           >
-            <Star className={`w-3.5 h-3.5 ${entry.starred ? 'text-yellow-400 fill-yellow-400' : 'text-[hsl(var(--muted-foreground))]'}`} />
+            <Star className={`w-3.5 h-3.5 ${entry.starred ? 'text-yellow-600 fill-yellow-400' : 'text-[hsl(var(--muted-foreground))]'}`} />
           </button>
           <button
             onClick={() => onDelete(entry.id)}
-            className="p-1 hover:bg-[hsl(var(--secondary))] rounded text-[hsl(var(--muted-foreground))] hover:text-red-400 transition-colors"
+            className="p-1 hover:bg-[hsl(var(--secondary))] rounded text-[hsl(var(--muted-foreground))] hover:text-red-600 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -311,7 +312,7 @@ function HistoryEntry({
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Midjourney</span>
+              <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">Midjourney</span>
               <CopyButton text={entry.midjourneyPrompt} />
             </div>
             <pre className="text-[11px] text-[hsl(var(--muted-foreground))] whitespace-pre-wrap leading-relaxed bg-[hsl(var(--secondary)/0.5)] rounded p-2 font-sans">
@@ -402,7 +403,7 @@ function AplusTab() {
       {/* Left Column */}
       <div className="w-[320px] flex-shrink-0 space-y-4">
         <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <span className="text-base">📄</span>
             A+ Content 生成
           </h3>
@@ -417,7 +418,7 @@ function AplusTab() {
                 <select
                   value={selectedAsin}
                   onChange={e => { setSelectedAsin(e.target.value); setStrategy(null); setSaved(false) }}
-                  className="w-full h-9 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-sm px-3 pr-8 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
+                  className="w-full h-9 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-sm px-3 pr-8 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
                 >
                   <option value="">— 选择 ASIN —</option>
                   {products.map(p => (
@@ -463,7 +464,7 @@ function AplusTab() {
           <Button
             onClick={handleGenerate}
             disabled={!selectedAsin || generating}
-            className="w-full bg-green-600 hover:bg-green-500 text-white border-0 flex items-center justify-center gap-2"
+            className="w-full bg-green-600 hover:bg-green-500 text-slate-900 border-0 flex items-center justify-center gap-2"
             size="sm"
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -609,7 +610,7 @@ function StoreTab() {
       {/* Left Column */}
       <div className="w-[320px] flex-shrink-0 space-y-4">
         <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-5">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <span className="text-base">🏪</span>
             Brand Store 方案
           </h3>
@@ -624,7 +625,7 @@ function StoreTab() {
                   onClick={() => setSelectedCategory(cat)}
                   className={`rounded-lg border px-3 py-2 cursor-pointer transition-all text-left text-sm ${
                     selectedCategory === cat
-                      ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-white'
+                      ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-slate-900'
                       : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)]'
                   }`}
                 >
@@ -644,7 +645,7 @@ function StoreTab() {
                   onClick={() => setSelectedSeason(s.id)}
                   className={`rounded-lg border px-3 py-2 cursor-pointer transition-all text-sm ${
                     selectedSeason === s.id
-                      ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-white'
+                      ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-slate-900'
                       : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)]'
                   }`}
                 >
@@ -662,7 +663,7 @@ function StoreTab() {
               onChange={e => setExtras(e.target.value)}
               placeholder="品牌故事、特别要求…"
               rows={3}
-              className="w-full rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-sm px-3 py-2 placeholder:text-[hsl(var(--muted-foreground)/0.5)] focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors resize-none"
+              className="w-full rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-sm px-3 py-2 placeholder:text-[hsl(var(--muted-foreground)/0.5)] focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors resize-none"
             />
           </div>
 
@@ -670,7 +671,7 @@ function StoreTab() {
           <Button
             onClick={handleGenerate}
             disabled={generating}
-            className="w-full bg-green-600 hover:bg-green-500 text-white border-0 flex items-center justify-center gap-2"
+            className="w-full bg-green-600 hover:bg-green-500 text-slate-900 border-0 flex items-center justify-center gap-2"
             size="sm"
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -810,7 +811,7 @@ function CampaignTab() {
       {/* Left Column */}
       <div className="w-[320px] flex-shrink-0 space-y-4">
         <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-5">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <span className="text-base">📢</span>
             营销方案
           </h3>
@@ -850,7 +851,7 @@ function CampaignTab() {
                         onChange={() => toggleAsin(p.asin)}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-white truncate">{p.name.split(',')[0].trim()}</p>
+                        <p className="text-xs text-slate-900 truncate">{p.name.split(',')[0].trim()}</p>
                         <p className="text-[10px] text-[hsl(var(--muted-foreground)/0.7)]">{p.asin}</p>
                       </div>
                     </label>
@@ -870,7 +871,7 @@ function CampaignTab() {
                   onClick={() => setSelectedScenario(s.id)}
                   className={`rounded-lg border px-3 py-2 cursor-pointer transition-all text-left text-sm ${
                     selectedScenario === s.id
-                      ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-white'
+                      ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-slate-900'
                       : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)]'
                   }`}
                 >
@@ -892,7 +893,7 @@ function CampaignTab() {
                     onClick={() => toggleChannel(ch)}
                     className={`rounded-lg border px-3 py-2 cursor-pointer transition-all text-sm ${
                       checked
-                        ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-white'
+                        ? 'border-[hsl(var(--primary)/0.6)] bg-[hsl(var(--primary)/0.08)] text-slate-900'
                         : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)]'
                     }`}
                   >
@@ -911,7 +912,7 @@ function CampaignTab() {
               onChange={e => setExtras(e.target.value)}
               placeholder="促销力度、预算、目标受众…"
               rows={3}
-              className="w-full rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-sm px-3 py-2 placeholder:text-[hsl(var(--muted-foreground)/0.5)] focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors resize-none"
+              className="w-full rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-sm px-3 py-2 placeholder:text-[hsl(var(--muted-foreground)/0.5)] focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors resize-none"
             />
           </div>
 
@@ -919,7 +920,7 @@ function CampaignTab() {
           <Button
             onClick={handleGenerate}
             disabled={generating}
-            className="w-full bg-green-600 hover:bg-green-500 text-white border-0 flex items-center justify-center gap-2"
+            className="w-full bg-green-600 hover:bg-green-500 text-slate-900 border-0 flex items-center justify-center gap-2"
             size="sm"
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -985,7 +986,7 @@ const CONTENT_TABS = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function ContentPage() {
+function ContentPageContent() {
   // Tab state
   const [activeTab, setActiveTab] = useState<string>('prompt-studio')
 
@@ -1134,7 +1135,7 @@ export default function ContentPage() {
     <div className="space-y-6 pb-10">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
           <Clapperboard className="w-5 h-5 text-[hsl(var(--primary))]" />
           Content Studio
         </h2>
@@ -1173,7 +1174,7 @@ export default function ContentPage() {
 
               {/* Step 1: Product */}
               <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-4">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] text-[10px] font-bold flex items-center justify-center">1</span>
                   Select Product
                 </h3>
@@ -1186,7 +1187,7 @@ export default function ContentPage() {
                       <select
                         value={selectedAsin}
                         onChange={e => { setSelectedAsin(e.target.value); setGenerated(false) }}
-                        className="w-full h-9 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-sm px-3 pr-8 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
+                        className="w-full h-9 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-sm px-3 pr-8 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
                       >
                         <option value="">— Choose a product —</option>
                         {products.map(p => (
@@ -1231,7 +1232,7 @@ export default function ContentPage() {
 
               {/* Step 2: Scene Type */}
               <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-4">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] text-[10px] font-bold flex items-center justify-center">2</span>
                   Scene Type
                 </h3>
@@ -1242,8 +1243,8 @@ export default function ContentPage() {
                       onClick={() => { setSelectedScene(scene.id); setGenerated(false) }}
                       className={`rounded-xl p-3 text-left transition-all border ${
                         selectedScene === scene.id
-                          ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.1)] text-white'
-                          : 'border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)] hover:text-white'
+                          ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.1)] text-slate-900'
+                          : 'border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)] hover:text-slate-900'
                       }`}
                     >
                       <div className="text-lg mb-1">{scene.emoji}</div>
@@ -1257,14 +1258,14 @@ export default function ContentPage() {
                     value={customDesc}
                     onChange={e => { setCustomDesc(e.target.value); setGenerated(false) }}
                     placeholder="Describe the scene…"
-                    className="w-full h-9 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-sm px-3 focus:outline-none focus:border-[hsl(var(--primary)/0.5)] placeholder:text-[hsl(var(--muted-foreground)/0.5)] transition-colors"
+                    className="w-full h-9 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-sm px-3 focus:outline-none focus:border-[hsl(var(--primary)/0.5)] placeholder:text-[hsl(var(--muted-foreground)/0.5)] transition-colors"
                   />
                 )}
               </Card>
 
               {/* Step 3: Parameters */}
               <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-4">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] text-[10px] font-bold flex items-center justify-center">3</span>
                   Parameters
                 </h3>
@@ -1277,7 +1278,7 @@ export default function ContentPage() {
                       <select
                         value={selectedStyle}
                         onChange={e => { setSelectedStyle(e.target.value as StyleType); setGenerated(false) }}
-                        className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-xs px-2.5 pr-6 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
+                        className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-xs px-2.5 pr-6 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
                       >
                         {STYLES.map(s => <option key={s}>{s}</option>)}
                       </select>
@@ -1292,7 +1293,7 @@ export default function ContentPage() {
                       <select
                         value={selectedTone}
                         onChange={e => { setSelectedTone(e.target.value as ToneType); setGenerated(false) }}
-                        className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-xs px-2.5 pr-6 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
+                        className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-xs px-2.5 pr-6 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
                       >
                         {TONES.map(t => <option key={t}>{t}</option>)}
                       </select>
@@ -1307,7 +1308,7 @@ export default function ContentPage() {
                       <select
                         value={selectedPlatform}
                         onChange={e => { setSelectedPlatform(e.target.value as PlatformType); setGenerated(false) }}
-                        className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-xs px-2.5 pr-6 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
+                        className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-xs px-2.5 pr-6 appearance-none focus:outline-none focus:border-[hsl(var(--primary)/0.5)] transition-colors"
                       >
                         {PLATFORMS.map(p => <option key={p}>{p}</option>)}
                       </select>
@@ -1323,7 +1324,7 @@ export default function ContentPage() {
                       value={extras}
                       onChange={e => { setExtras(e.target.value); setGenerated(false) }}
                       placeholder="e.g. bokeh, golden hour…"
-                      className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-white text-xs px-2.5 focus:outline-none focus:border-[hsl(var(--primary)/0.5)] placeholder:text-[hsl(var(--muted-foreground)/0.4)] transition-colors"
+                      className="w-full h-8 rounded-lg bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] text-slate-900 text-xs px-2.5 focus:outline-none focus:border-[hsl(var(--primary)/0.5)] placeholder:text-[hsl(var(--muted-foreground)/0.4)] transition-colors"
                     />
                   </div>
                 </div>
@@ -1332,7 +1333,7 @@ export default function ContentPage() {
               {/* Step 4: Generate */}
               <Card className="p-5 bg-[hsl(var(--card))] border-[hsl(var(--border))] space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] text-[10px] font-bold flex items-center justify-center">4</span>
                     Generate
                   </h3>
@@ -1367,8 +1368,8 @@ export default function ContentPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                          <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider">Midjourney Prompt</span>
+                          <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Midjourney Prompt</span>
                         </div>
                         <CopyButton text={midjourneyPrompt} />
                       </div>
@@ -1422,7 +1423,7 @@ export default function ContentPage() {
                       className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-colors ${
                         historyTab === tab
                           ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] -mb-px'
-                          : 'text-[hsl(var(--muted-foreground))] hover:text-white'
+                          : 'text-[hsl(var(--muted-foreground))] hover:text-slate-900'
                       }`}
                     >
                       {tab === 'all' ? 'All Prompts' : '⭐ Favorites'}
@@ -1432,7 +1433,7 @@ export default function ContentPage() {
                         </span>
                       )}
                       {tab === 'starred' && prompts.filter(p => p.starred).length > 0 && (
-                        <span className="ml-1.5 bg-yellow-400/20 text-yellow-400 text-[9px] rounded-full px-1.5 py-0.5">
+                        <span className="ml-1.5 bg-yellow-400/20 text-yellow-600 text-[9px] rounded-full px-1.5 py-0.5">
                           {prompts.filter(p => p.starred).length}
                         </span>
                       )}
@@ -1482,5 +1483,16 @@ export default function ContentPage() {
       {activeTab === 'store' && <StoreTab />}
       {activeTab === 'campaign' && <CampaignTab />}
     </div>
+  )
+}
+export default function ContentPage() {
+  return (
+    <DashboardPageLayout
+      signedOut={{ message: 'Sign in to view content', forceRedirectUrl: '/content' }}
+      title="Content"
+      description="内容资产库"
+    >
+      <ContentPageContent />
+    </DashboardPageLayout>
   )
 }
