@@ -460,10 +460,10 @@ function KeywordsOptTab({ analysisData, analysisLoading }: {
           { key: 'duplicate' as const, label: '重复投放', count: analysisData?.duplicateTargeting.length ?? 0 },
         ]).map(tab => (
           <button key={tab.key} onClick={() => setAnalysisTab(tab.key)}
-            className={cn('flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors', 
-              analysisTab === tab.key
-                ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-            )}`}
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              analysisTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            )}
           >
             {tab.label}
             {tab.count > 0 && <Badge variant="outline" className="text-[8px] h-4 px-1">{tab.count}</Badge>}
@@ -663,9 +663,10 @@ function CampaignStructureTab({ data }: { data: CampaignAnalysis | null }) {
       <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5">
         {subTabs.map(tab => (
           <button key={tab.key} onClick={() => setSubTab(tab.key)}
-            className={cn('flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors', 
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               subTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-            )}`}
+            )}
           >
             {tab.label}
             {tab.count > 0 && (
@@ -876,9 +877,10 @@ function BidBudgetTab({ data }: { data: BidAnalysis | null }) {
       <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5 overflow-x-auto">
         {subTabs.map(tab => (
           <button key={tab.key} onClick={() => setSubTab(tab.key)}
-            className={cn('flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors', 
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
               subTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-            )}`}
+            )}
           >
             {tab.label}
             {tab.count > 0 && <Badge variant="outline" className="text-[8px] h-4 px-1">{tab.count}</Badge>}
