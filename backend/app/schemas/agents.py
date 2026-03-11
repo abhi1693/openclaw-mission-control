@@ -175,6 +175,10 @@ class AgentUpdate(SQLModel):
         description="Optional heartbeat policy override.",
         examples=[{"interval_seconds": 45}],
     )
+    auto_heartbeat_enabled: bool | None = Field(
+        default=None,
+        description="If false, Mission Control's auto heartbeat governor will not manage this agent.",
+    )
     identity_profile: dict[str, Any] | None = Field(
         default=None,
         description="Optional identity profile update values.",
@@ -235,6 +239,22 @@ class AgentRead(AgentBase):
     is_gateway_main: bool = Field(
         default=False,
         description="Whether this agent is the primary gateway agent.",
+    )
+    auto_heartbeat_enabled: bool = Field(
+        default=True,
+        description="Whether Mission Control's auto heartbeat governor is allowed to manage this agent.",
+    )
+    auto_heartbeat_step: int = Field(
+        default=0,
+        description="Current backoff ladder step maintained by the governor.",
+    )
+    auto_heartbeat_off: bool = Field(
+        default=False,
+        description="Whether the governor has currently set this agent to fully-off (unset heartbeat).",
+    )
+    auto_heartbeat_last_active_at: datetime | None = Field(
+        default=None,
+        description="Last time the governor considered this agent active.",
     )
     openclaw_session_id: str | None = Field(
         default=None,

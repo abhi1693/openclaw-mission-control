@@ -28,6 +28,10 @@ from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board
 from app.models.gateways import Gateway
+from app.schemas.auto_heartbeat_governor import (
+    AutoHeartbeatGovernorPolicyRead,
+    AutoHeartbeatGovernorPolicyUpdate,
+)
 from app.schemas.boards import BoardCreate, BoardRead, BoardUpdate
 from app.schemas.common import OkResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
@@ -100,6 +104,15 @@ def _board_update_message(
     lines.append("")
     lines.append("Take action: review the board changes and adjust plan/assignments as needed.")
     return "\n".join(lines)
+
+
+def _reject_null_governor_policy_fields(updates: dict[str, object]) -> None:
+    null_fields = sorted(field_name for field_name, value in updates.items() if value is None)
+    if null_fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{', '.join(null_fields)} cannot be null",
+        )
 
 
 async def _require_gateway_main_agent(session: AsyncSession, gateway: Gateway) -> None:
@@ -496,6 +509,50 @@ def get_board(
 ) -> Board:
     """Get a board by id."""
     return board
+
+
+@router.get(
+    "/{board_id}/auto-heartbeat-governor-policy",
+    response_model=AutoHeartbeatGovernorPolicyRead,
+)
+def get_auto_heartbeat_governor_policy(
+    board: Board = BOARD_USER_READ_DEP,
+) -> AutoHeartbeatGovernorPolicyRead:
+    """Get board-scoped auto heartbeat governor policy."""
+    return AutoHeartbeatGovernorPolicyRead(
+        enabled=bool(board.auto_heartbeat_governor_enabled),
+        ladder=list(board.auto_heartbeat_governor_ladder or []),
+        lead_cap_every=str(board.auto_heartbeat_governor_lead_cap_every),
+        activity_trigger_type=str(board.auto_heartbeat_governor_activity_trigger_type),
+    )
+
+
+@router.patch(
+    "/{board_id}/auto-heartbeat-governor-policy",
+    response_model=AutoHeartbeatGovernorPolicyRead,
+)
+async def update_auto_heartbeat_governor_policy(
+    payload: AutoHeartbeatGovernorPolicyUpdate,
+    session: AsyncSession = SESSION_DEP,
+    board: Board = BOARD_USER_WRITE_DEP,
+) -> AutoHeartbeatGovernorPolicyRead:
+    """Patch board-scoped auto heartbeat governor policy."""
+    updates = payload.model_dump(exclude_unset=True)
+    _reject_null_governor_policy_fields(updates)
+    if "enabled" in updates:
+        board.auto_heartbeat_governor_enabled = bool(updates["enabled"])
+    if "ladder" in updates:
+        board.auto_heartbeat_governor_ladder = list(updates["ladder"])
+    if "lead_cap_every" in updates:
+        board.auto_heartbeat_governor_lead_cap_every = str(updates["lead_cap_every"])
+    if "activity_trigger_type" in updates:
+        trigger = updates["activity_trigger_type"]
+        board.auto_heartbeat_governor_activity_trigger_type = (
+            trigger.value if hasattr(trigger, "value") else str(trigger)
+        )
+    board.updated_at = utcnow()
+    await crud.save(session, board)
+    return get_auto_heartbeat_governor_policy(board)
 
 
 @router.get("/{board_id}/snapshot", response_model=BoardSnapshot)
