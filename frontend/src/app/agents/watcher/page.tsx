@@ -13,9 +13,12 @@ import { Button } from "@/components/ui/button";
 interface AgentStatus {
   name: string;
   status: string;
-  last_heartbeat?: string;
+  last_seen?: string;
   tasks_done?: number;
-  openclaw_session_id?: string;
+  tokens_used?: number;
+  failed_count?: number;
+  approval_rate?: number;
+  avg_duration_ms?: number;
 }
 
 interface AgentsStatusResponse {
@@ -47,8 +50,7 @@ export default function AgentWatcherPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = localopenclaw_token");
-Storage.getItem("      const res = await fetch("/api/v1/api/agents/status", {
+      const token = localStorage.getItem("openclaw_token");      const res = await fetch("/api/v1/api/agents/status", {
         headers: {
           "Authorization": `Bearer ${token}`,
         },
@@ -111,7 +113,11 @@ Storage.getItem("      const res = await fetch("/api/v1/api/agents/status", {
 
   const formatTime = (dateStr?: string) => {
     if (!dateStr) return "Never";
-    const date = new Date(dateStr);
+    // Handle both ISO format and "2026-03-11 07:51:11.556897+00:00" format
+    const date = dateStr.includes(" ") 
+      ? new Date(dateStr.replace(" ", "T"))
+      : new Date(dateStr);
+    if (isNaN(date.getTime())) return "Unknown";
     const now = new Date();
     const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
     if (diff < 60) return `${diff}s ago`;
@@ -188,9 +194,9 @@ Storage.getItem("      const res = await fetch("/api/v1/api/agents/status", {
 
                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <p className="text-slate-500">Last heartbeat</p>
+                    <p className="text-slate-500">Last seen</p>
                     <p className="font-medium text-slate-900">
-                      {formatTime(agent.last_heartbeat)}
+                      {formatTime(agent.last_seen)}
                     </p>
                   </div>
                   <div>
@@ -201,11 +207,20 @@ Storage.getItem("      const res = await fetch("/api/v1/api/agents/status", {
                   </div>
                 </div>
 
-                {agent.openclaw_session_id && (
-                  <div className="mt-2 text-xs text-slate-400">
-                    Session: {agent.openclaw_session_id.slice(0, 8)}...
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-slate-500">Tokens used</p>
+                    <p className="font-medium text-slate-900">
+                      {agent.tokens_used ?? 0}
+                    </p>
                   </div>
-                )}
+                  <div>
+                    <p className="text-slate-500">Failed</p>
+                    <p className="font-medium text-slate-900">
+                      {agent.failed_count ?? 0}
+                    </p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
