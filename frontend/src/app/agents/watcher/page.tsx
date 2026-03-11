@@ -81,15 +81,26 @@ export default function AgentWatcherPage() {
   // Ping all agents to update their status
   const pingAllAgents = async () => {
     setPinging(true);
+    setError(null);
     try {
       // Get all agents first
+      console.log("Fetching agents list...");
       const agentsData = await customFetch<{items: Array<{id: string, name: string}>}>("/api/v1/agents", {
         method: "GET",
       });
       
+      console.log("Agents fetched:", agentsData);
+      
+      if (!agentsData.items || agentsData.items.length === 0) {
+        setError("No agents found in database");
+        setPinging(false);
+        return;
+      }
+      
       // Send heartbeat for each agent
-      for (const agent of agentsData.items || []) {
+      for (const agent of agentsData.items) {
         try {
+          console.log("Pinging agent:", agent.name);
           await customFetch(`/api/v1/agents/${agent.id}/heartbeat`, {
             method: "POST",
             body: JSON.stringify({ status: "active" }),
@@ -102,7 +113,8 @@ export default function AgentWatcherPage() {
       // Refresh after pinging all
       setTimeout(fetchAgentsStatus, 1000);
     } catch (err) {
-      setError("Failed to ping agents");
+      console.error("Ping all failed:", err);
+      setError(`Failed to ping agents: ${err}`);
     } finally {
       setPinging(false);
     }
