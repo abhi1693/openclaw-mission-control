@@ -223,6 +223,18 @@ export function DashboardSidebar() {
                 Organization
               </Link>
               <Link
+                href="/settings"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
+                  pathname === "/settings"
+                    ? "bg-blue-100 text-blue-800 font-medium"
+                    : "hover:bg-slate-100",
+                )}
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+              <Link
                 href="/agents/watcher"
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition",
