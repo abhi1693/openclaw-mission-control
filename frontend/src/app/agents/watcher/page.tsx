@@ -78,14 +78,14 @@ export default function AgentWatcherPage() {
     }
   };
 
-  // Ping all agents to update their status
+  // Ping all agents to update their status - uses agents list API instead of heartbeat
   const pingAllAgents = async () => {
     setPinging(true);
     setError(null);
     try {
       // Get all agents first
       console.log("Fetching agents list...");
-      const agentsData = await customFetch<{items: Array<{id: string, name: string}>}>("/api/v1/agents", {
+      const agentsData = await customFetch<{items: Array<{id: string, name: string, status: string}>}>("/api/v1/agents", {
         method: "GET",
       });
       
@@ -97,24 +97,16 @@ export default function AgentWatcherPage() {
         return;
       }
       
-      // Send heartbeat for each agent
-      for (const agent of agentsData.items) {
-        try {
-          console.log("Pinging agent:", agent.name);
-          await customFetch(`/api/v1/agents/${agent.id}/heartbeat`, {
-            method: "POST",
-            body: JSON.stringify({ status: "active" }),
-          });
-        } catch (e) {
-          console.error(`Failed to ping ${agent.name}:`, e);
-        }
-      }
+      // Just refresh the status view - the status API gets current state from DB
+      // Agents show offline because they're not sending heartbeats to MC
+      // The actual agents are running fine in Discord
+      console.log(`Found ${agentsData.items.length} agents`);
       
-      // Refresh after pinging all
-      setTimeout(fetchAgentsStatus, 1000);
+      // Refresh after
+      await fetchAgentsStatus();
     } catch (err) {
       console.error("Ping all failed:", err);
-      setError(`Failed to ping agents: ${err}`);
+      setError(`Failed to fetch agents: ${err}`);
     } finally {
       setPinging(false);
     }
