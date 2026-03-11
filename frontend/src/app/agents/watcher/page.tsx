@@ -45,6 +45,7 @@ export default function AgentWatcherPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState<string | null>(null);
+  const [pinging, setPinging] = useState(false);
 
   const fetchAgentsStatus = async () => {
     if (!isSignedIn) return;
@@ -74,6 +75,36 @@ export default function AgentWatcherPage() {
       setError(`Failed to restart ${agentName}`);
     } finally {
       setRestarting(null);
+    }
+  };
+
+  // Ping all agents to update their status
+  const pingAllAgents = async () => {
+    setPinging(true);
+    try {
+      // Get all agents first
+      const agentsData = await customFetch<{items: Array<{id: string, name: string}>}>("/api/v1/agents", {
+        method: "GET",
+      });
+      
+      // Send heartbeat for each agent
+      for (const agent of agentsData.items || []) {
+        try {
+          await customFetch(`/api/v1/agents/${agent.id}/heartbeat`, {
+            method: "POST",
+            body: JSON.stringify({ status: "active" }),
+          });
+        } catch (e) {
+          console.error(`Failed to ping ${agent.name}:`, e);
+        }
+      }
+      
+      // Refresh after pinging all
+      setTimeout(fetchAgentsStatus, 1000);
+    } catch (err) {
+      setError("Failed to ping agents");
+    } finally {
+      setPinging(false);
     }
   };
 
@@ -124,10 +155,16 @@ export default function AgentWatcherPage() {
       title="Agent Watcher"
       description="Monitor all agents across boards in real-time."
       headerActions={
-        <Button variant="outline" onClick={fetchAgentsStatus} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={pingAllAgents} disabled={pinging}>
+            <Activity className={`h-4 w-4 ${pinging ? "animate-spin" : ""}`} />
+            {pinging ? "Pinging..." : "Ping All"}
+          </Button>
+          <Button variant="outline" onClick={fetchAgentsStatus} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       }
     >
       <div className="space-y-6">
