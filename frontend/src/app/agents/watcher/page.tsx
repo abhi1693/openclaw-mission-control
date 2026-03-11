@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import { Activity, Eye, RefreshCw, Play, Square } from "lucide-react";
 
+import { customFetch } from "@/api/mutator";
 import { useAuth } from "@/auth/clerk";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { Button } from "@/components/ui/button";
@@ -50,19 +51,12 @@ export default function AgentWatcherPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("openclaw_token");      const res = await fetch("/api/v1/api/agents/status", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+      const data = await customFetch<AgentsStatusResponse>("/api/v1/api/agents/status", {
+        method: "GET",
       });
-      if (res.ok) {
-        const data: AgentsStatusResponse = await res.json();
-        setAgents(data.agents || []);
-      } else {
-        setError("Failed to load agent status");
-      }
+      setAgents(data.agents || []);
     } catch (err) {
-      setError("Failed to connect to agents API");
+      setError("Failed to load agent status");
     } finally {
       setLoading(false);
     }
@@ -71,17 +65,11 @@ export default function AgentWatcherPage() {
   const restartAgent = async (agentName: string) => {
     setRestarting(agentName);
     try {
-      const token = localStorage.getItem("openclaw_token");
-      const res = await fetch(`/api/v1/api/agents/${agentName}/restart`, {
+      await customFetch(`/api/v1/agents/${agentName}/restart`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
       });
-      if (res.ok) {
-        // Refresh after restart
-        setTimeout(fetchAgentsStatus, 2000);
-      }
+      // Refresh after restart
+      setTimeout(fetchAgentsStatus, 2000);
     } catch (err) {
       setError(`Failed to restart ${agentName}`);
     } finally {

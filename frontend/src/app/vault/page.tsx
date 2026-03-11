@@ -36,7 +36,7 @@ export default function VaultPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("openclaw_token");
+      const token = localStorage.getItem("mc_local_auth_token");
       const res = await fetch("/api/v1/api/vault/list", {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -58,7 +58,7 @@ export default function VaultPage() {
   const addSecret = async () => {
     if (!newKey.trim() || !newValue.trim()) return;
     try {
-      const token = localStorage.getItem("openclaw_token");
+      const token = localStorage.getItem("mc_local_auth_token");
       const res = await fetch("/api/v1/api/vault/set", {
         method: "POST",
         headers: {
@@ -79,7 +79,7 @@ export default function VaultPage() {
 
   const deleteSecret = async (key: string) => {
     try {
-      const token = localStorage.getItem("openclaw_token");
+      const token = localStorage.getItem("mc_local_auth_token");
       const res = await fetch("/api/v1/api/vault/delete", {
         method: "POST",
         headers: {
