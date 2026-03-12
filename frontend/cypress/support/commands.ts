@@ -5,6 +5,12 @@ const LOCAL_AUTH_STORAGE_KEY = "mc_local_auth_token";
 const DEFAULT_LOCAL_AUTH_TOKEN =
   "cypress-local-auth-token-0123456789-0123456789-0123456789x";
 
+function getAuthToken(explicitToken?: string): string {
+  if (explicitToken) return explicitToken;
+  const envToken = Cypress.env("AUTH_TOKEN") as string | undefined;
+  return envToken || DEFAULT_LOCAL_AUTH_TOKEN;
+}
+
 Cypress.Commands.add("waitForAppLoaded", () => {
   cy.get("[data-cy='route-loader']", {
     timeout: APP_LOAD_TIMEOUT_MS,
@@ -15,10 +21,11 @@ Cypress.Commands.add("waitForAppLoaded", () => {
   }).should("have.attr", "aria-hidden", "true");
 });
 
-Cypress.Commands.add("loginWithLocalAuth", (token = DEFAULT_LOCAL_AUTH_TOKEN) => {
+Cypress.Commands.add("loginWithLocalAuth", (token?: string) => {
+  const resolvedToken = getAuthToken(token);
   cy.visit("/", {
     onBeforeLoad(win) {
-      win.sessionStorage.setItem(LOCAL_AUTH_STORAGE_KEY, token);
+      win.sessionStorage.setItem(LOCAL_AUTH_STORAGE_KEY, resolvedToken);
     },
   });
 });
