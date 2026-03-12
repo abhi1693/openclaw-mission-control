@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 interface AgentStatus {
   name: string;
   status: string;
-  last_seen?: string;
+  last_seen_at?: string;
   tasks_done?: number;
   tokens_used?: number;
   failed_count?: number;
@@ -52,10 +52,11 @@ export default function AgentWatcherPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await customFetch<AgentsStatusResponse>("/api/v1/api/agents/status", {
+      // Use /api/v1/agents instead of /api/v1/api/agents/status for accurate status
+      const data = await customFetch<{items: Array<AgentStatus>}>("/api/v1/agents", {
         method: "GET",
       });
-      setAgents(data.agents || []);
+      setAgents(data.items || []);
     } catch (err) {
       setError("Failed to load agent status");
     } finally {
@@ -225,7 +226,7 @@ export default function AgentWatcherPage() {
                   <div>
                     <p className="text-slate-500">Last seen</p>
                     <p className="font-medium text-slate-900">
-                      {formatTime(agent.last_seen)}
+                      {formatTime(agent.last_seen_at)}
                     </p>
                   </div>
                   <div>
