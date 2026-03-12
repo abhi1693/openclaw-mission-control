@@ -65,7 +65,7 @@ export default function VaultPage() {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ key: newKey, value: newValue }),
+        body: JSON.stringify({ key_name: newKey, value: newValue }),
       });
       if (res.ok) {
         setNewKey("");
@@ -86,7 +86,7 @@ export default function VaultPage() {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ key_name: key }),
       });
       if (res.ok) {
         fetchSecrets();
