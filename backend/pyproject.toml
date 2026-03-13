@@ -13,7 +13,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "alembic==1.18.3",
-    "clerk-backend-api==4.2.0",
+    "clerk-backend-api==5.0.2",
     "fastapi==0.131.0",
     "fastapi-pagination==0.15.10",
     "jinja2==3.1.6",
@@ -27,7 +27,7 @@ dependencies = [
     "websockets==16.0",
     "redis==6.3.0",
     "rq==2.6.0",
-    "cryptography==45.0.7",
+    "cryptography==46.0.5",
 ]
 
 [project.optional-dependencies]
