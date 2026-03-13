@@ -25,6 +25,15 @@ class GatewayResolveQuery(SQLModel):
     gateway_allow_insecure_tls: bool | None = None
 
 
+class GatewayStatusCheckRequest(SQLModel):
+    """Request payload for gateway reachability checks without query-string tokens."""
+
+    gateway_url: NonEmptyStr
+    gateway_token: str | None = None
+    gateway_disable_device_pairing: bool | None = None
+    gateway_allow_insecure_tls: bool | None = None
+
+
 class GatewaysStatusResponse(SQLModel):
     """Aggregated gateway status response including session metadata."""
 

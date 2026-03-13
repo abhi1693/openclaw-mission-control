@@ -1,4 +1,5 @@
-import { gatewaysStatusApiV1GatewaysStatusGet } from "@/api/generated/gateways/gateways";
+import { customFetch } from "@/api/mutator";
+import type { GatewaysStatusResponse } from "@/api/generated/model";
 
 export const DEFAULT_WORKSPACE_ROOT = "~/.openclaw";
 
@@ -78,7 +79,7 @@ export async function checkGatewayConnection(params: {
   gatewayAllowInsecureTls: boolean;
 }): Promise<{ ok: boolean; message: string }> {
   try {
-    const requestParams: {
+    const payload: {
       gateway_url: string;
       gateway_token?: string;
       gateway_disable_device_pairing: boolean;
@@ -89,10 +90,18 @@ export async function checkGatewayConnection(params: {
       gateway_allow_insecure_tls: params.gatewayAllowInsecureTls,
     };
     if (params.gatewayToken.trim()) {
-      requestParams.gateway_token = params.gatewayToken.trim();
+      payload.gateway_token = params.gatewayToken.trim();
     }
 
-    const response = await gatewaysStatusApiV1GatewaysStatusGet(requestParams);
+    const response = await customFetch<{
+      data: GatewaysStatusResponse;
+      status: number;
+      headers: Headers;
+    }>("/api/v1/gateways/status/check", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
     if (response.status !== 200) {
       return { ok: false, message: "Unable to reach gateway." };
     }

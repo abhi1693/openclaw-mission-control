@@ -117,11 +117,18 @@ class GatewaySessionService(OpenClawDBService):
             if can_query_saved_gateway and (
                 params.gateway_allow_insecure_tls is None
                 or params.gateway_disable_device_pairing is None
+                or token is None
             ):
                 gateway_query = Gateway.objects.filter_by(url=raw_url)
                 if organization_id is not None:
                     gateway_query = gateway_query.filter_by(organization_id=organization_id)
                 gateway = await gateway_query.first(self.session)
+
+            # If callers intentionally omit the token but reference a saved gateway URL,
+            # reuse the stored token server-side to avoid leaking it via query strings.
+            if token is None and gateway is not None:
+                token = (gateway.token or "").strip() or None
+
             allow_insecure_tls = (
                 params.gateway_allow_insecure_tls
                 if params.gateway_allow_insecure_tls is not None
