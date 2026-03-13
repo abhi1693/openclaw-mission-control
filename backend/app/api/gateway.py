@@ -17,6 +17,7 @@ from app.schemas.gateway_api import (
     GatewaySessionMessageRequest,
     GatewaySessionResponse,
     GatewaySessionsResponse,
+    GatewayStatusCheckRequest,
     GatewaysStatusResponse,
 )
 from app.services.openclaw.gateway_rpc import GATEWAY_EVENTS, GATEWAY_METHODS, PROTOCOL_VERSION
@@ -61,6 +62,29 @@ async def gateways_status(
 ) -> GatewaysStatusResponse:
     """Return gateway connectivity and session status."""
     service = GatewaySessionService(session)
+    return await service.get_status(
+        params=params,
+        organization_id=ctx.organization.id,
+        user=auth.user,
+    )
+
+
+@router.post("/status/check", response_model=GatewaysStatusResponse)
+async def gateways_status_check(
+    payload: GatewayStatusCheckRequest,
+    session: AsyncSession = SESSION_DEP,
+    auth: AuthContext = AUTH_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> GatewaysStatusResponse:
+    """Check gateway connectivity via JSON body (keeps tokens out of query strings)."""
+    service = GatewaySessionService(session)
+    params = GatewaySessionService.to_resolve_query(
+        board_id=None,
+        gateway_url=payload.gateway_url,
+        gateway_token=payload.gateway_token,
+        gateway_disable_device_pairing=payload.gateway_disable_device_pairing,
+        gateway_allow_insecure_tls=payload.gateway_allow_insecure_tls,
+    )
     return await service.get_status(
         params=params,
         organization_id=ctx.organization.id,

@@ -87,7 +87,7 @@ export default function EditGatewayPage() {
     gatewayQuery.data?.status === 200 ? gatewayQuery.data.data : null;
   const resolvedName = name ?? loadedGateway?.name ?? "";
   const resolvedGatewayUrl = gatewayUrl ?? loadedGateway?.url ?? "";
-  const resolvedGatewayToken = gatewayToken ?? loadedGateway?.token ?? "";
+  const resolvedGatewayToken = gatewayToken ?? "";
   const resolvedDisableDevicePairing =
     disableDevicePairing ?? loadedGateway?.disable_device_pairing ?? false;
   const resolvedWorkspaceRoot =
@@ -145,11 +145,14 @@ export default function EditGatewayPage() {
     const payload: GatewayUpdate = {
       name: resolvedName.trim(),
       url: resolvedGatewayUrl.trim(),
-      token: resolvedGatewayToken.trim() || null,
       disable_device_pairing: resolvedDisableDevicePairing,
       workspace_root: resolvedWorkspaceRoot.trim(),
       allow_insecure_tls: resolvedAllowInsecureTls,
     };
+
+    if (gatewayToken !== undefined) {
+      payload.token = gatewayToken.trim() || null;
+    }
 
     updateMutation.mutate({ gatewayId, data: payload });
   };

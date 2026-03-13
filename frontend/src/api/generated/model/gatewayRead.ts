@@ -15,7 +15,7 @@ export interface GatewayRead {
   id: string;
   name: string;
   organization_id: string;
-  token?: string | null;
+  has_token?: boolean;
   updated_at: string;
   url: string;
   workspace_root: string;
