@@ -18,10 +18,12 @@ from app.api.auth import router as auth_router
 from app.api.board_group_memory import router as board_group_memory_router
 from app.api.board_groups import router as board_groups_router
 from app.api.board_memory import router as board_memory_router
+from app.api.retro_entries import router as retro_entries_router
 from app.api.board_onboarding import router as board_onboarding_router
 from app.api.board_webhooks import router as board_webhooks_router
 from app.api.boards import router as boards_router
 from app.api.gateway import router as gateway_router
+from app.api.github_webhooks import router as github_webhooks_router
 from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
 from app.api.organizations import router as organizations_router
@@ -101,6 +103,10 @@ OPENAPI_TAGS = [
     {
         "name": "board-memory",
         "description": "Board-scoped memory read/write endpoints for persistent context.",
+    },
+    {
+        "name": "retros",
+        "description": "Sprint retrospective entry CRUD and aggregation endpoints.",
     },
     {
         "name": "board-webhooks",
@@ -543,6 +549,7 @@ api_v1.include_router(agents_router)
 api_v1.include_router(activity_router)
 api_v1.include_router(gateway_router)
 api_v1.include_router(gateways_router)
+api_v1.include_router(github_webhooks_router)
 api_v1.include_router(metrics_router)
 api_v1.include_router(organizations_router)
 api_v1.include_router(souls_directory_router)
@@ -551,6 +558,7 @@ api_v1.include_router(board_groups_router)
 api_v1.include_router(board_group_memory_router)
 api_v1.include_router(boards_router)
 api_v1.include_router(board_memory_router)
+api_v1.include_router(retro_entries_router)
 api_v1.include_router(board_webhooks_router)
 api_v1.include_router(board_onboarding_router)
 api_v1.include_router(approvals_router)

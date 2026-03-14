@@ -41,7 +41,7 @@ describe("TaskCard", () => {
   });
 
   it("shows lead review indicator when status is review with no approvals and not blocked", () => {
-    render(<TaskCard title="Waiting" status="review" approvalsPendingCount={0} />);
+    render(<TaskCard title="Waiting" status="in_review" approvalsPendingCount={0} />);
 
     expect(screen.getByText(/Waiting for lead review/i)).toBeInTheDocument();
   });

@@ -5,10 +5,12 @@ const STATUS_STYLES: Record<
   "default" | "outline" | "accent" | "success" | "warning" | "danger"
 > = {
   inbox: "outline",
+  todo: "default",
   assigned: "accent",
   in_progress: "warning",
   testing: "accent",
-  review: "accent",
+  in_review: "accent",
+  sprint_done: "warning",
   done: "success",
   online: "success",
   busy: "warning",

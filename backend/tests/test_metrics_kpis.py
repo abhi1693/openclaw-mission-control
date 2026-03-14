@@ -60,8 +60,10 @@ async def test_task_status_counts_returns_zeroes_for_empty_board_scope() -> None
 
     assert counts == {
         "inbox": 0,
+        "todo": 0,
         "in_progress": 0,
-        "review": 0,
+        "in_review": 0,
+        "sprint_done": 0,
         "done": 0,
     }
 
@@ -71,8 +73,10 @@ async def test_task_status_counts_maps_known_statuses() -> None:
     session = _FakeSession(
         [
             ("inbox", 4),
+            ("todo", 1),
             ("in_progress", 3),
-            ("review", 2),
+            ("in_review", 2),
+            ("sprint_done", 5),
             ("done", 7),
             ("blocked", 99),
         ],
@@ -82,8 +86,10 @@ async def test_task_status_counts_maps_known_statuses() -> None:
 
     assert counts == {
         "inbox": 4,
+        "todo": 1,
         "in_progress": 3,
-        "review": 2,
+        "in_review": 2,
+        "sprint_done": 5,
         "done": 7,
     }
 

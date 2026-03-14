@@ -13,7 +13,7 @@ import { TaskCard } from "@/components/molecules/TaskCard";
 import { parseApiDatetime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 
-type TaskStatus = "inbox" | "in_progress" | "review" | "done";
+type TaskStatus = "inbox" | "todo" | "in_progress" | "in_review" | "sprint_done" | "done";
 
 type Task = {
   id: string;
@@ -57,6 +57,14 @@ const columns: Array<{
     badge: "bg-slate-100 text-slate-600",
   },
   {
+    title: "Todo",
+    status: "todo",
+    dot: "bg-sky-500",
+    accent: "hover:border-sky-400 hover:bg-sky-50",
+    text: "group-hover:text-sky-600 text-slate-500",
+    badge: "bg-sky-100 text-sky-700",
+  },
+  {
     title: "In Progress",
     status: "in_progress",
     dot: "bg-purple-500",
@@ -65,12 +73,20 @@ const columns: Array<{
     badge: "bg-purple-100 text-purple-700",
   },
   {
-    title: "Review",
-    status: "review",
+    title: "In Review",
+    status: "in_review",
     dot: "bg-indigo-500",
     accent: "hover:border-indigo-400 hover:bg-indigo-50",
     text: "group-hover:text-indigo-600 text-slate-500",
     badge: "bg-indigo-100 text-indigo-700",
+  },
+  {
+    title: "Sprint Done",
+    status: "sprint_done",
+    dot: "bg-amber-500",
+    accent: "hover:border-amber-400 hover:bg-amber-50",
+    text: "group-hover:text-amber-600 text-slate-500",
+    badge: "bg-amber-100 text-amber-700",
   },
   {
     title: "Done",
@@ -87,8 +103,8 @@ const columns: Array<{
  *
  * - Returns `due: undefined` when the task has no due date (or it's invalid), so
  *   callers can omit the due-date UI entirely.
- * - Treats a task as overdue only if it is not `done` (so "Done" tasks don't
- *   keep showing as overdue forever).
+ * - Treats a task as overdue only if it is not `done` or `sprint_done` (so
+ *   completed tasks don't keep showing as overdue forever).
  */
 const resolveDueState = (
   task: Task,
@@ -101,7 +117,10 @@ const resolveDueState = (
     day: "numeric",
   });
 
-  const isOverdue = task.status !== "done" && date.getTime() < Date.now();
+  const isOverdue =
+    task.status !== "done" &&
+    task.status !== "sprint_done" &&
+    date.getTime() < Date.now();
   return {
     due: isOverdue ? `Overdue · ${dueLabel}` : dueLabel,
     isOverdue,
@@ -114,7 +133,7 @@ const KANBAN_MOVE_ANIMATION_MS = 240;
 const KANBAN_MOVE_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
 /**
- * Kanban-style task board with 4 columns.
+ * Kanban-style task board with 6 columns.
  *
  * Notes:
  * - Uses a lightweight FLIP animation (via `useLayoutEffect`) to animate cards
@@ -288,8 +307,10 @@ export const TaskBoard = memo(function TaskBoard({
   const grouped = useMemo(() => {
     const buckets: Record<TaskStatus, Task[]> = {
       inbox: [],
+      todo: [],
       in_progress: [],
-      review: [],
+      in_review: [],
+      sprint_done: [],
       done: [],
     };
     for (const column of columns) {
@@ -364,17 +385,17 @@ export const TaskBoard = memo(function TaskBoard({
       ref={boardRef}
       data-testid="task-board"
       className={cn(
-        // Mobile-first: stack columns vertically to avoid horizontal scrolling.
-        "grid grid-cols-1 gap-4 overflow-x-hidden pb-6",
-        // Desktop/tablet: switch back to horizontally scrollable kanban columns.
-        "sm:grid-flow-col sm:auto-cols-[minmax(260px,320px)] sm:grid-cols-none sm:overflow-x-auto",
+        // Mobile-first: stack columns vertically with horizontal scroll fallback.
+        "grid grid-cols-1 gap-4 overflow-x-auto pb-6",
+        // Desktop (1024px+): horizontally scrollable kanban columns.
+        "lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-cols-none",
       )}
     >
       {columns.map((column) => {
         const columnTasks = grouped[column.status] ?? [];
         // Derive review tab counts and the active subset from one canonical task list.
         const reviewCounts =
-          column.status === "review"
+          column.status === "in_review"
             ? columnTasks.reduce(
                 (acc, task) => {
                   if (task.is_blocked) {
@@ -398,7 +419,7 @@ export const TaskBoard = memo(function TaskBoard({
             : null;
 
         const filteredTasks =
-          column.status === "review" && reviewBucket !== "all"
+          column.status === "in_review" && reviewBucket !== "all"
             ? columnTasks.filter((task) => {
                 if (reviewBucket === "blocked") return Boolean(task.is_blocked);
                 if (reviewBucket === "approval_needed")
@@ -421,7 +442,7 @@ export const TaskBoard = memo(function TaskBoard({
               // On mobile, columns are stacked, so avoid forcing tall fixed heights.
               "kanban-column min-h-0",
               // On larger screens, keep columns tall to reduce empty space during drag.
-              "sm:min-h-[calc(100vh-260px)]",
+              "lg:min-h-[calc(100vh-260px)]",
               activeColumn === column.status &&
                 !readOnly &&
                 "ring-2 ring-slate-200",
@@ -430,7 +451,7 @@ export const TaskBoard = memo(function TaskBoard({
             onDragOver={readOnly ? undefined : handleDragOver(column.status)}
             onDragLeave={readOnly ? undefined : handleDragLeave(column.status)}
           >
-            <div className="column-header z-10 rounded-t-xl border border-b-0 border-slate-200 bg-white px-4 py-3 sm:sticky sm:top-0 sm:bg-white/80 sm:backdrop-blur">
+            <div className="column-header z-10 rounded-t-xl border border-b-0 border-slate-200 bg-white px-4 py-3 lg:sticky lg:top-0 lg:bg-white/80 lg:backdrop-blur">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 rounded-full", column.dot)} />
@@ -447,7 +468,7 @@ export const TaskBoard = memo(function TaskBoard({
                   {filteredTasks.length}
                 </span>
               </div>
-              {column.status === "review" && reviewCounts ? (
+              {column.status === "in_review" && reviewCounts ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   {(
                     [

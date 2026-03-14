@@ -35,7 +35,7 @@ async def _make_session(engine: AsyncEngine) -> AsyncSession:
 async def _seed_board_task_and_agent(
     session: AsyncSession,
     *,
-    task_status: str = "review",
+    task_status: str = "in_review",
     require_approval_for_done: bool = True,
     require_review_before_done: bool = False,
     block_status_changes_with_pending_approval: bool = False,
@@ -105,7 +105,7 @@ async def _update_task_status(
     *,
     task: Task,
     agent: Agent,
-    status: Literal["inbox", "in_progress", "review", "done"],
+    status: Literal["inbox", "todo", "in_progress", "in_review", "sprint_done", "done"],
 ) -> TaskRead:
     return await tasks_api.update_task(
         payload=TaskUpdate(status=status),
@@ -255,7 +255,7 @@ async def test_update_task_rejects_done_from_in_progress_when_review_toggle_enab
             detail = exc.value.detail
             assert isinstance(detail, dict)
             assert detail["message"] == (
-                "Task can only be marked done from review when the board rule is enabled."
+                "Task can only be marked done from in_review when the board rule is enabled."
             )
     finally:
         await engine.dispose()
@@ -268,7 +268,7 @@ async def test_update_task_allows_done_from_review_when_review_toggle_enabled() 
         async with await _make_session(engine) as session:
             _board, task, agent = await _seed_board_task_and_agent(
                 session,
-                task_status="review",
+                task_status="in_review",
                 require_approval_for_done=False,
                 require_review_before_done=True,
             )
@@ -421,7 +421,7 @@ async def test_update_task_lead_can_still_change_status_when_only_lead_rule_enab
         async with await _make_session(engine) as session:
             _board, task, lead_agent = await _seed_board_task_and_agent(
                 session,
-                task_status="review",
+                task_status="in_review",
                 require_approval_for_done=False,
                 require_review_before_done=False,
                 only_lead_can_change_status=True,
@@ -447,7 +447,7 @@ async def test_update_task_allows_dependency_change_with_pending_approval() -> N
         async with await _make_session(engine) as session:
             board, task, _agent = await _seed_board_task_and_agent(
                 session,
-                task_status="review",
+                task_status="in_review",
                 require_approval_for_done=False,
                 block_status_changes_with_pending_approval=True,
             )
@@ -472,7 +472,7 @@ async def test_update_task_allows_dependency_change_with_pending_approval() -> N
 
             updated = await tasks_api.update_task(
                 payload=TaskUpdate(
-                    status="review",
+                    status="in_review",
                     depends_on_task_ids=[dependency.id],
                 ),
                 task=task,

@@ -10,7 +10,9 @@ export type TaskCardReadStatus =
 
 export const TaskCardReadStatus = {
   inbox: "inbox",
+  todo: "todo",
   in_progress: "in_progress",
-  review: "review",
+  in_review: "in_review",
+  sprint_done: "sprint_done",
   done: "done",
 } as const;

@@ -26,7 +26,7 @@ from app.services.tags import TagState, load_tag_state
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
 
-_STATUS_ORDER = {"in_progress": 0, "review": 1, "inbox": 2, "done": 3}
+_STATUS_ORDER = {"in_progress": 0, "in_review": 1, "inbox": 2, "todo": 3, "sprint_done": 4, "done": 5}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _RUNTIME_TYPE_REFERENCES = (UUID, AsyncSession)
 

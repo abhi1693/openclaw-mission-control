@@ -71,7 +71,7 @@ async def test_lead_update_rejects_assignment_change_when_task_blocked() -> None
                     board_id=board_id,
                     title="t",
                     description=None,
-                    status="review",
+                    status="in_review",
                     assigned_agent_id=None,
                 ),
             )
@@ -116,7 +116,7 @@ async def test_lead_update_rejects_assignment_change_when_task_blocked() -> None
             # DB unchanged
             reloaded = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert reloaded is not None
-            assert reloaded.status == "review"
+            assert reloaded.status == "in_review"
             assert reloaded.assigned_agent_id is None
 
     finally:
@@ -153,7 +153,7 @@ async def test_lead_update_rejects_status_change_when_task_blocked() -> None:
                     board_id=board_id,
                     title="t",
                     description=None,
-                    status="review",
+                    status="in_review",
                 ),
             )
             session.add(
@@ -196,7 +196,7 @@ async def test_lead_update_rejects_status_change_when_task_blocked() -> None:
 
             reloaded = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert reloaded is not None
-            assert reloaded.status == "review"
+            assert reloaded.status == "in_review"
 
     finally:
         await engine.dispose()

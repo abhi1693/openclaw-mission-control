@@ -25,8 +25,10 @@ class DashboardWipPoint(SQLModel):
 
     period: datetime
     inbox: int
+    todo: int = 0
     in_progress: int
-    review: int
+    in_review: int
+    sprint_done: int = 0
     done: int
 
 
@@ -67,7 +69,7 @@ class DashboardKpis(SQLModel):
     tasks_in_progress: int
     inbox_tasks: int
     in_progress_tasks: int
-    review_tasks: int
+    in_review_tasks: int
     done_tasks: int
     error_rate_pct: float
     median_cycle_time_hours_7d: float | None

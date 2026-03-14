@@ -152,8 +152,10 @@ def _wip_series_from_mapping(
             DashboardWipPoint(
                 period=bucket,
                 inbox=values.get("inbox", 0),
+                todo=values.get("todo", 0),
                 in_progress=values.get("in_progress", 0),
-                review=values.get("review", 0),
+                in_review=values.get("in_review", 0),
+                sprint_done=values.get("sprint_done", 0),
                 done=values.get("done", 0),
             ),
         )
@@ -196,7 +198,7 @@ async def _query_cycle_time(
     duration_hours = func.extract("epoch", Task.updated_at - in_progress) / 3600.0
     statement = (
         select(bucket_col, func.avg(duration_hours))
-        .where(col(Task.status) == "review")
+        .where(col(Task.status) == "in_review")
         .where(col(Task.in_progress_at).is_not(None))
         .where(col(Task.updated_at) >= range_spec.start)
         .where(col(Task.updated_at) <= range_spec.end)
@@ -269,14 +271,18 @@ async def _query_wip(
     inbox_results = (await session.exec(inbox_statement)).all()
 
     status_bucket_col = func.date_trunc(range_spec.bucket, Task.updated_at).label("status_bucket")
+    todo_case = case((col(Task.status) == "todo", 1), else_=0)
     progress_case = case((col(Task.status) == "in_progress", 1), else_=0)
-    review_case = case((col(Task.status) == "review", 1), else_=0)
+    in_review_case = case((col(Task.status) == "in_review", 1), else_=0)
+    sprint_done_case = case((col(Task.status) == "sprint_done", 1), else_=0)
     done_case = case((col(Task.status) == "done", 1), else_=0)
     status_statement = (
         select(
             status_bucket_col,
+            func.sum(todo_case),
             func.sum(progress_case),
-            func.sum(review_case),
+            func.sum(in_review_case),
+            func.sum(sprint_done_case),
             func.sum(done_case),
         )
         .where(col(Task.updated_at) >= range_spec.start)
@@ -291,10 +297,12 @@ async def _query_wip(
     for bucket, inbox in inbox_results:
         values = mapping.setdefault(bucket, {})
         values["inbox"] = int(inbox or 0)
-    for bucket, in_progress, review, done in status_results:
+    for bucket, todo, in_progress, in_review, sprint_done, done in status_results:
         values = mapping.setdefault(bucket, {})
+        values["todo"] = int(todo or 0)
         values["in_progress"] = int(in_progress or 0)
-        values["review"] = int(review or 0)
+        values["in_review"] = int(in_review or 0)
+        values["sprint_done"] = int(sprint_done or 0)
         values["done"] = int(done or 0)
     return _wip_series_from_mapping(range_spec, mapping)
 
@@ -308,7 +316,7 @@ async def _median_cycle_time_for_range(
     duration_hours = func.extract("epoch", Task.updated_at - in_progress) / 3600.0
     statement = (
         select(func.percentile_cont(0.5).within_group(duration_hours))
-        .where(col(Task.status) == "review")
+        .where(col(Task.status) == "in_review")
         .where(col(Task.in_progress_at).is_not(None))
         .where(col(Task.updated_at) >= range_spec.start)
         .where(col(Task.updated_at) <= range_spec.end)
@@ -380,8 +388,10 @@ async def _task_status_counts(
     if not board_ids:
         return {
             "inbox": 0,
+            "todo": 0,
             "in_progress": 0,
-            "review": 0,
+            "in_review": 0,
+            "sprint_done": 0,
             "done": 0,
         }
     statement = (
@@ -392,8 +402,10 @@ async def _task_status_counts(
     results = (await session.exec(statement)).all()
     counts = {
         "inbox": 0,
+        "todo": 0,
         "in_progress": 0,
-        "review": 0,
+        "in_review": 0,
+        "sprint_done": 0,
         "done": 0,
     }
     for status_value, total in results:
@@ -529,7 +541,7 @@ async def dashboard_metrics(
         tasks_in_progress=task_status_counts["in_progress"],
         inbox_tasks=task_status_counts["inbox"],
         in_progress_tasks=task_status_counts["in_progress"],
-        review_tasks=task_status_counts["review"],
+        in_review_tasks=task_status_counts["in_review"],
         done_tasks=task_status_counts["done"],
         error_rate_pct=await _error_rate_kpi(session, primary, board_ids),
         median_cycle_time_hours_7d=await _median_cycle_time_for_range(

@@ -2,7 +2,7 @@ import { CalendarClock, UserCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-type TaskStatus = "inbox" | "in_progress" | "review" | "done";
+type TaskStatus = "inbox" | "todo" | "in_progress" | "in_review" | "sprint_done" | "done";
 
 interface TaskCardProps {
   title: string;
@@ -41,7 +41,7 @@ export function TaskCard({
 }: TaskCardProps) {
   const hasPendingApproval = approvalsPendingCount > 0;
   const needsLeadReview =
-    status === "review" && !isBlocked && !hasPendingApproval;
+    status === "in_review" && !isBlocked && !hasPendingApproval;
   const leftBarClassName = isBlocked
     ? "bg-rose-400"
     : hasPendingApproval

@@ -14,6 +14,7 @@ import { SignInButton, SignedIn, SignedOut, useAuth } from "@/auth/clerk";
 import {
   Activity,
   ArrowUpRight,
+  BookOpen,
   MessageSquare,
   Pause,
   Plus,
@@ -29,6 +30,11 @@ import { Markdown } from "@/components/atoms/Markdown";
 import { StatusDot } from "@/components/atoms/StatusDot";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { TaskBoard } from "@/components/organisms/TaskBoard";
+import {
+  TaskBoardFilters,
+  applyTaskBoardFilters,
+  type TaskBoardFilterValues,
+} from "@/components/organisms/TaskBoardFilters";
 import {
   DependencyBanner,
   type DependencyBannerDependency,
@@ -57,7 +63,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError } from "@/api/mutator";
+import { ApiError, customFetch } from "@/api/mutator";
 import { streamAgentsApiV1AgentsStreamGet } from "@/api/generated/agents/agents";
 import {
   streamApprovalsApiV1BoardsBoardIdApprovalsStreamGet,
@@ -107,6 +113,7 @@ import type {
   TaskRead,
 } from "@/api/generated/model";
 import { createExponentialBackoff } from "@/lib/backoff";
+import { useUrlBoardFilters } from "@/lib/use-url-board-filters";
 import {
   apiDatetimeToMs,
   localDateInputToUtcIso,
@@ -514,8 +521,10 @@ const priorities = [
 ];
 const statusOptions = [
   { value: "inbox", label: "Inbox" },
+  { value: "todo", label: "Todo" },
   { value: "in_progress", label: "In progress" },
-  { value: "review", label: "Review" },
+  { value: "in_review", label: "In review" },
+  { value: "sprint_done", label: "Sprint done" },
   { value: "done", label: "Done" },
 ];
 
@@ -909,6 +918,8 @@ export default function BoardDetailPage() {
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [deleteTaskError, setDeleteTaskError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const { filters: boardFilters, setFilters: setBoardFilters } =
+    useUrlBoardFilters();
   const [isLiveFeedOpen, setIsLiveFeedOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const isLiveFeedOpenRef = useRef(false);
@@ -1148,6 +1159,12 @@ export default function BoardDetailPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editStatus, setEditStatus] = useState<TaskStatus>("inbox");
   const [editPriority, setEditPriority] = useState("medium");
+  const [selectedTaskTransitions, setSelectedTaskTransitions] = useState<{
+    current_status: string;
+    allowed_next_statuses: string[];
+    has_tag_rules: boolean;
+    tag_slugs: string[];
+  } | null>(null);
   const [editDueDate, setEditDueDate] = useState("");
   const [editAssigneeId, setEditAssigneeId] = useState("");
   const [editTagIds, setEditTagIds] = useState<string[]>([]);
@@ -1646,6 +1663,32 @@ export default function BoardDetailPage() {
     };
   }, [board, boardId, isPageActive, isSignedIn, pushLiveFeed]);
 
+  const fetchTaskTransitions = useCallback(
+    async (taskId: string) => {
+      if (!boardId) return null;
+      try {
+        const result = await customFetch<{
+          data: {
+            current_status: string;
+            allowed_next_statuses: string[];
+            has_tag_rules: boolean;
+            tag_slugs: string[];
+          };
+          status: number;
+        }>(`/api/v1/boards/${boardId}/tasks/${taskId}/transitions`, {
+          method: "GET",
+        });
+        if (result.status === 200) {
+          return result.data;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    [boardId],
+  );
+
   useEffect(() => {
     if (!selectedTask) {
       setEditTitle("");
@@ -1660,6 +1703,7 @@ export default function BoardDetailPage() {
         boardCustomFieldValues(boardCustomFieldDefinitions, {}),
       );
       setSaveTaskError(null);
+      setSelectedTaskTransitions(null);
       return;
     }
     setEditTitle(selectedTask.title);
@@ -1677,7 +1721,11 @@ export default function BoardDetailPage() {
       ),
     );
     setSaveTaskError(null);
-  }, [boardCustomFieldDefinitions, selectedTask]);
+    // Fetch tag-based transition rules for the status dropdown
+    void fetchTaskTransitions(selectedTask.id).then((result) => {
+      setSelectedTaskTransitions(result);
+    });
+  }, [boardCustomFieldDefinitions, fetchTaskTransitions, selectedTask]);
 
   useEffect(() => {
     if (!isPageActive) return;
@@ -2152,6 +2200,11 @@ export default function BoardDetailPage() {
     });
     return map;
   }, [tasks]);
+
+  const filteredTasks = useMemo(
+    () => applyTaskBoardFilters(tasks, boardFilters),
+    [tasks, boardFilters],
+  );
 
   const orderedLiveFeed = useMemo(() => {
     return [...liveFeed].sort((a, b) => {
@@ -2803,6 +2856,24 @@ export default function BoardDetailPage() {
         setError("Task is blocked by incomplete dependencies.");
         return;
       }
+      // Check tag-based transition rules before optimistic update
+      const transitions = await fetchTaskTransitions(taskId);
+      if (
+        transitions?.has_tag_rules &&
+        !transitions.allowed_next_statuses.includes(status)
+      ) {
+        const allowedLabels = transitions.allowed_next_statuses
+          .map(
+            (s) =>
+              statusOptions.find((o) => o.value === s)?.label ??
+              s.replace(/_/g, " "),
+          )
+          .join(", ");
+        const message = `Status transition not allowed by tag rules. Allowed: ${allowedLabels || "none"}.`;
+        setError(message);
+        pushToast(message);
+        return;
+      }
       const previousTasks = tasksRef.current;
       setTasks((prev) =>
         prev.map((task) =>
@@ -2864,7 +2935,7 @@ export default function BoardDetailPage() {
         pushToast(message);
       }
     },
-    [boardId, isSignedIn, pushToast, taskTitleById],
+    [boardId, fetchTaskTransitions, isSignedIn, pushToast, taskTitleById],
   );
 
   const agentInitials = (agent: Agent) =>
@@ -2925,10 +2996,14 @@ export default function BoardDetailPage() {
 
   const statusBadgeClass = (value?: string) => {
     switch (value) {
+      case "todo":
+        return "bg-sky-100 text-sky-700";
       case "in_progress":
         return "bg-purple-100 text-purple-700";
-      case "review":
+      case "in_review":
         return "bg-indigo-100 text-indigo-700";
+      case "sprint_done":
+        return "bg-amber-100 text-amber-700";
       case "done":
         return "bg-emerald-100 text-emerald-700";
       default:
@@ -3221,6 +3296,16 @@ export default function BoardDetailPage() {
                   >
                     <Activity className="h-4 w-4" />
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/boards/${boardId}/retros`)}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                    aria-label="Retrospectives"
+                    title="Sprint Retrospectives"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    <span className="hidden sm:inline">Retro</span>
+                  </button>
                   {isOrgAdmin ? (
                     <button
                       type="button"
@@ -3402,11 +3487,19 @@ export default function BoardDetailPage() {
                                         Inbox {item.task_counts?.inbox ?? 0}
                                       </span>
                                       <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">
+                                        Todo {item.task_counts?.todo ?? 0}
+                                      </span>
+                                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">
                                         In progress{" "}
                                         {item.task_counts?.in_progress ?? 0}
                                       </span>
                                       <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">
-                                        Review {item.task_counts?.review ?? 0}
+                                        In review{" "}
+                                        {item.task_counts?.in_review ?? 0}
+                                      </span>
+                                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">
+                                        Sprint done{" "}
+                                        {item.task_counts?.sprint_done ?? 0}
                                       </span>
                                     </div>
 
@@ -3537,12 +3630,26 @@ export default function BoardDetailPage() {
                   ) : null}
 
                   {viewMode === "board" ? (
-                    <TaskBoard
-                      tasks={tasks}
-                      onTaskSelect={openComments}
-                      onTaskMove={canWrite ? handleTaskMove : undefined}
-                      readOnly={!canWrite}
-                    />
+                    <>
+                      <TaskBoardFilters
+                        tasks={tasks}
+                        filters={boardFilters}
+                        onFiltersChange={setBoardFilters}
+                      />
+                      {filteredTasks.length === 0 &&
+                      Object.keys(boardFilters).length > 0 ? (
+                        <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white py-16 text-sm text-slate-500">
+                          No matching tasks
+                        </div>
+                      ) : (
+                        <TaskBoard
+                          tasks={filteredTasks}
+                          onTaskSelect={openComments}
+                          onTaskMove={canWrite ? handleTaskMove : undefined}
+                          readOnly={!canWrite}
+                        />
+                      )}
+                    </>
                   ) : (
                     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
                       <div className="border-b border-slate-200 px-5 py-4">
@@ -4194,13 +4301,26 @@ export default function BoardDetailPage() {
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    {statusOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    {statusOptions.map((option) => {
+                      const isCurrentStatus = option.value === selectedTask?.status;
+                      const isAllowed =
+                        !selectedTaskTransitions?.has_tag_rules ||
+                        isCurrentStatus ||
+                        selectedTaskTransitions.allowed_next_statuses.includes(option.value);
+                      if (!isAllowed) return null;
+                      return (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
+                {selectedTaskTransitions?.has_tag_rules ? (
+                  <p className="text-xs text-slate-500">
+                    Status options restricted by tag rules.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">

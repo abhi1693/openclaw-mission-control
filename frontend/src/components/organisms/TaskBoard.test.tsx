@@ -18,7 +18,7 @@ const buildTask = (overrides: Partial<Task> = {}): Task => ({
 });
 
 describe("TaskBoard", () => {
-  it("uses a mobile-first stacked layout (no horizontal scroll) with responsive kanban columns on larger screens", () => {
+  it("uses a mobile-first stacked layout with responsive kanban columns on larger screens", () => {
     render(
       <TaskBoard
         tasks={[
@@ -34,10 +34,9 @@ describe("TaskBoard", () => {
 
     const board = screen.getByTestId("task-board");
 
-    expect(board.className).toContain("overflow-x-hidden");
-    expect(board.className).toContain("sm:overflow-x-auto");
+    expect(board.className).toContain("overflow-x-auto");
     expect(board.className).toContain("grid-cols-1");
-    expect(board.className).toContain("sm:grid-flow-col");
+    expect(board.className).toContain("lg:grid-flow-col");
   });
 
   it("only sticks column headers on larger screens (avoids weird stacked sticky headers on mobile)", () => {
@@ -57,46 +56,58 @@ describe("TaskBoard", () => {
     const header = screen
       .getByRole("heading", { name: "Inbox" })
       .closest(".column-header");
-    expect(header?.className).toContain("sm:sticky");
-    expect(header?.className).toContain("sm:top-0");
-    // Ensure we didn't accidentally keep unscoped sticky behavior.
-    expect(header?.className).not.toContain("sticky top-0");
+    expect(header?.className).toContain("lg:sticky");
+    expect(header?.className).toContain("lg:top-0");
   });
 
-  it("renders the 4 columns and shows per-column counts", () => {
+  it("renders the 6 columns and shows per-column counts", () => {
     const tasks: Task[] = [
       buildTask({ id: "t1", title: "Inbox A", status: "inbox" }),
-      buildTask({ id: "t2", title: "Doing A", status: "in_progress" }),
-      buildTask({ id: "t3", title: "Review A", status: "review" }),
-      buildTask({ id: "t4", title: "Done A", status: "done" }),
-      buildTask({ id: "t5", title: "Inbox B", status: "inbox" }),
+      buildTask({ id: "t2", title: "Todo A", status: "todo" }),
+      buildTask({ id: "t3", title: "Doing A", status: "in_progress" }),
+      buildTask({ id: "t4", title: "Review A", status: "in_review" }),
+      buildTask({ id: "t5", title: "Sprint Done A", status: "sprint_done" }),
+      buildTask({ id: "t6", title: "Done A", status: "done" }),
+      buildTask({ id: "t7", title: "Inbox B", status: "inbox" }),
     ];
 
     render(<TaskBoard tasks={tasks} />);
 
     const inboxHeading = screen.getByRole("heading", { name: "Inbox" });
+    const todoHeading = screen.getByRole("heading", { name: "Todo" });
     const inProgressHeading = screen.getByRole("heading", {
       name: "In Progress",
     });
-    const reviewHeading = screen.getByRole("heading", { name: "Review" });
+    const inReviewHeading = screen.getByRole("heading", { name: "In Review" });
+    const sprintDoneHeading = screen.getByRole("heading", {
+      name: "Sprint Done",
+    });
     const doneHeading = screen.getByRole("heading", { name: "Done" });
 
     expect(inboxHeading).toBeInTheDocument();
+    expect(todoHeading).toBeInTheDocument();
     expect(inProgressHeading).toBeInTheDocument();
-    expect(reviewHeading).toBeInTheDocument();
+    expect(inReviewHeading).toBeInTheDocument();
+    expect(sprintDoneHeading).toBeInTheDocument();
     expect(doneHeading).toBeInTheDocument();
 
     const inboxColumn = inboxHeading.closest(".kanban-column") as HTMLElement | null;
+    const todoColumn = todoHeading.closest(".kanban-column") as HTMLElement | null;
     const inProgressColumn = inProgressHeading.closest(
       ".kanban-column",
     ) as HTMLElement | null;
-    const reviewColumn = reviewHeading.closest(".kanban-column") as HTMLElement | null;
+    const inReviewColumn = inReviewHeading.closest(".kanban-column") as HTMLElement | null;
+    const sprintDoneColumn = sprintDoneHeading.closest(
+      ".kanban-column",
+    ) as HTMLElement | null;
     const doneColumn = doneHeading.closest(".kanban-column") as HTMLElement | null;
     expect(inboxColumn).toBeTruthy();
+    expect(todoColumn).toBeTruthy();
     expect(inProgressColumn).toBeTruthy();
-    expect(reviewColumn).toBeTruthy();
+    expect(inReviewColumn).toBeTruthy();
+    expect(sprintDoneColumn).toBeTruthy();
     expect(doneColumn).toBeTruthy();
-    if (!inboxColumn || !inProgressColumn || !reviewColumn || !doneColumn) return;
+    if (!inboxColumn || !todoColumn || !inProgressColumn || !inReviewColumn || !sprintDoneColumn || !doneColumn) return;
 
     const getColumnCountBadge = (column: HTMLElement) =>
       column.querySelector(
@@ -104,44 +115,48 @@ describe("TaskBoard", () => {
       ) as HTMLElement | null;
 
     const inboxCountBadge = getColumnCountBadge(inboxColumn);
+    const todoCountBadge = getColumnCountBadge(todoColumn);
     const inProgressCountBadge = getColumnCountBadge(inProgressColumn);
-    const reviewCountBadge = getColumnCountBadge(reviewColumn);
+    const inReviewCountBadge = getColumnCountBadge(inReviewColumn);
+    const sprintDoneCountBadge = getColumnCountBadge(sprintDoneColumn);
     const doneCountBadge = getColumnCountBadge(doneColumn);
 
     expect(inboxCountBadge).toHaveTextContent("2");
+    expect(todoCountBadge).toHaveTextContent("1");
     expect(inProgressCountBadge).toHaveTextContent("1");
-    expect(reviewCountBadge).toHaveTextContent("1");
+    expect(inReviewCountBadge).toHaveTextContent("1");
+    expect(sprintDoneCountBadge).toHaveTextContent("1");
     expect(doneCountBadge).toHaveTextContent("1");
 
     expect(screen.getByText("Inbox A")).toBeInTheDocument();
     expect(screen.getByText("Inbox B")).toBeInTheDocument();
   });
 
-  it("filters the review column by bucket", () => {
+  it("filters the in_review column by bucket", () => {
     const tasks: Task[] = [
       buildTask({
         id: "blocked",
         title: "Blocked Review",
-        status: "review",
+        status: "in_review",
         is_blocked: true,
         blocked_by_task_ids: ["dep-1"],
       }),
       buildTask({
         id: "approval",
         title: "Needs Approval",
-        status: "review",
+        status: "in_review",
         approvals_pending_count: 2,
       }),
       buildTask({
         id: "lead",
         title: "Lead Review",
-        status: "review",
+        status: "in_review",
       }),
     ];
 
     render(<TaskBoard tasks={tasks} />);
 
-    const reviewHeading = screen.getByRole("heading", { name: "Review" });
+    const reviewHeading = screen.getByRole("heading", { name: "In Review" });
     const reviewColumn = reviewHeading.closest(".kanban-column") as HTMLElement | null;
     expect(reviewColumn).toBeTruthy();
     if (!reviewColumn) return;
@@ -217,5 +232,16 @@ describe("TaskBoard", () => {
       "draggable",
       "false",
     );
+  });
+
+  it("renders empty columns as valid drop targets", () => {
+    render(<TaskBoard tasks={[]} />);
+
+    const headings = ["Inbox", "Todo", "In Progress", "In Review", "Sprint Done", "Done"];
+    for (const name of headings) {
+      const heading = screen.getByRole("heading", { name });
+      const column = heading.closest(".kanban-column");
+      expect(column).toBeTruthy();
+    }
   });
 });

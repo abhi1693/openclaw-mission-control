@@ -19,8 +19,10 @@ const APPROVAL_STATUS_DOT_CLASS_BY_STATUS: Record<string, string> = {
 
 const TASK_STATUS_DOT_CLASS_BY_STATUS: Record<string, string> = {
   inbox: "bg-slate-400",
+  todo: "bg-sky-500",
   in_progress: "bg-purple-500",
-  review: "bg-indigo-500",
+  in_review: "bg-indigo-500",
+  sprint_done: "bg-amber-500",
   done: "bg-emerald-500",
 };
 

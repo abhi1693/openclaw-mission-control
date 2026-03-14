@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     security_header_referrer_policy: str = "strict-origin-when-cross-origin"
     security_header_permissions_policy: str = ""
 
+    # GitHub webhook secret for HMAC-SHA256 signature verification.
+    github_webhook_secret: str = ""
+
     # Webhook payload size limit in bytes (default 1 MB).
     webhook_max_payload_bytes: int = 1_048_576
 

@@ -27,6 +27,7 @@ from app.models.task_custom_fields import (
 )
 from app.models.task_dependencies import TaskDependency
 from app.models.task_fingerprints import TaskFingerprint
+from app.models.retro_entries import RetroEntry
 from app.models.tasks import Task
 from app.models.users import User
 
@@ -55,6 +56,7 @@ __all__ = [
     "OrganizationInvite",
     "OrganizationInviteBoardAccess",
     "TaskDependency",
+    "RetroEntry",
     "Task",
     "TaskFingerprint",
     "Tag",

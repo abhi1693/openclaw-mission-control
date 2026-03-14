@@ -13,7 +13,10 @@ from app.schemas.common import NonEmptyStr
 from app.schemas.tags import TagRef
 from app.schemas.task_custom_fields import TaskCustomFieldValues
 
-TaskStatus = Literal["inbox", "in_progress", "review", "done"]
+TaskStatus = Literal["inbox", "todo", "in_progress", "in_review", "sprint_done", "done"]
+
+# Backward-compatible alias: API consumers may still send "review".
+_STATUS_COMPAT_MAP: dict[str, str] = {"review": "in_review"}
 STATUS_REQUIRED_ERROR = "status is required"
 # Keep these symbols as runtime globals so Pydantic can resolve
 # deferred annotations reliably.
@@ -31,6 +34,14 @@ class TaskBase(SQLModel):
     assigned_agent_id: UUID | None = None
     depends_on_task_ids: list[UUID] = Field(default_factory=list)
     tag_ids: list[UUID] = Field(default_factory=list)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value: object) -> object:
+        """Map legacy status values to their current equivalents."""
+        if isinstance(value, str):
+            return _STATUS_COMPAT_MAP.get(value, value)
+        return value
 
 
 class TaskCreate(TaskBase):
@@ -53,6 +64,14 @@ class TaskUpdate(SQLModel):
     tag_ids: list[UUID] | None = None
     custom_field_values: TaskCustomFieldValues | None = None
     comment: NonEmptyStr | None = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value: object) -> object:
+        """Map legacy status values to their current equivalents."""
+        if isinstance(value, str):
+            return _STATUS_COMPAT_MAP.get(value, value)
+        return value
 
     @field_validator("comment", mode="before")
     @classmethod

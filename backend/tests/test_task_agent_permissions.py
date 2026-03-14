@@ -397,13 +397,13 @@ async def test_non_lead_agent_moves_task_to_review_and_reassigns_to_lead() -> No
             assert actor is not None
 
             updated = await tasks_api.update_task(
-                payload=TaskUpdate(status="review", comment="Moving to review."),
+                payload=TaskUpdate(status="in_review", comment="Moving to review."),
                 task=task,
                 session=session,
                 actor=ActorContext(actor_type="agent", agent=actor),
             )
 
-            assert updated.status == "review"
+            assert updated.status == "in_review"
             assert updated.assigned_agent_id == lead_id
             assert updated.in_progress_at is None
 
@@ -517,13 +517,13 @@ async def test_non_lead_agent_move_to_review_reassigns_to_lead_and_sends_review_
             assert actor is not None
 
             updated = await tasks_api.update_task(
-                payload=TaskUpdate(status="review", comment="Moving to review."),
+                payload=TaskUpdate(status="in_review", comment="Moving to review."),
                 task=task,
                 session=session,
                 actor=ActorContext(actor_type="agent", agent=actor),
             )
 
-            assert updated.status == "review"
+            assert updated.status == "in_review"
             assert updated.assigned_agent_id == lead_id
             assert sent["session_key"] == "lead-session"
             assert sent["agent_name"] == "Lead Agent"
@@ -640,12 +640,12 @@ async def test_lead_moves_review_task_to_inbox_and_reassigns_last_worker_with_re
             assert lead is not None
 
             moved_to_review = await tasks_api.update_task(
-                payload=TaskUpdate(status="review", comment="Ready for review."),
+                payload=TaskUpdate(status="in_review", comment="Ready for review."),
                 task=task,
                 session=session,
                 actor=ActorContext(actor_type="agent", agent=worker),
             )
-            assert moved_to_review.status == "review"
+            assert moved_to_review.status == "in_review"
             assert moved_to_review.assigned_agent_id == lead_id
 
             session.add(
@@ -733,7 +733,7 @@ async def test_non_lead_agent_comment_in_review_without_status_does_not_reassign
                     board_id=board_id,
                     title="review task",
                     description="",
-                    status="review",
+                    status="in_review",
                     assigned_agent_id=None,
                 ),
             )
@@ -753,7 +753,7 @@ async def test_non_lead_agent_comment_in_review_without_status_does_not_reassign
                 actor=ActorContext(actor_type="agent", agent=commentator),
             )
 
-            assert updated.status == "review"
+            assert updated.status == "in_review"
             assert updated.assigned_agent_id is None
     finally:
         await engine.dispose()
@@ -829,13 +829,13 @@ async def test_non_lead_agent_moves_to_review_without_comment_when_rule_disabled
             assert actor is not None
 
             updated = await tasks_api.update_task(
-                payload=TaskUpdate(status="review"),
+                payload=TaskUpdate(status="in_review"),
                 task=task,
                 session=session,
                 actor=ActorContext(actor_type="agent", agent=actor),
             )
 
-            assert updated.status == "review"
+            assert updated.status == "in_review"
             assert updated.assigned_agent_id == lead_id
     finally:
         await engine.dispose()
@@ -903,7 +903,7 @@ async def test_non_lead_agent_moves_to_review_without_comment_or_recent_comment_
 
             with pytest.raises(HTTPException) as exc:
                 await tasks_api.update_task(
-                    payload=TaskUpdate(status="review"),
+                    payload=TaskUpdate(status="in_review"),
                     task=task,
                     session=session,
                     actor=ActorContext(actor_type="agent", agent=actor),

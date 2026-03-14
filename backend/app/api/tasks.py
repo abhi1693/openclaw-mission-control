@@ -11,8 +11,9 @@ from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+import sqlalchemy as sa
 from sqlalchemy import asc, desc, or_
-from sqlmodel import col, select
+from sqlmodel import SQLModel, col, select
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import (
@@ -75,6 +76,11 @@ from app.services.task_dependencies import (
     replace_task_dependencies,
     validate_dependency_update,
 )
+from app.services.transition_rules import (
+    get_allowed_transitions,
+    has_controlled_tags,
+    is_valid_transition,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
@@ -88,7 +94,9 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/boards/{board_id}/tasks", tags=["tasks"])
 
-ALLOWED_STATUSES = {"inbox", "in_progress", "review", "done"}
+ALLOWED_STATUSES = {"inbox", "todo", "in_progress", "in_review", "sprint_done", "done"}
+# Backward compatibility: accept legacy "review" as "in_review" in status filters.
+_STATUS_FILTER_COMPAT: dict[str, str] = {"review": "in_review"}
 TASK_EVENT_TYPES = {
     "task.created",
     "task.updated",
@@ -162,7 +170,7 @@ def _review_required_for_done_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={
-            "message": ("Task can only be marked done from review when the board rule is enabled."),
+            "message": ("Task can only be marked done from in_review when the board rule is enabled."),
             "blocked_by_task_ids": [],
         },
     )
@@ -176,6 +184,57 @@ def _pending_approval_blocks_status_change_error() -> HTTPException:
             "blocked_by_task_ids": [],
         },
     )
+
+
+def _invalid_tag_transition_error(
+    *,
+    current_status: str,
+    target_status: str,
+    allowed_next_statuses: list[str],
+) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "message": (
+                f"Invalid status transition from '{current_status}' to '{target_status}' "
+                "based on task tag rules."
+            ),
+            "code": "invalid_tag_transition",
+            "current_status": current_status,
+            "requested_status": target_status,
+            "allowed_next_statuses": allowed_next_statuses,
+        },
+    )
+
+
+async def _validate_tag_transition(
+    session: AsyncSession,
+    *,
+    task: Task,
+    target_status: str,
+) -> None:
+    """Validate status transition against tag-based rules.
+
+    If the task has any controlled tags (feature/enhancement/bug/document),
+    only sequential transitions are allowed.  Tasks without controlled tags
+    may transition freely.  Raises HTTP 400 when the transition is invalid.
+    """
+    if task.status == target_status:
+        return  # no-op — always valid
+
+    tag_state = (await load_tag_state(session, task_ids=[task.id])).get(task.id, TagState())
+    tag_slugs = {tag.slug for tag in tag_state.tags}
+
+    if not has_controlled_tags(tag_slugs):
+        return  # free transition — no tag rules apply
+
+    if not is_valid_transition(task.status, target_status):
+        allowed = get_allowed_transitions(task.status)
+        raise _invalid_tag_transition_error(
+            current_status=task.status,
+            target_status=target_status,
+            allowed_next_statuses=allowed,
+        )
 
 
 async def _task_has_approved_linked_approval(
@@ -255,7 +314,7 @@ async def _require_review_before_done_when_enabled(
             select(col(Board.require_review_before_done)).where(col(Board.id) == board_id),
         )
     ).first()
-    if requires_review and previous_status != "review":
+    if requires_review and previous_status != "in_review":
         raise _review_required_for_done_error()
 
 
@@ -602,7 +661,7 @@ def _assignment_notification_message(*, board: Board, task: Task, agent: Agent) 
     ]
     if description:
         details.append(f"Description: {description}")
-    if task.status == "review" and agent.is_board_lead:
+    if task.status == "in_review" and agent.is_board_lead:
         action = (
             "Take action: review the deliverables now. "
             "Approve by moving to done or return to inbox with clear feedback."
@@ -894,7 +953,9 @@ async def _notify_lead_on_task_unassigned(
 def _status_values(status_filter: str | None) -> list[str]:
     if not status_filter:
         return []
-    values = [s.strip() for s in status_filter.split(",") if s.strip()]
+    raw = [s.strip() for s in status_filter.split(",") if s.strip()]
+    # Apply backward-compat mapping (e.g. "review" → "in_review").
+    values = [_STATUS_FILTER_COMPAT.get(v, v) for v in raw]
     if any(value not in ALLOWED_STATUSES for value in values):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1421,17 +1482,58 @@ async def list_tasks(
     status_filter: str | None = STATUS_QUERY,
     assigned_agent_id: UUID | None = None,
     unassigned: bool | None = None,
+    sprint: int | None = Query(default=None),
+    type: str | None = Query(default=None, alias="type"),
+    epic: str | None = Query(default=None),
     board: Board = BOARD_READ_DEP,
     session: AsyncSession = SESSION_DEP,
     _actor: ActorContext = ACTOR_DEP,
 ) -> LimitOffsetPage[TaskRead]:
-    """List board tasks with optional status and assignment filters."""
+    """List board tasks with optional status, assignment, and custom field filters."""
     statement = _task_list_statement(
         board_id=board.id,
         status_filter=status_filter,
         assigned_agent_id=assigned_agent_id,
         unassigned=unassigned,
     )
+
+    # Apply custom_field_values JSONB filters (AND combination).
+    custom_field_filters: dict[str, object] = {}
+    if sprint is not None:
+        custom_field_filters["sprint"] = sprint
+    if type is not None:
+        custom_field_filters["type"] = type
+    if epic is not None:
+        custom_field_filters["epic"] = epic
+
+    if custom_field_filters:
+        # Join through the custom field definition and value tables to filter
+        # by JSONB-stored custom field values on the server side.
+        definitions = await _organization_custom_field_definitions_for_board(
+            session,
+            board_id=board.id,
+        )
+        for field_key, filter_value in custom_field_filters.items():
+            definition = definitions.get(field_key)
+            if definition is None:
+                # Unknown custom field key: silently ignore per AC.
+                continue
+            # Sub-query: find task IDs that have this custom field value.
+            value_subquery = (
+                select(col(TaskCustomFieldValue.task_id))
+                .where(
+                    col(TaskCustomFieldValue.task_custom_field_definition_id) == definition.id,
+                )
+                .where(
+                    # JSON column: text values stored as '"xxx"', integers as 'N'.
+                    # Try both JSON-encoded string and raw text forms.
+                    or_(
+                        sa.cast(col(TaskCustomFieldValue.value), sa.Text) == f'"{filter_value}"',
+                        sa.cast(col(TaskCustomFieldValue.value), sa.Text) == str(filter_value),
+                    ),
+                )
+            )
+            statement = statement.where(col(Task.id).in_(value_subquery))
 
     async def _transform(items: Sequence[object]) -> Sequence[object]:
         tasks = _coerce_task_items(items)
@@ -1724,14 +1826,14 @@ async def _validate_task_comment_access(
         actor.actor_type == "agent"
         and actor.agent
         and actor.agent.is_board_lead
-        and task.status != "review"
+        and task.status != "in_review"
         and not await _lead_was_mentioned(session, task, actor.agent)
         and not _lead_created_task(task, actor.agent)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Board leads can only comment during review, when mentioned, "
+                "Board leads can only comment during in_review, when mentioned, "
                 "or on tasks they created."
             ),
         )
@@ -2094,7 +2196,12 @@ async def _last_worker_who_moved_task_to_review(
         select(col(ActivityEvent.agent_id))
         .where(col(ActivityEvent.task_id) == task_id)
         .where(col(ActivityEvent.event_type) == "task.status_changed")
-        .where(col(ActivityEvent.message).like("Task moved to review:%"))
+        .where(
+            or_(
+                col(ActivityEvent.message).like("Task moved to in_review:%"),
+                col(ActivityEvent.message).like("Task moved to review:%"),
+            ),
+        )
         .where(col(ActivityEvent.agent_id).is_not(None))
         .order_by(desc(col(ActivityEvent.created_at)))
     )
@@ -2121,12 +2228,12 @@ async def _lead_apply_status(
     lead_agent = update.actor.agent
     if "status" not in update.updates:
         return
-    if update.task.status != "review":
+    if update.task.status != "in_review":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
                 "Lead status gate failed: board leads can only change status when the current "
-                f"task status is `review` (current: `{update.task.status}`)."
+                f"task status is `in_review` (current: `{update.task.status}`)."
             ),
         )
     target_status = _required_status_value(update.updates["status"])
@@ -2134,7 +2241,7 @@ async def _lead_apply_status(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Lead status target gate failed: review tasks can only move to `done` or "
+                "Lead status target gate failed: in_review tasks can only move to `done` or "
                 f"`inbox` (requested: `{target_status}`)."
             ),
         )
@@ -2177,7 +2284,7 @@ async def _lead_notify_new_assignee(
     )
     if board:
         if (
-            update.previous_status == "review"
+            update.previous_status == "in_review"
             and update.task.status == "inbox"
             and update.actor.actor_type == "agent"
             and update.actor.agent
@@ -2348,6 +2455,12 @@ async def _apply_non_lead_agent_task_rules(
                 detail="Only board leads can change task status.",
             )
         status_value = _required_status_value(update.updates["status"])
+        # Validate tag-based transition rules (raises 400 if invalid).
+        await _validate_tag_transition(
+            session,
+            task=update.task,
+            target_status=status_value,
+        )
         if status_value != "inbox":
             dep_ids = await _task_dep_ids(
                 session,
@@ -2365,7 +2478,7 @@ async def _apply_non_lead_agent_task_rules(
             update.task.assigned_agent_id = None
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.in_progress_at = None
-        elif status_value == "review":
+        elif status_value == "in_review":
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.assigned_agent_id = None
             update.task.in_progress_at = None
@@ -2415,6 +2528,13 @@ async def _apply_admin_task_rules(
     target_status = _required_status_value(
         update.updates.get("status", update.task.status),
     )
+    # Validate tag-based transition rules for explicitly requested status changes.
+    if "status" in update.updates and target_status != update.task.status:
+        await _validate_tag_transition(
+            session,
+            task=update.task,
+            target_status=target_status,
+        )
     # Reset blocked tasks to inbox unless the task is already done and remains
     # done, which is the explicit done-task exception.
     if blocked_ids and not (update.task.status == "done" and target_status == "done"):
@@ -2430,7 +2550,7 @@ async def _apply_admin_task_rules(
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.assigned_agent_id = None
             update.task.in_progress_at = None
-        elif status_value == "review":
+        elif status_value == "in_review":
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.assigned_agent_id = None
             update.task.in_progress_at = None
@@ -2504,7 +2624,7 @@ async def _assign_review_task_to_lead(
     *,
     update: _TaskUpdateInput,
 ) -> None:
-    if update.task.status != "review" or update.previous_status == "review":
+    if update.task.status != "in_review" or update.previous_status == "in_review":
         return
     lead = (
         await Agent.objects.filter_by(board_id=update.board_id)
@@ -2554,7 +2674,7 @@ async def _notify_task_update_assignment_changes(
         else None
     )
     if (
-        update.previous_status == "review"
+        update.previous_status == "in_review"
         and update.task.status == "inbox"
         and update.actor.actor_type == "agent"
         and update.actor.agent
@@ -2615,9 +2735,9 @@ async def _finalize_updated_task(
     update.task.updated_at = utcnow()
 
     status_raw = update.updates.get("status")
-    # Entering review can require a new comment or valid recent context when
+    # Entering in_review can require a new comment or valid recent context when
     # the board-level rule is enabled.
-    if status_raw == "review" and await _require_comment_for_review_when_enabled(
+    if status_raw == "in_review" and await _require_comment_for_review_when_enabled(
         session,
         board_id=update.board_id,
     ):
@@ -2671,6 +2791,45 @@ async def _finalize_updated_task(
         session,
         task=update.task,
         board_id=update.board_id,
+    )
+
+
+class TaskTransitionsResponse(SQLModel):
+    """Response schema for available status transitions."""
+
+    current_status: str
+    allowed_next_statuses: list[str]
+    has_tag_rules: bool
+    tag_slugs: list[str]
+
+
+@router.get("/{task_id}/transitions", response_model=TaskTransitionsResponse)
+async def get_task_transitions(
+    task: Task = TASK_DEP,
+    session: AsyncSession = SESSION_DEP,
+    _actor: ActorContext = ACTOR_DEP,
+) -> TaskTransitionsResponse:
+    """Return the allowed next status transitions for a task.
+
+    When the task has controlled tags (feature/enhancement/bug/document),
+    only sequential transitions are allowed.
+    Tasks without controlled tags allow transitions to any other status.
+    """
+    tag_state = (await load_tag_state(session, task_ids=[task.id])).get(task.id, TagState())
+    tag_slugs_set = {tag.slug for tag in tag_state.tags}
+    controlled = has_controlled_tags(tag_slugs_set)
+
+    if controlled:
+        allowed = get_allowed_transitions(task.status)
+    else:
+        # Free transition: any status other than the current one.
+        allowed = [s for s in ALLOWED_STATUSES if s != task.status]
+
+    return TaskTransitionsResponse(
+        current_status=task.status,
+        allowed_next_statuses=allowed,
+        has_tag_rules=controlled,
+        tag_slugs=sorted(tag_slugs_set),
     )
 
 
