@@ -2121,15 +2121,30 @@ async def _lead_apply_status(
     lead_agent = update.actor.agent
     if "status" not in update.updates:
         return
-    if update.task.status != "review":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Lead status gate failed: board leads can only change status when the current "
-                f"task status is `review` (current: `{update.task.status}`)."
-            ),
-        )
     target_status = _required_status_value(update.updates["status"])
+
+    # When the board does not require review before done, allow the lead to move
+    # an in_progress task directly to done (approval gate is still enforced later).
+    # When require_review_before_done is enabled, the task must pass through review first.
+    if update.task.status != "review":
+        # Allow in_progress → done/inbox when review is not required by the board.
+        requires_review = (
+            await session.exec(
+                select(col(Board.require_review_before_done)).where(
+                    col(Board.id) == update.board_id,
+                ),
+            )
+        ).first()
+        allowed_without_review = not requires_review and target_status in {"done", "inbox"}
+        if not allowed_without_review:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Lead status gate failed: board leads can only change status when the current "
+                    f"task status is `review` (current: `{update.task.status}`)."
+                ),
+            )
+
     if target_status not in {"done", "inbox"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
