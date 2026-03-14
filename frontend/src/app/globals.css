@@ -74,6 +74,422 @@ body {
   }
 }
 
+/* ============================================
+   像素风元素 - Pixel Style Elements
+   ============================================ */
+
+/* 像素边框效果 - Pixel Border */
+.pixel-border {
+  border: 3px solid var(--border);
+  image-rendering: pixelated;
+  box-shadow: 
+    4px 0 0 0 var(--border),
+    -4px 0 0 0 var(--border),
+    0 4px 0 0 var(--border),
+    0 -4px 0 0 var(--border);
+}
+
+.pixel-border-light {
+  border: 2px solid var(--border-strong);
+  box-shadow: 
+    3px 0 0 0 var(--border-strong),
+    -3px 0 0 0 var(--border-strong),
+    0 3px 0 0 var(--border-strong),
+    0 -3px 0 0 var(--border-strong);
+}
+
+/* 像素装饰角 - Pixel Corner Decorations */
+.pixel-corner {
+  position: relative;
+}
+
+.pixel-corner::before,
+.pixel-corner::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+}
+
+.pixel-corner::before {
+  top: -4px;
+  left: -4px;
+}
+
+.pixel-corner::after {
+  bottom: -4px;
+  right: -4px;
+}
+
+.pixel-corner-top-right::before {
+  top: -4px;
+  left: auto;
+  right: -4px;
+}
+
+.pixel-corner-top-right::after {
+  bottom: -4px;
+  right: -4px;
+  left: auto;
+}
+
+/* 霓虹发光效果 - Neon Glow */
+.neon-glow {
+  box-shadow: 
+    0 0 5px var(--accent),
+    0 0 10px var(--accent),
+    0 0 20px rgba(37, 99, 235, 0.3);
+}
+
+.neon-glow-text {
+  text-shadow: 
+    0 0 5px var(--accent),
+    0 0 10px var(--accent),
+    0 0 20px rgba(37, 99, 235, 0.5);
+}
+
+.neon-glow-success {
+  box-shadow: 
+    0 0 5px var(--success),
+    0 0 10px var(--success),
+    0 0 20px rgba(22, 163, 74, 0.3);
+}
+
+.neon-glow-warning {
+  box-shadow: 
+    0 0 5px var(--warning),
+    0 0 10px var(--warning),
+    0 0 20px rgba(217, 119, 6, 0.3);
+}
+
+.neon-glow-danger {
+  box-shadow: 
+    0 0 5px var(--danger),
+    0 0 10px var(--danger),
+    0 0 20px rgba(220, 38, 38, 0.3);
+}
+
+/* 像素风格按钮 - Pixel Button */
+.pixel-btn {
+  position: relative;
+  transition: all 0.1s ease;
+  image-rendering: pixelated;
+}
+
+.pixel-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 
+    4px 4px 0 0 var(--text-muted);
+}
+
+.pixel-btn:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+/* 扫描线效果 - Scanline Effect */
+.scanline-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline-overlay::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.03),
+    rgba(0, 0, 0, 0.03) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+
+/* CRT 屏幕效果 - CRT Screen Effect */
+.crt-effect {
+  position: relative;
+}
+
+.crt-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.03),
+      rgba(0, 0, 0, 0.03) 1px,
+      transparent 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      ellipse at center,
+      transparent 0%,
+      rgba(0, 0, 0, 0.1) 100%
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 像素加载动画 - Pixel Loading */
+@keyframes pixel-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.pixel-loader {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  animation: pixel-blink 0.8s infinite;
+}
+
+.pixel-loader-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 2px;
+  background: var(--accent);
+}
+
+.pixel-loader-dot:nth-child(1) { animation-delay: 0s; }
+.pixel-loader-dot:nth-child(2) { animation-delay: 0.2s; }
+.pixel-loader-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pixel-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.pixel-loader-bounce {
+  animation: pixel-bounce 0.6s infinite;
+}
+
+/* 像素星星装饰 - Pixel Star Decorations */
+.pixel-star {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  transform: rotate(45deg);
+  position: relative;
+}
+
+.pixel-star::before,
+.pixel-star::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+}
+
+.pixel-star::before {
+  transform: rotate(45deg);
+}
+
+.pixel-star::after {
+  transform: rotate(90deg);
+}
+
+.pixel-star-sm {
+  width: 4px;
+  height: 4px;
+}
+
+.pixel-star-sm::before,
+.pixel-star-sm::after {
+  width: 4px;
+  height: 4px;
+}
+
+/* 闪烁效果 - Blink Effect */
+@keyframes pixel-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    opacity: 1;
+  }
+  20%, 24%, 55% {
+    opacity: 0.4;
+  }
+}
+
+.pixel-flicker {
+  animation: pixel-flicker 3s infinite;
+}
+
+/* 像素化过渡动画 - Pixel Transition */
+@keyframes pixel-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.pixel-slide-in {
+  animation: pixel-slide-in 0.3s ease-out;
+}
+
+/* 复古按钮效果 - Retro Button */
+.retro-btn {
+  position: relative;
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.retro-btn:hover {
+  background: var(--surface-muted);
+  border-color: var(--accent);
+  box-shadow: 
+    inset 0 0 0 1px var(--accent);
+}
+
+.retro-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.retro-btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent-strong);
+}
+
+.retro-btn-primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent);
+  box-shadow: 
+    0 0 10px rgba(37, 99, 235, 0.4);
+}
+
+/* 卡片像素描边 - Card Pixel Border */
+.pixel-card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  box-shadow: 
+    4px 4px 0 0 var(--surface-muted);
+  transition: all 0.2s ease;
+}
+
+.pixel-card:hover {
+  border-color: var(--accent);
+  box-shadow: 
+    6px 6px 0 0 var(--surface-muted);
+  transform: translate(-2px, -2px);
+}
+
+/* 脉冲点 - Pulsing Dot */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  background: var(--success);
+  position: relative;
+}
+
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--success);
+  animation: pulse-expand 1.5s infinite;
+}
+
+@keyframes pulse-expand {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* 像素网格背景 - Pixel Grid Background */
+.pixel-grid-bg {
+  background-image: 
+    linear-gradient(var(--surface-muted) 1px, transparent 1px),
+    linear-gradient(90deg, var(--surface-muted) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* 渐变发光边框 - Gradient Glow Border */
+.gradient-glow {
+  position: relative;
+}
+
+.gradient-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(
+    45deg,
+    var(--accent),
+    var(--success),
+    var(--warning),
+    var(--accent)
+  );
+  background-size: 400% 400%;
+  animation: gradient-shift 3s ease infinite;
+  z-index: -1;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 复古像素标题装饰 */
+.pixel-title-decoration {
+  position: relative;
+  display: inline-block;
+}
+
+.pixel-title-decoration::before {
+  content: '>';
+  margin-right: 8px;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.pixel-title-decoration::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--accent),
+    transparent
+  );
+}
+
+/* ============================================
+   原有样式继续...
+   ============================================ */
+
 @layer utilities {
   .bg-app {
     background: var(--bg);
