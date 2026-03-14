@@ -450,6 +450,17 @@ async def update_approval(
     prior_status = approval.status
     if "status" in updates:
         target_status = updates["status"]
+        # Guard: resolved approvals are immutable — no status changes allowed
+        if prior_status in ("approved", "rejected"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": f"Approval is already {prior_status}.",
+                    "approval_id": str(approval.id),
+                    "current_status": prior_status,
+                    "requested_status": target_status,
+                },
+            )
         if target_status == "pending" and prior_status != "pending":
             task_ids_by_approval = await load_task_ids_by_approval(
                 session, approval_ids=[approval.id]

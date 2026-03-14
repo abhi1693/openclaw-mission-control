@@ -131,23 +131,127 @@ async def test_create_approval_rejects_pending_conflict_from_linked_task_ids() -
 
 
 @pytest.mark.asyncio
-async def test_update_approval_rejects_reopening_to_pending_with_existing_pending() -> None:
+async def test_update_approval_rejects_double_approve() -> None:
+    """Re-approving an already-approved approval must return 409."""
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:
             board, task_ids = await _seed_board_with_tasks(session, task_count=1)
             task_id = task_ids[0]
-            pending = await approvals_api.create_approval(
+            approval = await approvals_api.create_approval(
                 payload=ApprovalCreate(
                     action_type="task.execute",
                     task_id=task_id,
-                    payload={"reason": "Primary pending approval is active."},
-                    confidence=83,
-                    status="pending",
+                    payload={"reason": "Needs sign-off."},
+                    confidence=80,
+                    status="approved",
                 ),
                 board=board,
                 session=session,
             )
+
+            with pytest.raises(HTTPException) as exc:
+                await approvals_api.update_approval(
+                    approval_id=approval.id,  # type: ignore[arg-type]
+                    payload=ApprovalUpdate(status="approved"),
+                    board=board,
+                    session=session,
+                )
+
+            assert exc.value.status_code == 409
+            detail = exc.value.detail
+            assert isinstance(detail, dict)
+            assert detail["message"] == "Approval is already approved."
+            assert detail["current_status"] == "approved"
+            assert detail["requested_status"] == "approved"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_approval_rejects_double_reject() -> None:
+    """Re-rejecting an already-rejected approval must return 409."""
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task_ids = await _seed_board_with_tasks(session, task_count=1)
+            task_id = task_ids[0]
+            approval = await approvals_api.create_approval(
+                payload=ApprovalCreate(
+                    action_type="task.execute",
+                    task_id=task_id,
+                    payload={"reason": "Needs sign-off."},
+                    confidence=80,
+                    status="rejected",
+                ),
+                board=board,
+                session=session,
+            )
+
+            with pytest.raises(HTTPException) as exc:
+                await approvals_api.update_approval(
+                    approval_id=approval.id,  # type: ignore[arg-type]
+                    payload=ApprovalUpdate(status="rejected"),
+                    board=board,
+                    session=session,
+                )
+
+            assert exc.value.status_code == 409
+            detail = exc.value.detail
+            assert isinstance(detail, dict)
+            assert detail["message"] == "Approval is already rejected."
+            assert detail["current_status"] == "rejected"
+            assert detail["requested_status"] == "rejected"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_approval_rejects_approving_rejected() -> None:
+    """Approving a rejected approval must return 409 (resolved approvals are immutable)."""
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task_ids = await _seed_board_with_tasks(session, task_count=1)
+            task_id = task_ids[0]
+            approval = await approvals_api.create_approval(
+                payload=ApprovalCreate(
+                    action_type="task.execute",
+                    task_id=task_id,
+                    payload={"reason": "Needs sign-off."},
+                    confidence=80,
+                    status="rejected",
+                ),
+                board=board,
+                session=session,
+            )
+
+            with pytest.raises(HTTPException) as exc:
+                await approvals_api.update_approval(
+                    approval_id=approval.id,  # type: ignore[arg-type]
+                    payload=ApprovalUpdate(status="approved"),
+                    board=board,
+                    session=session,
+                )
+
+            assert exc.value.status_code == 409
+            detail = exc.value.detail
+            assert isinstance(detail, dict)
+            assert detail["message"] == "Approval is already rejected."
+            assert detail["current_status"] == "rejected"
+            assert detail["requested_status"] == "approved"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_approval_rejects_reopening_resolved_to_pending() -> None:
+    """Resolved approvals are immutable — cannot reopen to pending."""
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task_ids = await _seed_board_with_tasks(session, task_count=1)
+            task_id = task_ids[0]
             resolved = await approvals_api.create_approval(
                 payload=ApprovalCreate(
                     action_type="task.review",
@@ -171,12 +275,8 @@ async def test_update_approval_rejects_reopening_to_pending_with_existing_pendin
             assert exc.value.status_code == 409
             detail = exc.value.detail
             assert isinstance(detail, dict)
-            assert detail["message"] == "Each task can have only one pending approval."
-            assert detail["conflicts"] == [
-                {
-                    "task_id": str(task_id),
-                    "approval_id": str(pending.id),
-                },
-            ]
+            assert detail["message"] == "Approval is already approved."
+            assert detail["current_status"] == "approved"
+            assert detail["requested_status"] == "pending"
     finally:
         await engine.dispose()
