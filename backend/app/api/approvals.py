@@ -450,7 +450,9 @@ async def update_approval(
     prior_status = approval.status
     if "status" in updates:
         target_status = updates["status"]
-        # Guard: resolved approvals are immutable — no status changes allowed
+        # Guard: resolved approvals are immutable — no status changes allowed.
+        # With ApprovalStatus = Literal["pending", "approved", "rejected"],
+        # the only non-pending prior statuses are the resolved ones blocked here.
         if prior_status in ("approved", "rejected"):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -460,19 +462,6 @@ async def update_approval(
                     "current_status": prior_status,
                     "requested_status": target_status,
                 },
-            )
-        if target_status == "pending" and prior_status != "pending":
-            task_ids_by_approval = await load_task_ids_by_approval(
-                session, approval_ids=[approval.id]
-            )
-            approval_task_ids = task_ids_by_approval.get(approval.id)
-            if not approval_task_ids and approval.task_id is not None:
-                approval_task_ids = [approval.task_id]
-            await _ensure_no_pending_approval_conflicts(
-                session,
-                board_id=board.id,
-                task_ids=approval_task_ids or [],
-                exclude_approval_id=approval.id,
             )
         approval.status = target_status
         if approval.status != "pending":
