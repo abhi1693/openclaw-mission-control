@@ -129,7 +129,7 @@ export default function EditCustomFieldPage() {
       stickyHeader
     >
       {customFieldsQuery.isLoading ? (
-        <div className="max-w-3xl rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+        <div className="surface-card max-w-3xl rounded-xl p-6 text-sm text-[var(--text-muted)]">
           Loading custom field…
         </div>
       ) : null}

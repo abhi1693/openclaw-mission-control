@@ -58,7 +58,7 @@ export function SkillInstallDialog({
 
         <div className="mt-2 space-y-3.5">
           {isGatewayStatusLoading ? (
-            <p className="text-sm text-slate-500">Loading gateways...</p>
+            <p className="text-sm text-[var(--text-muted)]">Loading gateways...</p>
           ) : (
             gateways.map((gateway) => {
               const isInstalled = gatewayInstalledById[gateway.id] === true;
@@ -67,10 +67,10 @@ export function SkillInstallDialog({
               return (
                 <div
                   key={gateway.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4"
+                  className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"
                 >
                   <div>
-                    <p className="text-sm font-medium text-slate-900">
+                    <p className="text-sm font-medium text-[var(--text)]">
                       {gateway.name}
                     </p>
                   </div>
@@ -94,14 +94,14 @@ export function SkillInstallDialog({
             })
           )}
           {gatewayStatusError ? (
-            <p className="text-sm text-rose-600">{gatewayStatusError}</p>
+            <p className="text-sm text-[var(--danger)]">{gatewayStatusError}</p>
           ) : null}
           {mutationError ? (
-            <p className="text-sm text-rose-600">{mutationError}</p>
+            <p className="text-sm text-[var(--danger)]">{mutationError}</p>
           ) : null}
         </div>
 
-        <DialogFooter className="mt-6 border-t border-slate-200 pt-4">
+        <DialogFooter className="mt-6 border-t border-[var(--border)] pt-4">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

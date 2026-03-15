@@ -8,6 +8,7 @@
   --surface: #ffffff;
   --surface-muted: #f1f5f9;
   --surface-strong: #e2e8f0;
+  --border-subtle: #f1f5f9;
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
   --text: #0f172a;
@@ -23,6 +24,338 @@
     0 1px 3px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.08);
   --shadow-card:
     0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.06);
+
+  /* ── Page-level surfaces ───────────────────────────── */
+  --page-bg: #f8fafc;
+  --page-bg-gradient-from: #f8fafc;
+  --page-bg-gradient-to: #f1f5f9;
+
+  /* ── Table / data-grid ─────────────────────────────── */
+  --table-header-bg: #f8fafc;
+  --table-header-text: #64748b;
+  --table-row-hover: #f8fafc;
+  --table-divide: #f1f5f9;
+  --table-sort-inactive: #cbd5e1;
+
+  /* ── Tooltip / popover ─────────────────────────────── */
+  --tooltip-bg: #0f172a;
+  --tooltip-text: #ffffff;
+  --popover-bg: #ffffff;
+  --popover-text: #0f172a;
+  --popover-border: #e2e8f0;
+
+  /* ── Code / markdown ───────────────────────────────── */
+  --code-block-bg: #020617;
+  --code-block-text: #f1f5f9;
+  --code-inline-bg: #f1f5f9;
+  --code-inline-text: #0f172a;
+  --markdown-table-header-bg: #f8fafc;
+  --markdown-table-divide: #f1f5f9;
+  --markdown-table-border: #e2e8f0;
+  --markdown-link: #0369a1;
+  --markdown-link-decoration: #38bdf8;
+  --markdown-link-hover: #075985;
+  --markdown-link-hover-decoration: #0284c7;
+  --markdown-mention: #0e7490;
+
+  /* ── Form controls (non-token overrides) ───────────── */
+  --input-bg: #ffffff;
+  --input-border: #e2e8f0;
+  --input-border-strong: #cbd5e1;
+  --input-text: #0f172a;
+  --input-placeholder: #94a3b8;
+  --input-focus-ring: #94a3b8;
+
+  /* ── Semantic pill / badge accents ──────────────────── */
+  --pill-default-bg: #f1f5f9;
+  --pill-default-border: #e2e8f0;
+  --pill-default-text: #334155;
+
+  --pill-blue-bg: #eff6ff;
+  --pill-blue-border: #bfdbfe;
+  --pill-blue-text: #1d4ed8;
+
+  --pill-emerald-bg: #ecfdf5;
+  --pill-emerald-border: #a7f3d0;
+  --pill-emerald-text: #047857;
+
+  --pill-amber-bg: #fffbeb;
+  --pill-amber-border: #fde68a;
+  --pill-amber-text: #92400e;
+
+  --pill-teal-bg: #f0fdfa;
+  --pill-teal-border: #99f6e4;
+  --pill-teal-text: #0f766e;
+
+  --pill-fuchsia-bg: #fdf4ff;
+  --pill-fuchsia-border: #f0abfc;
+  --pill-fuchsia-text: #a21caf;
+
+  --pill-violet-bg: #f5f3ff;
+  --pill-violet-border: #c4b5fd;
+  --pill-violet-text: #6d28d9;
+
+  --pill-lime-bg: #f7fee7;
+  --pill-lime-border: #bef264;
+  --pill-lime-text: #4d7c0f;
+
+  --pill-indigo-bg: #eef2ff;
+  --pill-indigo-border: #c7d2fe;
+  --pill-indigo-text: #4338ca;
+
+  --pill-cyan-bg: #ecfeff;
+  --pill-cyan-border: #a5f3fc;
+  --pill-cyan-text: #0e7490;
+
+  --pill-sky-bg: #f0f9ff;
+  --pill-sky-border: #bae6fd;
+  --pill-sky-text: #0369a1;
+
+  --pill-rose-bg: #fff1f2;
+  --pill-rose-border: #fecdd3;
+  --pill-rose-text: #be123c;
+
+  --pill-slate-bg: #f1f5f9;
+  --pill-slate-border: #cbd5e1;
+  --pill-slate-text: #334155;
+
+  /* ── Semantic status accent backgrounds ─────────────── */
+  --status-online-bg: #d1fae5;
+  --status-online-text: #047857;
+  --status-offline-bg: #ffe4e6;
+  --status-offline-text: #be123c;
+  --status-neutral-bg: #e2e8f0;
+  --status-neutral-text: #334155;
+
+  /* ── Info / metric card accents ─────────────────────── */
+  --metric-blue-bg: #eff6ff;
+  --metric-blue-text: #2563eb;
+  --metric-emerald-bg: #ecfdf5;
+  --metric-emerald-text: #059669;
+  --metric-violet-bg: #f5f3ff;
+  --metric-violet-text: #7c3aed;
+  --metric-green-bg: #f0fdf4;
+  --metric-green-text: #16a34a;
+
+  /* ── Alert / banner variants ───────────────────────── */
+  --alert-info-bg: #eff6ff;
+  --alert-info-border: #bfdbfe;
+  --alert-info-text: #1e40af;
+  --alert-success-bg: #ecfdf5;
+  --alert-success-border: #a7f3d0;
+  --alert-success-text: #047857;
+  --alert-warning-bg: #fffbeb;
+  --alert-warning-border: #fcd34d;
+  --alert-warning-text: #92400e;
+  --alert-danger-bg: #fff1f2;
+  --alert-danger-border: #fecdd3;
+  --alert-danger-text: #be123c;
+
+  /* ── Task card accents ─────────────────────────────── */
+  --task-approval-border: #fde68a;
+  --task-approval-bg: rgba(255, 251, 235, 0.4);
+  --task-blocked-border: #fecdd3;
+  --task-blocked-bg: rgba(255, 241, 242, 0.5);
+  --task-review-border: #c7d2fe;
+  --task-review-bg: rgba(238, 242, 255, 0.3);
+
+  /* ── Priority badge ────────────────────────────────── */
+  --priority-high-bg: #ffe4e6;
+  --priority-high-text: #be123c;
+  --priority-medium-bg: #fef3c7;
+  --priority-medium-text: #92400e;
+  --priority-low-bg: #d1fae5;
+  --priority-low-text: #047857;
+  --priority-default-bg: #f1f5f9;
+  --priority-default-text: #475569;
+
+  /* ── Toggle switch knob ────────────────────────────── */
+  --toggle-knob: #ffffff;
+
+  /* ── Activity highlight ────────────────────────────── */
+  --highlight-border: #93c5fd;
+  --highlight-ring: #bfdbfe;
+
+  /* ── Avatar fallback ───────────────────────────────── */
+  --avatar-bg: #f1f5f9;
+  --avatar-text: #334155;
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-muted: #263548;
+  --surface-strong: #334155;
+  --border-subtle: #1e293b;
+  --border: #334155;
+  --border-strong: #475569;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-quiet: #64748b;
+  --accent: #3b82f6;
+  --accent-strong: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.15);
+
+  /* ── Page-level surfaces ───────────────────────────── */
+  --page-bg: #0f172a;
+  --page-bg-gradient-from: #0f172a;
+  --page-bg-gradient-to: #1e293b;
+
+  /* ── Table / data-grid ─────────────────────────────── */
+  --table-header-bg: #1e293b;
+  --table-header-text: #cbd5e1;
+  --table-row-hover: rgba(51, 65, 85, 0.5);
+  --table-divide: #334155;
+  --table-sort-inactive: #475569;
+
+  /* ── Tooltip / popover ─────────────────────────────── */
+  --tooltip-bg: #f1f5f9;
+  --tooltip-text: #0f172a;
+  --popover-bg: #1e293b;
+  --popover-text: #f1f5f9;
+  --popover-border: #334155;
+
+  /* ── Code / markdown ───────────────────────────────── */
+  --code-block-bg: #020617;
+  --code-block-text: #e2e8f0;
+  --code-inline-bg: #334155;
+  --code-inline-text: #e2e8f0;
+  --markdown-table-header-bg: #1e293b;
+  --markdown-table-divide: #334155;
+  --markdown-table-border: #475569;
+  --markdown-link: #38bdf8;
+  --markdown-link-decoration: #0ea5e9;
+  --markdown-link-hover: #7dd3fc;
+  --markdown-link-hover-decoration: #38bdf8;
+  --markdown-mention: #22d3ee;
+
+  /* ── Form controls (non-token overrides) ───────────── */
+  --input-bg: #1e293b;
+  --input-border: #334155;
+  --input-border-strong: #475569;
+  --input-text: #f1f5f9;
+  --input-placeholder: #64748b;
+  --input-focus-ring: #475569;
+
+  /* ── Semantic pill / badge accents ──────────────────── */
+  --pill-default-bg: #334155;
+  --pill-default-border: #475569;
+  --pill-default-text: #cbd5e1;
+
+  --pill-blue-bg: rgba(59, 130, 246, 0.15);
+  --pill-blue-border: rgba(59, 130, 246, 0.3);
+  --pill-blue-text: #93c5fd;
+
+  --pill-emerald-bg: rgba(16, 185, 129, 0.15);
+  --pill-emerald-border: rgba(16, 185, 129, 0.3);
+  --pill-emerald-text: #6ee7b7;
+
+  --pill-amber-bg: rgba(245, 158, 11, 0.15);
+  --pill-amber-border: rgba(245, 158, 11, 0.3);
+  --pill-amber-text: #fcd34d;
+
+  --pill-teal-bg: rgba(20, 184, 166, 0.15);
+  --pill-teal-border: rgba(20, 184, 166, 0.3);
+  --pill-teal-text: #5eead4;
+
+  --pill-fuchsia-bg: rgba(217, 70, 239, 0.15);
+  --pill-fuchsia-border: rgba(217, 70, 239, 0.3);
+  --pill-fuchsia-text: #e879f9;
+
+  --pill-violet-bg: rgba(139, 92, 246, 0.15);
+  --pill-violet-border: rgba(139, 92, 246, 0.3);
+  --pill-violet-text: #a78bfa;
+
+  --pill-lime-bg: rgba(132, 204, 22, 0.15);
+  --pill-lime-border: rgba(132, 204, 22, 0.3);
+  --pill-lime-text: #bef264;
+
+  --pill-indigo-bg: rgba(99, 102, 241, 0.15);
+  --pill-indigo-border: rgba(99, 102, 241, 0.3);
+  --pill-indigo-text: #a5b4fc;
+
+  --pill-cyan-bg: rgba(6, 182, 212, 0.15);
+  --pill-cyan-border: rgba(6, 182, 212, 0.3);
+  --pill-cyan-text: #67e8f9;
+
+  --pill-sky-bg: rgba(14, 165, 233, 0.15);
+  --pill-sky-border: rgba(14, 165, 233, 0.3);
+  --pill-sky-text: #7dd3fc;
+
+  --pill-rose-bg: rgba(244, 63, 94, 0.15);
+  --pill-rose-border: rgba(244, 63, 94, 0.3);
+  --pill-rose-text: #fda4af;
+
+  --pill-slate-bg: #334155;
+  --pill-slate-border: #475569;
+  --pill-slate-text: #cbd5e1;
+
+  /* ── Semantic status accent backgrounds ─────────────── */
+  --status-online-bg: rgba(16, 185, 129, 0.15);
+  --status-online-text: #6ee7b7;
+  --status-offline-bg: rgba(244, 63, 94, 0.15);
+  --status-offline-text: #fda4af;
+  --status-neutral-bg: #334155;
+  --status-neutral-text: #cbd5e1;
+
+  /* ── Info / metric card accents ─────────────────────── */
+  --metric-blue-bg: rgba(59, 130, 246, 0.12);
+  --metric-blue-text: #60a5fa;
+  --metric-emerald-bg: rgba(16, 185, 129, 0.12);
+  --metric-emerald-text: #34d399;
+  --metric-violet-bg: rgba(139, 92, 246, 0.12);
+  --metric-violet-text: #a78bfa;
+  --metric-green-bg: rgba(22, 163, 74, 0.12);
+  --metric-green-text: #4ade80;
+
+  /* ── Alert / banner variants ───────────────────────── */
+  --alert-info-bg: rgba(59, 130, 246, 0.1);
+  --alert-info-border: rgba(59, 130, 246, 0.25);
+  --alert-info-text: #93c5fd;
+  --alert-success-bg: rgba(16, 185, 129, 0.1);
+  --alert-success-border: rgba(16, 185, 129, 0.25);
+  --alert-success-text: #6ee7b7;
+  --alert-warning-bg: rgba(245, 158, 11, 0.1);
+  --alert-warning-border: rgba(245, 158, 11, 0.25);
+  --alert-warning-text: #fcd34d;
+  --alert-danger-bg: rgba(244, 63, 94, 0.1);
+  --alert-danger-border: rgba(244, 63, 94, 0.25);
+  --alert-danger-text: #fda4af;
+
+  /* ── Task card accents ─────────────────────────────── */
+  --task-approval-border: rgba(245, 158, 11, 0.3);
+  --task-approval-bg: rgba(245, 158, 11, 0.08);
+  --task-blocked-border: rgba(244, 63, 94, 0.3);
+  --task-blocked-bg: rgba(244, 63, 94, 0.08);
+  --task-review-border: rgba(99, 102, 241, 0.3);
+  --task-review-bg: rgba(99, 102, 241, 0.08);
+
+  /* ── Priority badge ────────────────────────────────── */
+  --priority-high-bg: rgba(244, 63, 94, 0.15);
+  --priority-high-text: #fda4af;
+  --priority-medium-bg: rgba(245, 158, 11, 0.15);
+  --priority-medium-text: #fcd34d;
+  --priority-low-bg: rgba(16, 185, 129, 0.15);
+  --priority-low-text: #6ee7b7;
+  --priority-default-bg: #334155;
+  --priority-default-text: #94a3b8;
+
+  /* ── Toggle switch knob ────────────────────────────── */
+  --toggle-knob: #f1f5f9;
+
+  /* ── Activity highlight ────────────────────────────── */
+  --highlight-border: rgba(59, 130, 246, 0.4);
+  --highlight-ring: rgba(59, 130, 246, 0.25);
+
+  /* ── Avatar fallback ───────────────────────────────── */
+  --avatar-bg: #334155;
+  --avatar-text: #cbd5e1;
 }
 
 body {
@@ -104,6 +437,214 @@ body {
   .border-strong {
     border-color: var(--border-strong);
   }
+
+  /* ── Page-level surface classes ─────────────────────── */
+  .page-bg {
+    background: var(--page-bg);
+  }
+  .page-bg-gradient {
+    background: linear-gradient(
+      to bottom right,
+      var(--page-bg-gradient-from),
+      var(--page-bg-gradient-to)
+    );
+  }
+  .surface-header {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  /* ── Table utility classes ──────────────────────────── */
+  .table-header {
+    background: var(--table-header-bg);
+    color: var(--table-header-text);
+  }
+  .table-row-hover:hover {
+    background: var(--table-row-hover);
+  }
+  .table-divide > * + * {
+    border-color: var(--table-divide);
+  }
+
+  /* ── Tooltip ───────────────────────────────────────── */
+  .tooltip-surface {
+    background: var(--tooltip-bg);
+    color: var(--tooltip-text);
+  }
+
+  /* ── Popover ───────────────────────────────────────── */
+  .popover-surface {
+    background: var(--popover-bg);
+    color: var(--popover-text);
+    border-color: var(--popover-border);
+  }
+
+  /* ── Input / form field surfaces ───────────────────── */
+  .input-surface {
+    background: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+  }
+
+  /* ── Pill classes ──────────────────────────────────── */
+  .pill-default {
+    background: var(--pill-default-bg);
+    border-color: var(--pill-default-border);
+    color: var(--pill-default-text);
+  }
+  .pill-blue {
+    background: var(--pill-blue-bg);
+    border-color: var(--pill-blue-border);
+    color: var(--pill-blue-text);
+  }
+  .pill-emerald {
+    background: var(--pill-emerald-bg);
+    border-color: var(--pill-emerald-border);
+    color: var(--pill-emerald-text);
+  }
+  .pill-amber {
+    background: var(--pill-amber-bg);
+    border-color: var(--pill-amber-border);
+    color: var(--pill-amber-text);
+  }
+  .pill-teal {
+    background: var(--pill-teal-bg);
+    border-color: var(--pill-teal-border);
+    color: var(--pill-teal-text);
+  }
+  .pill-fuchsia {
+    background: var(--pill-fuchsia-bg);
+    border-color: var(--pill-fuchsia-border);
+    color: var(--pill-fuchsia-text);
+  }
+  .pill-violet {
+    background: var(--pill-violet-bg);
+    border-color: var(--pill-violet-border);
+    color: var(--pill-violet-text);
+  }
+  .pill-lime {
+    background: var(--pill-lime-bg);
+    border-color: var(--pill-lime-border);
+    color: var(--pill-lime-text);
+  }
+  .pill-indigo {
+    background: var(--pill-indigo-bg);
+    border-color: var(--pill-indigo-border);
+    color: var(--pill-indigo-text);
+  }
+  .pill-cyan {
+    background: var(--pill-cyan-bg);
+    border-color: var(--pill-cyan-border);
+    color: var(--pill-cyan-text);
+  }
+  .pill-sky {
+    background: var(--pill-sky-bg);
+    border-color: var(--pill-sky-border);
+    color: var(--pill-sky-text);
+  }
+  .pill-rose {
+    background: var(--pill-rose-bg);
+    border-color: var(--pill-rose-border);
+    color: var(--pill-rose-text);
+  }
+  .pill-slate {
+    background: var(--pill-slate-bg);
+    border-color: var(--pill-slate-border);
+    color: var(--pill-slate-text);
+  }
+
+  /* ── Alert / banner classes ─────────────────────────── */
+  .alert-info {
+    background: var(--alert-info-bg);
+    border-color: var(--alert-info-border);
+    color: var(--alert-info-text);
+  }
+  .alert-success {
+    background: var(--alert-success-bg);
+    border-color: var(--alert-success-border);
+    color: var(--alert-success-text);
+  }
+  .alert-warning {
+    background: var(--alert-warning-bg);
+    border-color: var(--alert-warning-border);
+    color: var(--alert-warning-text);
+  }
+  .alert-danger {
+    background: var(--alert-danger-bg);
+    border-color: var(--alert-danger-border);
+    color: var(--alert-danger-text);
+  }
+
+  /* ── Status badge utility ──────────────────────────── */
+  .status-online {
+    background: var(--status-online-bg);
+    color: var(--status-online-text);
+  }
+  .status-offline {
+    background: var(--status-offline-bg);
+    color: var(--status-offline-text);
+  }
+  .status-neutral {
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
+  }
+
+  /* ── Metric card icon accent ───────────────────────── */
+  .metric-blue {
+    background: var(--metric-blue-bg);
+    color: var(--metric-blue-text);
+  }
+  .metric-emerald {
+    background: var(--metric-emerald-bg);
+    color: var(--metric-emerald-text);
+  }
+  .metric-violet {
+    background: var(--metric-violet-bg);
+    color: var(--metric-violet-text);
+  }
+  .metric-green {
+    background: var(--metric-green-bg);
+    color: var(--metric-green-text);
+  }
+
+  /* ── Task card accents ─────────────────────────────── */
+  .task-card-approval {
+    border-color: var(--task-approval-border);
+    background: var(--task-approval-bg);
+  }
+  .task-card-blocked {
+    border-color: var(--task-blocked-border);
+    background: var(--task-blocked-bg);
+  }
+  .task-card-review {
+    border-color: var(--task-review-border);
+    background: var(--task-review-bg);
+  }
+
+  /* ── Priority badges ───────────────────────────────── */
+  .priority-high {
+    background: var(--priority-high-bg);
+    color: var(--priority-high-text);
+  }
+  .priority-medium {
+    background: var(--priority-medium-bg);
+    color: var(--priority-medium-text);
+  }
+  .priority-low {
+    background: var(--priority-low-bg);
+    color: var(--priority-low-text);
+  }
+  .priority-default {
+    background: var(--priority-default-bg);
+    color: var(--priority-default-text);
+  }
+
+  /* ── Highlight ─────────────────────────────────────── */
+  .highlight-ring {
+    border-color: var(--highlight-border);
+    box-shadow: 0 0 0 2px var(--highlight-ring);
+  }
+
   .animate-fade-in-up {
     animation: fade-in-up 0.6s ease-out both;
   }

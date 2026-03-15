@@ -97,14 +97,14 @@ export function MembersInvitesTable({
             const display = memberDisplay(row.original.member);
             return (
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 text-xs font-semibold text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--accent)] to-indigo-500 text-xs font-semibold text-white">
                   {display.initials}
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">
+                  <div className="text-sm font-semibold text-[var(--text)]">
                     {display.primary}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-[var(--text-muted)]">
                     {display.secondary}
                   </div>
                 </div>
@@ -114,14 +114,14 @@ export function MembersInvitesTable({
 
           return (
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-200 text-xs font-semibold text-slate-600">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--surface-strong)] text-xs font-semibold text-[var(--text-muted)]">
                 {initialsFrom(row.original.invite.invited_email)}
               </div>
               <div>
-                <div className="text-sm font-semibold text-slate-900">
+                <div className="text-sm font-semibold text-[var(--text)]">
                   {row.original.invite.invited_email}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-[var(--text-muted)]">
                   Invited {formatTimestamp(row.original.invite.created_at)}
                 </div>
               </div>
@@ -155,7 +155,7 @@ export function MembersInvitesTable({
         id: "access",
         header: "Access",
         cell: ({ row }) => (
-          <span className="text-slate-600">
+          <span className="text-[var(--text-muted)]">
             {row.original.kind === "member"
               ? summarizeAccess(
                   row.original.member.all_boards_read,
@@ -175,13 +175,13 @@ export function MembersInvitesTable({
           if (row.original.kind === "member") {
             const member = row.original.member;
             if (!isAdmin) {
-              return <span className="text-xs text-slate-400">Admin only</span>;
+              return <span className="text-xs text-[var(--text-quiet)]">Admin only</span>;
             }
             return (
               <div className="flex justify-end">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => onManageAccess(member.id)}
                 >
@@ -241,13 +241,13 @@ export function MembersInvitesTable({
       isLoading={isLoading}
       loadingLabel="Loading members..."
       emptyMessage="No members or invites yet."
-      headerClassName="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"
+      headerClassName="bg-[var(--surface-muted)] text-[11px] uppercase tracking-wide text-[var(--text-muted)]"
       headerCellClassName="px-5 py-3 text-left font-medium"
       cellClassName="px-5 py-4"
       rowClassName={(row) =>
         row.original.kind === "invite"
-          ? "border-t border-slate-200 bg-slate-50/60"
-          : "border-t border-slate-200 hover:bg-slate-50"
+          ? "border-t border-[var(--border)] bg-[var(--surface-muted)]/60"
+          : "border-t border-[var(--border)] hover:bg-[var(--surface-muted)]"
       }
     />
   );

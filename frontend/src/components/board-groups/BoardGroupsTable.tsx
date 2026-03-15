@@ -37,7 +37,7 @@ type BoardGroupsTableProps = {
 
 const DEFAULT_EMPTY_ICON = (
   <svg
-    className="h-16 w-16 text-slate-300"
+    className="h-16 w-16 text-[var(--text-quiet)]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -94,8 +94,8 @@ export function BoardGroupsTable({
             label: row.original.name,
             subtitle: row.original.description ?? "No description",
             subtitleClassName: row.original.description
-              ? "mt-1 line-clamp-2 text-xs text-slate-500"
-              : "mt-1 text-xs text-slate-400",
+              ? "mt-1 line-clamp-2 text-xs text-[var(--text-muted)]"
+              : "mt-1 text-xs text-[var(--text-quiet)]",
           }),
       },
       {
@@ -129,7 +129,7 @@ export function BoardGroupsTable({
       isLoading={isLoading}
       stickyHeader={stickyHeader}
       emptyMessage={emptyMessage}
-      rowClassName="transition hover:bg-slate-50"
+      rowClassName="transition hover:bg-[var(--surface-muted)]"
       cellClassName="px-3 py-3 md:px-6 md:py-4 align-top"
       rowActions={
         showActions

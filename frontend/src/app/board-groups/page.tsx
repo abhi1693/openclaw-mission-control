@@ -102,7 +102,7 @@ export default function BoardGroupsPage() {
         }
         stickyHeader
       >
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="surface-card overflow-hidden rounded-xl">
           <BoardGroupsTable
             groups={groups}
             isLoading={groupsQuery.isLoading}

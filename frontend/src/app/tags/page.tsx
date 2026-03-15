@@ -100,7 +100,7 @@ export default function TagsPage() {
         adminOnlyMessage="Only organization owners and admins can manage tags."
         stickyHeader
       >
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="surface-card overflow-hidden rounded-xl">
           <TagsTable
             tags={tags}
             isLoading={tagsQuery.isLoading}
@@ -125,7 +125,7 @@ export default function TagsPage() {
           />
         </div>
         {tagsQuery.error ? (
-          <p className="mt-4 text-sm text-rose-600">
+          <p className="mt-4 text-sm text-[var(--danger)]">
             {tagsQuery.error.message}
           </p>
         ) : null}
