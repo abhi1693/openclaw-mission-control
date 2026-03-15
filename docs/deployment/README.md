@@ -24,6 +24,7 @@ Edit `.env`:
 
 - `AUTH_MODE=local` (default)
 - **Set** `LOCAL_AUTH_TOKEN` to a non-placeholder value (≥ 50 chars)
+- Ensure `BASE_URL` matches the public backend origin if it is not `http://localhost:8000`
 - Ensure `NEXT_PUBLIC_API_URL` is reachable from the browser (not a Docker-internal hostname)
 
 Key variables (from `.env.example` / `compose.yml`):
