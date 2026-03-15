@@ -184,3 +184,27 @@ docs-link-check: ## Check for broken relative links in markdown docs
 
 .PHONY: docs-check
 docs-check: docs-lint docs-link-check ## Run all docs quality gates
+
+# ── E2E Integration Targets ─────────────────────────────────────
+.PHONY: e2e-up
+e2e-up: ## Start E2E Docker stack (test DB + backend + redis)
+	docker compose --profile e2e up -d --wait db-test backend-e2e redis
+
+.PHONY: e2e-seed
+e2e-seed: ## Seed E2E test database with prerequisite data
+	docker compose --profile e2e run --rm e2e-seed
+
+.PHONY: e2e-down
+e2e-down: ## Tear down E2E Docker stack and volumes
+	docker compose --profile e2e down -v
+
+.PHONY: e2e-integration
+e2e-integration: ## Run integration E2E tests (requires e2e-up + e2e-seed first)
+	cd $(FRONTEND_DIR) && npx cypress run --config-file cypress.integration.config.ts --browser chrome
+
+.PHONY: e2e-full
+e2e-full: ## Full E2E cycle: start stack → seed → run tests → tear down
+	$(MAKE) e2e-up
+	$(MAKE) e2e-seed || ($(MAKE) e2e-down && exit 1)
+	$(MAKE) e2e-integration || ($(MAKE) e2e-down && exit 1)
+	$(MAKE) e2e-down
