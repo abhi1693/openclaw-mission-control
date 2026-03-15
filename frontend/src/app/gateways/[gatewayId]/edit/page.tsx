@@ -19,6 +19,7 @@ import { GatewayForm } from "@/components/gateways/GatewayForm";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import {
   DEFAULT_WORKSPACE_ROOT,
+  WORKSPACE_OPTIONS,
   checkGatewayConnection,
   type GatewayCheckStatus,
   validateGatewayUrl,
@@ -183,6 +184,7 @@ export default function EditGatewayPage() {
         isLoading={isLoading}
         canSubmit={canSubmit}
         workspaceRootPlaceholder={DEFAULT_WORKSPACE_ROOT}
+        workspaceOptions={WORKSPACE_OPTIONS}
         cancelLabel="Back"
         submitLabel="Save changes"
         submitBusyLabel="Saving…"

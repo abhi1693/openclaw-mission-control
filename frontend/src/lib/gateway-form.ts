@@ -1,5 +1,15 @@
 import { gatewaysStatusApiV1GatewaysStatusGet } from "@/api/generated/gateways/gateways";
 
+// 常用的 workspace 目录列表（多 Agents 场景）
+export const WORKSPACE_OPTIONS = [
+  "~/.openclaw",
+  "~/.openclaw/workspace-pm",
+  "~/.openclaw/workspace-fe",
+  "~/.openclaw/workspace-be",
+  "~/.openclaw/workspace-ops",
+  "~/.openclaw/workspace-qa",
+];
+
 export const DEFAULT_WORKSPACE_ROOT = "~/.openclaw";
 
 export type GatewayCheckStatus = "idle" | "checking" | "success" | "error";
