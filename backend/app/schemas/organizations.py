@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
+from pydantic import model_validator
 from sqlmodel import Field, SQLModel
 
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID)
@@ -116,12 +118,25 @@ class OrganizationInviteRead(SQLModel):
     role: str
     all_boards_read: bool
     all_boards_write: bool
-    token: str
+    has_token: bool = False
     created_by_user_id: UUID | None = None
     accepted_by_user_id: UUID | None = None
     accepted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _compute_has_token(cls, values: Any, handler: Any) -> OrganizationInviteRead:
+        """Compute has_token from the ORM token field without exposing the raw value."""
+        model = handler(values)
+        token = (
+            getattr(values, "token", None)
+            if not isinstance(values, dict)
+            else values.get("token")
+        )
+        model.has_token = bool(token)
+        return model
 
 
 class OrganizationInviteAccept(SQLModel):
