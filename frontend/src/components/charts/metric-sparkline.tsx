@@ -38,7 +38,9 @@ const SparklineTooltip = ({
   payload,
   bucket,
   labels,
-}: TooltipContentProps<number, string> & {
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number; payload?: { index?: number } }>;
   bucket?: string;
   labels?: string[];
 }) => {
@@ -102,10 +104,15 @@ export default function MetricSparkline({
             </linearGradient>
           </defs>
           <YAxis hide domain={["dataMin", "dataMax"]} />
-          <Tooltip<number, string>
+          <Tooltip
             cursor={false}
             content={(props) => (
-              <SparklineTooltip {...props} bucket={bucket} labels={labels} />
+              <SparklineTooltip
+                active={props.active}
+                payload={props.payload as unknown as Array<{ value?: number; payload?: { index?: number } }>}
+                bucket={bucket}
+                labels={labels}
+              />
             )}
           />
           <Area

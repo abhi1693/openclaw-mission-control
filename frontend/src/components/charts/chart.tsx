@@ -153,7 +153,7 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
-type ChartTooltipValue = number | string | Array<number | string>;
+type ChartTooltipValue = number | string | readonly (number | string)[];
 type ChartTooltipName = number | string;
 type ChartTooltipContentProps = Partial<
   TooltipContentProps<ChartTooltipValue, ChartTooltipName>
@@ -243,7 +243,7 @@ function ChartTooltipContent({
 
             return (
               <div
-                key={item.dataKey}
+                key={typeof item.dataKey === 'function' ? index : (item.dataKey ?? index)}
                 className={cn(
                   "[&>svg]:text-muted-foreground flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5",
                   indicator === "dot" && "items-center",

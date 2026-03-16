@@ -103,7 +103,7 @@ const rubricColors = [
   "#8b5cf6",
 ];
 
-type TooltipValue = number | string | Array<number | string>;
+type TooltipValue = number | string | readonly (number | string)[];
 
 const formatRubricTooltipValue = (
   value?: TooltipValue,
