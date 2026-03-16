@@ -1,20 +1,5 @@
 {% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
 {% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
-# TOOLS.md
-
-- `BASE_URL={{ base_url }}`
-- `AUTH_TOKEN={{ auth_token }}`
-- `AGENT_NAME={{ agent_name }}`
-- `AGENT_ID={{ agent_id }}`
-{% if board_id is defined %}
-- `BOARD_ID={{ board_id }}`
-{% endif %}
-- `WORKSPACE_ROOT={{ workspace_root }}`
-{% if workspace_path is defined %}
-- `WORKSPACE_PATH={{ workspace_path }}`
-{% endif %}
-- Required tools: `curl`, `jq`
-
 {% if is_main %}
 {% set role_tag = "agent-main" %}
 {% elif is_lead %}
@@ -22,6 +7,25 @@
 {% else %}
 {% set role_tag = "agent-worker" %}
 {% endif %}
+# TOOLS.md
+
+## Agent Identity (Mission Control)
+
+BASE_URL={{ base_url }}
+AUTH_TOKEN={{ auth_token }}
+AGENT_NAME={{ agent_name }}
+AGENT_ID={{ agent_id }}
+{% if board_id is defined %}
+BOARD_ID={{ board_id }}
+{% endif %}
+WORKSPACE_ROOT={{ workspace_root }}
+{% if workspace_path is defined %}
+WORKSPACE_PATH={{ workspace_path }}
+{% endif %}
+
+## Notes
+
+- Required tools: `curl`, `jq`
 
 ## OpenAPI refresh (run before API-heavy work)
 
