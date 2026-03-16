@@ -2,28 +2,47 @@
 
 export const dynamic = "force-dynamic";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { SignedIn, SignedOut, useAuth } from "@/auth/clerk";
-import { ScrollText, Bot, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  ScrollText,
+  Bot,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Filter,
+  Wifi,
+  WifiOff,
+  X,
+} from "lucide-react";
 
 import { ApiError } from "@/api/mutator";
 import {
   type listAgentsApiV1AgentsGetResponse,
   useListAgentsApiV1AgentsGet,
+  getListAgentsApiV1AgentsGetQueryKey,
 } from "@/api/generated/agents/agents";
 import {
   type listActivityApiV1ActivityGetResponse,
   useListActivityApiV1ActivityGet,
+  getListActivityApiV1ActivityGetQueryKey,
 } from "@/api/generated/activity/activity";
 import {
   type listBoardsApiV1BoardsGetResponse,
   useListBoardsApiV1BoardsGet,
 } from "@/api/generated/boards/boards";
-import {
-  getBoardSnapshotApiV1BoardsBoardIdSnapshotGet,
-} from "@/api/generated/boards/boards";
+import { getBoardSnapshotApiV1BoardsBoardIdSnapshotGet } from "@/api/generated/boards/boards";
 import type {
   ActivityEventRead,
   AgentRead,
@@ -42,14 +61,36 @@ import {
   formatTimestamp,
 } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { useSSE, type SSEStatus } from "@/lib/use-sse";
+
+// ─── Constants ───────────────────────────────────────────────────────
 
 const REFETCH_INTERVAL_MS = 15_000;
+const REFETCH_INTERVAL_SSE_MS = 60_000; // Slower polling when SSE active
 const ACTIVITY_LIMIT = 200;
+
+const TIME_RANGES = [
+  { label: "Last 1h", value: "1h", ms: 60 * 60 * 1000 },
+  { label: "Last 6h", value: "6h", ms: 6 * 60 * 60 * 1000 },
+  { label: "Last 24h", value: "24h", ms: 24 * 60 * 60 * 1000 },
+  { label: "Last 7d", value: "7d", ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: "All time", value: "all", ms: 0 },
+] as const;
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Online", value: "online" },
+  { label: "Offline", value: "offline" },
+] as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────────
 
 type AgentWithContext = AgentRead & {
   boardName: string | null;
   currentTask: TaskCardRead | null;
   events: ActivityEventRead[];
+  activityState: "working" | "idle" | "waiting" | "offline";
+  lastActivityAt: Date | null;
 };
 
 const agentStatusOrder = (status?: string | null): number => {
@@ -57,6 +98,13 @@ const agentStatusOrder = (status?: string | null): number => {
   if (s === "online") return 0;
   if (s === "provisioning") return 1;
   return 2;
+};
+
+const activityStateOrder = (state: string): number => {
+  if (state === "working") return 0;
+  if (state === "waiting") return 1;
+  if (state === "idle") return 2;
+  return 3;
 };
 
 const roleFromAgent = (agent: AgentRead): string | null => {
@@ -100,6 +148,226 @@ const eventTypePillClass = (eventType: string): string => {
     return "border-teal-200 bg-teal-50 text-teal-700";
   return "border-slate-200 bg-slate-100 text-slate-700";
 };
+
+const parseDate = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const d = new Date(value.endsWith("Z") ? value : `${value}Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const minutesAgo = (date: Date | null): number => {
+  if (!date) return Infinity;
+  return (Date.now() - date.getTime()) / 60_000;
+};
+
+const deriveActivityState = (
+  agent: AgentRead,
+  hasTask: boolean,
+  lastActivity: Date | null,
+): AgentWithContext["activityState"] => {
+  const status = (agent.status ?? "").toLowerCase();
+  if (status !== "online") return "offline";
+
+  const mins = minutesAgo(lastActivity);
+  if (hasTask && mins < 5) return "working";
+  if (hasTask && mins >= 15) return "waiting";
+  if (mins >= 5) return "idle";
+  return "working";
+};
+
+// ─── SSE Connection Indicator ────────────────────────────────────────
+
+const SSEIndicator = memo(function SSEIndicator({
+  status,
+}: {
+  status: SSEStatus;
+}) {
+  if (status === "connected") {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+        <Wifi className="h-3 w-3" />
+        Live
+      </div>
+    );
+  }
+  if (status === "connecting") {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
+        <Wifi className="h-3 w-3 animate-pulse" />
+        Connecting…
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500">
+      <WifiOff className="h-3 w-3" />
+      Polling
+    </div>
+  );
+});
+
+SSEIndicator.displayName = "SSEIndicator";
+
+// ─── Activity State Dot ──────────────────────────────────────────────
+
+const ActivityStateDot = memo(function ActivityStateDot({
+  state,
+  className,
+}: {
+  state: AgentWithContext["activityState"];
+  className?: string;
+}) {
+  if (state === "working") {
+    return (
+      <span className={cn("relative flex h-3 w-3", className)}>
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
+      </span>
+    );
+  }
+  if (state === "idle") {
+    return (
+      <span
+        className={cn("inline-flex h-3 w-3 rounded-full bg-amber-400", className)}
+      />
+    );
+  }
+  if (state === "waiting") {
+    return (
+      <span className={cn("relative flex h-3 w-3", className)}>
+        <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-orange-300 opacity-60" />
+        <span className="relative inline-flex h-3 w-3 rounded-full bg-orange-400" />
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn("inline-flex h-3 w-3 rounded-full bg-slate-300", className)}
+    />
+  );
+});
+
+ActivityStateDot.displayName = "ActivityStateDot";
+
+const activityStateLabel = (state: AgentWithContext["activityState"]): string => {
+  if (state === "working") return "Working";
+  if (state === "idle") return "Idle";
+  if (state === "waiting") return "Waiting";
+  return "Offline";
+};
+
+// ─── Filter Bar ──────────────────────────────────────────────────────
+
+interface FilterBarProps {
+  search: string;
+  onSearchChange: (v: string) => void;
+  boardFilter: string;
+  onBoardFilterChange: (v: string) => void;
+  statusFilter: string;
+  onStatusFilterChange: (v: string) => void;
+  timeRange: string;
+  onTimeRangeChange: (v: string) => void;
+  boards: BoardRead[];
+}
+
+const FilterBar = memo(function FilterBar({
+  search,
+  onSearchChange,
+  boardFilter,
+  onBoardFilterChange,
+  statusFilter,
+  onStatusFilterChange,
+  timeRange,
+  onTimeRangeChange,
+  boards,
+}: FilterBarProps) {
+  const hasFilters =
+    search !== "" ||
+    boardFilter !== "all" ||
+    statusFilter !== "all" ||
+    timeRange !== "all";
+
+  return (
+    <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <Filter className="h-4 w-4 text-slate-400" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Filters
+        </span>
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              onSearchChange("");
+              onBoardFilterChange("all");
+              onStatusFilterChange("all");
+              onTimeRangeChange("all");
+            }}
+            className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 transition"
+          >
+            <X className="h-3 w-3" />
+            Clear all
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search agents…"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
+          />
+        </div>
+
+        {/* Board filter */}
+        <select
+          value={boardFilter}
+          onChange={(e) => onBoardFilterChange(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
+        >
+          <option value="all">All boards</option>
+          {boards.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Status filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+
+        {/* Time range */}
+        <select
+          value={timeRange}
+          onChange={(e) => onTimeRangeChange(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
+        >
+          {TIME_RANGES.map((tr) => (
+            <option key={tr.value} value={tr.value}>
+              {tr.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+});
+
+FilterBar.displayName = "FilterBar";
 
 // ─── Agent Log Entry ─────────────────────────────────────────────────
 
@@ -152,23 +420,34 @@ const AgentCard = memo(function AgentCard({
   const role = roleFromAgent(agent);
   const events = agent.events;
   const hasMore = events.length > COLLAPSED_LOG_COUNT;
-  const visibleEvents = expanded ? events : events.slice(0, COLLAPSED_LOG_COUNT);
+  const visibleEvents = expanded
+    ? events
+    : events.slice(0, COLLAPSED_LOG_COUNT);
+
+  const lastActivityText = agent.lastActivityAt
+    ? formatRelative(agent.lastActivityAt.toISOString())
+    : null;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-        <div
-          className={cn(
-            "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold",
-            status === "online"
-              ? "bg-emerald-100 text-emerald-700"
-              : status === "provisioning"
-                ? "bg-amber-100 text-amber-700"
-                : "bg-slate-100 text-slate-500",
-          )}
-        >
-          {agent.name[0]?.toUpperCase() ?? "?"}
+        <div className="relative flex-shrink-0">
+          <div
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold",
+              status === "online"
+                ? "bg-emerald-100 text-emerald-700"
+                : status === "provisioning"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-slate-100 text-slate-500",
+            )}
+          >
+            {agent.name[0]?.toUpperCase() ?? "?"}
+          </div>
+          <div className="absolute -bottom-0.5 -right-0.5">
+            <ActivityStateDot state={agent.activityState} />
+          </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -179,6 +458,20 @@ const AgentCard = memo(function AgentCard({
               {agent.name}
             </Link>
             <StatusPill status={status} />
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                agent.activityState === "working"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : agent.activityState === "idle"
+                    ? "bg-amber-50 text-amber-700"
+                    : agent.activityState === "waiting"
+                      ? "bg-orange-50 text-orange-700"
+                      : "bg-slate-50 text-slate-500",
+              )}
+            >
+              {activityStateLabel(agent.activityState)}
+            </span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
             {role ? <span>{role}</span> : null}
@@ -192,6 +485,14 @@ const AgentCard = memo(function AgentCard({
             ) : null}
             <span className="text-slate-300">·</span>
             <span>Last seen {formatRelative(agent.last_seen_at)}</span>
+            {lastActivityText && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span>
+                  Active {lastActivityText}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -266,16 +567,124 @@ AgentCard.displayName = "AgentCard";
 export default function AgentLogsPage() {
   const { isSignedIn } = useAuth();
   const { isAdmin } = useOrganizationMembership(isSignedIn);
+  const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // ── Filter state (URL-persisted) ──────────────────────────────────
+
+  const search = searchParams.get("q") ?? "";
+  const boardFilter = searchParams.get("board") ?? "all";
+  const statusFilter = searchParams.get("status") ?? "all";
+  const timeRange = searchParams.get("range") ?? "all";
+
+  const updateParam = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (value === "" || value === "all") {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+      const qs = params.toString();
+      router.replace(`/agent-logs${qs ? `?${qs}` : ""}`, { scroll: false });
+    },
+    [searchParams, router],
+  );
+
+  // ── SSE real-time updates ─────────────────────────────────────────
+
+  const sseEnabled = Boolean(isSignedIn && isAdmin);
+
+  const handleAgentSSE = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string) as AgentRead;
+        // Merge into React Query cache
+        queryClient.setQueryData(
+          getListAgentsApiV1AgentsGetQueryKey(),
+          (old: listAgentsApiV1AgentsGetResponse | undefined) => {
+            if (!old || old.status !== 200) return old;
+            const items = [...(old.data.items ?? [])];
+            const idx = items.findIndex((a) => a.id === data.id);
+            if (idx >= 0) {
+              items[idx] = { ...items[idx], ...data };
+            } else {
+              items.push(data);
+            }
+            return {
+              ...old,
+              data: { ...old.data, items },
+            };
+          },
+        );
+      } catch {
+        // ignore parse errors
+      }
+    },
+    [queryClient],
+  );
+
+  const handleActivitySSE = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string) as ActivityEventRead;
+        queryClient.setQueryData(
+          getListActivityApiV1ActivityGetQueryKey({ limit: ACTIVITY_LIMIT }),
+          (old: listActivityApiV1ActivityGetResponse | undefined) => {
+            if (!old || old.status !== 200) return old;
+            const items = [data, ...(old.data.items ?? [])];
+            // Cap to limit
+            if (items.length > ACTIVITY_LIMIT) items.length = ACTIVITY_LIMIT;
+            return {
+              ...old,
+              data: { ...old.data, items, total: (old.data.total ?? 0) + 1 },
+            };
+          },
+        );
+      } catch {
+        // ignore
+      }
+    },
+    [queryClient],
+  );
+
+  const { status: agentSSEStatus } = useSSE({
+    path: "/api/v1/agents/stream",
+    onMessage: handleAgentSSE,
+    enabled: sseEnabled,
+  });
+
+  const { status: activitySSEStatus } = useSSE({
+    path: "/api/v1/activity/task-comments/stream",
+    onMessage: handleActivitySSE,
+    enabled: sseEnabled,
+  });
+
+  const sseConnected =
+    agentSSEStatus === "connected" || activitySSEStatus === "connected";
+  const sseStatus: SSEStatus =
+    agentSSEStatus === "connected" || activitySSEStatus === "connected"
+      ? "connected"
+      : agentSSEStatus === "connecting" || activitySSEStatus === "connecting"
+        ? "connecting"
+        : agentSSEStatus === "error" || activitySSEStatus === "error"
+          ? "error"
+          : "disconnected";
+
+  const pollingInterval = sseConnected
+    ? REFETCH_INTERVAL_SSE_MS
+    : REFETCH_INTERVAL_MS;
 
   // ── Data queries ──────────────────────────────────────────────────
 
   const agentsQuery = useListAgentsApiV1AgentsGet<
     listAgentsApiV1AgentsGetResponse,
     ApiError
-  >({
+  >(undefined, {
     query: {
       enabled: Boolean(isSignedIn && isAdmin),
-      refetchInterval: REFETCH_INTERVAL_MS,
+      refetchInterval: pollingInterval,
       refetchOnMount: "always",
       retry: false,
     },
@@ -289,7 +698,7 @@ export default function AgentLogsPage() {
     {
       query: {
         enabled: Boolean(isSignedIn && isAdmin),
-        refetchInterval: REFETCH_INTERVAL_MS,
+        refetchInterval: pollingInterval,
         retry: false,
       },
     },
@@ -323,7 +732,6 @@ export default function AgentLogsPage() {
     [boards],
   );
 
-  // Fetch snapshots for all boards to get task assignments
   useEffect(() => {
     if (boards.length === 0) return;
     let cancelled = false;
@@ -346,10 +754,7 @@ export default function AgentLogsPage() {
             (task.status === "in_progress" || task.status === "review")
           ) {
             const existing = taskMap.get(task.assigned_agent_id);
-            if (
-              !existing ||
-              task.status === "in_progress"
-            ) {
+            if (!existing || task.status === "in_progress") {
               taskMap.set(task.assigned_agent_id, task);
             }
           }
@@ -379,10 +784,19 @@ export default function AgentLogsPage() {
   }, [activityQuery.data]);
 
   const agentsWithContext = useMemo<AgentWithContext[]>(() => {
+    const now = Date.now();
+    const timeRangeDef = TIME_RANGES.find((t) => t.value === timeRange);
+    const timeRangeMs = timeRangeDef?.ms ?? 0;
+
     // Group events by agent
     const eventsByAgent = new Map<string, ActivityEventRead[]>();
     for (const event of events) {
       if (!event.agent_id) continue;
+      // Apply time range filter to events
+      if (timeRangeMs > 0) {
+        const eventDate = parseDate(event.created_at);
+        if (eventDate && now - eventDate.getTime() > timeRangeMs) continue;
+      }
       const list = eventsByAgent.get(event.agent_id) ?? [];
       list.push(event);
       eventsByAgent.set(event.agent_id, list);
@@ -390,26 +804,85 @@ export default function AgentLogsPage() {
 
     return agents
       .filter((a) => !a.is_gateway_main)
-      .map((agent) => ({
-        ...agent,
-        boardName: agent.board_id
-          ? (boardsById.get(agent.board_id)?.name ?? null)
-          : null,
-        currentTask: tasksByAgent.get(agent.id) ?? null,
-        events: eventsByAgent.get(agent.id) ?? [],
-      }))
+      .map((agent) => {
+        const agentEvents = eventsByAgent.get(agent.id) ?? [];
+        const hasTask = tasksByAgent.has(agent.id);
+
+        // Find most recent activity timestamp
+        let lastActivityAt: Date | null = null;
+        for (const ev of agentEvents) {
+          const d = parseDate(ev.created_at);
+          if (d && (!lastActivityAt || d > lastActivityAt)) {
+            lastActivityAt = d;
+          }
+        }
+        // Also consider last_seen_at
+        const lastSeen = parseDate(agent.last_seen_at);
+        if (lastSeen && (!lastActivityAt || lastSeen > lastActivityAt)) {
+          lastActivityAt = lastSeen;
+        }
+
+        return {
+          ...agent,
+          boardName: agent.board_id
+            ? (boardsById.get(agent.board_id)?.name ?? null)
+            : null,
+          currentTask: tasksByAgent.get(agent.id) ?? null,
+          events: agentEvents,
+          activityState: deriveActivityState(agent, hasTask, lastActivityAt),
+          lastActivityAt,
+        };
+      })
       .sort((a, b) => {
-        const statusDiff = agentStatusOrder(a.status) - agentStatusOrder(b.status);
+        // Sort by activity state first, then status, then name
+        const actDiff =
+          activityStateOrder(a.activityState) -
+          activityStateOrder(b.activityState);
+        if (actDiff !== 0) return actDiff;
+        const statusDiff =
+          agentStatusOrder(a.status) - agentStatusOrder(b.status);
         if (statusDiff !== 0) return statusDiff;
         return a.name.localeCompare(b.name);
       });
-  }, [agents, events, boardsById, tasksByAgent]);
+  }, [agents, events, boardsById, tasksByAgent, timeRange]);
+
+  // ── Apply filters ─────────────────────────────────────────────────
+
+  const filteredAgents = useMemo<AgentWithContext[]>(() => {
+    let result = agentsWithContext;
+
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          (roleFromAgent(a) ?? "").toLowerCase().includes(q),
+      );
+    }
+
+    if (boardFilter !== "all") {
+      result = result.filter((a) => a.board_id === boardFilter);
+    }
+
+    if (statusFilter !== "all") {
+      result = result.filter(
+        (a) => (a.status ?? "offline").toLowerCase() === statusFilter,
+      );
+    }
+
+    return result;
+  }, [agentsWithContext, search, boardFilter, statusFilter]);
 
   const onlineCount = useMemo(
     () =>
       agentsWithContext.filter(
         (a) => (a.status ?? "").toLowerCase() === "online",
       ).length,
+    [agentsWithContext],
+  );
+
+  const workingCount = useMemo(
+    () => agentsWithContext.filter((a) => a.activityState === "working").length,
     [agentsWithContext],
   );
 
@@ -454,6 +927,13 @@ export default function AgentLogsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
+                  <SSEIndicator status={sseStatus} />
+                  {workingCount > 0 && (
+                    <div className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                      <ActivityStateDot state="working" />
+                      {workingCount} working
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
                     <span
                       className={cn(
@@ -464,8 +944,11 @@ export default function AgentLogsPage() {
                     {onlineCount} online
                   </div>
                   <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
-                    {agentsWithContext.length} agent
-                    {agentsWithContext.length !== 1 ? "s" : ""}
+                    {filteredAgents.length}
+                    {filteredAgents.length !== agentsWithContext.length
+                      ? ` / ${agentsWithContext.length}`
+                      : ""}{" "}
+                    agent{agentsWithContext.length !== 1 ? "s" : ""}
                   </div>
                 </div>
               </div>
@@ -486,22 +969,42 @@ export default function AgentLogsPage() {
               <div className="flex items-center justify-center py-20 text-sm text-slate-500">
                 Loading agent data…
               </div>
-            ) : agentsWithContext.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-                <Bot className="mx-auto h-10 w-10 text-slate-300" />
-                <p className="mt-3 text-sm font-medium text-slate-900">
-                  No agents found
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Agents will appear here once they are registered and connected.
-                </p>
-              </div>
             ) : (
-              <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-                {agentsWithContext.map((agent) => (
-                  <AgentCard key={agent.id} agent={agent} />
-                ))}
-              </div>
+              <>
+                <FilterBar
+                  search={search}
+                  onSearchChange={(v) => updateParam("q", v)}
+                  boardFilter={boardFilter}
+                  onBoardFilterChange={(v) => updateParam("board", v)}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={(v) => updateParam("status", v)}
+                  timeRange={timeRange}
+                  onTimeRangeChange={(v) => updateParam("range", v)}
+                  boards={boards}
+                />
+
+                {filteredAgents.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+                    <Bot className="mx-auto h-10 w-10 text-slate-300" />
+                    <p className="mt-3 text-sm font-medium text-slate-900">
+                      {agentsWithContext.length === 0
+                        ? "No agents found"
+                        : "No agents match filters"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {agentsWithContext.length === 0
+                        ? "Agents will appear here once they are registered and connected."
+                        : "Try adjusting your search or filter criteria."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                    {filteredAgents.map((agent) => (
+                      <AgentCard key={agent.id} agent={agent} />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </main>
