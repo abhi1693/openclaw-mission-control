@@ -1,0 +1,24 @@
+# Mission Control RQ queue worker — example systemd unit for local install.
+# Processes lifecycle and webhook queue tasks; required for gateway wake/check-in and webhooks.
+# Copy to ~/.config/systemd/user/ or /etc/systemd/system/, then:
+#   sed -e 's|REPO_ROOT|/path/to/openclaw-mission-control|g' -i openclaw-mission-control-rq-worker.service
+#   systemctl --user daemon-reload  # or sudo systemctl daemon-reload
+#   systemctl --user enable --now openclaw-mission-control-rq-worker  # or sudo systemctl enable --now ...
+#
+# Requires: uv in PATH, Redis reachable (RQ_REDIS_URL in backend/.env), backend/.env present.
+
+[Unit]
+Description=Mission Control RQ queue worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=REPO_ROOT/backend
+EnvironmentFile=-REPO_ROOT/backend/.env
+ExecStart=uv run python ../scripts/rq worker
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

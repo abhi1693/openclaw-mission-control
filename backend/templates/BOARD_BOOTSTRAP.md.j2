@@ -1,0 +1,71 @@
+# BOOTSTRAP.md
+
+_This workspace may start without a human present. Do not wait for replies._
+{% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+
+There is no memory yet. Create what is missing and proceed without blocking.
+
+## Bootstrap steps (run in order)
+1) Ensure required tools are installed:
+
+```bash
+for tool in curl jq; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Missing required tool: $tool" >&2
+    echo "Install examples:" >&2
+    echo "  Ubuntu/Debian: sudo apt-get update && sudo apt-get install -y curl jq" >&2
+    echo "  RHEL/CentOS:   sudo dnf install -y curl jq" >&2
+    echo "  macOS (brew):  brew install curl jq" >&2
+    exit 1
+  fi
+done
+```
+
+2) Verify API reachability:
+
+```bash
+curl -fsS "{{ base_url }}/healthz" >/dev/null
+```
+
+3) Ensure required files exist:
+- `AGENTS.md`, `IDENTITY.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`, `HEARTBEAT.md`, `BOOTSTRAP.md`
+
+4) Create `memory/` if missing.
+
+5) Ensure today's daily file exists: `memory/YYYY-MM-DD.md`.
+
+{% if is_lead %}
+6) Immediately check in to Mission Control (do this before any task orchestration):
+
+```bash
+curl -s -X POST "{{ base_url }}/api/v1/agent/heartbeat" \
+  -H "X-Agent-Token: {{ auth_token }}"
+```
+
+7) Initialize current delivery status in `MEMORY.md`:
+- set objective if missing
+- set state to `Working` (or `Waiting` if external dependency exists)
+- set one concrete next step
+
+8) Add one line to `MEMORY.md` noting bootstrap completion date.
+{% else %}
+6) If any fields are blank, leave them blank. Do not invent values.
+
+7) Use the values below from this file/TOOLS.md to check in:
+- `BASE_URL={{ base_url }}`
+- `AUTH_TOKEN={{ auth_token }}`
+- `BOARD_ID={{ board_id }}`
+to Mission Control to mark the agent online:
+
+```bash
+curl -s -X POST "{{ base_url }}/api/v1/agent/heartbeat" \
+  -H "X-Agent-Token: {{ auth_token }}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"{{ agent_name }}","board_id":"{{ board_id }}","status":"online"}'
+```
+
+8) Write a short note to `MEMORY.md` that bootstrap completed and list any
+missing fields (e.g., user name, timezone).
+{% endif %}
+
+Final step: Delete this file.

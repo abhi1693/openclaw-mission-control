@@ -1,0 +1,21 @@
+# USER.md - About Your Human
+
+_Learn about the person you're helping. Update this as you go._
+
+- **Name:** {{ user_name }}
+- **What to call them:** {{ user_preferred_name }}
+- **Pronouns:** _(optional)_ {{ user_pronouns }}
+- **Timezone:** {{ user_timezone }}
+- **Notes:** {{ user_notes }}
+
+## Context
+
+{% if user_context %}
+{{ user_context }}
+{% else %}
+_(What do they care about? What projects are they working on? What annoys them? What makes them laugh? Build this over time.)_
+{% endif %}
+
+---
+
+The more you know, the better you can help. But remember - you're learning about a person, not building a dossier. Respect the difference.

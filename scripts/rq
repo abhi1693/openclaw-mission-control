@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+"""RQ worker entrypoint."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+BACKEND_ROOT = ROOT_DIR / "backend"
+sys.path.insert(0, str(BACKEND_ROOT))
+
+from app.services.queue_worker import run_worker
+
+
+def cmd_worker(args: argparse.Namespace) -> int:
+    try:
+        run_worker()
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="RQ background worker helpers.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    worker_parser = subparsers.add_parser(
+        "worker",
+        help="Continuously process queued background work.",
+    )
+    worker_parser.set_defaults(func=cmd_worker)
+
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    sys.exit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()

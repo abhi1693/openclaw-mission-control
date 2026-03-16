@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""RQ worker entrypoint for Docker containers."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+# In Docker, the working directory is /app and app code is at /app/app/
+# Add /app to sys.path so we can import app.services.queue_worker
+WORKDIR = Path.cwd()
+sys.path.insert(0, str(WORKDIR))
+
+from app.services.queue_worker import run_worker
+
+
+def cmd_worker(args: argparse.Namespace) -> int:
+    try:
+        run_worker()
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="RQ background worker helpers.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    worker_parser = subparsers.add_parser(
+        "worker",
+        help="Continuously process queued background work.",
+    )
+    worker_parser.set_defaults(func=cmd_worker)
+
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        sys.exit(args.func(args))
+    except Exception:
+        # Log unexpected errors before exiting
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

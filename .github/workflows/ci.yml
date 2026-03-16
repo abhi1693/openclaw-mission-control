@@ -1,0 +1,380 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            backend/.venv
+          key: uv-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+
+      - name: Set up Node
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: make backend-sync
+
+      - name: Install frontend dependencies
+        run: make frontend-sync
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/.next/cache
+          key: nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-
+
+
+
+      - name: Enforce one migration per PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          ./scripts/ci/one_migration_per_pr.sh
+
+      - name: Run migration integrity gate
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.sha }}"
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if ! echo "$CHANGED_FILES" | grep -Eq '^backend/(app/models|db|migrations|alembic\.ini)'; then
+            echo "No migration-relevant backend changes detected; skipping migration gate."
+            exit 0
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^backend/app/models/' && ! echo "$CHANGED_FILES" | grep -Eq '^backend/migrations/versions/'; then
+            echo "Model changes detected without a migration under backend/migrations/versions/."
+            exit 1
+          fi
+
+          make backend-migration-check
+
+      - name: Run backend checks
+        env:
+          # Keep CI builds deterministic.
+          AUTH_MODE: "local"
+          LOCAL_AUTH_TOKEN: "ci-local-auth-token-0123456789-0123456789-0123456789x"
+        run: |
+          make backend-lint
+          make backend-coverage
+
+      - name: Run frontend checks
+        env:
+          # Keep CI builds deterministic.
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          NEXT_PUBLIC_AUTH_MODE: "local"
+        run: |
+          make frontend-lint
+          make frontend-typecheck
+          make frontend-test
+          make frontend-build
+
+
+      - name: Docs quality gates
+        run: |
+          make docs-check
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          if-no-files-found: ignore
+          path: |
+            backend/coverage.xml
+            frontend/coverage/**
+
+  installer:
+    name: Installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            run_linux_smoke_tests: true
+            run_macos_local_smoke_test: false
+          - os: macos-latest
+            run_linux_smoke_tests: false
+            run_macos_local_smoke_test: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate installer shell syntax
+        run: bash -n install.sh
+
+      - name: Set up Python for macOS installer smoke test
+        if: ${{ matrix.run_macos_local_smoke_test }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv for macOS installer smoke test
+        if: ${{ matrix.run_macos_local_smoke_test }}
+        run: python -m pip install --upgrade pip uv
+
+      - name: Set up Node for macOS installer smoke test
+        if: ${{ matrix.run_macos_local_smoke_test }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Start PostgreSQL for macOS installer smoke test
+        if: ${{ matrix.run_macos_local_smoke_test }}
+        run: |
+          brew install postgresql@16
+          PG_BIN="$(brew --prefix postgresql@16)/bin"
+          "$PG_BIN/initdb" -D "$RUNNER_TEMP/pgdata"
+          "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/pgdata" -l "$RUNNER_TEMP/postgres.log" -o "-p 55432" start
+          "$PG_BIN/createdb" -p 55432 mission_control
+
+      - name: Installer smoke test (macOS local mode + external db)
+        if: ${{ matrix.run_macos_local_smoke_test }}
+        run: |
+          PGUSER="$(whoami)"
+          ./install.sh \
+            --mode local \
+            --backend-port 18002 \
+            --frontend-port 13002 \
+            --public-host localhost \
+            --api-url http://localhost:18002 \
+            --token-mode generate \
+            --db-mode external \
+            --database-url "postgresql+psycopg://${PGUSER}@localhost:55432/mission_control" \
+            --start-services no
+          test -f .env
+          test -f backend/.env
+          test -f frontend/.env
+          test -f frontend/.next/BUILD_ID
+
+      - name: Installer smoke test (docker mode)
+        if: ${{ matrix.run_linux_smoke_tests }}
+        run: |
+          ./install.sh \
+            --mode docker \
+            --backend-port 18000 \
+            --frontend-port 13000 \
+            --public-host localhost \
+            --api-url http://localhost:18000 \
+            --token-mode generate
+
+          backend_ready=0
+          for _ in {1..120}; do
+            if curl -fsS http://127.0.0.1:18000/healthz >/dev/null; then
+              backend_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          frontend_ready=0
+          for _ in {1..120}; do
+            if curl -fsS http://127.0.0.1:13000 >/dev/null; then
+              frontend_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$backend_ready" -ne 1 ] || [ "$frontend_ready" -ne 1 ]; then
+            echo "Installer docker smoke readiness failed: backend_ready=$backend_ready frontend_ready=$frontend_ready"
+            docker compose -f compose.yml --env-file .env ps || true
+            docker compose -f compose.yml --env-file .env logs --no-color --tail=200 backend db redis frontend webhook-worker || true
+            exit 1
+          fi
+
+      - name: Cleanup docker stack after docker mode
+        if: ${{ always() && matrix.run_linux_smoke_tests }}
+        run: |
+          docker compose -f compose.yml --env-file .env down -v --remove-orphans || true
+
+      - name: Installer smoke test (local mode)
+        if: ${{ matrix.run_linux_smoke_tests }}
+        env:
+          XDG_STATE_HOME: ${{ github.workspace }}/.installer-state
+        run: |
+          ./install.sh \
+            --mode local \
+            --backend-port 18001 \
+            --frontend-port 13001 \
+            --public-host localhost \
+            --api-url http://localhost:18001 \
+            --token-mode generate \
+            --db-mode docker \
+            --start-services yes
+
+          backend_ready=0
+          for _ in {1..120}; do
+            if curl -fsS http://127.0.0.1:18001/healthz >/dev/null; then
+              backend_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          frontend_ready=0
+          for _ in {1..120}; do
+            if curl -fsS http://127.0.0.1:13001 >/dev/null; then
+              frontend_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$backend_ready" -ne 1 ] || [ "$frontend_ready" -ne 1 ]; then
+            echo "Installer local smoke readiness failed: backend_ready=$backend_ready frontend_ready=$frontend_ready"
+            LOG_DIR="$XDG_STATE_HOME/openclaw-mission-control-install"
+            if [ -f "$LOG_DIR/backend.log" ]; then
+              echo "----- backend log (tail) -----"
+              tail -n 200 "$LOG_DIR/backend.log" || true
+            fi
+            if [ -f "$LOG_DIR/frontend.log" ]; then
+              echo "----- frontend log (tail) -----"
+              tail -n 200 "$LOG_DIR/frontend.log" || true
+            fi
+            exit 1
+          fi
+
+      - name: Cleanup local processes and docker resources
+        if: ${{ always() && matrix.run_linux_smoke_tests }}
+        env:
+          XDG_STATE_HOME: ${{ github.workspace }}/.installer-state
+        run: |
+          LOG_DIR="$XDG_STATE_HOME/openclaw-mission-control-install"
+          if [ -f "$LOG_DIR/backend.pid" ]; then kill "$(cat "$LOG_DIR/backend.pid")" || true; fi
+          if [ -f "$LOG_DIR/frontend.pid" ]; then kill "$(cat "$LOG_DIR/frontend.pid")" || true; fi
+          docker compose -f compose.yml --env-file .env down -v --remove-orphans || true
+
+      - name: Cleanup macOS PostgreSQL
+        if: ${{ always() && matrix.run_macos_local_smoke_test }}
+        run: |
+          if ! command -v brew >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          PG_PREFIX="$(brew --prefix postgresql@16 2>/dev/null || true)"
+          if [ -z "$PG_PREFIX" ] || [ ! -d "$PG_PREFIX" ]; then
+            exit 0
+          fi
+
+          PG_BIN="$PG_PREFIX/bin"
+          if [ -d "$RUNNER_TEMP/pgdata" ] && [ -x "$PG_BIN/pg_ctl" ]; then
+            "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/pgdata" -m fast stop || true
+          fi
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [check]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: make frontend-sync
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/.next/cache
+          key: nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-
+
+
+      - name: Start frontend (dev server)
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          NEXT_PUBLIC_AUTH_MODE: "local"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          cd frontend
+          npm run dev -- --hostname 0.0.0.0 --port 3000 &
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "Frontend did not start"
+          exit 1
+
+      - name: Run Cypress E2E
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          NEXT_PUBLIC_AUTH_MODE: "local"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          cd frontend
+          npm run e2e -- --browser chrome
+
+      - name: Upload Cypress artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-artifacts
+          if-no-files-found: ignore
+          path: |
+            frontend/cypress/screenshots/**
+            frontend/cypress/videos/**

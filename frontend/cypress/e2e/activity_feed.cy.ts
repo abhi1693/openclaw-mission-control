@@ -1,0 +1,173 @@
+/// <reference types="cypress" />
+
+describe("/activity feed", () => {
+  const apiBase = "**/api/v1";
+
+  const originalDefaultCommandTimeout = Cypress.config("defaultCommandTimeout");
+
+  beforeEach(() => {
+    // CI can be slow enough that the default 4s command timeout flakes.
+    Cypress.config("defaultCommandTimeout", 20_000);
+  });
+
+  afterEach(() => {
+    Cypress.config("defaultCommandTimeout", originalDefaultCommandTimeout);
+  });
+
+  function stubStreamsEmpty() {
+    // The activity page connects multiple SSE streams (tasks/approvals/agents/board memory).
+    // In E2E we keep them empty to avoid flake and keep assertions deterministic.
+    const emptySse = {
+      statusCode: 200,
+      headers: { "content-type": "text/event-stream" },
+      body: "",
+    };
+
+    cy.intercept("GET", `${apiBase}/boards/*/tasks/stream*`, emptySse).as(
+      "tasksStream",
+    );
+    cy.intercept("GET", `${apiBase}/boards/*/approvals/stream*`, emptySse).as(
+      "approvalsStream",
+    );
+    cy.intercept("GET", `${apiBase}/boards/*/memory/stream*`, emptySse).as(
+      "memoryStream",
+    );
+    cy.intercept("GET", `${apiBase}/agents/stream*`, emptySse).as("agentsStream");
+  }
+
+  function stubBoardBootstrap() {
+    // Some app bootstraps happen before we get to the /activity call.
+    // Keep these stable so the page always reaches the activity request.
+    cy.intercept("GET", `${apiBase}/users/me*`, {
+      statusCode: 200,
+      body: {
+        id: "u1",
+        clerk_user_id: "local-auth-user",
+        email: "local@example.com",
+        name: "Local User",
+        preferred_name: "Local User",
+        timezone: "UTC",
+      },
+    }).as("usersMe");
+
+    cy.intercept("GET", `${apiBase}/organizations/me/list*`, {
+      statusCode: 200,
+      body: [
+        {
+          id: "org1",
+          name: "Testing Org",
+          is_active: true,
+          role: "owner",
+        },
+      ],
+    }).as("orgsList");
+
+    cy.intercept("GET", `${apiBase}/organizations/me/member*`, {
+      statusCode: 200,
+      body: { organization_id: "org1", role: "owner" },
+    }).as("orgMeMember");
+
+    cy.intercept("GET", `${apiBase}/boards*`, {
+      statusCode: 200,
+      body: {
+        items: [{ id: "b1", name: "Testing", updated_at: "2026-02-07T00:00:00Z" }],
+      },
+    }).as("boardsList");
+
+    cy.intercept("GET", `${apiBase}/boards/b1/snapshot*`, {
+      statusCode: 200,
+      body: {
+        tasks: [{ id: "t1", title: "CI hardening" }],
+        agents: [],
+        approvals: [],
+        chat_messages: [],
+      },
+    }).as("boardSnapshot");
+  }
+
+  function assertSignedInAndLanded() {
+    cy.waitForAppLoaded();
+    cy.contains(/live feed/i).should("be.visible");
+  }
+
+  it("auth negative: signed-out user sees auth prompt", () => {
+    cy.visit("/activity");
+    cy.contains(/sign in to view the feed|local authentication/i, {
+      timeout: 20_000,
+    }).should("be.visible");
+  });
+
+  it("happy path: renders task comment cards", () => {
+    stubBoardBootstrap();
+
+    cy.intercept("GET", "**/api/v1/activity**", {
+      statusCode: 200,
+      body: {
+        items: [
+          {
+            id: "e1",
+            event_type: "task.comment",
+            message: "Hello world",
+            agent_id: null,
+            agent_name: "Kunal",
+            created_at: "2026-02-07T00:00:00Z",
+            task_id: "t1",
+            task_title: "CI hardening",
+            agent_role: "QA 2",
+          },
+        ],
+      },
+    }).as("activityList");
+
+    stubStreamsEmpty();
+
+    cy.loginWithLocalAuth();
+    cy.visit("/activity");
+    assertSignedInAndLanded();
+    cy.wait("@activityList", { timeout: 20_000 });
+
+    // Task-title rendering can be either enriched title or fallback label,
+    // depending on metadata resolution timing.
+    cy.contains(/ci hardening|unknown task/i).should("be.visible");
+    cy.contains(/hello world/i).should("be.visible");
+  });
+
+  it("empty state: shows waiting message when no items", () => {
+    stubBoardBootstrap();
+
+    cy.intercept("GET", "**/api/v1/activity**", {
+      statusCode: 200,
+      body: { items: [] },
+    }).as("activityList");
+
+    stubStreamsEmpty();
+
+    cy.loginWithLocalAuth();
+    cy.visit("/activity");
+    assertSignedInAndLanded();
+    cy.wait("@activityList", { timeout: 20_000 });
+
+    cy.contains(/waiting for new activity/i).should("be.visible");
+  });
+
+  it("error state: shows failure UI when API errors", () => {
+    stubBoardBootstrap();
+
+    cy.intercept("GET", "**/api/v1/activity**", {
+      statusCode: 500,
+      body: { detail: "boom" },
+    }).as("activityList");
+
+    stubStreamsEmpty();
+
+    cy.loginWithLocalAuth();
+    cy.visit("/activity");
+    assertSignedInAndLanded();
+    cy.wait("@activityList", { timeout: 20_000 });
+
+    // Depending on how ApiError is surfaced, we may show a generic or specific message.
+    cy.contains(/unable to load activity feed|unable to load feed|boom/i).should(
+      "be.visible",
+    );
+  });
+});

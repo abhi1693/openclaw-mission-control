@@ -1,0 +1,23 @@
+# Mission Control backend (FastAPI) — example systemd unit for local install.
+# Copy to ~/.config/systemd/user/ or /etc/systemd/system/, then:
+#   sed -e 's|REPO_ROOT|/path/to/openclaw-mission-control|g' -e 's|BACKEND_PORT|8000|g' -i openclaw-mission-control-backend.service
+#   systemctl --user daemon-reload  # or sudo systemctl daemon-reload
+#   systemctl --user enable --now openclaw-mission-control-backend  # or sudo systemctl enable --now ...
+#
+# Requires: uv in PATH (e.g. ~/.local/bin), backend/.env present.
+
+[Unit]
+Description=Mission Control backend (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=REPO_ROOT/backend
+EnvironmentFile=-REPO_ROOT/backend/.env
+ExecStart=uv run uvicorn app.main:app --host 0.0.0.0 --port BACKEND_PORT
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

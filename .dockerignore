@@ -1,0 +1,36 @@
+.git
+.gitignore
+.github
+
+# Python
+**/__pycache__
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/htmlcov
+**/*.egg-info
+.venv
+**/.venv
+
+# Node / Next
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.turbo
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+
+# Local env files
+**/.env
+**/.env.*
+
+# Logs
+**/*.log
