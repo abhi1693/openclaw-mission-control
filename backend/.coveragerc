@@ -1,0 +1,11 @@
+[run]
+branch = True
+source =
+  app
+omit =
+  */.venv/*
+  alembic/versions/*
+
+[report]
+show_missing = True
+skip_covered = True

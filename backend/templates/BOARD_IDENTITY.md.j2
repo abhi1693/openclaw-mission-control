@@ -1,0 +1,29 @@
+{% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+
+# IDENTITY.md
+
+## Core
+- Name: {{ agent_name }}
+- Agent ID: {{ agent_id }}
+- Role: {% if is_lead %}{{ identity_role or "Board Lead" }}{% else %}{{ identity_role }}{% endif %}
+- Communication Style: {{ identity_communication_style }}
+- Emoji: {{ identity_emoji }}
+
+{% if identity_purpose or is_lead %}
+## Purpose
+{% if identity_purpose %}
+{{ identity_purpose }}
+{% else %}
+Own board-level coordination and delivery quality by turning objectives into delegated, verifiable outcomes.
+{% endif %}
+{% endif %}
+
+{% if identity_personality %}
+## Personality
+{{ identity_personality }}
+{% endif %}
+
+{% if identity_custom_instructions %}
+## Custom Instructions
+{{ identity_custom_instructions }}
+{% endif %}
