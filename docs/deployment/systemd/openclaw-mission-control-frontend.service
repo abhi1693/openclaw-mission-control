@@ -1,0 +1,23 @@
+# Mission Control frontend (Next.js) — example systemd unit for local install.
+# Copy to ~/.config/systemd/user/ or /etc/systemd/system/, then:
+#   sed -e 's|REPO_ROOT|/path/to/openclaw-mission-control|g' -e 's|FRONTEND_PORT|3000|g' -i openclaw-mission-control-frontend.service
+#   systemctl --user daemon-reload  # or sudo systemctl daemon-reload
+#   systemctl --user enable --now openclaw-mission-control-frontend  # or sudo systemctl enable --now ...
+#
+# Requires: Node.js/npm in PATH (e.g. from nvm or system install), frontend/.env present.
+
+[Unit]
+Description=Mission Control frontend (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=REPO_ROOT/frontend
+EnvironmentFile=-REPO_ROOT/frontend/.env
+ExecStart=npm run start -- --hostname 0.0.0.0 --port FRONTEND_PORT
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

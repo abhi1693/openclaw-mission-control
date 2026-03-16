@@ -1,0 +1,24 @@
+# markdownlint-cli2 config
+# Keep the ruleset intentionally tiny to avoid noisy churn.
+
+config:
+  default: false
+  MD009: true   # no trailing spaces
+  MD010: true   # no hard tabs
+  MD012: true   # no multiple consecutive blank lines
+  MD047: true   # single trailing newline
+
+globs:
+  - "**/*.md"
+
+ignores:
+  - "**/node_modules/**"
+  - "**/.next/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/__pycache__/**"
+  - "**/.pytest_cache/**"
+  - "**/.mypy_cache/**"
+  - "**/coverage/**"
+  - "**/~/**"

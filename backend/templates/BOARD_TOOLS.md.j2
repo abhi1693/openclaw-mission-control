@@ -1,0 +1,51 @@
+{% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+# TOOLS.md
+
+- `BASE_URL={{ base_url }}`
+- `AUTH_TOKEN={{ auth_token }}`
+- `AGENT_NAME={{ agent_name }}`
+- `AGENT_ID={{ agent_id }}`
+{% if board_id is defined %}
+- `BOARD_ID={{ board_id }}`
+{% endif %}
+- `WORKSPACE_ROOT={{ workspace_root }}`
+{% if workspace_path is defined %}
+- `WORKSPACE_PATH={{ workspace_path }}`
+{% endif %}
+- Required tools: `curl`, `jq`
+
+{% if is_main %}
+{% set role_tag = "agent-main" %}
+{% elif is_lead %}
+{% set role_tag = "agent-lead" %}
+{% else %}
+{% set role_tag = "agent-worker" %}
+{% endif %}
+
+## OpenAPI refresh (run before API-heavy work)
+
+```bash
+mkdir -p api
+curl -fsS "{{ base_url }}/openapi.json" -o api/openapi.json
+jq -r '
+  .paths | to_entries[] as $p
+  | $p.value | to_entries[]
+  | select((.value.tags // []) | index("{{ role_tag }}"))
+  | "\(.key|ascii_upcase)\t\($p.key)\t\(.value.operationId // "-")\t\(.value[\"x-llm-intent\"] // "-")\t\(.value[\"x-when-to-use\"] // [] | join(\" | \"))\t\(.value[\"x-routing-policy\"] // [] | join(\" | \"))"
+' api/openapi.json | sort > api/{{ role_tag }}-operations.tsv
+```
+
+## API source of truth
+- `api/openapi.json`
+- `api/{{ role_tag }}-operations.tsv`
+  - Columns: METHOD, PATH, OP_ID, X_LLM_INTENT, X_WHEN_TO_USE, X_ROUTING_POLICY
+
+## API discovery policy
+- Use operations tagged `{{ role_tag }}`.
+- Prefer operations whose `x-llm-intent` and `x-when-to-use` match the current objective.
+- Derive method/path/schema from `api/openapi.json` at runtime.
+- Do not hardcode endpoint paths in markdown files.
+
+## API safety
+If no confident match exists for current intent, ask one clarifying question.
