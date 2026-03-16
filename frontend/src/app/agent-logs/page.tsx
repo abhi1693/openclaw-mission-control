@@ -25,6 +25,8 @@ import {
   Wifi,
   WifiOff,
   X,
+  MessageSquare,
+  Activity,
 } from "lucide-react";
 
 import { ApiError } from "@/api/mutator";
@@ -43,9 +45,15 @@ import {
   useListBoardsApiV1BoardsGet,
 } from "@/api/generated/boards/boards";
 import { getBoardSnapshotApiV1BoardsBoardIdSnapshotGet } from "@/api/generated/boards/boards";
+import {
+  type listBoardMemoryApiV1BoardsBoardIdMemoryGetResponse,
+  useListBoardMemoryApiV1BoardsBoardIdMemoryGet,
+  getListBoardMemoryApiV1BoardsBoardIdMemoryGetQueryKey,
+} from "@/api/generated/board-memory/board-memory";
 import type {
   ActivityEventRead,
   AgentRead,
+  BoardMemoryRead,
   BoardRead,
   TaskCardRead,
 } from "@/api/generated/model";
@@ -56,12 +64,9 @@ import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
-import {
-  formatRelativeTimestamp as formatRelative,
-  formatTimestamp,
-} from "@/lib/formatters";
+import { formatRelativeTimestamp as formatRelative } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { useSSE, type SSEStatus } from "@/lib/use-sse";
+import { useSSE, type SSEStatus, type SSEEvent } from "@/lib/use-sse";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -171,8 +176,8 @@ const deriveActivityState = (
   const mins = minutesAgo(lastActivity);
   if (hasTask && mins < 5) return "working";
   if (hasTask && mins >= 15) return "waiting";
-  if (mins >= 5) return "idle";
-  return "working";
+  if (mins < 5 && hasTask) return "working";
+  return "idle";
 };
 
 // ─── SSE Connection Indicator ────────────────────────────────────────
@@ -325,6 +330,7 @@ const FilterBar = memo(function FilterBar({
 
         {/* Board filter */}
         <select
+          aria-label="Filter by board"
           value={boardFilter}
           onChange={(e) => onBoardFilterChange(e.target.value)}
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
@@ -339,6 +345,7 @@ const FilterBar = memo(function FilterBar({
 
         {/* Status filter */}
         <select
+          aria-label="Filter by status"
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value)}
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
@@ -352,6 +359,7 @@ const FilterBar = memo(function FilterBar({
 
         {/* Time range */}
         <select
+          aria-label="Filter by time range"
           value={timeRange}
           onChange={(e) => onTimeRangeChange(e.target.value)}
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
@@ -562,6 +570,357 @@ const AgentCard = memo(function AgentCard({
 
 AgentCard.displayName = "AgentCard";
 
+// ─── Chat Message ────────────────────────────────────────────────────
+
+const COLLAPSED_MESSAGE_LINES = 4;
+const COLLAPSED_MESSAGE_CHARS = 300;
+
+const ChatMessage = memo(function ChatMessage({
+  message,
+  boardName,
+}: {
+  message: BoardMemoryRead;
+  boardName: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const content = (message.content ?? "").trim();
+  const isLong = content.length > COLLAPSED_MESSAGE_CHARS || content.split("\n").length > COLLAPSED_MESSAGE_LINES;
+  const displayContent = expanded || !isLong
+    ? content
+    : content.slice(0, COLLAPSED_MESSAGE_CHARS).replace(/\n/g, "\n").trimEnd() + "…";
+
+  const agentName = message.source ?? "Unknown Agent";
+  const initial = agentName[0]?.toUpperCase() ?? "?";
+
+  // Derive a stable color from agent name
+  const colorIdx = agentName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 6;
+  const avatarColors = [
+    "bg-blue-100 text-blue-700",
+    "bg-emerald-100 text-emerald-700",
+    "bg-violet-100 text-violet-700",
+    "bg-amber-100 text-amber-700",
+    "bg-rose-100 text-rose-700",
+    "bg-teal-100 text-teal-700",
+  ];
+
+  return (
+    <div className="group flex gap-3 rounded-xl px-4 py-3 transition hover:bg-slate-50">
+      {/* Avatar */}
+      <div
+        className={cn(
+          "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold",
+          avatarColors[colorIdx],
+        )}
+      >
+        {initial}
+      </div>
+
+      {/* Content */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-900">
+            {agentName}
+          </span>
+          {boardName ? (
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+              {boardName}
+            </span>
+          ) : null}
+          <span className="text-[11px] text-slate-400">
+            {formatRelative(message.created_at)}
+          </span>
+        </div>
+        <div className="mt-1 select-text cursor-text text-sm leading-relaxed text-slate-700 break-words">
+          <Markdown content={displayContent} variant="basic" />
+        </div>
+        {isLong ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1 flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-3 w-3" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3" />
+                Show more
+              </>
+            )}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
+ChatMessage.displayName = "ChatMessage";
+
+// ─── Communications Panel ────────────────────────────────────────────
+
+const COMMS_LIMIT = 200;
+
+const CommunicationsPanel = memo(function CommunicationsPanel({
+  boards,
+  boardsById,
+  commsBoardFilter,
+  onCommsBoardFilterChange,
+  isAdmin,
+  isSignedIn,
+  sseStatus,
+}: {
+  boards: BoardRead[];
+  boardsById: Map<string, BoardRead>;
+  commsBoardFilter: string;
+  onCommsBoardFilterChange: (v: string) => void;
+  isAdmin: boolean;
+  isSignedIn: boolean | undefined;
+  sseStatus: SSEStatus;
+}) {
+  const queryClient = useQueryClient();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const [commsSearch, setCommsSearch] = useState("");
+
+  // Determine which board to fetch comms for
+  const selectedBoardId = commsBoardFilter !== "all" ? commsBoardFilter : (boards[0]?.id ?? "");
+
+  // Fetch chat messages from board memory
+  const chatQuery = useListBoardMemoryApiV1BoardsBoardIdMemoryGet<
+    listBoardMemoryApiV1BoardsBoardIdMemoryGetResponse,
+    ApiError
+  >(
+    selectedBoardId,
+    { is_chat: true, limit: COMMS_LIMIT },
+    {
+      query: {
+        enabled: Boolean(isSignedIn && isAdmin && selectedBoardId),
+        refetchInterval: 30_000,
+        refetchOnMount: "always",
+        retry: false,
+      },
+    },
+  );
+
+  // SSE for real-time board memory updates
+  const handleBoardMemorySSE = useCallback(
+    (event: SSEEvent) => {
+      try {
+        const data = JSON.parse(event.data) as BoardMemoryRead;
+        if (!data.is_chat) return;
+        queryClient.setQueryData(
+          getListBoardMemoryApiV1BoardsBoardIdMemoryGetQueryKey(
+            selectedBoardId,
+            { is_chat: true, limit: COMMS_LIMIT },
+          ),
+          (old: listBoardMemoryApiV1BoardsBoardIdMemoryGetResponse | undefined) => {
+            if (!old || old.status !== 200) return old;
+            const items = [...(old.data.items ?? []), data];
+            if (items.length > COMMS_LIMIT) items.splice(0, items.length - COMMS_LIMIT);
+            return {
+              ...old,
+              data: { ...old.data, items, total: (old.data.total ?? 0) + 1 },
+            };
+          },
+        );
+      } catch {
+        // ignore
+      }
+    },
+    [queryClient, selectedBoardId],
+  );
+
+  useSSE({
+    path: `/api/v1/boards/${selectedBoardId}/memory/stream`,
+    onEvent: handleBoardMemorySSE,
+    enabled: Boolean(isSignedIn && isAdmin && selectedBoardId),
+  });
+
+  const messages = useMemo<BoardMemoryRead[]>(() => {
+    if (chatQuery.data?.status !== 200) return [];
+    const items = [...(chatQuery.data.data.items ?? [])];
+    // Sort chronologically (oldest first for chat view)
+    items.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    return items;
+  }, [chatQuery.data]);
+
+  const filteredMessages = useMemo(() => {
+    if (!commsSearch) return messages;
+    const q = commsSearch.toLowerCase();
+    return messages.filter(
+      (m) =>
+        (m.content ?? "").toLowerCase().includes(q) ||
+        (m.source ?? "").toLowerCase().includes(q),
+    );
+  }, [messages, commsSearch]);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    if (isAutoScroll && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [filteredMessages.length, isAutoScroll]);
+
+  // Detect manual scroll to disable auto-scroll
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setIsAutoScroll(isNearBottom);
+  }, []);
+
+  return (
+    <div className="flex flex-col">
+      {/* Filter bar */}
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search messages…"
+              value={commsSearch}
+              onChange={(e) => setCommsSearch(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
+            />
+          </div>
+          <select
+            value={commsBoardFilter}
+            onChange={(e) => onCommsBoardFilterChange(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition"
+          >
+            {boards.length === 1 ? null : <option value="all">First board</option>}
+            {boards.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <div className="text-xs text-slate-400">
+            {filteredMessages.length} message{filteredMessages.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        {chatQuery.isLoading && messages.length === 0 ? (
+          <div className="flex items-center justify-center py-20 text-sm text-slate-500">
+            Loading communications…
+          </div>
+        ) : filteredMessages.length === 0 ? (
+          <div className="p-10 text-center">
+            <MessageSquare className="mx-auto h-10 w-10 text-slate-300" />
+            <p className="mt-3 text-sm font-medium text-slate-900">
+              No messages yet
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Inter-agent communications will appear here as agents collaborate on tasks.
+            </p>
+          </div>
+        ) : (
+          <div
+            ref={containerRef}
+            onScroll={handleScroll}
+            className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-slate-100"
+          >
+            {filteredMessages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                boardName={boardsById.get(msg.board_id)?.name ?? null}
+              />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+
+        {/* Scroll-to-bottom indicator */}
+        {!isAutoScroll && filteredMessages.length > 0 ? (
+          <div className="sticky bottom-0 flex justify-center border-t border-slate-100 bg-white/80 backdrop-blur-sm py-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsAutoScroll(true);
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition"
+            >
+              <ChevronDown className="h-3 w-3" />
+              Scroll to latest
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
+CommunicationsPanel.displayName = "CommunicationsPanel";
+
+// ─── Tab Bar ─────────────────────────────────────────────────────────
+
+type TabValue = "activity" | "comms";
+
+const TabBar = memo(function TabBar({
+  activeTab,
+  onTabChange,
+  messageCount,
+}: {
+  activeTab: TabValue;
+  onTabChange: (tab: TabValue) => void;
+  messageCount: number;
+}) {
+  return (
+    <div className="mb-6 flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-fit">
+      <button
+        type="button"
+        onClick={() => onTabChange("activity")}
+        className={cn(
+          "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition",
+          activeTab === "activity"
+            ? "bg-slate-900 text-white shadow-sm"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+        )}
+      >
+        <Activity className="h-4 w-4" />
+        Activity
+      </button>
+      <button
+        type="button"
+        onClick={() => onTabChange("comms")}
+        className={cn(
+          "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition",
+          activeTab === "comms"
+            ? "bg-slate-900 text-white shadow-sm"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+        )}
+      >
+        <MessageSquare className="h-4 w-4" />
+        Communications
+        {messageCount > 0 ? (
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+              activeTab === "comms"
+                ? "bg-white/20 text-white"
+                : "bg-slate-200 text-slate-600",
+            )}
+          >
+            {messageCount}
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+});
+
+TabBar.displayName = "TabBar";
+
 // ─── Page ────────────────────────────────────────────────────────────
 
 export default function AgentLogsPage() {
@@ -577,6 +936,8 @@ export default function AgentLogsPage() {
   const boardFilter = searchParams.get("board") ?? "all";
   const statusFilter = searchParams.get("status") ?? "all";
   const timeRange = searchParams.get("range") ?? "all";
+  const activeTab = (searchParams.get("tab") === "comms" ? "comms" : "activity") as TabValue;
+  const commsBoardFilter = searchParams.get("comms_board") ?? "all";
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -597,20 +958,25 @@ export default function AgentLogsPage() {
   const sseEnabled = Boolean(isSignedIn && isAdmin);
 
   const handleAgentSSE = useCallback(
-    (event: MessageEvent) => {
+    (sseEvent: SSEEvent) => {
       try {
-        const data = JSON.parse(event.data as string) as AgentRead;
-        // Merge into React Query cache
+        const parsed = JSON.parse(sseEvent.data) as Record<string, unknown>;
+        // Backend may wrap in { agent: ... } envelope or send raw AgentRead
+        const agentData = (
+          parsed.agent ? parsed.agent : parsed
+        ) as AgentRead;
+        if (!agentData.id) return;
+
         queryClient.setQueryData(
           getListAgentsApiV1AgentsGetQueryKey(),
           (old: listAgentsApiV1AgentsGetResponse | undefined) => {
             if (!old || old.status !== 200) return old;
             const items = [...(old.data.items ?? [])];
-            const idx = items.findIndex((a) => a.id === data.id);
+            const idx = items.findIndex((a) => a.id === agentData.id);
             if (idx >= 0) {
-              items[idx] = { ...items[idx], ...data };
+              items[idx] = { ...items[idx], ...agentData };
             } else {
-              items.push(data);
+              items.push(agentData);
             }
             return {
               ...old,
@@ -626,19 +992,33 @@ export default function AgentLogsPage() {
   );
 
   const handleActivitySSE = useCallback(
-    (event: MessageEvent) => {
+    (sseEvent: SSEEvent) => {
       try {
-        const data = JSON.parse(event.data as string) as ActivityEventRead;
+        const parsed = JSON.parse(sseEvent.data) as Record<string, unknown>;
+        // Backend emits { comment: ActivityTaskCommentFeedItemRead } or similar
+        // Map to ActivityEventRead shape for cache consistency
+        const comment = (parsed.comment ?? parsed) as Record<string, unknown>;
+        const activityEvent: ActivityEventRead = {
+          id: (comment.id as string) ?? crypto.randomUUID(),
+          event_type: (comment.event_type as string) ?? "task.comment",
+          agent_id: (comment.agent_id as string) ?? null,
+          task_id: (comment.task_id as string) ?? null,
+          message: (comment.message as string) ?? (comment.content as string) ?? "",
+          created_at: (comment.created_at as string) ?? new Date().toISOString(),
+        };
+
         queryClient.setQueryData(
           getListActivityApiV1ActivityGetQueryKey({ limit: ACTIVITY_LIMIT }),
           (old: listActivityApiV1ActivityGetResponse | undefined) => {
             if (!old || old.status !== 200) return old;
-            const items = [data, ...(old.data.items ?? [])];
-            // Cap to limit
-            if (items.length > ACTIVITY_LIMIT) items.length = ACTIVITY_LIMIT;
+            const items = old.data.items ?? [];
+            // Deduplicate by id
+            if (items.some((e) => e.id === activityEvent.id)) return old;
+            const updated = [activityEvent, ...items];
+            if (updated.length > ACTIVITY_LIMIT) updated.length = ACTIVITY_LIMIT;
             return {
               ...old,
-              data: { ...old.data, items, total: (old.data.total ?? 0) + 1 },
+              data: { ...old.data, items: updated, total: (old.data.total ?? 0) + 1 },
             };
           },
         );
@@ -651,13 +1031,13 @@ export default function AgentLogsPage() {
 
   const { status: agentSSEStatus } = useSSE({
     path: "/api/v1/agents/stream",
-    onMessage: handleAgentSSE,
+    onEvent: handleAgentSSE,
     enabled: sseEnabled,
   });
 
   const { status: activitySSEStatus } = useSSE({
     path: "/api/v1/activity/task-comments/stream",
-    onMessage: handleActivitySSE,
+    onEvent: handleActivitySSE,
     enabled: sseEnabled,
   });
 
@@ -886,6 +1266,26 @@ export default function AgentLogsPage() {
     [agentsWithContext],
   );
 
+  // ── Comms message count (for tab badge) ────────────────────────────
+  const commsBoardId = commsBoardFilter !== "all" ? commsBoardFilter : (boards[0]?.id ?? "");
+  const commsCountQuery = useListBoardMemoryApiV1BoardsBoardIdMemoryGet<
+    listBoardMemoryApiV1BoardsBoardIdMemoryGetResponse,
+    ApiError
+  >(
+    commsBoardId,
+    { is_chat: true, limit: 1 },
+    {
+      query: {
+        enabled: Boolean(isSignedIn && isAdmin && commsBoardId),
+        refetchInterval: 60_000,
+        retry: false,
+      },
+    },
+  );
+  const commsMessageCount = commsCountQuery.data?.status === 200
+    ? (commsCountQuery.data.data.total ?? 0)
+    : 0;
+
   const isLoading =
     agentsQuery.isLoading || activityQuery.isLoading || boardsQuery.isLoading;
   const error =
@@ -971,38 +1371,58 @@ export default function AgentLogsPage() {
               </div>
             ) : (
               <>
-                <FilterBar
-                  search={search}
-                  onSearchChange={(v) => updateParam("q", v)}
-                  boardFilter={boardFilter}
-                  onBoardFilterChange={(v) => updateParam("board", v)}
-                  statusFilter={statusFilter}
-                  onStatusFilterChange={(v) => updateParam("status", v)}
-                  timeRange={timeRange}
-                  onTimeRangeChange={(v) => updateParam("range", v)}
-                  boards={boards}
+                <TabBar
+                  activeTab={activeTab}
+                  onTabChange={(tab) => updateParam("tab", tab === "activity" ? "" : tab)}
+                  messageCount={commsMessageCount}
                 />
 
-                {filteredAgents.length === 0 ? (
-                  <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-                    <Bot className="mx-auto h-10 w-10 text-slate-300" />
-                    <p className="mt-3 text-sm font-medium text-slate-900">
-                      {agentsWithContext.length === 0
-                        ? "No agents found"
-                        : "No agents match filters"}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {agentsWithContext.length === 0
-                        ? "Agents will appear here once they are registered and connected."
-                        : "Try adjusting your search or filter criteria."}
-                    </p>
-                  </div>
+                {activeTab === "activity" ? (
+                  <>
+                    <FilterBar
+                      search={search}
+                      onSearchChange={(v) => updateParam("q", v)}
+                      boardFilter={boardFilter}
+                      onBoardFilterChange={(v) => updateParam("board", v)}
+                      statusFilter={statusFilter}
+                      onStatusFilterChange={(v) => updateParam("status", v)}
+                      timeRange={timeRange}
+                      onTimeRangeChange={(v) => updateParam("range", v)}
+                      boards={boards}
+                    />
+
+                    {filteredAgents.length === 0 ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+                        <Bot className="mx-auto h-10 w-10 text-slate-300" />
+                        <p className="mt-3 text-sm font-medium text-slate-900">
+                          {agentsWithContext.length === 0
+                            ? "No agents found"
+                            : "No agents match filters"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {agentsWithContext.length === 0
+                            ? "Agents will appear here once they are registered and connected."
+                            : "Try adjusting your search or filter criteria."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                        {filteredAgents.map((agent) => (
+                          <AgentCard key={agent.id} agent={agent} />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-                    {filteredAgents.map((agent) => (
-                      <AgentCard key={agent.id} agent={agent} />
-                    ))}
-                  </div>
+                  <CommunicationsPanel
+                    boards={boards}
+                    boardsById={boardsById}
+                    commsBoardFilter={commsBoardFilter}
+                    onCommsBoardFilterChange={(v) => updateParam("comms_board", v)}
+                    isAdmin={isAdmin}
+                    isSignedIn={isSignedIn}
+                    sseStatus={sseStatus}
+                  />
                 )}
               </>
             )}

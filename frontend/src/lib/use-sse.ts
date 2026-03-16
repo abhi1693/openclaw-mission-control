@@ -25,13 +25,22 @@ async function resolveToken(): Promise<string | null> {
 
 export type SSEStatus = "connecting" | "connected" | "disconnected" | "error";
 
+export interface SSEEvent {
+  /** The SSE event name (empty string for unnamed/default events) */
+  event: string;
+  /** The event data payload (raw string) */
+  data: string;
+  /** The event id, if present */
+  id?: string;
+}
+
 export interface UseSSEOptions {
   /** SSE endpoint path (e.g. "/api/v1/agents/stream") */
   path: string;
   /** Query params appended to the URL */
   params?: Record<string, string | undefined>;
-  /** Callback for each SSE message */
-  onMessage: (event: MessageEvent) => void;
+  /** Callback for each SSE event (receives parsed event with name + data) */
+  onEvent: (event: SSEEvent) => void;
   /** Whether the hook is enabled (default true) */
   enabled?: boolean;
   /** Reconnect delay in ms after error (default 5000) */
@@ -39,35 +48,33 @@ export interface UseSSEOptions {
 }
 
 /**
- * React hook for consuming Server-Sent Events with auth.
+ * React hook for consuming Server-Sent Events with auth header support.
  *
- * Because the browser EventSource API does not support custom headers,
- * we pass the auth token as a query parameter (`_token`). The backend
- * should accept this for SSE endpoints.
- *
- * Falls back to fetch-based SSE reading if the token approach fails.
+ * Uses fetch + ReadableStream instead of the browser EventSource API so we can
+ * send Authorization headers (EventSource does not support custom headers).
+ * Supports named SSE events (e.g. `event: agent`).
  */
 export function useSSE({
   path,
   params,
-  onMessage,
+  onEvent,
   enabled = true,
   reconnectDelay = 5_000,
 }: UseSSEOptions): { status: SSEStatus } {
   const [status, setStatus] = useState<SSEStatus>("disconnected");
-  const esRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
 
   const cleanup = useCallback(() => {
     if (reconnectTimer.current) {
       clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
     }
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
   }, []);
 
@@ -95,31 +102,95 @@ export function useSSE({
           if (v !== undefined) url.searchParams.set(k, v);
         });
       }
-      // Pass token as query param since EventSource doesn't support headers
-      if (token) {
-        url.searchParams.set("_token", token);
-      }
 
-      const es = new EventSource(url.toString());
-      esRef.current = es;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      es.onopen = () => {
+      try {
+        const headers: Record<string, string> = {
+          Accept: "text/event-stream",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(url.toString(), {
+          headers,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`SSE HTTP ${response.status}`);
+        }
+
+        if (!response.body) {
+          throw new Error("SSE response has no body");
+        }
+
         if (!cancelled) setStatus("connected");
-      };
 
-      es.onmessage = (event) => {
-        if (!cancelled) onMessageRef.current(event);
-      };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        // SSE parsing state
+        let currentEvent = "";
+        let currentData: string[] = [];
+        let currentId: string | undefined;
 
-      es.onerror = () => {
-        if (cancelled) return;
-        es.close();
-        esRef.current = null;
-        setStatus("error");
-        reconnectTimer.current = setTimeout(() => {
-          if (!cancelled) void connect();
-        }, reconnectDelay);
-      };
+        const dispatch = () => {
+          if (currentData.length > 0) {
+            const data = currentData.join("\n");
+            onEventRef.current({
+              event: currentEvent || "",
+              data,
+              id: currentId,
+            });
+          }
+          // Reset for next event
+          currentEvent = "";
+          currentData = [];
+          currentId = undefined;
+        };
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || cancelled) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete lines
+          const lines = buffer.split("\n");
+          // Keep incomplete last line in buffer
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (line === "") {
+              // Empty line = end of event
+              dispatch();
+            } else if (line.startsWith(":")) {
+              // Comment, ignore
+            } else if (line.startsWith("event:")) {
+              currentEvent = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              currentData.push(line.slice(5).trimStart());
+            } else if (line.startsWith("id:")) {
+              currentId = line.slice(3).trim();
+            }
+            // Ignore retry: and unknown fields
+          }
+        }
+      } catch (err) {
+        if (cancelled || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
+        if (!cancelled) {
+          setStatus("error");
+          reconnectTimer.current = setTimeout(() => {
+            if (!cancelled) void connect();
+          }, reconnectDelay);
+        }
+      }
     };
 
     void connect();
