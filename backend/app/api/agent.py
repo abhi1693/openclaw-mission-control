@@ -2186,7 +2186,7 @@ async def list_agent_messages(
     if task_id is not None:
         statement = statement.where(col(AgentMessage.task_id) == task_id)
     statement = statement.order_by(col(AgentMessage.created_at).desc())
-    return await paginate(session, statement.statement)
+    return await paginate(session, statement)
 
 
 @router.get(
