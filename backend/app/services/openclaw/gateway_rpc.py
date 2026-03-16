@@ -19,6 +19,7 @@ from uuid import uuid4
 import websockets
 from websockets.exceptions import WebSocketException
 
+from app.core.config import settings
 from app.core.logging import TRACE_LEVEL, get_logger
 from app.services.openclaw.device_identity import (
     build_device_auth_payload,
@@ -40,6 +41,23 @@ DEFAULT_GATEWAY_CLIENT_MODE = "backend"
 CONTROL_UI_CLIENT_ID = "openclaw-control-ui"
 CONTROL_UI_CLIENT_MODE = "ui"
 GatewayConnectMode = Literal["device", "control_ui"]
+
+
+def _get_gateway_origin() -> str:
+    """Get the origin header for gateway WebSocket connections.
+
+    Falls back to base_url if gateway_origin is not configured.
+    """
+    origin = settings.gateway_origin.strip()
+    if origin:
+        return origin
+    # Fallback to base_url for backward compat / convenience.
+    base = settings.base_url.strip()
+    if base:
+        return base
+    # Last resort: localhost for local dev.
+    return "http://localhost:3000"
+
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
@@ -210,24 +228,6 @@ def _create_ssl_context(config: GatewayConfig) -> ssl.SSLContext | None:
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
     return ssl_context
-
-
-def _build_control_ui_origin(gateway_url: str) -> str | None:
-    parsed = urlparse(gateway_url)
-    if not parsed.hostname:
-        return None
-    if parsed.scheme in {"ws", "http"}:
-        origin_scheme = "http"
-    elif parsed.scheme in {"wss", "https"}:
-        origin_scheme = "https"
-    else:
-        return None
-    host = parsed.hostname
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    if parsed.port is not None:
-        host = f"{host}:{parsed.port}"
-    return f"{origin_scheme}://{host}"
 
 
 def _resolve_connect_mode(config: GatewayConfig) -> GatewayConnectMode:
@@ -401,11 +401,11 @@ async def _openclaw_call_once(
     config: GatewayConfig,
     gateway_url: str,
 ) -> object:
-    origin = _build_control_ui_origin(gateway_url) if config.disable_device_pairing else None
+    # Always send the MC origin header so the gateway accepts the connection
+    # regardless of the gateway URL (avoids "origin not allowed" rejections).
     ssl_context = _create_ssl_context(config)
-    connect_kwargs: dict[str, Any] = {"ping_interval": None}
-    if origin is not None:
-        connect_kwargs["origin"] = origin
+    origin = _get_gateway_origin()
+    connect_kwargs: dict[str, Any] = {"ping_interval": None, "additional_headers": {"Origin": origin}}
     if ssl_context is not None:
         connect_kwargs["ssl"] = ssl_context
     async with websockets.connect(gateway_url, **connect_kwargs) as ws:
@@ -419,11 +419,11 @@ async def _openclaw_connect_metadata_once(
     config: GatewayConfig,
     gateway_url: str,
 ) -> object:
-    origin = _build_control_ui_origin(gateway_url) if config.disable_device_pairing else None
+    # Always send the MC origin header so the gateway accepts the connection
+    # regardless of the gateway URL (avoids "origin not allowed" rejections).
     ssl_context = _create_ssl_context(config)
-    connect_kwargs: dict[str, Any] = {"ping_interval": None}
-    if origin is not None:
-        connect_kwargs["origin"] = origin
+    origin = _get_gateway_origin()
+    connect_kwargs: dict[str, Any] = {"ping_interval": None, "additional_headers": {"Origin": origin}}
     if ssl_context is not None:
         connect_kwargs["ssl"] = ssl_context
     async with websockets.connect(gateway_url, **connect_kwargs) as ws:

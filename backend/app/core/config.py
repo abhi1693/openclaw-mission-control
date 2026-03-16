@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     base_url: str = ""
 
+    # Gateway WebSocket Origin header (sent on all gateway WS connections).
+    # Must match gateway's controlUi.allowedOrigins. Defaults to base_url if empty.
+    gateway_origin: str = ""
+
     # Security response headers (set to blank to disable a specific header)
     security_header_x_content_type_options: str = "nosniff"
     security_header_x_frame_options: str = "DENY"
