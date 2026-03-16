@@ -7,5 +7,6 @@
 
 export type StreamTaskCommentFeedApiV1ActivityTaskCommentsStreamGetParams = {
   board_id?: string | null;
+  agent_id?: string | null;
   since?: string | null;
 };
