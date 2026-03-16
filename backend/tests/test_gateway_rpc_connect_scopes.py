@@ -12,7 +12,6 @@ from app.services.openclaw.gateway_rpc import (
     GatewayConfig,
     OpenClawGatewayError,
     _build_connect_params,
-    _build_control_ui_origin,
     openclaw_call,
 )
 
@@ -128,20 +127,6 @@ def test_build_connect_params_passes_nonce_to_device_payload(
     assert captured["connect_nonce"] == "nonce-xyz"
 
 
-@pytest.mark.parametrize(
-    ("gateway_url", "expected_origin"),
-    [
-        ("ws://gateway.example/ws", "http://gateway.example"),
-        ("wss://gateway.example/ws", "https://gateway.example"),
-        ("ws://gateway.example:8080/ws", "http://gateway.example:8080"),
-        ("wss://gateway.example:8443/ws", "https://gateway.example:8443"),
-        ("ws://[::1]:8000/ws", "http://[::1]:8000"),
-    ],
-)
-def test_build_control_ui_origin(gateway_url: str, expected_origin: str) -> None:
-    assert _build_control_ui_origin(gateway_url) == expected_origin
-
-
 @pytest.mark.asyncio
 async def test_openclaw_call_uses_single_connect_attempt(
     monkeypatch: pytest.MonkeyPatch,
@@ -228,6 +213,7 @@ async def test_openclaw_call_once_does_not_pass_ssl_none_for_wss(
     monkeypatch.setattr(gateway_rpc, "_recv_first_message_or_none", _fake_recv_first)
     monkeypatch.setattr(gateway_rpc, "_ensure_connected", _fake_ensure_connected)
     monkeypatch.setattr(gateway_rpc, "_send_request", _fake_send_request)
+    monkeypatch.setattr(gateway_rpc.settings, "gateway_origin", "https://mc.example")
 
     payload = await gateway_rpc._openclaw_call_once(
         "status",
@@ -241,6 +227,9 @@ async def test_openclaw_call_once_does_not_pass_ssl_none_for_wss(
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)
     assert "ssl" not in kwargs
+    headers = kwargs.get("additional_headers")
+    assert isinstance(headers, dict)
+    assert headers.get("Origin") == "https://mc.example"
 
 
 @pytest.mark.asyncio
@@ -269,6 +258,7 @@ async def test_openclaw_call_once_passes_ssl_context_for_insecure_wss(
     monkeypatch.setattr(gateway_rpc, "_recv_first_message_or_none", _fake_recv_first)
     monkeypatch.setattr(gateway_rpc, "_ensure_connected", _fake_ensure_connected)
     monkeypatch.setattr(gateway_rpc, "_send_request", _fake_send_request)
+    monkeypatch.setattr(gateway_rpc.settings, "gateway_origin", "https://mc.example")
 
     payload = await gateway_rpc._openclaw_call_once(
         "status",
@@ -282,3 +272,48 @@ async def test_openclaw_call_once_passes_ssl_context_for_insecure_wss(
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)
     assert kwargs.get("ssl") is not None
+    headers = kwargs.get("additional_headers")
+    assert isinstance(headers, dict)
+    assert headers.get("Origin") == "https://mc.example"
+
+
+@pytest.mark.asyncio
+async def test_openclaw_connect_metadata_once_passes_origin_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_connect(url: str, **kwargs: object) -> _FakeConnectContext:
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return _FakeConnectContext()
+
+    async def _fake_recv_first(_ws: object) -> None:
+        return None
+
+    async def _fake_ensure_connected(
+        _ws: object, _first_message: object, _config: GatewayConfig
+    ) -> None:
+        return None
+
+    async def _fake_send_request(_ws: object, _method: str, _params: object) -> object:
+        return {"ok": True}
+
+    monkeypatch.setattr(gateway_rpc.websockets, "connect", _fake_connect)
+    monkeypatch.setattr(gateway_rpc, "_recv_first_message_or_none", _fake_recv_first)
+    monkeypatch.setattr(gateway_rpc, "_ensure_connected", _fake_ensure_connected)
+    monkeypatch.setattr(gateway_rpc, "_send_request", _fake_send_request)
+    monkeypatch.setattr(gateway_rpc.settings, "gateway_origin", "https://mc.example")
+
+    payload = await gateway_rpc._openclaw_connect_metadata_once(
+        config=GatewayConfig(url="wss://gateway.example/ws", allow_insecure_tls=False),
+        gateway_url="wss://gateway.example/ws",
+    )
+
+    assert payload == {"ok": True}
+    assert captured["url"] == "wss://gateway.example/ws"
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    headers = kwargs.get("additional_headers")
+    assert isinstance(headers, dict)
+    assert headers.get("Origin") == "https://mc.example"
