@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import col, select
 
-from app.core.auth import AuthContext, delete_clerk_user, get_auth_context
+from app.core.auth import AuthContext, get_auth_context
 from app.db import crud
 from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
@@ -234,7 +234,6 @@ async def delete_me(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     user: User = auth.user
-    await delete_clerk_user(user.clerk_user_id)
     memberships = await OrganizationMember.objects.filter_by(user_id=user.id).all(session)
 
     await crud.update_where(

@@ -34,8 +34,6 @@ from app.api.users import router as users_router
 from app.core.config import settings
 from app.core.error_handling import install_error_handling
 from app.core.logging import configure_logging, get_logger
-from app.core.rate_limit import validate_rate_limit_redis
-from app.core.rate_limit_backend import RateLimitBackend
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import init_db
 from app.schemas.health import HealthStatusResponse
@@ -439,11 +437,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         settings.db_auto_migrate,
     )
     await init_db()
-    if settings.rate_limit_backend == RateLimitBackend.REDIS:
-        validate_rate_limit_redis(settings.rate_limit_redis_url)
-        logger.info("app.lifecycle.rate_limit backend=redis")
-    else:
-        logger.info("app.lifecycle.rate_limit backend=memory")
+    logger.info("app.lifecycle.rate_limit backend=memory")
     logger.info("app.lifecycle.started")
     try:
         yield

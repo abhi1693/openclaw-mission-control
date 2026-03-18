@@ -6,7 +6,6 @@ from enum import Enum
 
 
 class AuthMode(str, Enum):
-    """Supported authentication modes for backend and frontend."""
+    """Supported authentication mode for backend."""
 
-    CLERK = "clerk"
     LOCAL = "local"

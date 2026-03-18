@@ -44,7 +44,7 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
         super().__init__(session)
 
     async def _lock_agent(self, *, agent_id: UUID) -> Agent:
-        statement = select(Agent).where(col(Agent.id) == agent_id).with_for_update()
+        statement = select(Agent).where(col(Agent.id) == agent_id)
         agent = (await self.session.exec(statement)).first()
         if agent is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
