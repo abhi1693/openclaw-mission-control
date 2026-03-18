@@ -10,6 +10,7 @@ import {
   BookOpen,
   Brain,
   Calendar,
+  Clock,
   CheckCircle2,
   FileText,
   Folder,
@@ -129,6 +130,21 @@ export function DashboardSidebar() {
               </Link>
               <Link href="/docs" className={linkClass(pathname.startsWith("/docs"))}>
                 <FileText className="h-4 w-4" /> Docs
+              </Link>
+            </div>
+          </div>
+
+          {/* Learning */}
+          <div>
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Learning
+            </p>
+            <div className="space-y-0.5">
+              <Link href="/reading-list" className={linkClass(pathname.startsWith("/reading-list"))}>
+                <BookOpen className="h-4 w-4" /> Reading List
+              </Link>
+              <Link href="/study-log" className={linkClass(pathname.startsWith("/study-log"))}>
+                <Clock className="h-4 w-4" /> Study Log
               </Link>
             </div>
           </div>
