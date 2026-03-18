@@ -16,7 +16,6 @@
     "e2e:open": "cypress open"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.37.3",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-select": "^2.2.6",
@@ -34,7 +33,6 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@clerk/testing": "^1.13.35",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

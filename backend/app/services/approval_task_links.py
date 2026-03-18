@@ -135,9 +135,8 @@ async def lock_tasks_for_approval(
         select(col(Task.id))
         .where(col(Task.id).in_(normalized_task_ids))
         .order_by(col(Task.id).asc())
-        .with_for_update()
     )
-    # Materialize results so the lock query fully executes before proceeding.
+    # Materialize results before proceeding.
     _ = list(await session.exec(statement))
 
 

@@ -13,11 +13,10 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "alembic==1.18.3",
-    "clerk-backend-api==4.2.0",
+    "aiosqlite==0.22.1",
     "fastapi==0.131.0",
     "fastapi-pagination==0.15.10",
     "jinja2==3.1.6",
-    "psycopg[binary]==3.3.2",
     "pydantic-settings==2.12.0",
     "python-dotenv==1.2.1",
     "sqlalchemy[asyncio]==2.0.46",
@@ -25,8 +24,6 @@ dependencies = [
     "sse-starlette==3.2.0",
     "uvicorn[standard]==0.40.0",
     "websockets==16.0",
-    "redis==6.3.0",
-    "rq==2.6.0",
     "cryptography==45.0.7",
 ]
 

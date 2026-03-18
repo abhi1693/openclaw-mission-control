@@ -33,44 +33,9 @@ vi.mock("next/link", () => {
   };
 });
 
-// Make Clerk components explode if we ever try to render them without the provider.
-// The regression we want to catch is: AuthProvider skips <ClerkProvider/>, but the
-// wrappers still render <SignedOut/> from @clerk/nextjs (which crashes in real builds).
-vi.mock("@clerk/nextjs", () => {
-  return {
-    ClerkProvider: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
-    SignedIn: () => {
-      throw new Error(
-        "@clerk/nextjs SignedIn rendered (unexpected in secretless mode)",
-      );
-    },
-    SignedOut: () => {
-      throw new Error("@clerk/nextjs SignedOut rendered without ClerkProvider");
-    },
-    SignInButton: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
-    SignOutButton: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
-    useAuth: () => ({ isLoaded: true, isSignedIn: false }),
-    useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
-  };
-});
-
 describe("/activity auth boundary", () => {
-  it("renders without ClerkProvider runtime errors when publishable key is a placeholder", () => {
-    const previousAuthMode = process.env.NEXT_PUBLIC_AUTH_MODE;
-    const previousPublishableKey =
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
-    // Simulate CI/secretless env where an arbitrary placeholder value may be present.
-    // AuthProvider should treat this as disabled, and the auth wrappers must not render
-    // Clerk SignedOut/SignedIn components.
+  it("renders local auth login when no token is set", () => {
     process.env.NEXT_PUBLIC_AUTH_MODE = "local";
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "placeholder";
     window.sessionStorage.clear();
 
     try {
@@ -87,8 +52,6 @@ describe("/activity auth boundary", () => {
       ).toBeInTheDocument();
       expect(screen.getByLabelText(/access token/i)).toBeInTheDocument();
     } finally {
-      process.env.NEXT_PUBLIC_AUTH_MODE = previousAuthMode;
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = previousPublishableKey;
       window.sessionStorage.clear();
     }
   });

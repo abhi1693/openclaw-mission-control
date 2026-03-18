@@ -1,19 +1,7 @@
 """Reusable FastAPI dependencies for auth and board/task access.
 
-These dependencies are the main "policy wiring" layer for the API.
-
-They:
-- resolve the authenticated actor (human user vs agent)
-- enforce organization/board access rules
-- provide common "load or 404" helpers (board/task)
-
-Why this exists:
-- Keeping authorization logic centralized makes it easier to reason about (and
-  audit) permissions as the API surface grows.
-- Some routes allow either human users or agents; others require user auth.
-
-If you're adding a new endpoint, prefer composing from these dependencies instead
-of re-implementing permission checks in the router.
+Simplified for single-user local deployment. All access checks pass for
+the authenticated local user.
 """
 
 from __future__ import annotations
@@ -35,8 +23,6 @@ from app.services.organizations import (
     OrganizationContext,
     ensure_member_for_user,
     get_active_membership,
-    is_org_admin,
-    require_board_access,
 )
 
 if TYPE_CHECKING:
@@ -68,11 +54,7 @@ async def require_user_or_agent(
     request: Request,
     session: AsyncSession = SESSION_DEP,
 ) -> ActorContext:
-    """Authorize either a human user or an authenticated agent.
-
-    User auth is resolved first so normal bearer-token user traffic does not
-    also trigger agent-token verification on mixed user/agent routes.
-    """
+    """Authorize either a human user or an authenticated agent."""
     auth = await get_auth_context_optional(
         request=request,
         credentials=None,
@@ -99,7 +81,7 @@ async def require_org_member(
     auth: AuthContext = AUTH_DEP,
     session: AsyncSession = SESSION_DEP,
 ) -> OrganizationContext:
-    """Resolve and require active organization membership for the current user."""
+    """Resolve active organization membership for the current user."""
     if auth.user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     member = await get_active_membership(session, auth.user)
@@ -121,9 +103,7 @@ ORG_MEMBER_DEP = Depends(require_org_member)
 async def require_org_admin(
     ctx: OrganizationContext = ORG_MEMBER_DEP,
 ) -> OrganizationContext:
-    """Require organization-admin membership privileges."""
-    if not is_org_admin(ctx.member):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    """Single-user mode: always grants admin access."""
     return ctx
 
 
@@ -150,10 +130,6 @@ async def get_board_for_actor_read(
     if actor.actor_type == "agent":
         if actor.agent and actor.agent.board_id and actor.agent.board_id != board.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-        return board
-    if actor.user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    await require_board_access(session, user=actor.user, board=board, write=False)
     return board
 
 
@@ -169,10 +145,6 @@ async def get_board_for_actor_write(
     if actor.actor_type == "agent":
         if actor.agent and actor.agent.board_id and actor.agent.board_id != board.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-        return board
-    if actor.user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    await require_board_access(session, user=actor.user, board=board, write=True)
     return board
 
 
@@ -181,13 +153,12 @@ async def get_board_for_user_read(
     session: AsyncSession = SESSION_DEP,
     auth: AuthContext = AUTH_DEP,
 ) -> Board:
-    """Load a board and enforce authenticated-user read access."""
+    """Load a board for an authenticated user."""
     board = await Board.objects.by_id(board_id).first(session)
     if board is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     if auth.user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    await require_board_access(session, user=auth.user, board=board, write=False)
     return board
 
 
@@ -196,13 +167,12 @@ async def get_board_for_user_write(
     session: AsyncSession = SESSION_DEP,
     auth: AuthContext = AUTH_DEP,
 ) -> Board:
-    """Load a board and enforce authenticated-user write access."""
+    """Load a board for an authenticated user (write)."""
     board = await Board.objects.by_id(board_id).first(session)
     if board is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     if auth.user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    await require_board_access(session, user=auth.user, board=board, write=True)
     return board
 
 

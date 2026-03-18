@@ -14,10 +14,14 @@ from collections import deque
 from threading import Lock
 from typing import Awaitable, cast
 
-import redis as redis_lib
-import redis.asyncio as aioredis
-
 from app.core.logging import get_logger
+
+try:
+    import redis as redis_lib
+    import redis.asyncio as aioredis
+except ImportError:
+    redis_lib = None  # type: ignore[assignment]
+    aioredis = None  # type: ignore[assignment]
 from app.core.rate_limit_backend import RateLimitBackend
 
 logger = get_logger(__name__)
