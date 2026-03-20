@@ -18,7 +18,12 @@ from app.services.openclaw.gateway_resolver import (
     require_gateway_for_board,
 )
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
-from app.services.openclaw.gateway_rpc import OpenClawGatewayError, ensure_session, send_message
+from app.services.openclaw.gateway_rpc import (
+    OpenClawGatewayError,
+    abort_session,
+    ensure_session,
+    send_message,
+)
 
 
 class GatewayDispatchService(OpenClawDBService):
@@ -67,6 +72,19 @@ class GatewayDispatchService(OpenClawDBService):
                 message=message,
                 deliver=deliver,
             )
+        except OpenClawGatewayError as exc:
+            return exc
+        return None
+
+    async def abort_agent_session(
+        self,
+        *,
+        session_key: str,
+        config: GatewayClientConfig,
+    ) -> OpenClawGatewayError | None:
+        """Abort the current run in a session, ignoring errors."""
+        try:
+            await abort_session(session_key, config=config)
         except OpenClawGatewayError as exc:
             return exc
         return None

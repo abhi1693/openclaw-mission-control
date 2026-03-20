@@ -27,9 +27,12 @@ from app.models.agents import Agent
 from app.models.board_memory import BoardMemory
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.pagination import DefaultLimitOffsetPage
+from app.core.logging import get_logger
 from app.services.mentions import extract_mentions, matches_agent_mention
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -108,11 +111,34 @@ async def _send_control_command(
     ).all(
         session,
     )
+    is_pause = command == "/pause"
+    sent = 0
+    failed = 0
+    skipped = 0
     for agent in pause_targets:
         if actor.actor_type == "agent" and actor.agent and agent.id == actor.agent.id:
+            skipped += 1
             continue
         if not agent.openclaw_session_id:
+            skipped += 1
             continue
+        # Abort the current agent run first so the session is receptive to the
+        # incoming control command.  Without this the agent LLM may simply
+        # swallow the slash-command as a regular chat message.
+        if is_pause:
+            abort_err = await dispatch.abort_agent_session(
+                session_key=agent.openclaw_session_id,
+                config=config,
+            )
+            if abort_err is not None:
+                logger.warning(
+                    "board_memory.control_command.abort_failed "
+                    "command=%s agent=%s board_id=%s error=%s",
+                    command,
+                    agent.name,
+                    board.id,
+                    abort_err,
+                )
         error = await dispatch.try_send_agent_message(
             session_key=agent.openclaw_session_id,
             config=config,
@@ -121,7 +147,26 @@ async def _send_control_command(
             deliver=True,
         )
         if error is not None:
-            continue
+            failed += 1
+            logger.warning(
+                "board_memory.control_command.dispatch_failed "
+                "command=%s agent=%s board_id=%s error=%s",
+                command,
+                agent.name,
+                board.id,
+                error,
+            )
+        else:
+            sent += 1
+    logger.info(
+        "board_memory.control_command.dispatched "
+        "command=%s board_id=%s sent=%d failed=%d skipped=%d",
+        command,
+        board.id,
+        sent,
+        failed,
+        skipped,
+    )
 
 
 def _chat_targets(
@@ -162,6 +207,10 @@ async def _notify_chat_targets(
     dispatch = GatewayDispatchService(session)
     config = await dispatch.optional_gateway_config_for_board(board)
     if config is None:
+        logger.warning(
+            "board_memory.notify.no_gateway board_id=%s",
+            board.id,
+        )
         return
 
     normalized = memory.content.strip()

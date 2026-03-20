@@ -542,6 +542,11 @@ async def send_message(
     return await openclaw_call("chat.send", params, config=config)
 
 
+async def abort_session(session_key: str, *, config: GatewayConfig) -> object:
+    """Abort the current run in a session."""
+    return await openclaw_call("chat.abort", {"sessionKey": session_key}, config=config)
+
+
 async def get_chat_history(
     session_key: str,
     config: GatewayConfig,

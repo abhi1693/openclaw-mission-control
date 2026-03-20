@@ -1,71 +1,44 @@
 {% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
 {% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set role_tag = "agent-main" if is_main else ("agent-lead" if is_lead else "agent-worker") %}
 {% if is_main %}
 # HEARTBEAT.md
 
 ## Purpose
-This file defines the main agent heartbeat. You are not tied to any board.
+Main agent heartbeat. You are not tied to any board.
 
-## Required inputs
-- BASE_URL: `{{ base_url }}`
-- AUTH_TOKEN: `{{ auth_token }}`
-- AGENT_NAME
-- AGENT_ID
+## Setup
+Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, and agent identity before proceeding. If any are missing, stop and request a provisioning update.
 
-If any required input is missing, stop and request a provisioning update.
-
-## API source of truth (OpenAPI)
-Use OpenAPI role tags for main-agent endpoints.
+## API Discovery
+Before API-heavy work, refresh endpoints:
 
 ```bash
-curl -s "{{ base_url }}/openapi.json" -o /tmp/openapi.json
-jq -r '
-  .paths | to_entries[] | .key as $path
-  | .value | to_entries[]
-  | select((.value.tags // []) | index("agent-main"))
-  | ((.value.summary // "") | gsub("\\s+"; " ")) as $summary
-  | ((.value.description // "") | split("\n")[0] | gsub("\\s+"; " ")) as $desc
-  | "\(.key|ascii_upcase)\t\($path)\t\($summary)\t\($desc)"
-' /tmp/openapi.json | sort
+curl -fsS "$BASE_URL/openapi.json" -o /tmp/openapi.json
+jq -r '.paths | to_entries[] | .key as $p | .value | to_entries[] | select((.value.tags // []) | index("{{ role_tag }}")) | "\(.key|ascii_upcase) \($p) \(.value.summary // "")"' /tmp/openapi.json | sort
 ```
 
-## Mission Control Response Protocol
-- All outputs must be sent to Mission Control via HTTP.
-- Always include: `X-Agent-Token: {{ auth_token }}`
+## Protocol
+- All outputs go to Mission Control via HTTP.
+- Always include: `X-Agent-Token: $AUTH_TOKEN`
 
 ## Schedule
-- If a heartbeat schedule is configured, send a lightweight check-in only.
-- On first cycle after wake/bootstrap, run heartbeat check-in immediately (do not wait for cadence).
-- Do not claim or move board tasks unless explicitly instructed by Mission Control.
-- If you have any pending `LEAD REQUEST: ASK USER` messages in OpenClaw chat, handle them promptly (see AGENTS.md).
+- On first cycle after wake/bootstrap, check in immediately.
+- Do not claim or move board tasks unless explicitly instructed.
+- Handle any pending `LEAD REQUEST: ASK USER` messages promptly (see AGENTS.md).
 
-## Heartbeat checklist
-1) Check in immediately:
-- Use the `agent-main` heartbeat endpoint (`POST /api/v1/agent/heartbeat`).
-- Startup check-in example:
+## Heartbeat Checklist
+1) Check in: `POST $BASE_URL/api/v1/agent/heartbeat` with header `X-Agent-Token: $AUTH_TOKEN`.
+2) If check-in fails (5xx/network), stop. Do **not** write memory updates until next successful check-in.
 
-```bash
-curl -s -X POST "{{ base_url }}/api/v1/agent/heartbeat" \
-  -H "X-Agent-Token: {{ auth_token }}"
-```
+## Memory Maintenance
+Do not perform memory maintenance every heartbeat. Only do it when explicitly instructed, idle for more than 1 hour, or when there is clear net-new durable information to preserve.
 
-- If check-in fails due to 5xx/network, stop and retry next heartbeat.
-- During that failure window, do **not** write memory updates (`MEMORY.md`, daily memory files).
-
-## Memory Maintenance (every 2-3 days)
-1) Read recent `memory/YYYY-MM-DD.md` files.
-2) Update `MEMORY.md` with durable facts/decisions.
-3) Update `MEMORY.md` with evolving preferences and identity.
-4) Prune stale content.
-
-## Common mistakes (avoid)
-- Claiming board tasks without instruction.
-
-## When to say HEARTBEAT_OK
-You may say `HEARTBEAT_OK` only when:
-1) Heartbeat check-in succeeded, and
-2) Any pending high-priority gateway-main duty for this cycle was handled (if present), and
-3) No outage rule was violated (no memory writes during 5xx/network failure window).
+## When to Say HEARTBEAT_OK
+Say `HEARTBEAT_OK` only when:
+1) Heartbeat check-in succeeded.
+2) Any pending high-priority gateway-main duty was handled.
+3) No outage rule was violated.
 
 Do **not** say `HEARTBEAT_OK` if check-in failed.
 {% else %}
@@ -78,86 +51,47 @@ Run the board as an operator: keep execution moving, enforce board rules, and cl
 Do real work with low noise while sharing useful knowledge across the board.
 {% endif %}
 
-## Required Inputs
-- `BASE_URL`: `{{ base_url }}`
-- `AUTH_TOKEN`: `{{ auth_token }}`
-- `AGENT_NAME`
-- `AGENT_ID`
-- `BOARD_ID`
-
-If any required input is missing, stop and request a provisioning update.
-
-## API Source of Truth
-Use OpenAPI for endpoint/payload details instead of static endpoint assumptions.
-
-```bash
-curl -fsS "{{ base_url }}/openapi.json" -o /tmp/openapi.json
-```
-
-When selecting endpoints, prioritize `x-llm-intent`, `x-when-to-use`, and `x-routing-policy`
-against the current task objective before choosing a path/method.
-
-{% if is_lead %}
-Lead-focused operation filter:
-
-```bash
-jq -r '
-  .paths | to_entries[] | .key as $path
-  | .value | to_entries[]
-  | select((.value.tags // []) | index("agent-lead"))
-  | ((.value.summary // "") | gsub("\\s+"; " ")) as $summary
-  | "\(.key|ascii_upcase)\t\($path)\t\(.value.operationId // "-")\t\(.value[\"x-llm-intent\"] // "-")\t\(.value[\"x-when-to-use\"] // [] | join(\" | \"))\t\(.value[\"x-routing-policy\"] // [] | join(\" | \"))\t\($summary)"
-' /tmp/openapi.json | sort
-```
-{% else %}
-Worker-focused operation filter:
-
-```bash
-jq -r '
-  .paths | to_entries[] | .key as $path
-  | .value | to_entries[]
-  | select((.value.tags // []) | index("agent-worker"))
-  | ((.value.summary // "") | gsub("\\s+"; " ")) as $summary
-  | "\(.key|ascii_upcase)\t\($path)\t\(.value.operationId // "-")\t\(.value[\"x-llm-intent\"] // "-")\t\(.value[\"x-when-to-use\"] // [] | join(\" | \"))\t\(.value[\"x-routing-policy\"] // [] | join(\" | \"))\t\($summary)"
-' /tmp/openapi.json | sort
-```
-{% endif %}
-
-## Schedule
-- Heartbeat cadence is controlled by gateway heartbeat config.
-- On first cycle after wake/bootstrap, run heartbeat check-in immediately (do not wait for cadence).
-- Keep cadence conservative unless there is a clear latency need.
+## Setup
+Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, `BOARD_ID`, and agent identity before proceeding. If any are missing, stop and request a provisioning update.
 
 ## Non-Negotiable Rules
 - Task updates go only to task comments (never chat/web status spam).
 - Comments must be concise markdown with evidence.
 - Post only when there is net-new value: artifact, decision, blocker, or handoff.
 - No keepalive comments ("still working", "checking in").
-- If pre-flight fails due to 5xx/network, do not write memory or task updates.
+- If pre-flight fails (5xx/network), do not write memory or task updates.
 
 ## Pre-Flight Checks (Every Heartbeat)
 1) Confirm `BASE_URL`, `AUTH_TOKEN`, and `BOARD_ID` from `TOOLS.md` match this workspace.
-2) Verify API access:
-- `GET {{ base_url }}/healthz`
-- `GET {{ base_url }}/api/v1/agent/boards`
-- `GET {{ base_url }}/api/v1/agent/boards/{{ board_id }}/tasks`
-3) If any check fails, stop and retry next heartbeat.
+2) Check in: `POST $BASE_URL/api/v1/agent/heartbeat` with header `X-Agent-Token: $AUTH_TOKEN`.
+3) Verify API access:
+   - `GET $BASE_URL/healthz`
+   - `GET $BASE_URL/api/v1/agent/boards`
+   - `GET $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks`
+4) If any check fails, stop and retry next heartbeat.
+
+## API Discovery
+Before API-heavy work, refresh endpoints:
+
+```bash
+curl -fsS "$BASE_URL/openapi.json" -o /tmp/openapi.json
+jq -r '.paths | to_entries[] | .key as $p | .value | to_entries[] | select((.value.tags // []) | index("{{ role_tag }}")) | "\(.key|ascii_upcase) \($p) \(.value.summary // "")"' /tmp/openapi.json | sort
+```
+
+Prioritize `x-llm-intent`, `x-when-to-use`, and `x-routing-policy` when selecting endpoints.
 
 ## Shared Context Pull
-Before execution:
-- Pull current task set (`inbox`, `in_progress`, `review` as relevant).
-- Pull non-chat board memory.
-- Pull group memory if board is grouped.
+Before execution, pull: current task set (`inbox`, `in_progress`, `review`), non-chat board memory, and group memory if grouped.
 
-## Role-Specific Loop
 {% if is_lead %}
-### Board Lead Loop
-1) Rebuild operating context from `AGENTS.md` and `MEMORY.md`.
-2) Enforce board-rule gates for status transitions and completion.
-3) Ensure approvals are resolved before external side effects and closure.
-4) Keep assignment/staffing healthy; create/retire specialists when needed.
-5) Unblock actively with concrete decisions and resequencing.
-6) Keep delivery status in `MEMORY.md` current (state, next step, evidence).
+## Board Lead Loop
+1) Check in via heartbeat endpoint (pre-flight above).
+2) Rebuild operating context from `AGENTS.md` and `MEMORY.md`.
+3) Enforce board-rule gates for status transitions and completion.
+4) Ensure approvals are resolved before external side effects and closure.
+5) Keep assignment/staffing healthy; create/retire specialists when needed.
+6) Unblock actively with concrete decisions and resequencing.
+7) Keep delivery status in `MEMORY.md` current.
 
 ### Board Rule Snapshot
 - `require_review_before_done`: `{{ board_rule_require_review_before_done }}`
@@ -167,8 +101,8 @@ Before execution:
 - `only_lead_can_change_status`: `{{ board_rule_only_lead_can_change_status }}`
 - `max_agents`: `{{ board_rule_max_agents }}`
 {% else %}
-### Board Worker Loop
-1) Check in via heartbeat endpoint.
+## Board Worker Loop
+1) Check in via heartbeat endpoint (pre-flight above).
 2) Continue one `in_progress` task; else pick one assigned `inbox` task; else run assist mode.
 3) Refresh task context and plan for the active task.
 4) Execute and post only high-signal task comment updates.
@@ -181,42 +115,32 @@ If no active/assigned task:
 {% endif %}
 
 ## Task Comment Format
-Use this compact structure:
-
 ```md
 **Update**
 - Net-new artifact/decision/blocker
 
 **Evidence**
-- Commands, links, records, file paths, outputs, or proof
+- Commands, links, outputs, or proof
 
 **Next**
 - Next 1-2 concrete actions
 ```
 
 If blocked:
-
 ```md
 **Question for @lead**
 - @lead: specific decision needed
 ```
 
 ## Definition of Done
-- Work artifact exists.
-- Evidence is captured in task comments.
-- Required gates/rules are satisfied before closure.
+- Work artifact exists, evidence is in task comments, required gates satisfied.
 
 ## When to Return `HEARTBEAT_OK`
 Return `HEARTBEAT_OK` only when:
 1) Pre-flight checks succeeded.
-2) This heartbeat produced a concrete outcome (task update, assist outcome, or clear lead request when idle).
+2) This heartbeat produced a concrete outcome (task update, assist, or lead request when idle).
 3) No outage rule was violated.
 
-Otherwise, do not return `HEARTBEAT_OK`.
-
 ## Memory Maintenance
-Periodically:
-- Review recent `memory/YYYY-MM-DD.md` files.
-- Distill durable lessons/decisions into `MEMORY.md`.
-- Remove stale guidance from `MEMORY.md`.
+Do not perform memory maintenance every heartbeat. Only do it when explicitly instructed, idle for more than 1 hour, or when there is clear net-new durable information to preserve.
 {% endif %}
