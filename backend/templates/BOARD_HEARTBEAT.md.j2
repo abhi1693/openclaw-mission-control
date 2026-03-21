@@ -347,26 +347,47 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    ```
    **Do NOT guess or improvise an implementation without requirements.**
 
-5) **Delegate to your ACP tool.** Check SOUL.md for your ACP configuration.
-   - **You MUST delegate implementation to your ACP tool (Claude Code or Codex).** Do NOT write code directly.
-   - **When starting an ACP session, activate skills first:**
-     - For Claude Code: begin with `use superpowers` to activate the workflow skills (TDD, debugging, verification, code review).
-     - For Codex review: use `codex exec` explicitly (the codex skill activates on this command).
-   - Pass the task requirements, spec content, and acceptance criteria to your ACP tool.
-   - If your ACP session fails or is unavailable, post a blocker comment: `@lead ACP session failed. Cannot proceed without ACP.`
-   - **Writing code directly without ACP is a SOUL.md violation.** If you catch yourself writing code in the heartbeat session, STOP and delegate to ACP instead.
+5) **Execute ONE workflow step.** Read MEMORY.md for your workflow state block. If none exists, you are in `PLANNING`.
+   **You MUST delegate all work to your ACP tool (Claude Code or Codex).** Do NOT write code directly.
 
-6) **Run feedback loops after ACP produces code:**
-   - Typecheck: `tsc --noEmit` or equivalent
-   - Lint: `npm run lint` or equivalent
-   - Tests: `npm test` or `pytest`
-   - **If no tests exist yet:** tell ACP to write tests before proceeding. At minimum: one test per API endpoint (backend) or one test per page/component (frontend). Zero tests is NOT acceptable.
-   - If any check fails → feed the errors back to ACP for correction. Do NOT submit broken code.
-   - **You MUST run ALL three checks (typecheck, lint, tests).** Skipping any is a violation. If a check command is not configured (e.g., no lint script), tell ACP to add it.
+   **First, find your current state** in MEMORY.md. Look for a block like:
+   ```
+   WORKFLOW: task_id=XXXX state=PLANNING
+   ```
+   If the `task_id` does not match your current task, or no WORKFLOW line exists, start fresh at `PLANNING`.
 
-7) **Request code review** BEFORE committing. Use the opposite ACP tool for review:
-   - If you used Claude Code to implement → review with: `codex exec --sandbox read-only "Review this change: DESCRIPTION"`
-   - If you used Codex to implement → review with: `claude -p "Review this change: DESCRIPTION"`
+   **Then execute ONLY the matching state below. Do NOT continue to the next state.**
+
+   **If state = PLANNING:**
+   - Activate skills: `use superpowers` (Claude Code) or `codex exec` (Codex).
+   - Pass task requirements from Step 4 and ask ACP for an implementation plan.
+   - If ACP fails: post blocker `@lead ACP session failed.` → return HEARTBEAT_OK.
+   - If ACP succeeds: write to MEMORY.md:
+     `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING plan=BRIEF_PLAN_SUMMARY`
+   - **STOP. Return HEARTBEAT_OK now. Do NOT start implementing.**
+
+   **If state = IMPLEMENTING:**
+   - Read plan from MEMORY.md. Pass plan + requirements to primary ACP.
+   - ACP produces code. Run ALL feedback loops: typecheck, lint, tests.
+   - If no tests exist: tell ACP to write tests first. Zero tests is NOT acceptable.
+   - If any check fails: feed errors back to ACP. Keep iterating within this heartbeat until checks pass or time runs out.
+   - If all pass: write to MEMORY.md:
+     `WORKFLOW: task_id=$TASK_ID state=REVIEWING summary=WHAT_WAS_BUILT`
+   - **STOP. Return HEARTBEAT_OK now. Do NOT start reviewing.**
+
+   **If state = REVIEWING:**
+   - Request review using the **opposite** ACP tool:
+     - Claude Code primary → `codex exec --sandbox read-only "Review: DESCRIPTION"`
+     - Codex primary → `claude -p "Review: DESCRIPTION"`
+   - If review **APPROVES**: write `WORKFLOW: task_id=$TASK_ID state=VALIDATING`
+   - If review **REJECTS**: write `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING feedback=REJECTION_DETAILS`
+   - **STOP. Return HEARTBEAT_OK now.**
+
+   **If state = VALIDATING:**
+   - Run self-validation (Step 8 below).
+   - If validation **PASSES** → proceed to Step 9 (PATCH to review). Clear the WORKFLOW line from MEMORY.md.
+   - If validation **FAILS** → write `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING feedback=VALIDATION_FAILURES`
+   - **STOP. Return HEARTBEAT_OK now.**
 
 8) **Self-validate BEFORE claiming done.** Verify your own deliverable:
    - For code: does it compile/typecheck? Are there NO hardcoded mock values?
@@ -466,41 +487,18 @@ curl -fsS http://TARGET_HOST:FRONTEND_PORT/ | grep -o 'http://[^"]*' | head -3
 ```
 If the API URL in the HTML is wrong (e.g., `localhost` instead of the target host), fix the `.env`, rebuild, and redeploy.
 
-**Step D — Version matches your build:**
-After deploying, verify the deployed files match your workspace. If they differ, redeploy.
-
-**Step E — Frontend SPA + browser check (React, Vue, etc.):**
-If Chrome MCP tools are available, use them to validate the frontend renders and loads data:
-```
-1. navigate_page → http://TARGET_HOST:FRONTEND_PORT/
-2. list_console_messages types=["error"] → must be empty (or only non-critical like favicon)
-3. list_network_requests resourceTypes=["fetch","xhr"] → API calls must return 200
-4. navigate_page → http://TARGET_HOST:FRONTEND_PORT/some/deep/route
-5. take_screenshot → must show the app, NOT a 404 page
-```
-If Chrome MCP is not available, fall back to curl:
+**Step D — Frontend SPA routing (React/Vue):**
 ```bash
-# Root must return HTML with app content
-curl -fsS http://TARGET_HOST:FRONTEND_PORT/ | grep -c '<div id'
-# SPA sub-route must ALSO return HTML (not 404)
 curl -s -o /dev/null -w "%{http_code}" http://TARGET_HOST:FRONTEND_PORT/test/route
 ```
-If the sub-route returns 404, your server does NOT support SPA routing. **Do NOT use `python3 -m http.server`** — it cannot handle SPA fallback. Use one of:
-- `npx serve -s dist -l PORT` (recommended, handles SPA fallback)
-- `nginx` with `try_files $uri /index.html`
+If 404 → server does NOT support SPA routing. Use `npx serve -s dist -l PORT` instead of `python3 -m http.server`.
 
-**Step F — End-to-end check (if your task covers both API and frontend):**
-Verify the frontend can actually load data from the API:
+**Step E — End-to-end (if both API + frontend):**
 ```bash
-# 1. API is reachable
-curl -fsS http://TARGET_HOST:API_PORT/health
-# 2. Frontend HTML references the correct API URL (not localhost)
 curl -fsS http://TARGET_HOST:FRONTEND_PORT/ | grep -c 'TARGET_HOST:API_PORT'
-# 3. CORS headers allow the frontend origin (must return Access-Control-Allow-Origin)
 curl -fsS -I -H "Origin: http://TARGET_HOST:FRONTEND_PORT" http://TARGET_HOST:API_PORT/health | grep -i 'access-control-allow-origin'
 ```
-- If check 2 returns 0 → frontend is calling the wrong API. Fix `.env`, rebuild, redeploy.
-- If check 3 returns no `Access-Control-Allow-Origin` header → CORS is not configured. Fix the API's CORS settings to allow the frontend origin.
+If grep returns 0 → frontend calls wrong API URL. If no CORS header → fix API CORS config.
 
 **If ANY check fails: do NOT move to review. Fix the issue and re-run ALL checks.**
 
