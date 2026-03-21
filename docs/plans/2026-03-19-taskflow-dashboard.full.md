@@ -6,10 +6,10 @@
 
 **Goal:** Build a dashboard to monitor the TaskFlow WhatsApp GTD app running on NanoClaw, giving the user visibility into boards, tasks, people, and stats across the 3-level organizational hierarchy. Multilingual (pt-BR / en-US).
 
-**Architecture:** Two independent services. A read-only FastAPI server runs on the NanoClaw machine (`nanoclaw@192.168.2.63`), reading the TaskFlow SQLite database directly and serving REST + WebSocket. A standalone TypeScript/React SPA connects to this API directly. No proxy, no middleware.
+**Architecture:** Two independent services. A FastAPI server runs on the NanoClaw machine (`nanoclaw@192.168.2.63`), reading the TaskFlow SQLite database directly and serving REST + WebSocket. A standalone TypeScript/React SPA connects to this API directly. No proxy, no middleware.
 
 **Tech Stack:**
-- API: Python 3.11+ / FastAPI / SQLite (read-only)
+- API: Python 3.11+ / FastAPI / SQLite 
 - Frontend: **Pure TypeScript + React 19** — no Next.js, no SSR, no meta-framework. Single-page application with client-side routing only.
 - UI libraries: React Router, TanStack Query, TanStack Table, Recharts, Radix UI, Tailwind CSS 3, Lucide icons
 - Real-time: WebSocket
@@ -471,7 +471,7 @@ TASKFLOW_POLL_INTERVAL=5
 
 Bearer token via `Authorization: Bearer <token>` header. Token set via `TASKFLOW_API_TOKEN` env var. All endpoints except `/health` require it. WebSocket authenticates via query param: `/ws?token=<token>`.
 
-**Security note:** The API token is embedded in the frontend bundle and visible in browser DevTools. This is acceptable for a read-only dashboard on a private LAN. For public deployments, add a backend-for-frontend proxy layer.
+**Security note:** The API token is embedded in the frontend bundle and visible in browser DevTools. This is acceptable for a dashboard on a private LAN. For public deployments, add a backend-for-frontend proxy layer.
 
 ### CORS
 
@@ -634,7 +634,7 @@ pytest-asyncio>=0.23
 ```ini
 # taskflow-api/taskflow-api.service
 [Unit]
-Description=TaskFlow Read-Only API
+Description=TaskFlow API
 After=network.target
 
 [Service]
@@ -869,7 +869,7 @@ curl http://localhost:8100/health
 
 ```bash
 git add taskflow-api/
-git commit -m "feat(taskflow-api): read-only HTTP API + WebSocket with auth, CORS, and tests"
+git commit -m "feat(taskflow-api): HTTP API + WebSocket with auth, CORS, and tests"
 ```
 
 ---
@@ -1362,7 +1362,7 @@ git commit -m "feat(taskflow-dashboard): add overview dashboard with real-time s
 - Each person: green dot (first person listed) / blue dot (others) + name + role text (from DB `role` field, displayed as-is)
 
 **BoardConfigPanel** (collapsible, `Settings` Lucide icon):
-- Read-only: language, timezone, WIP limit, standup/digest/review cron times
+- Language, timezone, WIP limit, standup/digest/review cron times
 
 ### TDD Steps
 
@@ -1512,3 +1512,19 @@ git tag v1.0.0-taskflow-dashboard
 - TLS termination (use Caddy/nginx reverse proxy if needed)
 - Per-board timezone in overdue evaluation (v1 uses server local time)
 - Pagination on task endpoints (v1 data volumes are small)
+
+
+  ┌────────────────────────────────────────────────────────────────────────┬──────────┐
+  │                                 Agent                                  │ Interval │
+  ├────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ Programmer-Frontend                                                    │ 3m       │
+  ├────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ Programmer-Backend                                                     │ 3m       │
+  ├────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ Supervisor                                                             │ 5m       │
+  ├────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ Architect, QA-Unit, QA-E2E                                             │ 10m      │
+  ├────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ DevOps                                                                 │ 30m      │
+  └────────────────────────────────────────────────────────────────────────┴──────────┘
+

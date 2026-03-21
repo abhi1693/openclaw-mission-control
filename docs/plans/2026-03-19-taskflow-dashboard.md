@@ -1,9 +1,9 @@
 # TaskFlow Dashboard — Implementation Plan
 
-> **Standalone project** (`taskflow-api/` + `taskflow-dashboard/`). NOT part of the MC Next.js codebase.
+> **Standalone project** (`taskflow-api/` + `taskflow-dashboard/`). 
 > **Methodology:** TDD. **Multilingual:** pt-BR / en-US.
 
-**Goal:** Read-only dashboard for the TaskFlow WhatsApp GTD system on NanoClaw.
+**Goal:** Dashboard for the TaskFlow WhatsApp GTD system on NanoClaw.
 
 **Stack:** API: FastAPI + SQLite. Frontend: Pure TypeScript + React 19 SPA (no Next.js). WebSocket for real-time.
 
@@ -83,7 +83,7 @@ Full schemas, board list, activity stats → full spec `### Key Schemas` + `### 
 
 ## API (Task 1) — `taskflow-api/`
 
-FastAPI on NanoClaw. SQLite read-only (`?mode=ro`). Bearer token auth (`TASKFLOW_API_TOKEN`). CORS from `TASKFLOW_CORS_ORIGINS`. All queries parameterized (`?`).
+FastAPI on NanoClaw. SQLite. Bearer token auth (`TASKFLOW_API_TOKEN`). CORS from `TASKFLOW_CORS_ORIGINS`. All queries parameterized (`?`).
 
 | Endpoint | Auth | Returns |
 |---|---|---|

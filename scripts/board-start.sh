@@ -5,8 +5,8 @@
 #
 # What it does:
 #   1. Restores heartbeat_config from _heartbeat_backup table in MC database
-#   2. Sets agent status to 'online' (lifecycle orchestrator takes over from here)
-#   3. Restores gateway openclaw.json from saved backup
+#   2. Sets agent status to 'online'
+#   3. Restores gateway openclaw.json from MC database (source of truth)
 #   4. Clears any leftover sessions (fresh start)
 #   5. Restarts gateway to pick up new heartbeat timers
 #   6. Runs Baileys group sync if WhatsApp groups are configured
@@ -25,7 +25,7 @@ PSQL="PGPASSWORD=$MC_DB_PASS psql -U $MC_DB_USER -h 127.0.0.1 -d $MC_DB -t -A"
 
 echo "=== Board Start ==="
 
-# Step 1: Restore heartbeats in MC database
+# Step 1: Restore heartbeats in MC database from backup table
 echo ""
 echo "--- Step 1: Restoring MC database ---"
 ssh root@$MC_DB_HOST "$PSQL" << 'SQLEOF'
@@ -54,19 +54,28 @@ ssh root@$MC_DB_HOST "$PSQL -c \"
   WHERE heartbeat_config IS NOT NULL ORDER BY name;
 \"" | while read line; do echo "    $line"; done
 
-# Step 3: Restore gateway config
+# Step 3: Restore gateway config FROM DATABASE (source of truth)
+# This reads each agent's heartbeat_config->>'every' from the DB
+# and applies it to the gateway config. No separate backup file needed.
 echo ""
-echo "--- Step 3: Restoring gateway config ---"
+echo "--- Step 3: Restoring gateway config from database ---"
+
+# Get agent intervals from DB as JSON
+DB_INTERVALS=$(ssh root@$MC_DB_HOST "$PSQL" << 'SQLEOF'
+  SELECT json_object_agg(
+    'mc-' || id::text,
+    heartbeat_config->>'every'
+  )::text
+  FROM agents
+  WHERE heartbeat_config IS NOT NULL
+    AND name != 'OpenClaw Primary Gateway Agent';
+SQLEOF
+)
+
 ssh root@$GATEWAY_HOST "python3 -c \"
 import json
 
-backup_file = '$GATEWAY_CONFIG.heartbeat-backup'
-try:
-    with open(backup_file) as f:
-        saved = json.load(f)
-except FileNotFoundError:
-    print('ERROR: No gateway backup found. Run board-stop.sh first.')
-    exit(1)
+intervals = json.loads('$DB_INTERVALS')
 
 with open('$GATEWAY_CONFIG') as f:
     data = json.load(f)
@@ -74,13 +83,9 @@ with open('$GATEWAY_CONFIG') as f:
 count = 0
 for a in data.get('agents', {}).get('list', []):
     aid = a.get('id', '')
-    if aid in saved:
-        original = saved[aid]
+    if aid in intervals and intervals[aid]:
         hb = a.get('heartbeat', {})
-        if original == 'default':
-            hb.pop('every', None)
-        else:
-            hb['every'] = original
+        hb['every'] = intervals[aid]
         a['heartbeat'] = hb
         count += 1
 
