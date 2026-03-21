@@ -913,3 +913,205 @@ async def test_non_lead_agent_moves_to_review_without_comment_or_recent_comment_
             assert exc.value.detail == "Comment is required."
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_lead_assignment_and_in_progress_wakes_assignee_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_send_agent_task_message(**_: Any) -> str | None:
+        return None
+
+    monkeypatch.setattr(tasks_api, "_send_agent_task_message", _fake_send_agent_task_message)
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            lead_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id,
+                    name="lead",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
+                    openclaw_session_id="session-lead",
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="offline",
+                    openclaw_session_id="session-worker",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="assignment wake",
+                    description="",
+                    status="inbox",
+                    assigned_agent_id=None,
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
+            assert lead is not None
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(assigned_agent_id=worker_id, status="in_progress"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=lead),
+            )
+
+            assert updated.status == "in_progress"
+            assert updated.assigned_agent_id == worker_id
+
+            reloaded_worker = (
+                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
+            ).first()
+            assert reloaded_worker is not None
+            assert reloaded_worker.status == "online"
+            assert reloaded_worker.last_seen_at is not None
+
+            wake_events = (
+                await session.exec(
+                    select(ActivityEvent)
+                    .where(col(ActivityEvent.task_id) == task_id)
+                    .where(col(ActivityEvent.event_type) == "task.assignee_woken"),
+                )
+            ).all()
+            assert len(wake_events) == 1
+            assert wake_events[0].message is not None
+            assert "(assignment)" in wake_events[0].message
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_entering_in_progress_with_existing_assignee_wakes_assignee(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_send_agent_task_message(**_: Any) -> str | None:
+        return None
+
+    monkeypatch.setattr(tasks_api, "_send_agent_task_message", _fake_send_agent_task_message)
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="offline",
+                    openclaw_session_id="session-worker",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="status wake",
+                    description="",
+                    status="inbox",
+                    assigned_agent_id=worker_id,
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            worker = (await session.exec(select(Agent).where(col(Agent.id) == worker_id))).first()
+            assert worker is not None
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(status="in_progress"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=worker),
+            )
+
+            assert updated.status == "in_progress"
+            assert updated.assigned_agent_id == worker_id
+
+            reloaded_worker = (
+                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
+            ).first()
+            assert reloaded_worker is not None
+            assert reloaded_worker.status == "online"
+            assert reloaded_worker.last_seen_at is not None
+
+            wake_events = (
+                await session.exec(
+                    select(ActivityEvent)
+                    .where(col(ActivityEvent.task_id) == task_id)
+                    .where(col(ActivityEvent.event_type) == "task.assignee_woken"),
+                )
+            ).all()
+            assert len(wake_events) == 1
+            assert wake_events[0].message is not None
+            assert "(status_in_progress)" in wake_events[0].message
+    finally:
+        await engine.dispose()
