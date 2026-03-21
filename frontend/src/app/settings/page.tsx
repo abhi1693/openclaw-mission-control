@@ -151,17 +151,17 @@ export default function SettingsPage() {
         description="Update your profile and account preferences."
       >
         <div className="space-y-6">
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-slate-900">Profile</h2>
-            <p className="mt-1 text-sm text-slate-500">
+          <section className="surface-card rounded-xl p-6">
+            <h2 className="text-base font-semibold text-[var(--text)]">Profile</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
               Keep your identity and timezone up to date.
             </p>
 
             <form onSubmit={handleSave} className="mt-6 space-y-5">
               <div className="grid gap-5 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <User className="h-4 w-4 text-slate-500" />
+                  <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-muted)]">
+                    <User className="h-4 w-4 text-[var(--text-quiet)]" />
                     Name
                   </label>
                   <Input
@@ -172,12 +172,12 @@ export default function SettingsPage() {
                     }}
                     placeholder="Your name"
                     disabled={isSaving}
-                    className="border-slate-300 text-slate-900 focus-visible:ring-blue-500"
+                    className="border-[var(--border-strong)] text-[var(--text)] focus-visible:ring-[var(--accent)]"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <Globe className="h-4 w-4 text-slate-500" />
+                  <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-muted)]">
+                    <Globe className="h-4 w-4 text-[var(--text-quiet)]" />
                     Timezone
                   </label>
                   <SearchableSelect
@@ -192,33 +192,33 @@ export default function SettingsPage() {
                     searchPlaceholder="Search timezones..."
                     emptyMessage="No matching timezones."
                     disabled={isSaving}
-                    triggerClassName="w-full h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    contentClassName="rounded-xl border border-slate-200 shadow-lg"
-                    itemClassName="px-4 py-3 text-sm text-slate-700 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
+                    triggerClassName="w-full h-11 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-sm focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+                    contentClassName="rounded-xl border border-[var(--border)] shadow-lg"
+                    itemClassName="px-4 py-3 text-sm text-[var(--text-muted)] data-[selected=true]:bg-[var(--surface-muted)] data-[selected=true]:text-[var(--text)]"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <Mail className="h-4 w-4 text-slate-500" />
+                <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-muted)]">
+                  <Mail className="h-4 w-4 text-[var(--text-quiet)]" />
                   Email
                 </label>
                 <Input
                   value={displayEmail}
                   readOnly
                   disabled
-                  className="border-slate-200 bg-slate-50 text-slate-600"
+                  className="border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-muted)]"
                 />
               </div>
 
               {saveError ? (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                <div className="alert-danger rounded-lg border p-3 text-sm">
                   {saveError}
                 </div>
               ) : null}
               {saveSuccess ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                <div className="alert-success rounded-lg border p-3 text-sm">
                   {saveSuccess}
                 </div>
               ) : null}

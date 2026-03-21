@@ -38,7 +38,7 @@ type GatewaysTableProps = {
 
 const DEFAULT_EMPTY_ICON = (
   <svg
-    className="h-16 w-16 text-slate-300"
+    className="h-16 w-16 text-[var(--text-quiet)]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -100,7 +100,7 @@ export function GatewaysTable({
         accessorKey: "workspace_root",
         header: "Workspace root",
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="text-sm text-[var(--text-muted)]">
             {truncate(row.original.workspace_root, 28)}
           </span>
         ),

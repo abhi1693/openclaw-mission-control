@@ -113,7 +113,7 @@ export default function GatewaysPage() {
         adminOnlyMessage="Only organization owners and admins can access gateways."
         stickyHeader
       >
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="surface-card overflow-hidden rounded-xl">
           <GatewaysTable
             gateways={gateways}
             isLoading={gatewaysQuery.isLoading}
@@ -133,7 +133,7 @@ export default function GatewaysPage() {
         </div>
 
         {gatewaysQuery.error ? (
-          <p className="mt-4 text-sm text-red-500">
+          <p className="mt-4 text-sm text-[var(--danger)]">
             {gatewaysQuery.error.message}
           </p>
         ) : null}

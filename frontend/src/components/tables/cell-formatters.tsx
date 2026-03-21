@@ -40,14 +40,14 @@ export function linkifyCell({
       <Link href={href} title={title} className={cn("group block", className)}>
         <p
           className={cn(
-            "text-sm font-medium text-slate-900 group-hover:text-blue-600",
+            "text-sm font-medium text-[var(--text)] group-hover:text-[var(--accent)]",
             labelClassName,
           )}
         >
           {label}
         </p>
         {subtitle != null ? (
-          <p className={cn("text-xs text-slate-500", subtitleClassName)}>
+          <p className={cn("text-xs text-[var(--text-muted)]", subtitleClassName)}>
             {subtitle}
           </p>
         ) : null}
@@ -60,7 +60,7 @@ export function linkifyCell({
       href={href}
       title={title}
       className={cn(
-        "text-sm font-medium text-slate-700 hover:text-blue-600",
+        "text-sm font-medium text-[var(--text)] hover:text-[var(--accent)]",
         className,
       )}
     >
@@ -82,7 +82,7 @@ export function dateCell(
 ) {
   const display = relative ? formatRelative(value) : formatTimestamp(value);
   return (
-    <span className={cn("text-sm text-slate-700", className)}>
+    <span className={cn("text-sm text-[var(--text)]", className)}>
       {display ?? fallback}
     </span>
   );

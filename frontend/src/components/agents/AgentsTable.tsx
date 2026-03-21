@@ -46,7 +46,7 @@ type AgentsTableProps = {
 
 const DEFAULT_EMPTY_ICON = (
   <svg
-    className="h-16 w-16 text-slate-300"
+    className="h-16 w-16 text-[var(--text-quiet)]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -120,7 +120,7 @@ export function AgentsTable({
         accessorKey: "openclaw_session_id",
         header: "Session",
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="text-sm text-[var(--text-muted)]">
             {truncate(row.original.openclaw_session_id)}
           </span>
         ),
@@ -186,7 +186,7 @@ export function AgentsTable({
             }
           : undefined
       }
-      rowClassName="hover:bg-slate-50"
+      rowClassName="hover:bg-[var(--surface-muted)]"
       cellClassName="px-6 py-4"
       emptyState={
         emptyState

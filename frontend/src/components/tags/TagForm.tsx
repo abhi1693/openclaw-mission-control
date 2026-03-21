@@ -101,13 +101,13 @@ export function TagForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+      className="space-y-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-card)]"
     >
       <div className="space-y-5">
-        <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/40 p-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Name
               </label>
               <Input
@@ -119,13 +119,13 @@ export function TagForm({
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                   Slug
                 </label>
                 <button
                   type="button"
                   onClick={() => setSlug(suggestedSlug)}
-                  className="text-xs font-medium text-slate-500 underline underline-offset-2 transition hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="text-xs font-medium text-[var(--text-muted)] underline underline-offset-2 transition hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={!suggestedSlug || isSubmitting}
                 >
                   Use from name
@@ -139,7 +139,7 @@ export function TagForm({
               />
             </div>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
             Leave slug blank to auto-generate from the tag name.
           </p>
         </div>
@@ -149,8 +149,8 @@ export function TagForm({
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Color
             </label>
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white px-3">
-              <span className="text-sm font-medium text-slate-400">#</span>
+            <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3">
+              <span className="text-sm font-medium text-[var(--text-quiet)]">#</span>
               <Input
                 value={color}
                 onChange={(event) => setColor(event.target.value)}
@@ -164,12 +164,12 @@ export function TagForm({
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Preview
             </label>
-            <div className="inline-flex h-[42px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
+            <div className="inline-flex h-[42px] items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3">
               <span
-                className="h-4 w-4 rounded border border-slate-300"
+                className="h-4 w-4 rounded border border-[var(--border-strong)]"
                 style={{ backgroundColor: `#${previewColor}` }}
               />
-              <span className="text-xs font-semibold text-slate-700">
+              <span className="text-xs font-semibold text-[var(--text-muted)]">
                 #{previewColor.toUpperCase()}
               </span>
             </div>
@@ -190,7 +190,7 @@ export function TagForm({
         </div>
 
         {errorMessage ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <div className="alert-danger rounded-lg border p-3 text-sm">
             {errorMessage}
           </div>
         ) : null}

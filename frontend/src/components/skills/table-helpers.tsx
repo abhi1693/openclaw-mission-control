@@ -10,7 +10,7 @@ import {
 
 export const SKILLS_TABLE_EMPTY_ICON = (
   <svg
-    className="h-16 w-16 text-slate-300"
+    className="h-16 w-16 text-[var(--text-quiet)]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"

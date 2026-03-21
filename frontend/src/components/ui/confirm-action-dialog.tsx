@@ -50,7 +50,7 @@ export function ConfirmActionDialog({
         </DialogHeader>
         {errorMessage ? (
           errorStyle === "text" ? (
-            <p className="text-sm text-red-500">{errorMessage}</p>
+            <p className="text-sm text-[var(--danger)]">{errorMessage}</p>
           ) : (
             <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-3 text-xs text-muted">
               {errorMessage}
