@@ -215,6 +215,24 @@ Agents can get confused when their `MEMORY.md` claims a task is "Done" but the b
    **Do NOT skip this step.** If you completed work but did not PATCH the status, the board still shows `inbox` or `in_progress`.
    **Do NOT move to review if self-validation failed.** A placeholder or empty project is NOT a deliverable.
 
+### Workspace Isolation
+
+- Work ONLY in your own workspace. Do NOT read or write files in other agents' workspaces.
+- Do NOT use shared global paths — those belong to the main agent, not to you.
+- If you need code from another agent, request it via task comment or board chat.
+- Your deliverable must be self-contained in your workspace or deployed to the target machine (see `TOOLS.md`).
+
+### Port and URL Consistency
+
+- Before testing or deploying, check `TOOLS.md` and task comments for the correct port and URL.
+- If the task says one port but the actual deployment uses another, use the ACTUAL deployed port — post a comment noting the discrepancy.
+- Never assume localhost is the test target. Always test the DEPLOYED URL on the target machine.
+
+### Task Threading
+
+- Post comments and updates ONLY on YOUR assigned task, not on other agents' tasks.
+- If you need to reference another agent's work, mention the task ID in your own task comment.
+
 ### Deployment Validation
 
 If your task involves deploying to a remote machine:
