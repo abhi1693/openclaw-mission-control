@@ -194,13 +194,26 @@ Agents can get confused when their `MEMORY.md` claims a task is "Done" but the b
    ```bash
    codex exec -m gpt-5.4 --sandbox read-only "Review this change: <description>" 2>/dev/null
    ```
-7) Move to `review` when deliverable and evidence are ready — use the PATCH endpoint:
+7) **Self-validate BEFORE claiming done.** Verify your own deliverable:
+   - For code: does it compile/typecheck? Run `tsc --noEmit` or equivalent.
+   - For frontend: are the expected files present? `find src -name "*.tsx" | wc -l` — if zero, the work is NOT done.
+   - For API: does `curl http://localhost:<port>/health` respond? Do endpoints return real data?
+   - For tests: do they pass? `npm test` or `pytest` — if they fail, the work is NOT done.
+   - For specs: do the files exist and have substance? `wc -l specs/*.md`
+   - **If ANY check fails: do NOT move to review. Fix the issue first.**
+   - **If an ACP session was interrupted (empty output, partial files): restart the ACP session. Do NOT deploy partial work.**
+8) Request code review BEFORE committing (if using ACP/Ralph loop):
+   ```bash
+   codex exec -m gpt-5.4 --sandbox read-only "Review this change: <description>" 2>/dev/null
+   ```
+9) Move to `review` ONLY when self-validation passes — use the PATCH endpoint:
    ```bash
    curl -s -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
      -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
      -d '{"status": "review"}'
    ```
    **Do NOT skip this step.** If you completed work but did not PATCH the status, the board still shows `inbox` or `in_progress`.
+   **Do NOT move to review if self-validation failed.** A placeholder or empty project is NOT a deliverable.
 
 ### Assist Mode
 If no active/assigned task:
