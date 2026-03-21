@@ -240,7 +240,12 @@ If your ACP session (Claude Code or Codex) was interrupted mid-work:
 **If you are QA (QA-Unit or QA-E2E) and tests fail:**
 - Post a task comment with the exact failure: what test, what error, what was expected.
 - Notify `@lead`: `Tests failing on {task}. Blocker: {specific issue}. Needs developer fix.`
-- Move YOUR task to `waiting` status — you cannot proceed until the developer fixes the issue.
+- Move YOUR task to `waiting` — you cannot proceed until the developer fixes the issue:
+  ```bash
+  curl -s -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+    -d '{"status": "waiting"}'
+  ```
 - Do NOT keep retrying the same failing tests. Report once, wait for fix.
 
 **If you are a developer and QA reports a failure:**
