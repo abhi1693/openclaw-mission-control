@@ -70,6 +70,7 @@ from app.services.tags import (
 )
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
+    blocked_by_for_task,
     dependency_ids_by_task_id,
     dependency_status_by_id,
     dependent_task_ids,
@@ -460,17 +461,21 @@ async def _reconcile_dependents_for_dependency_toggle(
     dependency_task: Task,
     previous_status: str,
     actor_agent_id: UUID | None,
-) -> None:
+) -> list[Task]:
     """Apply dependency side-effects when a dependency task toggles done/undone.
 
     The UI models dependencies as a DAG: when a dependency is reopened, dependents that were
     previously marked done may need to be reopened or flagged. This helper keeps dependent state
     consistent with the dependency graph without duplicating logic across endpoints.
+
+    Returns a list of dependent tasks that are now fully unblocked (all their
+    dependencies are done) and have an assigned agent — callers should notify
+    those assignees after commit.
     """
 
     done_toggled = (previous_status == "done") != (dependency_task.status == "done")
     if not done_toggled:
-        return
+        return []
 
     dependent_ids = await dependent_task_ids(
         session,
@@ -478,7 +483,7 @@ async def _reconcile_dependents_for_dependency_toggle(
         dependency_task_id=dependency_task.id,
     )
     if not dependent_ids:
-        return
+        return []
 
     dependents = list(
         await session.exec(
@@ -533,6 +538,21 @@ async def _reconcile_dependents_for_dependency_toggle(
                 board_id=dependent.board_id,
             )
 
+    # Collect dependents that are now fully unblocked (all deps done) and assigned.
+    newly_unblocked: list[Task] = []
+    if not reopened:
+        for dependent in dependents:
+            if dependent.status == "done" or dependent.assigned_agent_id is None:
+                continue
+            remaining = await blocked_by_for_task(
+                session,
+                board_id=board_id,
+                task_id=dependent.id,
+            )
+            if not remaining:
+                newly_unblocked.append(dependent)
+    return newly_unblocked
+
 
 async def _fetch_task_events(
     session: AsyncSession,
@@ -572,7 +592,7 @@ async def _send_lead_task_message(
         config=config,
         agent_name="Lead Agent",
         message=message,
-        deliver=False,
+        deliver=True,
     )
 
 
@@ -589,7 +609,7 @@ async def _send_agent_task_message(
         config=config,
         agent_name=agent_name,
         message=message,
-        deliver=False,
+        deliver=True,
     )
 
 
@@ -931,6 +951,55 @@ async def _notify_lead_on_task_unassigned(
             task_id=task.id,
             board_id=board.id,
         )
+        await session.commit()
+
+
+async def _notify_agents_on_dependency_unblocked(
+    *,
+    session: AsyncSession,
+    board: Board,
+    completed_task: Task,
+    unblocked_tasks: list[Task],
+) -> None:
+    """Notify assignees of tasks that became unblocked when a dependency completed."""
+    if not unblocked_tasks:
+        return
+    dispatch = GatewayDispatchService(session)
+    config = await dispatch.optional_gateway_config_for_board(board)
+    if config is None:
+        return
+    for task in unblocked_tasks:
+        if not task.assigned_agent_id:
+            continue
+        agent = await session.get(Agent, task.assigned_agent_id)
+        if not agent or not agent.openclaw_session_id:
+            continue
+        message = (
+            f"DEPENDENCY UNBLOCKED\n"
+            f"Board: {board.name}\n"
+            f"Task: {task.title}\n"
+            f"Task ID: {task.id}\n"
+            f"Status: {task.status}\n\n"
+            f"Blocking dependency completed: {completed_task.title}\n"
+            f"All dependencies are now resolved. You can proceed with this task.\n\n"
+            f"Take action: move the task to in_progress and begin work."
+        )
+        error = await _send_agent_task_message(
+            dispatch=dispatch,
+            session_key=agent.openclaw_session_id,
+            config=config,
+            agent_name=agent.name,
+            message=message,
+        )
+        if error is None:
+            record_activity(
+                session,
+                event_type="task.dependency_unblocked",
+                message=f"Agent {agent.name} notified: dependency {completed_task.title} completed.",
+                agent_id=agent.id,
+                task_id=task.id,
+                board_id=board.id,
+            )
         await session.commit()
 
 
@@ -2326,7 +2395,7 @@ async def _apply_lead_task_update(
         agent_id=update.actor.agent.id,
         board_id=update.board_id,
     )
-    await _reconcile_dependents_for_dependency_toggle(
+    unblocked = await _reconcile_dependents_for_dependency_toggle(
         session,
         board_id=update.board_id,
         dependency_task=update.task,
@@ -2336,6 +2405,15 @@ async def _apply_lead_task_update(
     await session.commit()
     await session.refresh(update.task)
     await _lead_notify_new_assignee(session, update=update)
+    if unblocked:
+        board = await session.get(Board, update.board_id)
+        if board:
+            await _notify_agents_on_dependency_unblocked(
+                session=session,
+                board=board,
+                completed_task=update.task,
+                unblocked_tasks=unblocked,
+            )
     return await _task_read_response(
         session,
         task=update.task,
@@ -2519,6 +2597,24 @@ async def _record_task_comment_from_update(
     )
     session.add(event)
     await session.commit()
+    # Notify mentioned agents in inline PATCH comments (same as dedicated comment endpoint).
+    targets, mention_names = await _comment_targets(
+        session,
+        task=update.task,
+        message=update.comment,
+        actor=update.actor,
+    )
+    if targets:
+        await _notify_task_comment_targets(
+            session,
+            request=_TaskCommentNotifyRequest(
+                task=update.task,
+                actor=update.actor,
+                message=update.comment,
+                targets=targets,
+                mention_names=mention_names,
+            ),
+        )
 
 
 async def _record_task_update_activity(
@@ -2540,7 +2636,7 @@ async def _record_task_update_activity(
         agent_id=actor_agent_id,
         board_id=update.board_id,
     )
-    await _reconcile_dependents_for_dependency_toggle(
+    unblocked = await _reconcile_dependents_for_dependency_toggle(
         session,
         board_id=update.board_id,
         dependency_task=update.task,
@@ -2548,6 +2644,15 @@ async def _record_task_update_activity(
         actor_agent_id=actor_agent_id,
     )
     await session.commit()
+    if unblocked:
+        board = await session.get(Board, update.board_id)
+        if board:
+            await _notify_agents_on_dependency_unblocked(
+                session=session,
+                board=board,
+                completed_task=update.task,
+                unblocked_tasks=unblocked,
+            )
 
 
 async def _assign_review_task_to_lead(
