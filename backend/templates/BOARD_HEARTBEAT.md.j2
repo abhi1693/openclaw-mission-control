@@ -215,6 +215,32 @@ Agents can get confused when their `MEMORY.md` claims a task is "Done" but the b
    **Do NOT skip this step.** If you completed work but did not PATCH the status, the board still shows `inbox` or `in_progress`.
    **Do NOT move to review if self-validation failed.** A placeholder or empty project is NOT a deliverable.
 
+### Deployment Validation
+
+If your task involves deploying to a remote machine:
+
+1) After deploying, **verify the deployed version matches your workspace build:**
+   - Compare file hashes: `sha256sum dist/assets/*.js` locally vs on the remote.
+   - If they differ, redeploy: `scp -r dist/* user@host:/path/`
+2) **Test the deployed URL, not localhost:**
+   - If you deployed to `192.168.2.63:3002`, test THAT — not `localhost:3001`.
+   - `curl -s http://<deployed-host>:<port>/` — does it return real content?
+3) **Verify API connectivity from the deployed frontend:**
+   - Open the deployed URL and check if the app loads data (not "Failed to fetch").
+   - If the API URL is misconfigured in the build, fix `.env` and rebuild.
+4) **If the deployed version is stale or broken:** redeploy before claiming done.
+
+### Interrupted ACP Sessions
+
+If your ACP session (Claude Code or Codex) was interrupted mid-work:
+
+1) **Check what was actually produced:** `ls src/components/ src/pages/` — are they empty?
+2) **If output is partial:** restart the ACP session with the remaining work. Do NOT treat partial output as complete.
+3) **If you see the problem but cannot fix it in this heartbeat cycle:**
+   - Update MEMORY.md with the exact state: "Components empty, ACP session interrupted, need to restart."
+   - Do NOT return HEARTBEAT_OK — post a blocker: `@lead ACP session interrupted, deliverable incomplete. Need another cycle to finish.`
+4) **NEVER return HEARTBEAT_OK when you know the work is incomplete.** That signals "nothing needs attention" when something clearly does.
+
 ### Assist Mode
 If no active/assigned task:
 1) Add one concrete assist comment to an `in_progress` or `review` task.
