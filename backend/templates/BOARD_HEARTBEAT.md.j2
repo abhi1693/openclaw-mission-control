@@ -147,6 +147,22 @@ for t in tasks:
     -d '{"content": "@Miguel Agent AGENT_ID stuck on TASK_TITLE for 60+ min. Nudged twice, no response.", "tags": ["chat", "escalation"]}'
   ```
 
+### Step 2b — Cross-Agent Audit (if agents appear stuck or results seem wrong)
+If Step 2 shows agents stuck 30+ minutes or you suspect inconsistencies, search across ALL agent conversations:
+```
+lcm_grep(pattern: "current task|decision|blocker|completed", allConversations: true)
+```
+This searches every agent's conversation history. Look for:
+- Agents claiming "done" in their conversation but board shows `in_progress` (state drift)
+- Agents discussing blockers they haven't reported via task comments
+- Conflicting decisions between agents (e.g., two agents deploying to the same port)
+
+Also check shared team memory for recent decisions:
+```
+memory_recall(query: "task status decisions blockers")
+```
+Do NOT run these every heartbeat — only when Step 2 reveals problems.
+
 ### Step 3 — Validate Tasks in `review`
 For EACH task with `status=review` in the Step 2 output, run this command (replace $TASK_ID with the task_id from Step 2):
 ```bash
@@ -283,6 +299,11 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
      -d '{"status": "in_progress"}'
    ```
    **Do NOT post progress, validation, or completion comments while the task is still `inbox`.** First PATCH to `in_progress` and confirm the status change succeeded, then begin work.
+   After a successful PATCH to `in_progress`, store your status in team memory once:
+   ```
+   memory_store(text: "Agent: AGENT_NAME, Task: TASK_TITLE, Status: in_progress, Plan: BRIEF_PLAN")
+   ```
+   Only call this once when you first move to `in_progress`. If the task was already `in_progress` before this heartbeat, do NOT call `memory_store` again.
 4) **Get specs and context.** Read your task description and comments for requirements and acceptance criteria.
    Get your assigned task (replace $AGENT_ID from TOOLS.md):
    ```bash
@@ -310,6 +331,12 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
        print('---')
    "
    ```
+   If the task description and comments do not provide enough context, check team memory for relevant decisions from other agents:
+   ```
+   memory_recall(query: "TASK_TITLE_OR_KEYWORDS")
+   ```
+   Only call this if task comments/specs do not already answer what you need. Do NOT call on every heartbeat.
+
    **If the task description or comments contain spec content, architecture details, or file paths → use those as your implementation guide.**
    **If the task is `is_blocked=True` → your dependencies are not done. Do NOT start work. Post a comment and wait.**
    **If no spec or requirements are available → post a task comment asking @lead BEFORE writing any code:**
@@ -322,6 +349,9 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
 
 5) **Delegate to your ACP tool.** Check SOUL.md for your ACP configuration.
    - **You MUST delegate implementation to your ACP tool (Claude Code or Codex).** Do NOT write code directly.
+   - **When starting an ACP session, activate skills first:**
+     - For Claude Code: begin with `use superpowers` to activate the workflow skills (TDD, debugging, verification, code review).
+     - For Codex review: use `codex exec` explicitly (the codex skill activates on this command).
    - Pass the task requirements, spec content, and acceptance criteria to your ACP tool.
    - If your ACP session fails or is unavailable, post a blocker comment: `@lead ACP session failed. Cannot proceed without ACP.`
    - **Writing code directly without ACP is a SOUL.md violation.** If you catch yourself writing code in the heartbeat session, STOP and delegate to ACP instead.
@@ -334,7 +364,9 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    - If any check fails → feed the errors back to ACP for correction. Do NOT submit broken code.
    - **You MUST run ALL three checks (typecheck, lint, tests).** Skipping any is a violation. If a check command is not configured (e.g., no lint script), tell ACP to add it.
 
-7) **Request code review** BEFORE committing (see SOUL.md for which tool to use for review).
+7) **Request code review** BEFORE committing. Use the opposite ACP tool for review:
+   - If you used Claude Code to implement → review with: `codex exec --sandbox read-only "Review this change: DESCRIPTION"`
+   - If you used Codex to implement → review with: `claude -p "Review this change: DESCRIPTION"`
 
 8) **Self-validate BEFORE claiming done.** Verify your own deliverable:
    - For code: does it compile/typecheck? Are there NO hardcoded mock values?
@@ -367,6 +399,11 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    **Include evidence in the comment** — paste actual command output (test results, curl responses, file counts).
    **Evidence must come from YOUR workspace.** Include `pwd` output, the exact command you ran, and the target URL/port. Do NOT paste output from another agent's workspace or tests.
    **If your results differ from earlier comments** (e.g., test count changed from 22 to 17), explain what changed and why in your review comment.
+   After a successful PATCH to `review`, store your completion in team memory once:
+   ```
+   memory_store(text: "Agent: AGENT_NAME, Task: TASK_TITLE, Status: review, Deliverable: WHAT_WAS_BUILT, Key decisions: DECISIONS_MADE")
+   ```
+   Only call this once when you first move to `review`. Do NOT call `memory_store` on every heartbeat — only on status transitions or key decisions that other agents need to know about.
 
 ### Workspace Isolation
 
