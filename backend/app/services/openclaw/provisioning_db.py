@@ -168,7 +168,8 @@ class OpenClawProvisioningService(OpenClawDBService):
             )
         ).first()
         if existing:
-            desired_name = config_options.agent_name or self.lead_agent_name(board)
+            default_name = self.lead_agent_name(board)
+            desired_name = config_options.agent_name or existing.name or default_name
             changed = False
             if existing.name != desired_name:
                 existing.name = desired_name
