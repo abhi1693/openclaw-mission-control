@@ -417,6 +417,7 @@ async def create_approval(
         confidence=payload.confidence,
         rubric_scores=payload.rubric_scores,
         status=payload.status,
+        resolved_at=utcnow() if payload.status != "pending" else None,
     )
     session.add(approval)
     await session.flush()
@@ -443,29 +444,36 @@ async def update_approval(
     session: AsyncSession = SESSION_DEP,
 ) -> ApprovalRead:
     """Update an approval's status and resolution timestamp."""
-    approval = await Approval.objects.by_id(approval_id).first(session)
+    try:
+        approval_lookup_id = UUID(approval_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+    approval = await Approval.objects.by_id(approval_lookup_id).first(session)
     if approval is None or approval.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     updates = payload.model_dump(exclude_unset=True)
     prior_status = approval.status
     if "status" in updates:
         target_status = updates["status"]
-        if target_status == "pending" and prior_status != "pending":
-            task_ids_by_approval = await load_task_ids_by_approval(
-                session, approval_ids=[approval.id]
-            )
-            approval_task_ids = task_ids_by_approval.get(approval.id)
-            if not approval_task_ids and approval.task_id is not None:
-                approval_task_ids = [approval.task_id]
-            await _ensure_no_pending_approval_conflicts(
-                session,
-                board_id=board.id,
-                task_ids=approval_task_ids or [],
-                exclude_approval_id=approval.id,
-            )
-        approval.status = target_status
-        if approval.status != "pending":
-            approval.resolved_at = utcnow()
+        if prior_status in ("approved", "rejected"):
+            # Legacy rows may be resolved without a timestamp; permit same-status backfill only.
+            if target_status == prior_status and approval.resolved_at is None:
+                approval.resolved_at = utcnow()
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "message": f"Approval is already {prior_status}.",
+                        "approval_id": str(approval.id),
+                        "current_status": prior_status,
+                        "requested_status": target_status,
+                    },
+                )
+        else:
+            approval.status = target_status
+            if approval.status != "pending":
+                approval.resolved_at = utcnow()
     session.add(approval)
     await session.commit()
     await session.refresh(approval)
