@@ -87,11 +87,41 @@ Before execution, pull: current task set (`inbox`, `in_progress`, `review`), non
 ## Board Lead Loop
 1) Check in via heartbeat endpoint (pre-flight above).
 2) Rebuild operating context from `AGENTS.md` and `MEMORY.md`.
-3) Enforce board-rule gates for status transitions and completion.
-4) Ensure approvals are resolved before external side effects and closure.
-5) Keep assignment/staffing healthy; create/retire specialists when needed.
-6) Unblock actively with concrete decisions and resequencing.
-7) Keep delivery status in `MEMORY.md` current.
+3) **Monitor agent health** (see Agent Health Check below).
+4) Enforce board-rule gates for status transitions and completion.
+5) Ensure approvals are resolved before external side effects and closure.
+6) Keep assignment/staffing healthy; create/retire specialists when needed.
+7) Unblock actively with concrete decisions and resequencing.
+8) Keep delivery status in `MEMORY.md` current.
+
+### Agent Health Check (Every Heartbeat)
+
+**You are responsible for detecting stuck agents.** Run this check every heartbeat:
+
+1) Pull all agents: `GET $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks`
+2) For each `in_progress` task, check `updated_at`:
+   - If `updated_at` is **older than 30 minutes** and the task is still `in_progress` → agent is likely stuck.
+3) Pull agent status: `GET $BASE_URL/api/v1/agents`
+   - If an agent shows `offline` but has an `in_progress` task → agent is down.
+   - If an agent shows `online` but its task hasn't been updated in 30+ minutes → agent is stuck in a loop.
+
+**When you detect a stuck agent (first detection):**
+- Post a comment on the stuck task: `@agent_name Status check — task unchanged for 30+ min. Are you blocked?`
+- Record in `MEMORY.md`: `{agent_name} stuck on {task_title} since {time}`
+
+**When a stuck agent doesn't recover (second detection, next heartbeat):**
+- Move the task back to `inbox`:
+  ```bash
+  curl -s -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+    -d '{"status": "inbox"}'
+  ```
+- Post a comment: `Task reset to inbox — agent was stuck for 2+ heartbeat cycles. Ready for reassignment.`
+- Notify the user: `@Miguel Agent {name} was stuck on {task}. Task reset to inbox for reassignment.`
+
+**When you detect an offline agent with in_progress work:**
+- Move the task back to `inbox` immediately (offline agent cannot recover on its own).
+- Notify the user: `@Miguel Agent {name} is offline. Task {title} reset to inbox.`
 
 ### Board Rule Snapshot
 - `require_review_before_done`: `{{ board_rule_require_review_before_done }}`
