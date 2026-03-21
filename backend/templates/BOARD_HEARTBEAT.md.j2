@@ -123,6 +123,31 @@ Before execution, pull: current task set (`inbox`, `in_progress`, `review`), non
 - Move the task back to `inbox` immediately (offline agent cannot recover on its own).
 - Notify the user: `@Miguel Agent {name} is offline. Task {title} reset to inbox.`
 
+### Deliverable Validation (When Tasks Move to Review)
+
+When an agent moves a task to `review`, **verify the deliverable before accepting it:**
+
+1) Read the task description for acceptance criteria.
+2) **Inspect the actual deliverable** using your exec tools:
+   - For API tasks: `curl -s http://<host>:<port>/health` — does it respond? Check key endpoints.
+   - For frontend tasks: `curl -s http://<host>:<port>/` — is it real content or a placeholder? Check if expected files exist (`*.tsx`, `*.ts`, components/).
+   - For spec tasks: `wc -l specs/*.md` — do the spec files exist and have substance?
+   - For test tasks: check if test files exist and if they pass.
+3) **Read logs if something looks wrong:**
+   - Gateway logs: `tail -50 /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | grep <agent_id>`
+   - Agent session: check `MEMORY.md` in the agent's workspace for delivery status claims.
+   - Deployed services: `systemctl status <service>`, `ps aux | grep <process>`.
+4) **If the deliverable is incomplete or a placeholder:**
+   - Move the task back to `in_progress`:
+     ```bash
+     curl -s -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+       -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+       -d '{"status": "in_progress"}'
+     ```
+   - Post a comment explaining what is missing: `@agent_name Deliverable incomplete: {specific issue}. Moving back to in_progress.`
+5) **If the deliverable is genuine and matches criteria:**
+   - Approve and move to `done`, or leave in `review` for further validation by QA.
+
 ### Board Rule Snapshot
 - `require_review_before_done`: `{{ board_rule_require_review_before_done }}`
 - `require_approval_for_done`: `{{ board_rule_require_approval_for_done }}`
