@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections import deque
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sse_starlette.sse import EventSourceResponse
+from sqlalchemy import func, or_
 from sqlmodel import SQLModel, col, select
 
 from app.api import agents as agents_api
@@ -18,8 +22,10 @@ from app.api import board_onboarding as onboarding_api
 from app.api import tasks as tasks_api
 from app.api.deps import ActorContext, get_board_or_404, get_task_or_404
 from app.core.agent_auth import AgentAuthContext, get_agent_auth_context
+from app.core.time import utcnow
 from app.db.pagination import paginate
-from app.db.session import get_session
+from app.db.session import async_session_maker, get_session
+from app.models.agent_messages import AgentMessage
 from app.models.agents import Agent
 from app.models.board_webhook_payloads import BoardWebhookPayload
 from app.models.boards import Board
@@ -33,6 +39,7 @@ from app.schemas.agents import (
     AgentNudge,
     AgentRead,
 )
+from app.schemas.agent_messages import AgentMessageCreate, AgentMessageRead
 from app.schemas.approvals import ApprovalCreate, ApprovalRead, ApprovalStatus
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.board_onboarding import BoardOnboardingAgentUpdate, BoardOnboardingRead
@@ -63,13 +70,14 @@ from app.services.task_dependencies import (
     validate_dependency_update,
 )
 
+from app.models.activity_events import ActivityEvent
+
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import AsyncIterator, Sequence
 
     from fastapi_pagination.limit_offset import LimitOffsetPage
     from sqlmodel.ext.asyncio.session import AsyncSession
 
-    from app.models.activity_events import ActivityEvent
     from app.models.board_memory import BoardMemory
     from app.models.board_onboarding import BoardOnboardingSession
 
@@ -2033,3 +2041,465 @@ async def broadcast_gateway_lead_message(
         actor_agent=agent_ctx.agent,
         payload=payload,
     )
+
+
+# ---------------------------------------------------------------------------
+# Inter-agent communication endpoints
+# ---------------------------------------------------------------------------
+
+_AGENT_COMMS_STREAM_POLL_SECONDS = 2
+_AGENT_COMMS_SINCE_QUERY = Query(default=None)
+_AGENT_COMMS_TASK_ID_QUERY = Query(default=None)
+
+
+def _serialize_agent_message(msg: AgentMessage) -> dict[str, object]:
+    return AgentMessageRead.model_validate(msg, from_attributes=True).model_dump(
+        mode="json"
+    )
+
+
+async def _fetch_agent_messages_since(
+    session: AsyncSession,
+    board_id: UUID,
+    since: datetime,
+    *,
+    task_id: UUID | None = None,
+) -> list[AgentMessage]:
+    """Fetch agent messages created after *since* for a board."""
+    statement = (
+        select(AgentMessage)
+        .where(col(AgentMessage.board_id) == board_id)
+        .where(col(AgentMessage.created_at) > since)
+        .order_by(col(AgentMessage.created_at).asc())
+    )
+    if task_id is not None:
+        statement = statement.where(col(AgentMessage.task_id) == task_id)
+    results = await session.exec(statement)
+    return list(results.all())
+
+
+@router.post(
+    "/boards/{board_id}/agent-comms",
+    response_model=AgentMessageRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=AGENT_BOARD_TAGS,
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_send_inter_agent_message",
+        when_to_use=[
+            "Agent needs to send a message to another agent on the same board.",
+            "Agent wants to broadcast a message to all agents on the board.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "send coordination message to peer agent",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_send_inter_agent_message",
+            },
+        ],
+    ),
+)
+async def send_agent_message(
+    payload: AgentMessageCreate,
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> AgentMessage:
+    """Send an inter-agent message within a board.
+
+    The sender is the authenticated agent. If ``receiver_agent_id`` is ``null``,
+    the message is a broadcast visible to all board agents.
+    """
+    _guard_board_access(agent_ctx, board)
+
+    # Validate receiver exists on this board when specified
+    if payload.receiver_agent_id is not None:
+        receiver = await session.get(Agent, payload.receiver_agent_id)
+        if receiver is None or receiver.board_id != board.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Receiver agent not found on this board",
+            )
+
+    # Validate task belongs to this board when specified
+    if payload.task_id is not None:
+        task = await session.get(Task, payload.task_id)
+        if task is None or task.board_id != board.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Task not found on this board",
+            )
+
+    message = AgentMessage(
+        board_id=board.id,
+        sender_agent_id=agent_ctx.agent.id,
+        receiver_agent_id=payload.receiver_agent_id,
+        task_id=payload.task_id,
+        content=payload.content,
+    )
+    session.add(message)
+    await session.commit()
+    await session.refresh(message)
+    return message
+
+
+@router.get(
+    "/boards/{board_id}/agent-comms",
+    response_model=DefaultLimitOffsetPage[AgentMessageRead],
+    tags=AGENT_BOARD_TAGS,
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_list_inter_agent_messages",
+        when_to_use=[
+            "Agent needs to read inter-agent communications for a board.",
+            "Agent wants to check messages from peers or broadcasts.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "list recent agent communications",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_list_inter_agent_messages",
+            },
+        ],
+    ),
+)
+async def list_agent_messages(
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+    since: str | None = _AGENT_COMMS_SINCE_QUERY,
+    task_id: UUID | None = _AGENT_COMMS_TASK_ID_QUERY,
+) -> LimitOffsetPage[AgentMessageRead]:
+    """List inter-agent messages for a board.
+
+    Supports optional ``since`` (ISO datetime) and ``task_id`` filters.
+    """
+    _guard_board_access(agent_ctx, board)
+
+    statement = select(AgentMessage).where(
+        col(AgentMessage.board_id) == board.id
+    )
+    if since is not None:
+        since_dt = _parse_agent_comms_since(since)
+        if since_dt is not None:
+            statement = statement.where(col(AgentMessage.created_at) > since_dt)
+    if task_id is not None:
+        statement = statement.where(col(AgentMessage.task_id) == task_id)
+    statement = statement.order_by(col(AgentMessage.created_at).desc())
+    return await paginate(session, statement)
+
+
+@router.get(
+    "/boards/{board_id}/agent-comms/stream",
+    tags=AGENT_BOARD_TAGS,
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_stream_inter_agent_messages",
+        when_to_use=[
+            "Frontend or agent needs real-time inter-agent communication feed.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "stream live agent communications",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_stream_inter_agent_messages",
+            },
+        ],
+    ),
+)
+async def stream_agent_messages(
+    request: Request,
+    *,
+    board: Board = BOARD_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+    since: str | None = _AGENT_COMMS_SINCE_QUERY,
+    task_id: UUID | None = _AGENT_COMMS_TASK_ID_QUERY,
+) -> EventSourceResponse:
+    """Stream inter-agent messages over server-sent events."""
+    _guard_board_access(agent_ctx, board)
+    since_dt = _parse_agent_comms_since(since) or utcnow()
+    last_seen = since_dt
+
+    async def event_generator() -> AsyncIterator[dict[str, str]]:
+        nonlocal last_seen
+        while True:
+            if await request.is_disconnected():
+                break
+            async with async_session_maker() as sess:
+                messages = await _fetch_agent_messages_since(
+                    sess, board.id, last_seen, task_id=task_id
+                )
+            for msg in messages:
+                last_seen = max(msg.created_at, last_seen)
+                payload = {"message": _serialize_agent_message(msg)}
+                yield {"event": "agent_message", "data": json.dumps(payload)}
+            await asyncio.sleep(_AGENT_COMMS_STREAM_POLL_SECONDS)
+
+    return EventSourceResponse(event_generator(), ping=15)
+
+
+def _parse_agent_comms_since(value: str | None) -> datetime | None:
+    """Parse an ISO datetime string, returning None on invalid input."""
+    if not value:
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(UTC).replace(tzinfo=None)
+    return parsed
+
+
+# ---------------------------------------------------------------------------
+# Agent activity endpoints
+# ---------------------------------------------------------------------------
+
+_ACTIVITY_STREAM_POLL_SECONDS = 2
+_ACTIVITY_STREAM_SEEN_MAX = 2000
+_ACTIVITY_SINCE_QUERY = Query(default=None, description="ISO datetime filter")
+_ACTIVITY_EVENT_TYPE_QUERY = Query(
+    default=None,
+    description="Filter by event_type prefix (e.g. 'task.comment', 'agent.log')",
+)
+
+
+class AgentActivityLogCreate(SQLModel):
+    """Payload for an agent to post its own activity log entry."""
+
+    message: str
+    task_id: UUID | None = None
+    event_type: str = "agent.log"
+
+
+class AgentActivityLogRead(SQLModel):
+    """Response for a created agent activity log entry."""
+
+    id: UUID
+    event_type: str
+    message: str | None
+    agent_id: UUID | None
+    task_id: UUID | None
+    board_id: UUID | None
+    created_at: datetime
+
+
+@router.get(
+    "/boards/{board_id}/agents/{agent_id}/activity",
+    response_model=DefaultLimitOffsetPage[AgentActivityLogRead],
+    tags=AGENT_BOARD_TAGS,
+    summary="List recent activity for a specific agent",
+    description=(
+        "Paginated list of activity events for a given agent on a board.\n\n"
+        "Supports optional `since` and `event_type` filters."
+    ),
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_activity_list",
+        when_to_use=[
+            "Need to see what a specific agent has been doing.",
+            "Check an agent's recent task progress or log entries.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "view agent activity history",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_activity_list",
+            },
+        ],
+    ),
+)
+async def list_agent_activity(
+    agent_id: str,
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+    since: str | None = _ACTIVITY_SINCE_QUERY,
+    event_type: str | None = _ACTIVITY_EVENT_TYPE_QUERY,
+) -> LimitOffsetPage[AgentActivityLogRead]:
+    """List activity events for a specific agent on a board."""
+    _guard_board_access(agent_ctx, board)
+
+    target_agent = await session.get(Agent, agent_id)
+    if target_agent is None or target_agent.board_id != board.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found on this board",
+        )
+
+    statement = (
+        select(ActivityEvent)
+        .where(col(ActivityEvent.agent_id) == target_agent.id)
+        .where(
+            or_(
+                col(ActivityEvent.board_id) == board.id,
+                col(ActivityEvent.board_id).is_(None),
+            )
+        )
+        .order_by(col(ActivityEvent.created_at).desc())
+    )
+
+    if since is not None:
+        since_dt = _parse_agent_comms_since(since)
+        if since_dt is not None:
+            statement = statement.where(col(ActivityEvent.created_at) >= since_dt)
+
+    if event_type is not None:
+        statement = statement.where(col(ActivityEvent.event_type).startswith(event_type))
+
+    return await paginate(session, statement)
+
+
+@router.get(
+    "/boards/{board_id}/activity/live",
+    tags=AGENT_BOARD_TAGS,
+    summary="Stream live activity events for a board",
+    description=(
+        "SSE endpoint streaming all activity events for a board in real time.\n\n"
+        "Supports optional `agent_id`, `since`, and `event_type` filters."
+    ),
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_activity_live_stream",
+        when_to_use=[
+            "Frontend or agent needs real-time activity feed for a board.",
+            "Live dashboard showing what agents are doing.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "stream live agent activity",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_activity_live_stream",
+            },
+        ],
+    ),
+)
+async def stream_board_activity(
+    request: Request,
+    *,
+    board: Board = BOARD_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+    since: str | None = _ACTIVITY_SINCE_QUERY,
+    agent_id: UUID | None = Query(default=None),
+    event_type: str | None = _ACTIVITY_EVENT_TYPE_QUERY,
+) -> EventSourceResponse:
+    """Stream activity events for a board over server-sent events."""
+    _guard_board_access(agent_ctx, board)
+    since_dt = _parse_agent_comms_since(since) or utcnow()
+
+    seen_ids: set[UUID] = set()
+    seen_queue: deque[UUID] = deque()
+
+    async def event_generator() -> AsyncIterator[dict[str, str]]:
+        last_seen = since_dt
+        while True:
+            if await request.is_disconnected():
+                break
+
+            async with async_session_maker() as sess:
+                statement = (
+                    select(ActivityEvent)
+                    .where(
+                        or_(
+                            col(ActivityEvent.board_id) == board.id,
+                            col(ActivityEvent.board_id).is_(None),
+                        )
+                    )
+                    .where(col(ActivityEvent.created_at) >= last_seen)
+                    .order_by(col(ActivityEvent.created_at).asc())
+                )
+                if agent_id is not None:
+                    statement = statement.where(
+                        col(ActivityEvent.agent_id) == agent_id
+                    )
+                if event_type is not None:
+                    statement = statement.where(
+                        col(ActivityEvent.event_type).startswith(event_type)
+                    )
+                results = await sess.exec(statement)
+                events = list(results.all())
+
+            for event in events:
+                if event.id in seen_ids:
+                    continue
+                seen_ids.add(event.id)
+                seen_queue.append(event.id)
+                if len(seen_queue) > _ACTIVITY_STREAM_SEEN_MAX:
+                    oldest = seen_queue.popleft()
+                    seen_ids.discard(oldest)
+                last_seen = max(event.created_at, last_seen)
+                payload = AgentActivityLogRead.model_validate(
+                    event, from_attributes=True
+                ).model_dump(mode="json")
+                yield {"event": "activity", "data": json.dumps(payload)}
+
+            await asyncio.sleep(_ACTIVITY_STREAM_POLL_SECONDS)
+
+    return EventSourceResponse(event_generator(), ping=15)
+
+
+@router.post(
+    "/log",
+    response_model=AgentActivityLogRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=AGENT_ALL_ROLE_TAGS,
+    summary="Post an agent activity log entry",
+    description=(
+        "Allows an agent to record its own activity log.\n\n"
+        "Creates an `ActivityEvent` with the agent's id and board context. "
+        "Useful for tracking what an agent is working on, current status, "
+        "and output snippets."
+    ),
+    openapi_extra={
+        "x-llm-intent": "agent_post_activity_log",
+        "x-when-to-use": [
+            "Agent wants to record what it is currently working on.",
+            "Agent needs to log progress, status transitions, or output snippets.",
+        ],
+        "x-when-not-to-use": [
+            "Task-specific comments should use the task comment endpoint.",
+            "Do not use for inter-agent messaging.",
+        ],
+        "x-required-actor": "any_agent",
+        "x-side-effects": [
+            "Creates an ActivityEvent row.",
+            "Event appears in activity feeds and live streams.",
+        ],
+    },
+)
+async def post_agent_activity_log(
+    payload: AgentActivityLogCreate,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> ActivityEvent:
+    """Record an activity log entry for the authenticated agent."""
+    agent = agent_ctx.agent
+
+    # Validate task belongs to agent's board when specified
+    if payload.task_id is not None:
+        task = await session.get(Task, payload.task_id)
+        if task is None or task.board_id != agent.board_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Task not found on this board",
+            )
+
+    event = record_activity(
+        session,
+        event_type=payload.event_type,
+        message=payload.message,
+        agent_id=agent.id,
+        task_id=payload.task_id,
+        board_id=agent.board_id,
+    )
+    await session.commit()
+    await session.refresh(event)
+    return event
