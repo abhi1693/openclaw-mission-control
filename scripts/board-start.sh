@@ -17,6 +17,7 @@ MC_DB_HOST="192.168.2.66"
 MC_DB="mission_control"
 MC_DB_USER="postgres"
 MC_DB_PASS="postgres"
+MC_APP_HOST="192.168.2.64"
 GATEWAY_HOST="192.168.2.60"
 GATEWAY_CONFIG="/root/.openclaw/openclaw.json"
 GATEWAY_AGENTS_DIR="/root/.openclaw/agents"
@@ -133,20 +134,6 @@ echo "--- Step 5: Restarting gateway ---"
 ssh root@$GATEWAY_HOST "systemctl --user restart openclaw-gateway"
 echo "  Gateway restarted"
 
-# Step 5b: Enable heartbeats via RPC (UI pause may have disabled them)
-echo ""
-echo "--- Step 5b: Enabling heartbeats ---"
-sleep 5
-ssh root@$MC_DB_HOST "cd /home/mcontrol/openclaw-mission-control/backend && .venv/bin/python3 -c '
-import asyncio
-from app.services.openclaw.gateway_rpc import openclaw_call, GatewayConfig
-async def enable():
-    config = GatewayConfig(url=\"ws://$GATEWAY_HOST:18789\",token=\"b288272c65a05af9b0eb88344d87a18c1491109008ff3de0\",allow_insecure_tls=True,disable_device_pairing=True)
-    result = await openclaw_call(\"set-heartbeats\", {\"enabled\": True}, config=config)
-    print(\"  Heartbeats enabled:\", result.get(\"enabled\", False))
-asyncio.run(enable())
-' 2>&1 | grep -E 'Heartbeats enabled|error' || echo '  Warning: could not enable heartbeats via RPC'"
-
 # Step 6: Wait for WhatsApp to connect, then sync groups (needed for group messaging)
 echo ""
 echo "--- Step 6: WhatsApp group sync ---"
@@ -157,6 +144,20 @@ if ssh root@$GATEWAY_HOST "test -f /tmp/sync-and-send.cjs"; then
 else
     echo "  Skipped (no sync script found)"
 fi
+
+# Step 7: Enable heartbeats via RPC (must be AFTER Step 6 which restarts gateway)
+echo ""
+echo "--- Step 7: Enabling heartbeats ---"
+sleep 10
+ssh root@$MC_APP_HOST "cd /home/mcontrol/openclaw-mission-control/backend && .venv/bin/python3 -c '
+import asyncio
+from app.services.openclaw.gateway_rpc import openclaw_call, GatewayConfig
+async def enable():
+    config = GatewayConfig(url=\"ws://$GATEWAY_HOST:18789\",token=\"b288272c65a05af9b0eb88344d87a18c1491109008ff3de0\",allow_insecure_tls=True,disable_device_pairing=True)
+    result = await openclaw_call(\"set-heartbeats\", {\"enabled\": True}, config=config)
+    print(\"  Heartbeats enabled:\", result.get(\"enabled\", False))
+asyncio.run(enable())
+' 2>&1 | grep -E 'Heartbeats enabled|error' || echo '  Warning: could not enable heartbeats via RPC'"
 
 echo ""
 echo "=== Done. Board is live: heartbeats ON, sessions fresh, agents online. ==="
