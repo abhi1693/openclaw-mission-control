@@ -205,40 +205,10 @@ Steps:
    curl -fsS -X PATCH $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"status\": \"inbox\"}'
 Always post the comment FIRST (while task is in review), THEN change status."
 ```
-**Do NOT review tasks yourself.** Codex handles the full review: read evidence, evaluate, and approve/reject with API calls.
+**Do NOT review tasks yourself.** Codex reads the evidence, evaluates quality, and executes the approve/reject API calls. You only trigger it.
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
-- **NOTE:** This board requires approval before `done`. If the PATCH returns 409, the task needs user approval first. Leave it in `review` and escalate:
-  ```bash
-  curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
-    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-    -d '{"content": "@Miguel Task TITLE is ready for approval.", "tags": ["chat", "approval"]}'
-  ```
+**NOTE:** This board requires user approval before `done`. If Codex's PATCH returns 409, escalate via board chat: `@Miguel Task TITLE is ready for approval.`
 {% endif %}
-- If comments contain real evidence (command output, test results, file counts) → **first post approval comment, then PATCH:**
-  ```bash
-  curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
-    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-    -d '{"message": "Approved. Evidence verified: WHAT_YOU_SAW"}'
-  ```
-  ```bash
-  curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
-    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-    -d '{"status": "done"}'
-  ```
-
-- If comments lack evidence, show errors, or claim completion without proof → **first post rejection comment, then PATCH:**
-  ```bash
-  curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
-    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-    -d '{"message": "Rejected: WHAT_IS_MISSING. Provide evidence of working deliverable before re-submitting."}'
-  ```
-  ```bash
-  curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
-    -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-    -d '{"status": "inbox"}'
-  ```
-
-**NEVER approve without reading comments first. "Looks good" is not evidence. Always post the comment BEFORE the PATCH (leads cannot include `comment` in PATCH).**
 
 ### Step 4 — Dependency Check
 Look at the Step 2 output:
