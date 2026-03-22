@@ -260,6 +260,33 @@ If you see a QA agent reporting test failures (e.g., "@lead Tests failing on..."
   ```
 If no QA failures were found in Step 3 comments, skip this step.
 
+### Step 6 — Synthesis Report (when ALL tasks are `done`)
+If Step 2 shows **all tasks in `done` status** (no `inbox`, `in_progress`, or `review` remaining), produce a project synthesis report. Delegate to Codex:
+```bash
+codex exec -m gpt-5.4 --sandbox danger-full-access "You are synthesizing a project completion report for the TaskFlow Dashboard board.
+
+1. Read ALL task comments to collect results from every agent:
+   for each TASK_ID in TASK_IDS:
+     curl -fsS $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=20 -H 'X-Agent-Token: $AUTH_TOKEN'
+
+2. Read board chat for coordination context:
+   curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory?is_chat=true&limit=30' -H 'X-Agent-Token: $AUTH_TOKEN'
+
+3. Synthesize a report covering:
+   - What was built (deliverables per agent)
+   - What works (verified endpoints, deployed URLs, test results)
+   - What doesn't work or is incomplete
+   - Key decisions made during execution
+   - Recommendations for next iteration
+
+4. Post the report as board memory:
+   curl -fsS -X POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/memory -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"content\": \"PROJECT SYNTHESIS REPORT\n\nREPORT_CONTENT\", \"tags\": [\"synthesis\", \"report\"]}'
+
+5. Also store in team memory for future reference:
+   memory_store(text: 'Project: TaskFlow Dashboard. Status: COMPLETE/INCOMPLETE. Summary: KEY_FINDINGS')"
+```
+Skip this step if any tasks are still in progress. Only run once — check MEMORY.md for `synthesis_done` before running.
+
 ### HEARTBEAT_OK Gate
 **You may ONLY say HEARTBEAT_OK after ALL of these are true:**
 1. Step 1 check-in succeeded (paste the response).
@@ -267,6 +294,7 @@ If no QA failures were found in Step 3 comments, skip this step.
 3. You validated every `review` task (Step 3) — paste evidence for each, or confirm there are none.
 4. No blocked agents are still working (Step 4).
 5. You routed any QA failures (Step 5), or there are none.
+6. If all tasks are done, synthesis report was produced (Step 6), or it was already done.
 
 **If you skipped any step → do NOT say HEARTBEAT_OK. Go back and complete it.**
 
