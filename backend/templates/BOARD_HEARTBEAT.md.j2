@@ -193,7 +193,7 @@ Board API: BASE_URL=$BASE_URL, AUTH_TOKEN=$AUTH_TOKEN, BOARD_ID=$BOARD_ID
 Specs: $SHARED_WORKSPACE/specs/
 
 Step 1 — Collect all review tasks and their comments:
-curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?status_filter=review&limit=50' -H 'X-Agent-Token: $AUTH_TOKEN'
+curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?status=review&limit=50' -H 'X-Agent-Token: $AUTH_TOKEN'
 For each task, read comments:
 curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=20' -H 'X-Agent-Token: $AUTH_TOKEN'
 
@@ -204,7 +204,11 @@ Step 4 — For API/deploy tasks: verify services are running (curl health endpoi
 Step 5 — For each task, APPROVE or REJECT. Post comment FIRST, then PATCH status:
 APPROVE: curl -fsS -X POST .../tasks/TASK_ID/comments -d '{\"message\":\"Approved: EVIDENCE\"}' then PATCH status=done
 REJECT: curl -fsS -X POST .../tasks/TASK_ID/comments -d '{\"message\":\"Rejected: ISSUES\"}' then PATCH status=inbox
-Always post the comment BEFORE the PATCH (leads cannot inline comment on PATCH)."
+Always post the comment BEFORE the PATCH.
+
+Step 6 — Post a COHERENCE SUMMARY as board memory:
+curl -fsS -X POST '$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory' -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"content\":\"REVIEW COHERENCE: N approved, M rejected. Cross-task: COHERENCE_ASSESSMENT\",\"tags\":[\"review\",\"coherence\"]}'
+This persists the synthesis rationale so Step 6 (final report) can reference it."
 ```
 **Do NOT review tasks yourself.** Codex handles everything — individual evaluation AND coherence check.
 **If Codex fails or times out:** escalate `@Miguel Codex review failed. Need manual review.` Skip to Step 4.
