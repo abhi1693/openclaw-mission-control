@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import field_validator
+from typing import Any
+
+from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel
 
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID)
@@ -65,9 +67,22 @@ class GatewayRead(GatewayBase):
 
     id: UUID
     organization_id: UUID
-    token: str | None = None
+    has_token: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _compute_has_token(cls, values: Any, handler: Any) -> GatewayRead:
+        """Compute has_token from the ORM token field without exposing the raw value."""
+        model = handler(values)
+        token = (
+            getattr(values, "token", None)
+            if not isinstance(values, dict)
+            else values.get("token")
+        )
+        model.has_token = bool(token)
+        return model
 
 
 class GatewayTemplatesSyncError(SQLModel):
