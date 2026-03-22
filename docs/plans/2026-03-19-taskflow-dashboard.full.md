@@ -35,6 +35,26 @@ sudo apt update && sudo apt install -y python3-pip
 
 ---
 
+## Design Foundation
+
+**Visual Thesis:** A calm, professional operations dashboard — think Linear meets government. Muted slate surfaces with precise data hierarchy, not flashy SaaS. The interface should feel like a control room: information-dense but never cluttered.
+
+**Content Plan:** Two pages, each with one job:
+- **Dashboard (`/`):** Status overview (4 stat cards) → board hierarchy tree (clickable, shows task counts) → column distribution chart (Recharts bar) → overdue alert table (TanStack Table). Narrative: "here's the big picture, here's the structure, here's the distribution, here's what needs attention."
+- **Board Detail (`/boards/:id`):** People panel (left) → Kanban columns with task cards (center) → board config (collapsible). Narrative: "who's involved, what's the work, how's the board configured."
+
+**Interaction Thesis:**
+1. **Staggered entrance** — stat cards and board tree items appear with a subtle cascade on page load (CSS `animation-delay` per item, ~50ms stagger)
+2. **View transitions** — Board/List toggle animates cards between layouts (fade + slide, ~200ms)
+3. **Live pulse** — when WebSocket delivers `taskflow:updated`, a subtle blue pulse ripples through affected stat cards before data refreshes
+
+**Typography:**
+- Display/headlines: `Space Grotesk` (geometric, technical) — `font-display: swap`, loaded via Google Fonts
+- Body text: `Inter` — acceptable for data dashboards (this is NOT a landing page)
+- Monospace (task IDs, board codes): `JetBrains Mono`
+- Scale: `text-3xl font-bold` page titles, `text-xl font-semibold` section headers, `text-sm` table body, `text-xs text-slate-500` metadata/timestamps
+- Weight contrast: titles at `700`, headers at `600`, body at `400`, metadata at `400` in muted color
+
 ## UI Reference
 
 Design based on Mission Control Kanban screenshots (`docs/pics/MC App Kanban.png` and `MC App Kanban 2.png`). Follow these specs exactly.
@@ -1552,3 +1572,6 @@ skills list as:
   Let me execute the 6 pre-start fixes, keeping all review tasks for the Supervisor to re-evaluate with the new checklist.
   Ready for bash scripts/board-start.sh when you give
   the word.
+
+  Are the plans file following the strucuture from https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4 and                                                    
+https://claude.com/blog/improving-frontend-design-through-skills, review and validate     

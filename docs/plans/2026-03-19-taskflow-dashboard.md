@@ -34,6 +34,23 @@
 
 ---
 
+## Design Foundation
+
+**Visual Thesis:** A calm, professional operations dashboard — think Linear meets government. Muted slate surfaces with precise data hierarchy, not flashy SaaS. The interface should feel like a control room: information-dense but never cluttered.
+
+**Content Plan:** Two pages, each with one job:
+- **Dashboard (`/`):** Status overview → board hierarchy tree → column chart → overdue table. One glance = "what needs attention."
+- **Board Detail (`/boards/:id`):** Kanban columns → task cards → people panel → board config. One glance = "what's happening on this board."
+
+**Interaction Thesis:**
+1. **Staggered entrance** — cards/stats cascade on page load
+2. **Column transitions** — smooth animation on Board/List toggle
+3. **Live pulse** — subtle indicator on WebSocket real-time updates
+
+**Typography:** Display: `Space Grotesk` or `DM Sans`. Body: `Inter`. Monospace: `JetBrains Mono`. Scale: `3xl` titles, `xl` headers, `sm` data, `xs` metadata.
+
+**Color Palette:** Sidebar `slate-900`, surfaces `white`/`slate-50`, accent `blue-600`. Column accents: inbox gray, next blue, in_progress yellow, waiting orange, review purple, done green. Status tinting: amber (approval), blue (lead review), gray (blocked), red (overdue).
+
 ## UI Reference
 
 Screenshots: `docs/pics/MC App Kanban.png` and `MC App Kanban 2.png`. Full Tailwind specs → `## UI Reference` in full spec.
