@@ -184,29 +184,30 @@ memory_recall(query: "task status decisions blockers")
 ```
 Do NOT run these every heartbeat — only when Step 2 reveals problems.
 
-### Step 3 — Validate Tasks in `review`
-For EACH task with `status=review` in the Step 2 output, **delegate the entire review to Codex:**
+### Step 3 — Review ALL `review` Tasks Together (Synthesis Review)
+If Step 2 shows tasks in `review` status, **delegate a single unified review to Codex** covering ALL review tasks at once. This catches cross-task inconsistencies (e.g., frontend calls endpoints the spec doesn't define).
 ```bash
-codex exec -m gpt-5.4 --sandbox danger-full-access "You are reviewing a task for the TaskFlow Dashboard board.
+codex exec -m gpt-5.4 --sandbox danger-full-access "You are reviewing ALL tasks in review for a board. Evaluate them individually AND as a coherent whole.
 
-Task: TASK_TITLE (task_id: TASK_ID)
 Board API: BASE_URL=$BASE_URL, AUTH_TOKEN=$AUTH_TOKEN, BOARD_ID=$BOARD_ID
 Specs: $SHARED_WORKSPACE/specs/
 
-Steps:
-1. Read task comments: curl -fsS $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=10 -H 'X-Agent-Token: $AUTH_TOKEN'
-2. Evaluate: real evidence (not just 'Done')? Provenance (pwd, command, URL)? Consistent with earlier comments? Matches spec?
-3. For API/deploy tasks: verify the service is running (curl health endpoint).
-4. If APPROVE: post comment then PATCH to done:
-   curl -fsS -X POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"message\": \"Approved: EVIDENCE_SUMMARY\"}'
-   curl -fsS -X PATCH $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"status\": \"done\"}'
-5. If REJECT: post comment then PATCH to inbox:
-   curl -fsS -X POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"message\": \"Rejected: SPECIFIC_ISSUES\"}'
-   curl -fsS -X PATCH $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"status\": \"inbox\"}'
-Always post the comment FIRST (while task is in review), THEN change status."
+Step 1 — Collect all review tasks and their comments:
+curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?status_filter=review&limit=50' -H 'X-Agent-Token: $AUTH_TOKEN'
+For each task, read comments:
+curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=20' -H 'X-Agent-Token: $AUTH_TOKEN'
+
+Step 2 — Evaluate EACH task: real evidence? Provenance (pwd, command, URL)? Consistent results? Matches spec?
+Step 3 — Evaluate CROSS-TASK coherence: do the deliverables work together? Does the frontend match the API spec? Does the deployment serve the right build? Do test targets match deployed URLs?
+Step 4 — For API/deploy tasks: verify services are running (curl health endpoints).
+
+Step 5 — For each task, APPROVE or REJECT. Post comment FIRST, then PATCH status:
+APPROVE: curl -fsS -X POST .../tasks/TASK_ID/comments -d '{\"message\":\"Approved: EVIDENCE\"}' then PATCH status=done
+REJECT: curl -fsS -X POST .../tasks/TASK_ID/comments -d '{\"message\":\"Rejected: ISSUES\"}' then PATCH status=inbox
+Always post the comment BEFORE the PATCH (leads cannot inline comment on PATCH)."
 ```
-**Do NOT review tasks yourself.** Do not read comments to decide approve/reject. Do not run approve/reject curl commands yourself. Codex handles everything.
-**If Codex fails, times out, or returns unclear output:** do NOT fall back to manual review. Post a board chat escalation: `@Miguel Codex review failed for TASK_TITLE. Need manual review.` Then skip this task and continue to Step 4.
+**Do NOT review tasks yourself.** Codex handles everything — individual evaluation AND coherence check.
+**If Codex fails or times out:** escalate `@Miguel Codex review failed. Need manual review.` Skip to Step 4.
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
 **NOTE:** This board requires user approval before `done`. If Codex's PATCH returns 409, escalate via board chat: `@Miguel Task TITLE is ready for approval.`
 {% endif %}
