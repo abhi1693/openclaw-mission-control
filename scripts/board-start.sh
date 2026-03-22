@@ -72,10 +72,10 @@ DB_INTERVALS=$(ssh root@$MC_DB_HOST "$PSQL" << 'SQLEOF'
 SQLEOF
 )
 
-ssh root@$GATEWAY_HOST "python3 -c \"
-import json
+echo "$DB_INTERVALS" | ssh root@$GATEWAY_HOST "python3 -c \"
+import json, sys
 
-intervals = json.loads('$DB_INTERVALS')
+intervals = json.loads(sys.stdin.read().strip())
 
 with open('$GATEWAY_CONFIG') as f:
     data = json.load(f)
