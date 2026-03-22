@@ -134,6 +134,16 @@ done
 echo \"  \$count session transcripts backed up and cleared\"
 "
 
+# Step 4: Send /pause to board memory (syncs UI state)
+echo ""
+echo "--- Step 4: Pausing board in UI ---"
+ssh root@$MC_DB_HOST "PGPASSWORD=$MC_DB_PASS psql -U $MC_DB_USER -h 127.0.0.1 -d $MC_DB -c \"
+  INSERT INTO board_memory (id, board_id, content, tags, source, is_chat, created_at)
+  SELECT gen_random_uuid(), id, '/pause', '[\"chat\"]'::json, 'user', true, NOW()
+  FROM boards WHERE name ILIKE '%dev%' LIMIT 1;
+\"" 2>/dev/null
+echo "  Board paused in UI"
+
 echo ""
 echo "=== Done. Heartbeats OFF in both database and gateway. ==="
 echo "=== Run board-start.sh to restore. ==="

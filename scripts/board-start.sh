@@ -148,6 +148,16 @@ else
     echo "  Skipped (no sync script found)"
 fi
 
+# Step 6b: Send /resume to board memory (syncs UI state)
+echo ""
+echo "--- Step 6b: Resuming board in UI ---"
+ssh root@$MC_DB_HOST "$PSQL" << 'SQLEOF'
+  INSERT INTO board_memory (id, board_id, content, tags, source, is_chat, created_at)
+  SELECT gen_random_uuid(), id, '/resume', '["chat"]'::json, 'user', true, NOW()
+  FROM boards WHERE name ILIKE '%dev%' LIMIT 1;
+SQLEOF
+echo "  Board resumed in UI"
+
 # Step 7: Enable heartbeats + check in all agents via direct API call
 echo ""
 echo "--- Step 7: Enabling heartbeats + initial check-in ---"
