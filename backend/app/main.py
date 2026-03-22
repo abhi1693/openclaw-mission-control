@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, FastAPI, status
+from fastapi import APIRouter, Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi_pagination import add_pagination
@@ -37,8 +37,9 @@ from app.core.logging import configure_logging, get_logger
 from app.core.rate_limit import validate_rate_limit_redis
 from app.core.rate_limit_backend import RateLimitBackend
 from app.core.security_headers import SecurityHeadersMiddleware
-from app.db.session import init_db
+from app.db.session import get_session, init_db
 from app.schemas.health import HealthStatusResponse
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -531,8 +532,16 @@ def healthz() -> HealthStatusResponse:
         }
     },
 )
-def readyz() -> HealthStatusResponse:
-    """Readiness probe endpoint for service orchestration checks."""
+async def readyz(
+    session: AsyncSession = Depends(get_session),
+) -> HealthStatusResponse:
+    """Readiness probe endpoint for service orchestration checks.
+
+    Verifies the database connection is live by executing a simple query.
+    """
+    from sqlalchemy import text
+
+    await session.execute(text("SELECT 1"))
     return HealthStatusResponse(ok=True)
 
 

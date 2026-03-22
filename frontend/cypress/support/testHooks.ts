@@ -1,5 +1,8 @@
 /// <reference types="cypress" />
 
+import { resetFactoryState } from "./factories";
+import { stubAuth } from "./intercepts";
+
 type CommonPageTestHooksOptions = {
   timeoutMs?: number;
   orgMemberRole?: string;
@@ -10,6 +13,10 @@ type CommonPageTestHooksOptions = {
   userName?: string;
 };
 
+/**
+ * Legacy convenience wrapper around stubAuth + factory reset.
+ * New tests should use stubAuth() and resetFactoryState() directly.
+ */
 export function setupCommonPageTestHooks(
   apiBase: string,
   options: CommonPageTestHooksOptions = {},
@@ -26,49 +33,14 @@ export function setupCommonPageTestHooks(
   const originalDefaultCommandTimeout = Cypress.config("defaultCommandTimeout");
 
   beforeEach(() => {
+    resetFactoryState();
     Cypress.config("defaultCommandTimeout", timeoutMs);
 
-    cy.intercept("GET", "**/healthz", {
-      statusCode: 200,
-      body: { ok: true },
-    }).as("healthz");
-
-    cy.intercept("GET", `${apiBase}/users/me*`, {
-      statusCode: 200,
-      body: {
-        id: userId,
-        clerk_user_id: "local-auth-user",
-        email: userEmail,
-        name: userName,
-        preferred_name: userName,
-        timezone: "UTC",
-      },
-    }).as("usersMe");
-
-    cy.intercept("GET", `${apiBase}/organizations/me/list*`, {
-      statusCode: 200,
-      body: [
-        {
-          id: organizationId,
-          name: organizationName,
-          is_active: true,
-          role: orgMemberRole,
-        },
-      ],
-    }).as("organizationsList");
-
-    cy.intercept("GET", `${apiBase}/organizations/me/member*`, {
-      statusCode: 200,
-      body: {
-        id: "membership-1",
-        organization_id: organizationId,
-        user_id: userId,
-        role: orgMemberRole,
-        all_boards_read: true,
-        all_boards_write: true,
-        board_access: [],
-      },
-    }).as("orgMeMember");
+    stubAuth(apiBase, {
+      user: { id: userId, email: userEmail, name: userName, preferred_name: userName },
+      org: { id: organizationId, name: organizationName },
+      member: { role: orgMemberRole, organization_id: organizationId, user_id: userId },
+    });
   });
 
   afterEach(() => {

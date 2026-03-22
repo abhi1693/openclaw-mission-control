@@ -114,5 +114,62 @@ services:
       RQ_DISPATCH_MAX_RETRIES: ${RQ_DISPATCH_MAX_RETRIES:-3}
     restart: unless-stopped
 
+  # ── E2E Integration Test Services ──────────────────────────────
+  db-test:
+    profiles: ["e2e"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ocmc_test
+      POSTGRES_USER: ocmc
+      POSTGRES_PASSWORD: test
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocmc -d ocmc_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  backend-e2e:
+    profiles: ["e2e"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db-test:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql+psycopg://ocmc:test@db-test:5432/ocmc_test"
+      AUTH_MODE: "local"
+      LOCAL_AUTH_TOKEN: "e2e-local-auth-token-0123456789-0123456789-0123456789x"
+      DB_AUTO_MIGRATE: "true"
+      CORS_ORIGINS: "http://localhost:3000"
+      RQ_REDIS_URL: "redis://redis:6379/0"
+      BASE_URL: "http://localhost:8000"
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/readyz || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+
+  e2e-seed:
+    profiles: ["e2e"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql+psycopg://ocmc:test@db-test:5432/ocmc_test"
+    command: ["python", "-m", "scripts.e2e_seed"]
+    restart: "no"
+
 volumes:
   postgres_data:
