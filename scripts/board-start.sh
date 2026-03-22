@@ -62,13 +62,16 @@ echo ""
 echo "--- Step 3: Restoring gateway config from database ---"
 
 # Get agent intervals from DB as JSON
+# Use openclaw_session_id to derive gateway agent ID (agent:KEY:main → KEY)
+# This handles both mc-{uuid} workers and lead-{board_id} board leads
 DB_INTERVALS=$(ssh root@$MC_DB_HOST "$PSQL" << 'SQLEOF'
   SELECT json_object_agg(
-    'mc-' || id::text,
+    split_part(openclaw_session_id, ':', 2),
     heartbeat_config->>'every'
   )::text
   FROM agents
   WHERE heartbeat_config IS NOT NULL
+    AND openclaw_session_id IS NOT NULL
     AND name != 'OpenClaw Primary Gateway Agent';
 SQLEOF
 )
@@ -102,7 +105,7 @@ echo ""
 echo "--- Step 4: Clearing sessions ---"
 ssh root@$GATEWAY_HOST "
 count=0
-for agent_dir in $GATEWAY_AGENTS_DIR/mc-*; do
+for agent_dir in $GATEWAY_AGENTS_DIR/mc-* $GATEWAY_AGENTS_DIR/lead-*; do
     [ -d \"\$agent_dir/sessions\" ] || continue
     agent_id=\$(basename \$agent_dir)
     [[ \"\$agent_id\" == *gateway* ]] && continue
@@ -118,7 +121,7 @@ for agent_dir in $GATEWAY_AGENTS_DIR/mc-*; do
 import json
 with open('\$agent_dir/sessions/sessions.json') as f:
     data = json.load(f)
-keys = [k for k in data if 'mc-' in k]
+keys = [k for k in data if 'mc-' in k or 'lead-' in k]
 for k in keys: del data[k]
 with open('\$agent_dir/sessions/sessions.json', 'w') as f:
     json.dump(data, f, indent=2)

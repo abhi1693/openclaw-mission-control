@@ -84,7 +84,7 @@ with open('$GATEWAY_CONFIG') as f:
 saved = {}
 for a in data.get('agents', {}).get('list', []):
     aid = a.get('id', '')
-    if not aid.startswith('mc-') or 'gateway' in aid:
+    if 'gateway' in aid or not (aid.startswith('mc-') or aid.startswith('lead-')):
         continue
     hb = a.get('heartbeat', {})
     saved[aid] = hb.get('every', 'default')
@@ -106,7 +106,7 @@ echo ""
 echo "--- Step 3: Clearing sessions ---"
 ssh root@$GATEWAY_HOST "
 count=0
-for agent_dir in $GATEWAY_AGENTS_DIR/mc-*; do
+for agent_dir in $GATEWAY_AGENTS_DIR/mc-* $GATEWAY_AGENTS_DIR/lead-*; do
     [ -d \"\$agent_dir/sessions\" ] || continue
     agent_id=\$(basename \$agent_dir)
     [[ \"\$agent_id\" == *gateway* ]] && continue
@@ -124,7 +124,7 @@ for agent_dir in $GATEWAY_AGENTS_DIR/mc-*; do
 import json
 with open('\$agent_dir/sessions/sessions.json') as f:
     data = json.load(f)
-keys = [k for k in data if 'mc-' in k]
+keys = [k for k in data if 'mc-' in k or 'lead-' in k]
 for k in keys: del data[k]
 with open('\$agent_dir/sessions/sessions.json', 'w') as f:
     json.dump(data, f, indent=2)
