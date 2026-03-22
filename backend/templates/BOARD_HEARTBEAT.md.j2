@@ -185,43 +185,27 @@ memory_recall(query: "task status decisions blockers")
 Do NOT run these every heartbeat — only when Step 2 reveals problems.
 
 ### Step 3 — Validate Tasks in `review`
-For EACH task with `status=review` in the Step 2 output:
-
-**3a. Read the task comments:**
+For EACH task with `status=review` in the Step 2 output, **delegate the entire review to Codex:**
 ```bash
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit=10" \
-  -H "X-Agent-Token: $AUTH_TOKEN" | python3 -c "
-import sys,json
-page=json.load(sys.stdin)
-comments=page.get('items', page if isinstance(page, list) else [])
-for c in comments:
-    print(c.get('message','')[:500])
-    print('---')
-"
+codex exec -m gpt-5.4 --sandbox danger-full-access "You are reviewing a task for the TaskFlow Dashboard board.
+
+Task: TASK_TITLE (task_id: TASK_ID)
+Board API: BASE_URL=$BASE_URL, AUTH_TOKEN=$AUTH_TOKEN, BOARD_ID=$BOARD_ID
+Specs: $SHARED_WORKSPACE/specs/
+
+Steps:
+1. Read task comments: curl -fsS $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=10 -H 'X-Agent-Token: $AUTH_TOKEN'
+2. Evaluate: real evidence (not just 'Done')? Provenance (pwd, command, URL)? Consistent with earlier comments? Matches spec?
+3. For API/deploy tasks: verify the service is running (curl health endpoint).
+4. If APPROVE: post comment then PATCH to done:
+   curl -fsS -X POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"message\": \"Approved: EVIDENCE_SUMMARY\"}'
+   curl -fsS -X PATCH $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"status\": \"done\"}'
+5. If REJECT: post comment then PATCH to inbox:
+   curl -fsS -X POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"message\": \"Rejected: SPECIFIC_ISSUES\"}'
+   curl -fsS -X PATCH $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"status\": \"inbox\"}'
+Always post the comment FIRST (while task is in review), THEN change status."
 ```
-
-**3b. Delegate the review to Codex (GPT-5.4) for deep evaluation:**
-```bash
-codex exec -m gpt-5.4 --sandbox read-only "Review this task deliverable for the TaskFlow Dashboard project.
-
-Task: TASK_TITLE
-Task comments (evidence from the agent):
-PASTE_COMMENTS_HERE
-
-Evaluate:
-1. Does the evidence contain real command output (not just 'Done')?
-2. Does it include pwd, exact command, and target URL (provenance)?
-3. Are results consistent with earlier comments (no unexplained count changes)?
-4. For code tasks: does the deliverable match the spec at \$SHARED_WORKSPACE/specs/?
-5. For deploy tasks: is the service actually running and healthy?
-
-Verdict: APPROVE (with evidence summary) or REJECT (with specific issues)."
-```
-
-**3c. Act on the Codex verdict:**
-- If Codex says **APPROVE** → post approval comment, then PATCH:
-
-**You MUST post the comment FIRST (while task is in `review`), THEN change status. Leads cannot use inline `comment` on PATCH.**
+**Do NOT review tasks yourself.** Codex handles the full review: read evidence, evaluate, and approve/reject with API calls.
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
 - **NOTE:** This board requires approval before `done`. If the PATCH returns 409, the task needs user approval first. Leave it in `review` and escalate:
   ```bash
