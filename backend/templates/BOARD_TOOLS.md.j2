@@ -13,6 +13,7 @@
 {% if workspace_path is defined %}
 - `WORKSPACE_PATH={{ workspace_path }}`
 {% endif %}
+- `SHARED_WORKSPACE={{ workspace_root }}/shared`
 - Required tools: `curl`, `jq`
 
 {% if is_main %}

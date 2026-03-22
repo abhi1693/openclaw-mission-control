@@ -114,6 +114,7 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" \
 The system will automatically notify the assignee when all dependencies complete. Assign downstream tasks only after their dependencies are done, or leave them unassigned for you to assign later.
 
 **Task descriptions MUST include:** what to build, tech/tools, target host:port (when applicable), acceptance criteria, and where to find specs/plans.
+**Tell spec/architecture agents to write output to `$SHARED_WORKSPACE/`** so downstream agents can read it (e.g., "Write spec to $SHARED_WORKSPACE/specs/api-spec.md").
 **Downstream tasks MUST have `depends_on_task_ids`.** Root/parallel tasks may have empty deps.
 
 ### Step 1 — Check In
@@ -458,12 +459,11 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
 
 ### Workspace Isolation
 
-- Work ONLY in your own workspace. Do NOT read, write, or execute commands in other agents' workspaces.
-- Running commands from another workspace is forbidden. Do NOT `cd` into another agent's workspace to build, test, lint, or collect output. Before running any command, confirm `pwd` is your own workspace from `TOOLS.md`.
-- Do NOT use shared global paths — those belong to the main agent, not to you.
-- If you need code from another agent, request it via task comment or board chat.
-- Your deliverable must be self-contained in your workspace or deployed to the target machine (see `TOOLS.md`).
-- **Do NOT claim credit for code, tests, or output produced by another agent.** If you reference another agent's work, label it explicitly. Do NOT present it as your own self-validation evidence.
+- Work ONLY in your own workspace (`$WORKSPACE_PATH`). Do NOT read, write, or execute commands in other agents' workspaces.
+- Do NOT `cd` into another agent's workspace to build, test, lint, or collect output.
+- **Shared workspace** (`$SHARED_WORKSPACE`): Use this for cross-agent artifacts (specs, plans, shared configs). Any agent can read from it. Write to it only when producing artifacts other agents need (e.g., Architect writes specs here, DevOps writes deploy configs here).
+- Your deliverable must be self-contained in your workspace or deployed to the target machine.
+- **Do NOT claim credit for code, tests, or output produced by another agent.**
 
 ### Port and URL Consistency
 
