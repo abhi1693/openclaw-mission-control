@@ -40,14 +40,14 @@
 
 **Content Plan:** Two pages, each with one job:
 - **Dashboard (`/`):** Status overview → board hierarchy tree → column chart → overdue table. One glance = "what needs attention."
-- **Board Detail (`/boards/:id`):** Kanban columns → task cards → people panel → board config. One glance = "what's happening on this board."
+- **Board Detail (`/boards/:id`):** People panel (left) → Kanban columns with task cards (center) → board config (collapsible). One glance = "what's happening on this board."
 
 **Interaction Thesis:**
 1. **Staggered entrance** — cards/stats cascade on page load
 2. **Column transitions** — smooth animation on Board/List toggle
 3. **Live pulse** — subtle indicator on WebSocket real-time updates
 
-**Typography:** Display: `Space Grotesk` or `DM Sans`. Body: `Inter`. Monospace: `JetBrains Mono`. Scale: `3xl` titles, `xl` headers, `sm` data, `xs` metadata.
+**Typography:** Display: `Space Grotesk`. Body: `Inter`. Monospace: `JetBrains Mono`. Scale: `3xl` titles, `xl` headers, `sm` data, `xs` metadata. Weights: `700` titles, `600` headers, `400` body.
 
 **Color Palette:** Sidebar `slate-900`, surfaces `white`/`slate-50`, accent `blue-600`. Column accents: inbox gray, next blue, in_progress yellow, waiting orange, review purple, done green. Status tinting: amber (approval), blue (lead review), gray (blocked), red (overdue).
 

@@ -662,7 +662,7 @@ Type=simple
 User=nanoclaw
 WorkingDirectory=/home/nanoclaw/taskflow-api
 EnvironmentFile=/home/nanoclaw/taskflow-api/.env
-ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8100
+ExecStart=/home/nanoclaw/taskflow-api/run.sh
 Restart=always
 RestartSec=5
 
@@ -842,7 +842,7 @@ def test_ws_snapshot_on_connect(client):
 **Step 3: Run tests — they should all FAIL (main.py doesn't exist yet)**
 
 ```bash
-cd taskflow-api && pip install -r requirements.txt -r requirements-dev.txt
+cd taskflow-api && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 pytest tests/ -v
 # Expected: ImportError or all failures
 ```
@@ -873,11 +873,16 @@ cd /home/nanoclaw/taskflow-api
 cp .env.example .env
 # Edit .env: set a strong TASKFLOW_API_TOKEN and correct TASKFLOW_CORS_ORIGINS
 
-# First time only: install pip (not installed by default on this machine)
-sudo apt update && sudo apt install -y python3-pip
+# First time only: install pip and venv (not installed by default)
+sudo apt update && sudo apt install -y python3-pip python3-venv
 
-pip install -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8100  # smoke test
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+# Create run.sh wrapper:
+echo '#!/bin/bash
+cd /home/nanoclaw/taskflow-api && .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8100' > run.sh
+chmod +x run.sh
+./run.sh  # smoke test
 
 # Install as systemd service:
 sudo cp taskflow-api.service /etc/systemd/system/
@@ -1454,8 +1459,8 @@ cp .env.example .env
 # Edit .env:
 #   TASKFLOW_API_TOKEN=<generate: openssl rand -hex 32>
 #   TASKFLOW_CORS_ORIGINS=http://192.168.2.63:3000  (or wherever frontend is served)
-sudo apt update && sudo apt install -y python3-pip  # first time only
-pip install -r requirements.txt
+sudo apt update && sudo apt install -y python3-pip python3-venv  # first time only
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 sudo cp taskflow-api.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now taskflow-api
 curl http://localhost:8100/health  # → {"status": "ok"}
