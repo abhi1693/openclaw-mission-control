@@ -261,31 +261,31 @@ If you see a QA agent reporting test failures (e.g., "@lead Tests failing on..."
 If no QA failures were found in Step 3 comments, skip this step.
 
 ### Step 6 — Synthesis Report (when ALL tasks are `done`)
-If Step 2 shows **all tasks in `done` status** (no `inbox`, `in_progress`, or `review` remaining), produce a project synthesis report. Delegate to Codex:
+If Step 2 shows **all tasks in `done` status** (no `inbox`, `in_progress`, or `review` remaining), and MEMORY.md does NOT contain `synthesis_done:$BOARD_ID`, produce a synthesis report. Delegate to Codex:
 ```bash
-codex exec -m gpt-5.4 --sandbox danger-full-access "You are synthesizing a project completion report for the TaskFlow Dashboard board.
+codex exec -m gpt-5.4 --sandbox danger-full-access "Synthesize a project completion report.
 
-1. Read ALL task comments to collect results from every agent:
-   for each TASK_ID in TASK_IDS:
-     curl -fsS $BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=20 -H 'X-Agent-Token: $AUTH_TOKEN'
+Step 1 — Collect all task IDs and comments:
+curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?limit=200' -H 'X-Agent-Token: $AUTH_TOKEN' | python3 -c \"
+import sys,json
+page=json.load(sys.stdin)
+for t in page.get('items',[]):
+    print(t['id'], t.get('status',''), t.get('title',''))
+\"
+Then for EACH task_id from that output:
+curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=30' -H 'X-Agent-Token: $AUTH_TOKEN'
 
-2. Read board chat for coordination context:
-   curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory?is_chat=true&limit=30' -H 'X-Agent-Token: $AUTH_TOKEN'
+Step 2 — Collect board context:
+curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory?limit=50' -H 'X-Agent-Token: $AUTH_TOKEN'
 
-3. Synthesize a report covering:
-   - What was built (deliverables per agent)
-   - What works (verified endpoints, deployed URLs, test results)
-   - What doesn't work or is incomplete
-   - Key decisions made during execution
-   - Recommendations for next iteration
+Step 3 — Synthesize: what was built, what works, what is incomplete, key decisions, recommendations.
 
-4. Post the report as board memory:
-   curl -fsS -X POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/memory -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"content\": \"PROJECT SYNTHESIS REPORT\n\nREPORT_CONTENT\", \"tags\": [\"synthesis\", \"report\"]}'
-
-5. Also store in team memory for future reference:
-   memory_store(text: 'Project: TaskFlow Dashboard. Status: COMPLETE/INCOMPLETE. Summary: KEY_FINDINGS')"
+Step 4 — Post report:
+curl -fsS -X POST '$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory' -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"content\": \"PROJECT SYNTHESIS REPORT\n\nREPORT_HERE\", \"tags\": [\"synthesis\", \"report\"]}'
+"
 ```
-Skip this step if any tasks are still in progress. Only run once — check MEMORY.md for `synthesis_done` before running.
+After Codex completes, write `synthesis_done:$BOARD_ID` to MEMORY.md to prevent re-running.
+Skip this step if any tasks are not `done`, or if `synthesis_done:$BOARD_ID` already exists in MEMORY.md.
 
 ### HEARTBEAT_OK Gate
 **You may ONLY say HEARTBEAT_OK after ALL of these are true:**
