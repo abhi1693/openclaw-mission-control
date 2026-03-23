@@ -58,11 +58,11 @@ export function UserMenu({
           type="button"
           className={cn(
             "group inline-flex h-9 items-center gap-2 rounded-[10px] bg-transparent px-1 py-1 transition",
-            "hover:bg-white/70",
+            "hover:bg-[color:var(--surface-muted)]",
             // Avoid the default browser focus outline (often bright blue) on click.
             // Keep a subtle, enterprise-looking focus ring for keyboard navigation.
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neutral-300,var(--border-strong))] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-            "data-[state=open]:bg-white",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neutral-300,var(--border-strong))] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface)]",
+            "data-[state=open]:bg-[color:var(--surface-muted)]",
             className,
           )}
           aria-label="Open user menu"
@@ -71,7 +71,7 @@ export function UserMenu({
             className={cn(
               "relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-[10px] text-xs font-semibold text-white shadow-sm",
               avatarUrl
-                ? "bg-[color:var(--neutral-200,var(--surface-muted))]"
+                ? "bg-[color:var(--surface-muted)]"
                 : "bg-gradient-to-br from-[color:var(--primary-navy,var(--accent))] to-[color:var(--secondary-navy,var(--accent-strong))]",
             )}
           >
@@ -87,21 +87,21 @@ export function UserMenu({
               avatarLabel
             )}
           </span>
-          <ChevronDown className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))] transition group-data-[state=open]:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-muted transition group-data-[state=open]:rotate-180" />
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
         sideOffset={12}
-        className="w-80 overflow-hidden rounded-2xl border border-[color:var(--neutral-200,var(--border))] bg-white/95 p-0 shadow-[0_8px_32px_rgba(10,22,40,0.08)] backdrop-blur"
+        className="w-80 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-0 shadow-[0_8px_32px_rgba(10,22,40,0.08)] backdrop-blur"
       >
-        <div className="border-b border-[color:var(--neutral-200,var(--border))] px-4 py-3">
+        <div className="border-b border-[color:var(--border)] px-4 py-3">
           <div className="flex items-center gap-3">
             <span
               className={cn(
                 "flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl text-sm font-semibold text-white",
                 avatarUrl
-                  ? "bg-[color:var(--neutral-200,var(--surface-muted))]"
+                  ? "bg-[color:var(--surface-muted)]"
                   : "bg-gradient-to-br from-[color:var(--primary-navy,var(--accent))] to-[color:var(--secondary-navy,var(--accent-strong))]",
               )}
             >
@@ -118,11 +118,11 @@ export function UserMenu({
               )}
             </span>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-[color:var(--primary-navy,var(--text))]">
+              <div className="truncate text-sm font-semibold text-strong">
                 {displayName}
               </div>
               {displayEmail ? (
-                <div className="truncate text-xs text-[color:var(--neutral-700,var(--text-muted))]">
+                <div className="truncate text-xs text-muted">
                   {displayEmail}
                 </div>
               ) : null}
@@ -133,10 +133,10 @@ export function UserMenu({
           <div className="grid grid-cols-2 gap-2">
             <Link
               href="/boards"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[color:var(--neutral-300,var(--border-strong))] bg-white px-3 py-2 text-sm font-semibold text-[color:var(--neutral-800,var(--text))] transition hover:border-[color:var(--primary-navy,var(--accent-strong))] hover:bg-[color:var(--neutral-100,var(--surface-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[color:var(--border-strong)] bg-[color:var(--surface)] px-3 py-2 text-sm font-semibold text-strong transition hover:border-[color:var(--primary-navy,var(--accent-strong))] hover:bg-[color:var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
               onClick={() => setOpen(false)}
             >
-              <Trello className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))]" />
+              <Trello className="h-4 w-4 text-muted" />
               Open boards
             </Link>
             <Link
@@ -169,10 +169,10 @@ export function UserMenu({
             <Link
               key={item.href}
               href={item.href}
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[color:var(--neutral-800,var(--text))] transition hover:bg-[color:var(--neutral-100,var(--surface-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-strong transition hover:bg-[color:var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
               onClick={() => setOpen(false)}
             >
-              <item.icon className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))]" />
+              <item.icon className="h-4 w-4 text-muted" />
               {item.label}
             </Link>
           ))}
@@ -182,24 +182,24 @@ export function UserMenu({
           {localMode ? (
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[color:var(--neutral-800,var(--text))] transition hover:bg-[color:var(--neutral-100,var(--surface-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-strong transition hover:bg-[color:var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
               onClick={() => {
                 clearLocalAuthToken();
                 setOpen(false);
                 window.location.reload();
               }}
             >
-              <LogOut className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))]" />
+              <LogOut className="h-4 w-4 text-muted" />
               Sign out
             </button>
           ) : (
             <SignOutButton>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[color:var(--neutral-800,var(--text))] transition hover:bg-[color:var(--neutral-100,var(--surface-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-strong transition hover:bg-[color:var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-teal,var(--accent))] focus-visible:ring-offset-2"
                 onClick={() => setOpen(false)}
               >
-                <LogOut className="h-4 w-4 text-[color:var(--neutral-700,var(--text-quiet))]" />
+                <LogOut className="h-4 w-4 text-muted" />
                 Sign out
               </button>
             </SignOutButton>

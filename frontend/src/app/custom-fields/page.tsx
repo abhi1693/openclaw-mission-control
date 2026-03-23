@@ -101,7 +101,7 @@ export default function CustomFieldsPage() {
         adminOnlyMessage="Only organization owners and admins can manage custom fields."
         stickyHeader
       >
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-sm">
           <CustomFieldsTable
             fields={customFields}
             isLoading={customFieldsQuery.isLoading}
@@ -122,7 +122,7 @@ export default function CustomFieldsPage() {
           />
         </div>
         {customFieldsQuery.error ? (
-          <p className="mt-4 text-sm text-rose-600">
+          <p className="mt-4 text-sm text-[color:var(--danger)]">
             {customFieldsQuery.error.message}
           </p>
         ) : null}
