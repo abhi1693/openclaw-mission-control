@@ -28,7 +28,7 @@ from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import async_session_maker
 from app.models.activity_events import ActivityEvent
-from app.models.agents import Agent, DEFAULT_APPROVAL_POLICY
+from app.models.agents import DEFAULT_APPROVAL_POLICY, Agent
 from app.models.approvals import Approval
 from app.models.board_memory import BoardMemory
 from app.models.board_webhooks import BoardWebhook

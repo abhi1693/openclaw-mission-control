@@ -6,32 +6,33 @@ import asyncio
 import json
 import ssl
 from typing import TYPE_CHECKING, Any
-from uuid import UUID, uuid4
 from urllib.parse import urlencode, urlparse, urlunparse
+from uuid import UUID, uuid4
 
 import websockets
 from websockets.exceptions import WebSocketException
 
 from app.core.logging import TRACE_LEVEL, get_logger
+from app.services.openclaw.approval_policy import apply_approval_policy
+from app.services.openclaw.gateway_resolver import gateway_client_config
 from app.services.openclaw.gateway_rpc import (
-    GatewayConfig,
-    PROTOCOL_VERSION,
-    _build_control_ui_origin,
-    _build_device_connect_payload,
-    _create_ssl_context,
-    _resolve_connect_mode,
     CONTROL_UI_CLIENT_ID,
     CONTROL_UI_CLIENT_MODE,
     DEFAULT_GATEWAY_CLIENT_ID,
     DEFAULT_GATEWAY_CLIENT_MODE,
     GATEWAY_OPERATOR_SCOPES,
+    PROTOCOL_VERSION,
+    GatewayConfig,
+    _build_control_ui_origin,
+    _build_device_connect_payload,
+    _create_ssl_context,
+    _resolve_connect_mode,
 )
-from app.services.openclaw.gateway_resolver import gateway_client_config
-from app.services.openclaw.approval_policy import apply_approval_policy
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
+    from app.models.agents import Agent
     from app.models.gateways import Gateway
 
 logger = get_logger(__name__)
@@ -48,7 +49,7 @@ class PerGatewayConnection:
         self._gateway = gateway
         self._config: GatewayConfig = gateway_client_config(gateway)
         self._ws: websockets.ClientConnection | None = None
-        self._listener_task: asyncio.Task | None = None
+        self._listener_task: asyncio.Task[None] | None = None
         self._shutdown_event: asyncio.Event = asyncio.Event()
 
     @property
@@ -80,7 +81,9 @@ class PerGatewayConnection:
         ssl_context = _create_ssl_context(self._config)
         connect_kwargs: dict[str, Any] = {"ping_interval": None}
 
-        origin = _build_control_ui_origin(gateway_url) if self._config.disable_device_pairing else None
+        origin = (
+            _build_control_ui_origin(gateway_url) if self._config.disable_device_pairing else None
+        )
         if origin is not None:
             connect_kwargs["origin"] = origin
         if ssl_context is not None:
@@ -105,7 +108,10 @@ class PerGatewayConnection:
             challenge_data = json.loads(first_message)
 
             connect_nonce: str | None = None
-            if challenge_data.get("type") == "event" and challenge_data.get("event") == "connect.challenge":
+            if (
+                challenge_data.get("type") == "event"
+                and challenge_data.get("event") == "connect.challenge"
+            ):
                 payload = challenge_data.get("payload")
                 if isinstance(payload, dict):
                     nonce = payload.get("nonce")
@@ -127,7 +133,9 @@ class PerGatewayConnection:
                     "id": CONTROL_UI_CLIENT_ID if use_control_ui else DEFAULT_GATEWAY_CLIENT_ID,
                     "version": "1.0.0",
                     "platform": "python",
-                    "mode": CONTROL_UI_CLIENT_MODE if use_control_ui else DEFAULT_GATEWAY_CLIENT_MODE,
+                    "mode": (
+                        CONTROL_UI_CLIENT_MODE if use_control_ui else DEFAULT_GATEWAY_CLIENT_MODE
+                    ),
                 },
             }
             if not use_control_ui:
@@ -208,7 +216,9 @@ class PerGatewayConnection:
                 await self._dispatch_event(event)
             except (websockets.ConnectionClosed, websockets.exceptions.ConcurrencyError):
                 if not self._shutdown_event.is_set():
-                    logger.warning("gateway.listener.connection_lost gateway_id=%s", self._gateway.id)
+                    logger.warning(
+                        "gateway.listener.connection_lost gateway_id=%s", self._gateway.id
+                    )
                     await self._reconnect()
             except Exception:
                 logger.exception("gateway.listener.error gateway_id=%s", self._gateway.id)
@@ -220,7 +230,7 @@ class PerGatewayConnection:
         if self._shutdown_event.is_set():
             return
         for attempt in range(5):
-            wait_time = min(2 ** attempt, 30)
+            wait_time = min(2**attempt, 30)
             logger.info(
                 "gateway.listener.reconnecting gateway_id=%s attempt=%s wait=%s",
                 self._gateway.id,
@@ -232,10 +242,12 @@ class PerGatewayConnection:
                 await self.connect()
                 return
             except Exception:
-                logger.exception("gateway.listener.reconnect_failed gateway_id=%s", self._gateway.id)
+                logger.exception(
+                    "gateway.listener.reconnect_failed gateway_id=%s", self._gateway.id
+                )
         logger.error("gateway.listener.reconnect_exhausted gateway_id=%s", self._gateway.id)
 
-    async def _dispatch_event(self, event: dict) -> None:
+    async def _dispatch_event(self, event: dict[str, Any]) -> None:
         """Route events to their appropriate handlers."""
         event_type = event.get("event")
         if event_type == "exec.approval.requested":
@@ -243,14 +255,14 @@ class PerGatewayConnection:
         elif event_type == "exec.approval.resolved":
             await self._handle_approval_resolved(event)
 
-    async def _handle_approval_requested(self, event: dict) -> None:
+    async def _handle_approval_requested(self, event: dict[str, Any]) -> None:
         """Handle exec.approval.requested events from the gateway."""
         from uuid import UUID as UUIDCls
 
         from sqlmodel import col, select
 
-        from app.models.agents import Agent
         from app.db.session import async_session_maker
+        from app.models.agents import Agent
         from app.services.openclaw.internal.agent_key import agent_key as _agent_key
         from app.services.openclaw.shared import GatewayAgentIdentity
 
@@ -265,9 +277,7 @@ class PerGatewayConnection:
             return
 
         async with async_session_maker() as session:
-            agent = await self._find_agent_by_openclaw_id(
-                session, agent_id, self._gateway
-            )
+            agent = await self._find_agent_by_openclaw_id(session, agent_id, self._gateway)
             if agent is None:
                 logger.warning(
                     "gateway.listener.approval_requested.agent_not_found gateway_id=%s agent_id=%s",
@@ -322,7 +332,7 @@ class PerGatewayConnection:
             stmt = (
                 select(Agent)
                 .where(Agent.gateway_id == gateway.id)
-                .where(Agent.board_id.is_(None))
+                .where(col(Agent.board_id).is_(None))
                 .where(col(Agent.is_board_lead).is_(False))
             )
             return (await session.exec(stmt)).first()
@@ -337,7 +347,7 @@ class PerGatewayConnection:
 
         return None
 
-    async def _handle_approval_resolved(self, event: dict) -> None:
+    async def _handle_approval_resolved(self, event: dict[str, Any]) -> None:
         """Handle exec.approval.resolved events from the gateway."""
         payload = event.get("payload", {})
         logger.info(

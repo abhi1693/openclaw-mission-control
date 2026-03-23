@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import Self
 from uuid import UUID
 
-from pydantic import Field as PydanticField, model_validator
+from pydantic import Field as PydanticField
+from pydantic import model_validator
 from sqlmodel import Field, SQLModel
 
 _ERR_GOAL_FIELDS_REQUIRED = "Confirmed goal boards require objective and success_metrics"

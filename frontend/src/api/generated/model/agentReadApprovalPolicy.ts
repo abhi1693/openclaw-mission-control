@@ -8,4 +8,6 @@
 /**
  * Approval policy controlling how dangerous operations are authorized.
  */
-export type AgentReadApprovalPolicy = { [key: string]: unknown } | null;
+export type AgentReadApprovalPolicy = {
+  mode?: string;
+};

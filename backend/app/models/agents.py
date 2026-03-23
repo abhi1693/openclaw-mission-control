@@ -57,7 +57,7 @@ class Agent(QueryModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-DEFAULT_APPROVAL_POLICY = {"mode": "immediate"}
+DEFAULT_APPROVAL_POLICY: dict[str, object] = {"mode": "immediate"}
 
 APPROVAL_POLICY_MODE_IMMEDIATE = "immediate"
 APPROVAL_POLICY_MODE_MANUAL = "manual"
@@ -65,4 +65,4 @@ APPROVAL_POLICY_MODE_MANUAL = "manual"
 
 def get_approval_policy(agent: Agent) -> dict[str, object]:
     """Return the agent's approval policy, defaulting to immediate mode."""
-    return agent.approval_policy or DEFAULT_APPROVAL_POLICY
+    return (agent.approval_policy or DEFAULT_APPROVAL_POLICY).copy()

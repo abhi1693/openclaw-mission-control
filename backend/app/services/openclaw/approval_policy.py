@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.core.logging import get_logger
 from app.models.agents import APPROVAL_POLICY_MODE_IMMEDIATE, get_approval_policy
-from app.services.openclaw.gateway_rpc import resolve_approval
 from app.services.openclaw.gateway_resolver import gateway_client_config
+from app.services.openclaw.gateway_rpc import resolve_approval
 
 if TYPE_CHECKING:
     from app.models.agents import Agent
@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 async def apply_approval_policy(
     agent: Agent,
     gateway: Gateway,
-    approval_request: dict,
+    approval_request: dict[str, Any],
 ) -> bool:
     """Apply the agent's approval policy to an approval request.
 
@@ -46,7 +46,7 @@ async def apply_approval_policy(
 async def _auto_resolve_approval(
     agent: Agent,
     gateway: Gateway,
-    approval_request: dict,
+    approval_request: dict[str, Any],
 ) -> None:
     """Automatically approve an approval request by calling exec.approval.resolve."""
     config = gateway_client_config(gateway)

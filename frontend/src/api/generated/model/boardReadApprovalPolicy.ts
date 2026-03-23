@@ -6,6 +6,8 @@
  */
 
 /**
- * Default approval policy for agents on this board.
+ * Approval policy for all agents in this board.
  */
-export type BoardReadApprovalPolicy = { [key: string]: unknown } | null;
+export type BoardReadApprovalPolicy = {
+  mode?: string;
+};
