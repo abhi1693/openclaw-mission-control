@@ -544,7 +544,7 @@ class GatewayControlPlane(ABC):
     @abstractmethod
     async def patch_agent_heartbeats(
         self,
-        entries: list[tuple[str, str, dict[str, Any]]],
+        entries: list[tuple[str, str, dict[str, Any] | None]],
     ) -> None:
         raise NotImplementedError
 
@@ -684,7 +684,7 @@ class OpenClawGatewayControlPlane(GatewayControlPlane):
 
     async def patch_agent_heartbeats(
         self,
-        entries: list[tuple[str, str, dict[str, Any]]],
+        entries: list[tuple[str, str, dict[str, Any] | None]],
     ) -> None:
         base_hash, raw_list, config_data = await _gateway_config_agent_list(self._config)
         entry_by_id = _heartbeat_entry_map(entries)
@@ -732,8 +732,8 @@ async def _gateway_config_agent_list(
 
 
 def _heartbeat_entry_map(
-    entries: list[tuple[str, str, dict[str, Any]]],
-) -> dict[str, tuple[str, dict[str, Any]]]:
+    entries: list[tuple[str, str, dict[str, Any] | None]],
+) -> dict[str, tuple[str, dict[str, Any] | None]]:
     return {
         agent_id: (workspace_path, heartbeat) for agent_id, workspace_path, heartbeat in entries
     }
@@ -741,7 +741,7 @@ def _heartbeat_entry_map(
 
 def _updated_agent_list(
     raw_list: list[object],
-    entry_by_id: dict[str, tuple[str, dict[str, Any]]],
+    entry_by_id: dict[str, tuple[str, dict[str, Any] | None]],
 ) -> list[object]:
     updated_ids: set[str] = set()
     new_list: list[object] = []
@@ -758,16 +758,20 @@ def _updated_agent_list(
         workspace_path, heartbeat = entry_by_id[agent_id]
         new_entry = dict(raw_entry)
         new_entry["workspace"] = workspace_path
-        new_entry["heartbeat"] = heartbeat
+        if heartbeat is None:
+            new_entry.pop("heartbeat", None)
+        else:
+            new_entry["heartbeat"] = heartbeat
         new_list.append(new_entry)
         updated_ids.add(agent_id)
 
     for agent_id, (workspace_path, heartbeat) in entry_by_id.items():
         if agent_id in updated_ids:
             continue
-        new_list.append(
-            {"id": agent_id, "workspace": workspace_path, "heartbeat": heartbeat},
-        )
+        entry: dict[str, Any] = {"id": agent_id, "workspace": workspace_path}
+        if heartbeat is not None:
+            entry["heartbeat"] = heartbeat
+        new_list.append(entry)
 
     return new_list
 
@@ -1073,7 +1077,7 @@ def _control_plane_for_gateway(gateway: Gateway) -> OpenClawGatewayControlPlane:
 async def _patch_gateway_agent_heartbeats(
     gateway: Gateway,
     *,
-    entries: list[tuple[str, str, dict[str, Any]]],
+    entries: list[tuple[str, str, dict[str, Any] | None]],
 ) -> None:
     """Patch multiple agent heartbeat configs in a single gateway config.patch call.
 
@@ -1113,7 +1117,7 @@ class OpenClawGatewayProvisioner:
         if not gateway.workspace_root:
             msg = "gateway workspace_root is required"
             raise OpenClawGatewayError(msg)
-        entries: list[tuple[str, str, dict[str, Any]]] = []
+        entries: list[tuple[str, str, dict[str, Any] | None]] = []
         for agent in agents:
             agent_id = _agent_key(agent)
             workspace_path = _workspace_path(agent, gateway.workspace_root)

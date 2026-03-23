@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     # OpenClaw gateway runtime compatibility
     gateway_min_version: str = "2026.02.9"
 
+    # Auto heartbeat governor
+    auto_heartbeat_governor_enabled: bool = False
+    auto_heartbeat_governor_interval_seconds: int = 300
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "text"

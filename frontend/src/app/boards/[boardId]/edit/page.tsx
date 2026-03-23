@@ -7,9 +7,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/auth/clerk";
 import { X } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError } from "@/api/mutator";
+import { ApiError, customFetch } from "@/api/mutator";
 import {
   type getBoardApiV1BoardsBoardIdGetResponse,
   useGetBoardApiV1BoardsBoardIdGet,
@@ -68,6 +68,21 @@ const slugify = (value: string) =>
     .replace(/(^-|-$)/g, "") || "board";
 
 const LEAD_AGENT_VALUE = "__lead_agent__";
+
+type GovernorActivityTriggerType = "A" | "B";
+
+type AutoHeartbeatGovernorPolicy = {
+  enabled: boolean;
+  ladder: string[];
+  lead_cap_every: string;
+  activity_trigger_type: GovernorActivityTriggerType;
+};
+
+const governorPolicyQueryKey = (boardId: string) => [
+  "boards",
+  boardId,
+  "auto-heartbeat-governor-policy",
+] as const;
 
 type WebhookCardProps = {
   webhook: BoardWebhookRead;
@@ -314,6 +329,16 @@ export default function EditBoardPage() {
   const [webhookError, setWebhookError] = useState<string | null>(null);
   const [copiedWebhookId, setCopiedWebhookId] = useState<string | null>(null);
 
+  const [governorPolicyDraft, setGovernorPolicyDraft] = useState<
+    AutoHeartbeatGovernorPolicy | undefined
+  >(undefined);
+  const [governorPolicyError, setGovernorPolicyError] = useState<string | null>(
+    null,
+  );
+  const [governorPolicySaveSuccess, setGovernorPolicySaveSuccess] = useState<
+    string | null
+  >(null);
+
   const onboardingParam = searchParams.get("onboarding");
   const searchParamsString = searchParams.toString();
   const shouldAutoOpenOnboarding =
@@ -421,6 +446,57 @@ export default function EditBoardPage() {
       },
     },
   );
+
+  const governorPolicyQuery = useQuery({
+    queryKey: boardId ? governorPolicyQueryKey(boardId) : [],
+    enabled: Boolean(isSignedIn && isAdmin && boardId),
+    retry: false,
+    queryFn: async () => {
+      if (!boardId) return null;
+      const resp = await customFetch<{ data: AutoHeartbeatGovernorPolicy }>(
+        `/api/v1/boards/${boardId}/auto-heartbeat-governor-policy`,
+        { method: "GET" },
+      );
+      return resp.data;
+    },
+  });
+
+  const currentGovernorPolicy =
+    governorPolicyDraft ?? governorPolicyQuery.data ?? undefined;
+
+  const saveGovernorPolicyMutation = useMutation({
+    mutationFn: async (policy: Partial<AutoHeartbeatGovernorPolicy>) => {
+      if (!boardId) throw new Error("Missing board id");
+      const resp = await customFetch<{ data: AutoHeartbeatGovernorPolicy }>(
+        `/api/v1/boards/${boardId}/auto-heartbeat-governor-policy`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(policy),
+        },
+      );
+      return resp.data;
+    },
+    onSuccess: async (data) => {
+      if (!boardId) return;
+      setGovernorPolicyError(null);
+      setGovernorPolicySaveSuccess("Governor policy saved.");
+      setGovernorPolicyDraft(data);
+      await queryClient.invalidateQueries({
+        queryKey: governorPolicyQueryKey(boardId),
+      });
+      window.setTimeout(() => setGovernorPolicySaveSuccess(null), 2500);
+    },
+    onError: (err: unknown) => {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Unable to save governor policy.";
+      setGovernorPolicySaveSuccess(null);
+      setGovernorPolicyError(message);
+    },
+  });
 
   const updateBoardMutation = useUpdateBoardApiV1BoardsBoardIdPatch<ApiError>({
     mutation: {
@@ -544,12 +620,16 @@ export default function EditBoardPage() {
     gatewaysQuery.isLoading ||
     groupsQuery.isLoading ||
     boardQuery.isLoading ||
+    governorPolicyQuery.isLoading ||
     updateBoardMutation.isPending;
   const errorMessage =
     error ??
     gatewaysQuery.error?.message ??
     groupsQuery.error?.message ??
     boardQuery.error?.message ??
+    (governorPolicyQuery.error instanceof Error
+      ? governorPolicyQuery.error.message
+      : null) ??
     null;
   const webhookErrorMessage =
     webhookError ??
@@ -1135,6 +1215,176 @@ export default function EditBoardPage() {
                   </span>
                 </span>
               </div>
+            </section>
+
+            <section className="space-y-4 border-t border-slate-200 pt-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Auto heartbeat governor
+                </h2>
+                <p className="text-xs text-slate-600">
+                  Controls how Mission Control automatically backs off agent
+                  heartbeats when this board is idle.
+                </p>
+              </div>
+
+              {governorPolicySaveSuccess ? (
+                <p className="text-sm text-emerald-600">
+                  {governorPolicySaveSuccess}
+                </p>
+              ) : null}
+              {governorPolicyError ? (
+                <p className="text-sm text-red-500">{governorPolicyError}</p>
+              ) : null}
+
+              {currentGovernorPolicy ? (
+                <div className="space-y-4 rounded-lg border border-slate-200 px-4 py-4">
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={currentGovernorPolicy.enabled}
+                      aria-label="Enable auto heartbeat governor"
+                      onClick={() => {
+                        setGovernorPolicySaveSuccess(null);
+                        setGovernorPolicyError(null);
+                        setGovernorPolicyDraft({
+                          ...currentGovernorPolicy,
+                          enabled: !currentGovernorPolicy.enabled,
+                        });
+                      }}
+                      disabled={isLoading || saveGovernorPolicyMutation.isPending}
+                      className={`mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition ${
+                        currentGovernorPolicy.enabled
+                          ? "border-emerald-600 bg-emerald-600"
+                          : "border-slate-300 bg-slate-200"
+                      } ${
+                        isLoading || saveGovernorPolicyMutation.isPending
+                          ? "cursor-not-allowed opacity-60"
+                          : "cursor-pointer"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                          currentGovernorPolicy.enabled
+                            ? "translate-x-5"
+                            : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                    <span className="space-y-1">
+                      <span className="block text-sm font-medium text-slate-900">
+                        Enabled
+                      </span>
+                      <span className="block text-xs text-slate-600">
+                        If disabled, the governor will not manage agent heartbeats
+                        for this board.
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-900">
+                        Activity trigger type
+                      </label>
+                      <Select
+                        value={currentGovernorPolicy.activity_trigger_type}
+                        onValueChange={(value) => {
+                          setGovernorPolicyDraft({
+                            ...currentGovernorPolicy,
+                            activity_trigger_type: value as GovernorActivityTriggerType,
+                          });
+                        }}
+                        disabled={isLoading || saveGovernorPolicyMutation.isPending}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select trigger" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="B">B — chat or assigned work</SelectItem>
+                          <SelectItem value="A">A — chat only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-slate-900">
+                        Ladder values
+                      </label>
+                      <Input
+                        value={currentGovernorPolicy.ladder.join(", ")}
+                        onChange={(event) => {
+                          const ladder = event.target.value
+                            .split(",")
+                            .map((part) => part.trim())
+                            .filter(Boolean);
+                          setGovernorPolicyDraft({
+                            ...currentGovernorPolicy,
+                            ladder,
+                          });
+                        }}
+                        placeholder="10m, 30m, 1h, 3h, 6h"
+                        disabled={isLoading || saveGovernorPolicyMutation.isPending}
+                      />
+                      <p className="text-xs text-slate-500">
+                        Comma-separated durations (e.g. 10m, 1h). Non-leads go
+                        fully off after the last rung.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-900">
+                        Lead cap
+                      </label>
+                      <Input
+                        value={currentGovernorPolicy.lead_cap_every}
+                        onChange={(event) =>
+                          setGovernorPolicyDraft({
+                            ...currentGovernorPolicy,
+                            lead_cap_every: event.target.value,
+                          })
+                        }
+                        placeholder="1h"
+                        disabled={isLoading || saveGovernorPolicyMutation.isPending}
+                      />
+                      <p className="text-xs text-slate-500">
+                        Leads never go fully off; they cap at this value.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (!currentGovernorPolicy) return;
+                        setGovernorPolicyError(null);
+                        setGovernorPolicySaveSuccess(null);
+                        saveGovernorPolicyMutation.mutate({
+                          enabled: currentGovernorPolicy.enabled,
+                          ladder: currentGovernorPolicy.ladder,
+                          lead_cap_every: currentGovernorPolicy.lead_cap_every,
+                          activity_trigger_type:
+                            currentGovernorPolicy.activity_trigger_type,
+                        });
+                      }}
+                      disabled={
+                        isLoading ||
+                        saveGovernorPolicyMutation.isPending ||
+                        !currentGovernorPolicy.ladder.length ||
+                        !currentGovernorPolicy.lead_cap_every.trim()
+                      }
+                    >
+                      {saveGovernorPolicyMutation.isPending ? "Saving…" : "Save governor policy"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Loading governor policy…
+                </div>
+              )}
             </section>
 
             {gateways.length === 0 ? (
