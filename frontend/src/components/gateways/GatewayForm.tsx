@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
 
-import type { GatewayCheckStatus } from "@/lib/gateway-form";
+import type { GatewayCheckStatus, WORKSPACE_OPTIONS } from "@/lib/gateway-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -18,6 +18,7 @@ type GatewayFormProps = {
   isLoading: boolean;
   canSubmit: boolean;
   workspaceRootPlaceholder: string;
+  workspaceOptions?: string[];
   cancelLabel: string;
   submitLabel: string;
   submitBusyLabel: string;
@@ -45,6 +46,7 @@ export function GatewayForm({
   isLoading,
   canSubmit,
   workspaceRootPlaceholder,
+  workspaceOptions,
   cancelLabel,
   submitLabel,
   submitBusyLabel,
@@ -112,12 +114,42 @@ export function GatewayForm({
           <label className="text-sm font-medium text-slate-900">
             Workspace root <span className="text-red-500">*</span>
           </label>
-          <Input
-            value={workspaceRoot}
-            onChange={(event) => onWorkspaceRootChange(event.target.value)}
-            placeholder={workspaceRootPlaceholder}
-            disabled={isLoading}
-          />
+          {workspaceOptions && workspaceOptions.length > 0 ? (
+            <div className="flex gap-2">
+              <select
+                value={workspaceOptions.includes(workspaceRoot) ? workspaceRoot : ""}
+                onChange={(event) => onWorkspaceRootChange(event.target.value)}
+                disabled={isLoading}
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="" disabled>
+                  Select workspace
+                </option>
+                {workspaceOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <Input
+                value={workspaceRoot}
+                onChange={(event) => onWorkspaceRootChange(event.target.value)}
+                placeholder={workspaceRootPlaceholder}
+                disabled={isLoading}
+                className="flex-1"
+              />
+            </div>
+          ) : (
+            <Input
+              value={workspaceRoot}
+              onChange={(event) => onWorkspaceRootChange(event.target.value)}
+              placeholder={workspaceRootPlaceholder}
+              disabled={isLoading}
+            />
+          )}
+          <p className="text-xs text-slate-500">
+            Multi-agent: use workspace-fe, workspace-be, etc.
+          </p>
         </div>
 
         <div className="space-y-2">
