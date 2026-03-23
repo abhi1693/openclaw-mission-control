@@ -194,7 +194,14 @@ This persists the synthesis rationale so Step 6 (final report) can reference it.
 **Do NOT review tasks yourself.** Codex handles everything — individual evaluation AND coherence check.
 **If Codex fails or times out:** escalate `@Miguel Codex review failed. Need manual review.` Skip to Step 4.
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
-**NOTE:** This board requires user approval before `done`. If Codex's PATCH returns 409, escalate via board chat: `@Miguel Task TITLE is ready for approval.`
+**This board requires human approval before `done`.** When Codex approves a task, do NOT PATCH to done. Instead create an approval request for the human to review:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"task_id": "TASK_UUID", "action_type": "move_to_done", "confidence": CODEX_CONFIDENCE_0_TO_100, "lead_reasoning": "CODEX_EVIDENCE_SUMMARY", "payload": {"codex_verdict": "approved", "evidence": "BRIEF_EVIDENCE"}}'
+```
+Then notify: `@Miguel Task TITLE ready for your approval. Codex confidence: X%. Evidence: SUMMARY.`
+The task stays in `review` until the human approves in the UI.
 {% endif %}
 
 ### Step 4 — Dependency Check
