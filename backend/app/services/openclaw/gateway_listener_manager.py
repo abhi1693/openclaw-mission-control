@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.core.logging import get_logger
 from app.models.gateways import Gateway
 from app.services.openclaw.gateway_events import PerGatewayConnection
-
-if TYPE_CHECKING:
-    from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = get_logger(__name__)
 

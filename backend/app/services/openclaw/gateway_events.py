@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import ssl
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode, urlparse, urlunparse
 from uuid import UUID, uuid4
 
 import websockets
-from websockets.exceptions import WebSocketException
 
 from app.core.logging import TRACE_LEVEL, get_logger
 from app.services.openclaw.approval_policy import apply_approval_policy
@@ -257,14 +255,7 @@ class PerGatewayConnection:
 
     async def _handle_approval_requested(self, event: dict[str, Any]) -> None:
         """Handle exec.approval.requested events from the gateway."""
-        from uuid import UUID as UUIDCls
-
-        from sqlmodel import col, select
-
         from app.db.session import async_session_maker
-        from app.models.agents import Agent
-        from app.services.openclaw.internal.agent_key import agent_key as _agent_key
-        from app.services.openclaw.shared import GatewayAgentIdentity
 
         payload = event.get("payload", {})
         request_data = payload.get("request", {})
