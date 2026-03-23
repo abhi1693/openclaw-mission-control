@@ -23,11 +23,11 @@ type SearchableSelectProps = {
 };
 
 const baseTriggerClassName =
-  "w-auto h-auto rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-left text-sm font-semibold text-gray-700 shadow-sm transition-all duration-200 hover:border-gray-300 focus:border-gray-900 focus:ring-4 focus:ring-gray-100";
+  "w-auto h-auto rounded-xl border-2 border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3 text-left text-sm font-semibold text-strong shadow-sm transition-all duration-200 hover:border-[color:var(--border-strong)] focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[color:var(--accent-soft)]";
 const baseContentClassName =
-  "rounded-xl border-2 border-gray-200 bg-white shadow-xl";
+  "rounded-xl border-2 border-[color:var(--border)] bg-[color:var(--surface)] shadow-xl";
 const baseItemClassName =
-  "px-4 py-3 text-sm text-gray-700 transition-colors data-[selected=true]:bg-gray-50 data-[selected=true]:text-gray-900 data-[selected=true]:font-semibold hover:bg-gray-50";
+  "px-4 py-3 text-sm text-strong transition-colors data-[selected=true]:bg-[color:var(--surface-strong)]/60 data-[selected=true]:text-strong data-[selected=true]:font-semibold hover:bg-[color:var(--surface-strong)]/55";
 
 export default function SearchableSelect({
   value,
