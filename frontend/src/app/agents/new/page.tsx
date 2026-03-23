@@ -37,6 +37,13 @@ type IdentityProfile = {
   emoji: string;
 };
 
+const APPROVAL_POLICY_OPTIONS = [
+  { value: "immediate", label: "Auto" },
+  { value: "manual", label: "Manual" },
+] as const;
+
+type ApprovalPolicyMode = (typeof APPROVAL_POLICY_OPTIONS)[number]["value"];
+
 const getBoardOptions = (boards: BoardRead[]): SearchableSelectOption[] =>
   boards.map((board) => ({
     value: board.id,
@@ -67,6 +74,8 @@ export default function NewAgentPage() {
   const [identityProfile, setIdentityProfile] = useState<IdentityProfile>({
     ...DEFAULT_IDENTITY_PROFILE,
   });
+  const [approvalPolicyMode, setApprovalPolicyMode] =
+    useState<ApprovalPolicyMode>("immediate");
   const [error, setError] = useState<string | null>(null);
 
   const boardsQuery = useListBoardsApiV1BoardsGet<
@@ -124,6 +133,7 @@ export default function NewAgentPage() {
         identity_profile: normalizeIdentityProfile(
           identityProfile,
         ) as unknown as Record<string, unknown> | null,
+        approval_policy: { mode: approvalPolicyMode },
       },
     });
   };
@@ -251,6 +261,40 @@ export default function NewAgentPage() {
                 }
                 disabled={isLoading}
               />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Authorization & safety
+          </p>
+          <div className="mt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Authorization mode
+              </label>
+              <Select
+                value={approvalPolicyMode}
+                onValueChange={(value) =>
+                  setApprovalPolicyMode(value as ApprovalPolicyMode)
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select authorization mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {APPROVAL_POLICY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Auto allows OpenClaw to execute commands without manual confirmation.
+              </p>
             </div>
           </div>
         </div>

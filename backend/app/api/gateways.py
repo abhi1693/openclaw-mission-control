@@ -25,6 +25,7 @@ from app.schemas.gateways import (
 )
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.openclaw.admin_service import GatewayAdminLifecycleService
+from app.services.openclaw.gateway_listener_manager import gateway_listener_manager
 from app.services.openclaw.session_service import GatewayTemplateSyncQuery
 
 if TYPE_CHECKING:
@@ -197,6 +198,7 @@ async def delete_gateway(
         gateway_id=gateway_id,
         organization_id=ctx.organization.id,
     )
+    await gateway_listener_manager.stop_for_gateway(gateway.id)
     main_agent = await service.find_main_agent(gateway)
     if main_agent is not None:
         await service.clear_agent_foreign_keys(agent_id=main_agent.id)

@@ -315,6 +315,14 @@ export default function AgentDetailPage() {
                         <span>Status</span>
                         <span className="text-strong">{agentStatus}</span>
                       </div>
+                      <div className="flex items-center justify-between">
+                        <span>Authorization mode</span>
+                        <span className="text-strong">
+                          {(agent.approval_policy as { mode?: string } | undefined)?.mode === "immediate"
+                            ? "Auto"
+                            : "Manual"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Self
 from uuid import UUID
 
-from pydantic import model_validator
+from pydantic import Field as PydanticField, model_validator
 from sqlmodel import Field, SQLModel
 
 _ERR_GOAL_FIELDS_REQUIRED = "Confirmed goal boards require objective and success_metrics"
@@ -35,6 +35,10 @@ class BoardBase(SQLModel):
     block_status_changes_with_pending_approval: bool = False
     only_lead_can_change_status: bool = False
     max_agents: int = Field(default=1, ge=0)
+    approval_policy: dict[str, object] | None = PydanticField(
+        default=None,
+        description="Default approval policy for agents on this board.",
+    )
 
 
 class BoardCreate(BoardBase):
