@@ -1,4 +1,4 @@
-"""add approval_policy to agents
+"""add approval_policy to agents and boards
 
 Revision ID: 47bc9d8e1234
 Revises: a9b1c2d3e4f7
@@ -20,9 +20,17 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Add agents.approval_policy column as nullable JSON."""
+    """Add approval_policy column to agents and boards tables as nullable JSON."""
     op.add_column(
         "agents",
+        sa.Column(
+            "approval_policy",
+            sa.JSON(),
+            nullable=True,
+        ),
+    )
+    op.add_column(
+        "boards",
         sa.Column(
             "approval_policy",
             sa.JSON(),
@@ -32,5 +40,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove agents.approval_policy column."""
+    """Remove approval_policy columns from agents and boards tables."""
     op.drop_column("agents", "approval_policy")
+    op.drop_column("boards", "approval_policy")
