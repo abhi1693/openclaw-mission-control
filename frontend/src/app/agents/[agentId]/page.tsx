@@ -57,6 +57,10 @@ export default function AgentDetailPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [unlinkOpen, setUnlinkOpen] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
 
   const agentQuery = useGetAgentApiV1AgentsAgentIdGet<
     getAgentApiV1AgentsAgentIdGetResponse,
@@ -145,6 +149,32 @@ export default function AgentDetailPage() {
     deleteMutation.mutate({ agentId });
   };
 
+  const handleUnlink = async () => {
+    if (!agentId || !isSignedIn) return;
+    setUnlinkError(null);
+    setUnlinking(true);
+    try {
+      const unlinkToken = typeof window !== 'undefined' ? window.sessionStorage.getItem('mc_local_auth_token') : null;
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/agents/${agentId}/unlink`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(unlinkToken ? { "Authorization": `Bearer ${unlinkToken}` } : {}),
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Error ${res.status}`);
+      }
+      setUnlinkOpen(false);
+      router.push("/agents");
+    } catch (err: unknown) {
+      setUnlinkError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
   return (
     <DashboardShell>
       <SignedOut>
@@ -195,6 +225,11 @@ export default function AgentDetailPage() {
                   >
                     Edit
                   </Link>
+                ) : null}
+                {agent && !agent.is_board_lead ? (
+                  <Button variant="outline" onClick={() => setUnlinkOpen(true)}>
+                    Unlink
+                  </Button>
                 ) : null}
                 {agent ? (
                   <Button variant="outline" onClick={() => setDeleteOpen(true)}>
@@ -369,24 +404,67 @@ export default function AgentDetailPage() {
         )}
       </SignedIn>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog open={unlinkOpen} onOpenChange={setUnlinkOpen}>
+        <DialogContent aria-label="Unlink agent">
+          <DialogHeader>
+            <DialogTitle>Unlink agent</DialogTitle>
+            <DialogDescription>
+              This will remove {agent?.name} from Mission Control but will NOT
+              delete the agent from the gateway. It will keep running — you can
+              re-link it later.
+            </DialogDescription>
+          </DialogHeader>
+          {unlinkError ? (
+            <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-3 text-xs text-muted">
+              {unlinkError}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnlinkOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUnlink} disabled={unlinking}>
+              {unlinking ? "Unlinking…" : "Unlink"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) setDeleteConfirmName(""); }}>
         <DialogContent aria-label="Delete agent">
           <DialogHeader>
             <DialogTitle>Delete agent</DialogTitle>
             <DialogDescription>
-              This will remove {agent?.name}. This action cannot be undone.
+              This will <strong>permanently delete</strong> {agent?.name} from
+              both Mission Control and the gateway, including its workspace.
+              This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted">
+              Type <strong>{agent?.name}</strong> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              placeholder={agent?.name ?? ""}
+              className="w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-strong outline-none focus:border-[color:var(--accent)]"
+            />
+          </div>
           {deleteError ? (
             <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-3 text-xs text-muted">
               {deleteError}
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+            <Button variant="outline" onClick={() => { setDeleteOpen(false); setDeleteConfirmName(""); }}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} disabled={isDeleting}>
+            <Button
+              onClick={handleDelete}
+              disabled={isDeleting || deleteConfirmName !== agent?.name}
+            >
               {isDeleting ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>

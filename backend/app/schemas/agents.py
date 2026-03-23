@@ -236,6 +236,10 @@ class AgentRead(AgentBase):
         default=False,
         description="Whether this agent is the primary gateway agent.",
     )
+    is_linked: bool = Field(
+        default=False,
+        description="Whether this agent was linked from an existing gateway agent.",
+    )
     openclaw_session_id: str | None = Field(
         default=None,
         description="Optional openclaw session token.",
@@ -313,4 +317,70 @@ class AgentNudge(SQLModel):
     message: NonEmptyStr = Field(
         description="Short message to direct an agent toward immediate attention.",
         examples=["Please update the incident triage status for task T-001."],
+    )
+
+
+class AgentLinkRequest(SQLModel):
+    """Payload for linking an existing gateway agent to Mission Control."""
+
+    model_config = SQLModelConfig(
+        json_schema_extra={
+            "x-llm-intent": "link_existing_agent",
+            "x-when-to-use": [
+                "Link a pre-existing gateway agent to Mission Control board",
+            ],
+            "x-required-actor": "org_admin",
+            "x-response-shape": "AgentRead",
+        },
+    )
+
+    gateway_agent_id: NonEmptyStr = Field(
+        description="Existing agent ID on the gateway (e.g., 'amy', 'jarvis').",
+        examples=["amy", "jarvis", "leo"],
+    )
+    board_id: UUID = Field(
+        description="Board ID to link the agent to.",
+        examples=["11111111-1111-1111-1111-111111111111"],
+    )
+    name: NonEmptyStr = Field(
+        description="Display name for the linked agent in Mission Control.",
+        examples=["Amy", "Jarvis", "Leo"],
+    )
+    role: str | None = Field(
+        default=None,
+        description="Optional role description for the agent.",
+        examples=["Assistant", "Coordinator", "Specialist"],
+    )
+
+
+class GatewayAgentDiscovery(SQLModel):
+    """Response payload for discovered gateway agents."""
+
+    model_config = SQLModelConfig(
+        json_schema_extra={
+            "x-llm-intent": "gateway_agent_discovery",
+            "x-when-to-use": [
+                "Return list of agents available for linking from gateway",
+            ],
+            "x-required-actor": "org_admin",
+        },
+    )
+
+    agent_id: str = Field(
+        description="Agent ID on the gateway.",
+        examples=["amy", "jarvis", "leo"],
+    )
+    workspace: str | None = Field(
+        default=None,
+        description="Agent workspace path on the gateway.",
+        examples=["/Users/tom/.openclaw/workspace-amy"],
+    )
+    linked: bool = Field(
+        default=False,
+        description="Whether this agent is already linked to Mission Control.",
+    )
+    linked_agent_name: str | None = Field(
+        default=None,
+        description="Display name if already linked to Mission Control.",
+        examples=["Amy"],
     )

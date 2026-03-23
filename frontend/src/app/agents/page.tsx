@@ -133,9 +133,14 @@ export default function AgentsPage() {
         description={`${agents.length} agent${agents.length === 1 ? "" : "s"} total.`}
         headerActions={
           agents.length > 0 ? (
-            <Button onClick={() => router.push("/agents/new")}>
-              New agent
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => router.push("/agents/link")}>
+                Link agent
+              </Button>
+              <Button onClick={() => router.push("/agents/new")}>
+                New agent
+              </Button>
+            </div>
           ) : null
         }
         isAdmin={isAdmin}
@@ -155,7 +160,7 @@ export default function AgentsPage() {
             emptyState={{
               title: "No agents yet",
               description:
-                "Create your first agent to start executing tasks on this board.",
+                "Create your first agent or link an existing one to start executing tasks on this board.",
               actionHref: "/agents/new",
               actionLabel: "Create your first agent",
             }}
