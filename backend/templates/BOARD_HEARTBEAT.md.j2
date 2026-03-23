@@ -120,11 +120,16 @@ If this fails (non-zero exit) → STOP. Do not continue. Try again next heartbea
 ### Step 2 — Health Scan
 Run this command. Paste the full output.
 ```bash
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" | python3 -c "
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/tasks.json
+curl -fsS "$BASE_URL/api/v1/agent/agents?board_id=$BOARD_ID&limit=100" -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/agents.json
+python3 -c "
 import sys,json
 from datetime import datetime,timezone
-page=json.load(sys.stdin)
-tasks=page.get('items', page if isinstance(page, list) else [])
+tasks_page=json.load(open('/tmp/tasks.json'))
+agents_page=json.load(open('/tmp/agents.json'))
+tasks=tasks_page.get('items', tasks_page if isinstance(tasks_page, list) else [])
+agents=agents_page.get('items', agents_page if isinstance(agents_page, list) else [])
+agents_by_id={a.get('id'): a for a in agents if isinstance(a, dict)}
 now=datetime.now(timezone.utc)
 for t in tasks:
     s=t.get('status','')
@@ -138,7 +143,10 @@ for t in tasks:
     blocked='BLOCKED' if t.get('is_blocked') else ''
     deps=t.get('depends_on_task_ids',[])
     dep_str=f'deps={deps}' if deps else ''
-    print(f\"{t['status']:12} {age:4}m  agent={agent_id}  {blocked} {dep_str}  {t['title'][:50]}  task_id={t['id']}\")
+    agent=agents_by_id.get(agent_id, {})
+    agent_status=agent.get('status','unknown')
+    last_seen=agent.get('last_seen_at') or 'never'
+    print(f\"{t['status']:12} {age:4}m  agent={agent_id}  agent_status={agent_status}  last_seen={last_seen}  {blocked} {dep_str}  {t['title'][:50]}  task_id={t['id']}\")
 "
 ```
 
@@ -146,6 +154,7 @@ for t in tasks:
 - `in_progress` **30+ min** → nudge: "Status check — task unchanged AGE min. Blocked? If done, PATCH to review."
 - `in_progress` **60+ min** → nudge: "URGENT: stuck 60+ min. Move to review NOW." + escalate via `POST .../memory` with `{"content":"@Miguel Agent stuck on TASK 60+ min.","tags":["chat","escalation"]}`
 - If an assigned agent is offline or has stopped checking in on a live task, recover first, then nudge.
+- Use the literal agent_id from Step 2 output in the recover call.
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$AGENT_ID/recover" -H "X-Agent-Token: $AUTH_TOKEN"
 ```

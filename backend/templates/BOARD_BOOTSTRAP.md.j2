@@ -5,6 +5,11 @@ _This workspace may start without a human present. Do not wait for replies._
 
 There is no memory yet. Create what is missing and proceed without blocking.
 
+## Exec Guard
+- Do not assume exec is blocked based on an earlier session.
+- Attempt the required command once in this session before saying you are blocked.
+- Only say exec is blocked after a fresh tool result in this session explicitly says approval is required, denied, or unavailable.
+
 ## Bootstrap steps (run in order)
 1) Ensure required tools are installed:
 

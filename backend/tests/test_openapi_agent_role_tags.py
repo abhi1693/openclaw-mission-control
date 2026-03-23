@@ -136,6 +136,7 @@ def test_openapi_agent_tool_endpoints_include_llm_hints() -> None:
         ("/api/v1/agent/boards/{board_id}/agents/{agent_id}/soul", "get"),
         ("/api/v1/agent/agents", "post"),
         ("/api/v1/agent/boards/{board_id}/agents/{agent_id}/nudge", "post"),
+        ("/api/v1/agent/boards/{board_id}/agents/{agent_id}/recover", "post"),
         ("/api/v1/agent/boards/{board_id}/agents/{agent_id}/soul", "put"),
         ("/api/v1/agent/boards/{board_id}/agents/{agent_id}", "delete"),
         ("/api/v1/agent/boards/{board_id}/gateway/main/ask-user", "post"),

@@ -10,9 +10,13 @@ from app.core.time import utcnow
 from app.models.agents import Agent
 from app.services.openclaw.constants import (
     CHECKIN_DEADLINE_AFTER_WAKE,
+    HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
     MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN,
 )
-from app.services.openclaw.lifecycle_reconcile import _has_checked_in_since_wake
+from app.services.openclaw.lifecycle_reconcile import (
+    _has_checked_in_since_reference,
+    _has_checked_in_since_wake,
+)
 
 
 def _agent(*, last_seen_offset_s: int | None, last_wake_offset_s: int | None) -> Agent:
@@ -48,6 +52,29 @@ def test_not_checked_in_since_wake_when_missing_last_seen() -> None:
     assert _has_checked_in_since_wake(agent) is False
 
 
+def test_checked_in_since_reference_requires_newer_heartbeat() -> None:
+    reference = utcnow()
+    agent = Agent(
+        name="reconcile-test",
+        gateway_id=uuid4(),
+        last_seen_at=reference,
+    )
+
+    assert _has_checked_in_since_reference(agent, reference_at=reference) is False
+
+
+def test_checked_in_since_reference_when_last_seen_is_newer() -> None:
+    reference = utcnow()
+    agent = Agent(
+        name="reconcile-test",
+        gateway_id=uuid4(),
+        last_seen_at=reference + timedelta(seconds=1),
+    )
+
+    assert _has_checked_in_since_reference(agent, reference_at=reference) is True
+
+
 def test_lifecycle_convergence_policy_constants() -> None:
-    assert CHECKIN_DEADLINE_AFTER_WAKE == timedelta(seconds=30)
+    assert CHECKIN_DEADLINE_AFTER_WAKE == timedelta(minutes=35)
+    assert HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL == timedelta(minutes=1)
     assert MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN == 3

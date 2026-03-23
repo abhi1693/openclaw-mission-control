@@ -101,6 +101,7 @@ def test_defer_lifecycle_reconcile_keeps_attempt_count(
 
 def test_decode_lifecycle_task_roundtrip() -> None:
     deadline = utcnow() + timedelta(minutes=3)
+    expected_checkin_after = utcnow()
     agent_id = uuid4()
     gateway_id = uuid4()
     board_id = uuid4()
@@ -112,6 +113,7 @@ def test_decode_lifecycle_task_roundtrip() -> None:
             "board_id": str(board_id),
             "generation": 5,
             "checkin_deadline_at": deadline.isoformat(),
+            "expected_checkin_after": expected_checkin_after.isoformat(),
         },
         created_at=utcnow(),
         attempts=1,
@@ -123,4 +125,5 @@ def test_decode_lifecycle_task_roundtrip() -> None:
     assert decoded.board_id == board_id
     assert decoded.generation == 5
     assert decoded.checkin_deadline_at == deadline
+    assert decoded.expected_checkin_after == expected_checkin_after
     assert decoded.attempts == 1

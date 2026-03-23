@@ -27,6 +27,14 @@ def _has_checked_in_since_wake(agent: Agent) -> bool:
     return agent.last_seen_at >= agent.last_wake_sent_at
 
 
+def _has_checked_in_since_reference(agent: Agent, *, reference_at) -> bool:
+    if agent.last_seen_at is None:
+        return False
+    if reference_at is None:
+        return True
+    return agent.last_seen_at > reference_at
+
+
 async def process_lifecycle_queue_task(task: QueuedTask) -> None:
     """Re-run lifecycle provisioning when an agent misses post-provision check-in."""
     payload = decode_lifecycle_task(task)
@@ -53,7 +61,10 @@ async def process_lifecycle_queue_task(task: QueuedTask) -> None:
             )
             return
 
-        if _has_checked_in_since_wake(agent):
+        if _has_checked_in_since_reference(
+            agent,
+            reference_at=payload.expected_checkin_after or agent.last_wake_sent_at,
+        ):
             logger.info(
                 "lifecycle.reconcile.skip_not_stuck",
                 extra={"agent_id": str(agent.id), "status": agent.status},

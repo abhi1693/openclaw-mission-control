@@ -1448,6 +1448,104 @@ async def nudge_agent(
 
 
 @router.post(
+    "/boards/{board_id}/agents/{agent_id}/recover",
+    response_model=OkResponse,
+    tags=AGENT_LEAD_TAGS,
+    summary="Recover a stale agent on a board",
+    description=(
+        "Trigger a lifecycle wake/reset for a specific board agent.\n\n"
+        "Use this when a lead sees an assigned agent go stale or offline and needs "
+        "Mission Control to re-wake the session."
+    ),
+    operation_id="agent_lead_recover_agent",
+    responses={
+        200: {"description": "Recovery dispatched"},
+        403: {
+            "model": LLMErrorResponse,
+            "description": "Caller is not board lead",
+        },
+        404: {
+            "model": LLMErrorResponse,
+            "description": "Target agent does not exist",
+        },
+        422: {
+            "model": LLMErrorResponse,
+            "description": "Target agent cannot be recovered",
+        },
+        409: {
+            "model": LLMErrorResponse,
+            "description": "Target agent was recovered too recently",
+        },
+        502: {
+            "model": LLMErrorResponse,
+            "description": "Gateway lifecycle wake failed",
+        },
+    },
+    openapi_extra={
+        "x-llm-intent": "agent_recovery",
+        "x-when-to-use": [
+            "An assigned agent is stale or offline and needs a fresh wake cycle",
+            "Heartbeat is missing and the lead wants Mission Control to re-wake the target",
+        ],
+        "x-when-not-to-use": [
+            "Routine coordination message with no lifecycle reset needed",
+            "Reporting liveness for the caller itself",
+        ],
+        "x-required-actor": "board_lead",
+        "x-prerequisites": [
+            "Authenticated board lead",
+            "Target agent on same board",
+        ],
+        "x-side-effects": [
+            "Resets target session and sends wakeup message without rotating the target token",
+            "Updates lifecycle recovery state for the target agent",
+        ],
+        "x-negative-guidance": [
+            "Do not use this to fake another agent's heartbeat.",
+            "Do not use when a simple nudge is enough.",
+            "Do not call repeatedly in a tight loop for the same agent.",
+        ],
+        "x-routing-policy": [
+            "Use when the target needs an actual lifecycle restart or wake.",
+            "Prefer nudge for normal coordination without session recovery.",
+        ],
+        "x-routing-policy-examples": [
+            {
+                "input": {
+                    "intent": "assigned agent is offline and has stale work",
+                    "required_privilege": "board_lead",
+                },
+                "decision": "agent_lead_recover_agent",
+            },
+            {
+                "input": {
+                    "intent": "tell a worker to post an update",
+                    "required_privilege": "board_lead",
+                },
+                "decision": "agent_lead_nudge_agent",
+            },
+        ],
+    },
+)
+async def recover_agent(
+    agent_id: str,
+    board: Board = BOARD_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> OkResponse:
+    """Trigger a lifecycle recovery wake for one board agent."""
+    _guard_board_access(agent_ctx, board)
+    _require_board_lead(agent_ctx)
+    coordination = GatewayCoordinationService(session)
+    await coordination.recover_board_agent(
+        board=board,
+        actor_agent=agent_ctx.agent,
+        target_agent_id=agent_id,
+    )
+    return OkResponse()
+
+
+@router.post(
     "/heartbeat",
     response_model=AgentRead,
     tags=AGENT_ALL_ROLE_TAGS,

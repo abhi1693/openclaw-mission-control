@@ -62,12 +62,70 @@ def test_wakeup_text_includes_bootstrap_before_agents():
     text = agent_provisioning._wakeup_text(agent, verb="created")
 
     assert "If BOOTSTRAP.md exists, read it first, then read AGENTS.md." in text
+    assert "Do not assume exec is blocked based on an earlier session." in text
+    assert "Attempt the required command once in this session before saying you are blocked." in text
 
 
 def test_agent_lifecycle_workspace_path_preserves_tilde_in_workspace_root():
     assert (
         AgentLifecycleService.workspace_path("Alice", "~/.openclaw")
         == "~/.openclaw/workspace-alice"
+    )
+
+
+def test_updated_agent_list_keeps_disabled_heartbeat_entry_with_minimal_raw_shape():
+    raw_list = [
+        {
+            "id": "mc-disabled",
+            "workspace": "/tmp/workspace-mc-disabled",
+            "heartbeat": {"every": "0m"},
+        }
+    ]
+
+    new_list = agent_provisioning._updated_agent_list(
+        raw_list,
+        {
+            "mc-disabled": (
+                "/tmp/workspace-mc-disabled",
+                {"every": "0m", "target": "last", "includeReasoning": False},
+            ),
+        },
+    )
+
+    assert new_list == raw_list
+
+
+def test_updated_agent_list_keeps_disabled_heartbeat_entry_with_stale_model():
+    raw_list = [
+        {
+            "id": "mc-disabled",
+            "workspace": "/tmp/workspace-mc-disabled",
+            "heartbeat": {
+                "every": "0m",
+                "target": "last",
+                "includeReasoning": False,
+                "model": "minimax/MiniMax-M2.7",
+            },
+        }
+    ]
+
+    new_list = agent_provisioning._updated_agent_list(
+        raw_list,
+        {
+            "mc-disabled": (
+                "/tmp/workspace-mc-disabled",
+                {"every": "0m", "target": "last", "includeReasoning": False},
+            ),
+        },
+    )
+
+    assert new_list == raw_list
+
+
+def test_heartbeat_configs_equal_canonicalizes_disabled_spellings():
+    assert agent_provisioning._heartbeat_configs_equal(
+        {"every": "disabled"},
+        {"every": "0m", "target": "last", "includeReasoning": False},
     )
 
 
@@ -573,6 +631,60 @@ async def test_control_plane_upsert_agent_retries_update_after_create_race(monke
     update_calls = [method for method, _ in calls if method == "agents.update"]
     assert len(update_calls) == 3
     assert sleeps == [0.75, 0.5, 1.0]
+
+
+@pytest.mark.asyncio
+async def test_patch_agent_heartbeats_skips_config_patch_for_disabled_semantic_match(monkeypatch):
+    calls: list[tuple[str, dict[str, object] | None]] = []
+
+    async def _fake_openclaw_call(method, params=None, config=None):
+        _ = config
+        calls.append((method, params))
+        if method == "config.get":
+            return {
+                "hash": "abc123",
+                "config": {
+                    "agents": {
+                        "list": [
+                            {
+                                "id": "mc-disabled",
+                                "workspace": "/tmp/workspace-mc-disabled",
+                                "heartbeat": {"every": "disabled"},
+                            }
+                        ]
+                    },
+                    "channels": {
+                        "defaults": {
+                            "heartbeat": {
+                                "showOk": False,
+                                "showAlerts": True,
+                                "useIndicator": True,
+                            }
+                        }
+                    },
+                    "tools": {"exec": {"host": "gateway"}},
+                },
+            }
+        if method == "config.patch":
+            raise AssertionError("config.patch should be skipped")
+        raise AssertionError(f"Unexpected method: {method}")
+
+    monkeypatch.setattr(agent_provisioning, "openclaw_call", _fake_openclaw_call)
+    cp = agent_provisioning.OpenClawGatewayControlPlane(
+        agent_provisioning.GatewayClientConfig(url="ws://gateway.example/ws", token=None),
+    )
+
+    await cp.patch_agent_heartbeats(
+        [
+            (
+                "mc-disabled",
+                "/tmp/workspace-mc-disabled",
+                {"every": "0m", "target": "last", "includeReasoning": False},
+            )
+        ],
+    )
+
+    assert [method for method, _ in calls] == ["config.get"]
 
 
 @pytest.mark.asyncio

@@ -363,6 +363,10 @@ def _parse_tools_md(content: str) -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
+        if line.startswith("- "):
+            line = line[2:].strip()
+        if line.startswith("`") and line.endswith("`") and len(line) >= 2:
+            line = line[1:-1].strip()
         match = _TOOLS_KV_RE.match(line)
         if not match:
             continue

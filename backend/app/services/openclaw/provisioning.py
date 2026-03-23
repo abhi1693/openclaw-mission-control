@@ -113,6 +113,31 @@ def _heartbeat_config(agent: Agent) -> dict[str, Any]:
     return merged
 
 
+def _is_disabled_heartbeat_every(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().lower()
+    if normalized in {"disabled", "off", "none"}:
+        return True
+    match = re.fullmatch(r"([+-]?\d+)([a-z]+)?", normalized)
+    if match is None:
+        return False
+    return int(match.group(1)) <= 0
+
+
+def _normalize_heartbeat_for_compare(heartbeat: object) -> object:
+    if not isinstance(heartbeat, dict):
+        return heartbeat
+    every = heartbeat.get("every")
+    if _is_disabled_heartbeat_every(every):
+        return {"every": "__disabled__"}
+    return heartbeat
+
+
+def _heartbeat_configs_equal(current: object, desired: dict[str, Any]) -> bool:
+    return _normalize_heartbeat_for_compare(current) == _normalize_heartbeat_for_compare(desired)
+
+
 def _tools_exec_host_patch(config_data: dict[str, Any]) -> dict[str, Any] | None:
     """Ensure ``tools.exec.host`` is set to ``"gateway"`` so agents can run commands.
 
@@ -756,9 +781,15 @@ def _updated_agent_list(
             continue
 
         workspace_path, heartbeat = entry_by_id[agent_id]
+        workspace_changed = raw_entry.get("workspace") != workspace_path
+        heartbeat_changed = not _heartbeat_configs_equal(raw_entry.get("heartbeat"), heartbeat)
+        if not workspace_changed and not heartbeat_changed:
+            new_list.append(raw_entry)
+            updated_ids.add(agent_id)
+            continue
         new_entry = dict(raw_entry)
         new_entry["workspace"] = workspace_path
-        new_entry["heartbeat"] = heartbeat
+        new_entry["heartbeat"] = heartbeat if heartbeat_changed else raw_entry.get("heartbeat")
         new_list.append(new_entry)
         updated_ids.add(agent_id)
 
@@ -1101,7 +1132,9 @@ def _wakeup_text(agent: Agent, *, verb: str) -> str:
     return (
         f"Hello {agent.name}. Your workspace has been {verb}.\n\n"
         "Start the agent. If BOOTSTRAP.md exists, read it first, then read AGENTS.md. "
-        "Begin heartbeats after startup."
+        "Begin heartbeats after startup.\n\n"
+        "Do not assume exec is blocked based on an earlier session. "
+        "Attempt the required command once in this session before saying you are blocked."
     )
 
 

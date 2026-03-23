@@ -162,6 +162,7 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
                     board_id=locked.board_id,
                     generation=locked.lifecycle_generation,
                     checkin_deadline_at=locked.checkin_deadline_at,
+                    expected_checkin_after=locked.last_wake_sent_at,
                 )
             )
         return locked

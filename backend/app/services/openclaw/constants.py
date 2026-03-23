@@ -18,6 +18,7 @@ DEFAULT_HEARTBEAT_CONFIG: dict[str, Any] = {
 }
 
 OFFLINE_AFTER = timedelta(minutes=10)
+HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL = timedelta(minutes=1)
 # Provisioning convergence policy:
 # - require first heartbeat/check-in within this deadline after wake
 # - must be longer than the longest heartbeat interval (currently 30m for DevOps)

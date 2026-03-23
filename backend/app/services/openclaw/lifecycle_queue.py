@@ -26,6 +26,7 @@ class QueuedAgentLifecycleReconcile:
     board_id: UUID | None
     generation: int
     checkin_deadline_at: datetime
+    expected_checkin_after: datetime | None = None
     attempts: int = 0
 
 
@@ -38,6 +39,11 @@ def _task_from_payload(payload: QueuedAgentLifecycleReconcile) -> QueuedTask:
             "board_id": str(payload.board_id) if payload.board_id is not None else None,
             "generation": payload.generation,
             "checkin_deadline_at": payload.checkin_deadline_at.isoformat(),
+            "expected_checkin_after": (
+                payload.expected_checkin_after.isoformat()
+                if payload.expected_checkin_after is not None
+                else None
+            ),
         },
         created_at=utcnow(),
         attempts=payload.attempts,
@@ -53,12 +59,16 @@ def decode_lifecycle_task(task: QueuedTask) -> QueuedAgentLifecycleReconcile:
     raw_deadline = payload.get("checkin_deadline_at")
     if not isinstance(raw_deadline, str):
         raise ValueError("checkin_deadline_at is required")
+    raw_expected = payload.get("expected_checkin_after")
     return QueuedAgentLifecycleReconcile(
         agent_id=UUID(str(payload["agent_id"])),
         gateway_id=UUID(str(payload["gateway_id"])),
         board_id=board_id,
         generation=int(payload["generation"]),
         checkin_deadline_at=datetime.fromisoformat(raw_deadline),
+        expected_checkin_after=(
+            datetime.fromisoformat(raw_expected) if isinstance(raw_expected, str) else None
+        ),
         attempts=int(payload.get("attempts", task.attempts)),
     )
 
@@ -100,6 +110,7 @@ def defer_lifecycle_reconcile(
         board_id=payload.board_id,
         generation=payload.generation,
         checkin_deadline_at=payload.checkin_deadline_at,
+        expected_checkin_after=payload.expected_checkin_after,
         attempts=task.attempts,
     )
     queued = _task_from_payload(deferred)

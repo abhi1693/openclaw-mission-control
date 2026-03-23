@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from abc import ABC
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import TypeVar
 from uuid import UUID
 
@@ -39,13 +40,17 @@ from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConf
 from app.services.openclaw.gateway_rpc import OpenClawGatewayError, openclaw_call
 from app.services.openclaw.internal.agent_key import agent_key
 from app.services.openclaw.internal.retry import with_coordination_gateway_retry
+from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import (
     LeadAgentOptions,
     LeadAgentRequest,
     OpenClawProvisioningService,
+    _get_existing_auth_token,
 )
+from app.services.openclaw.provisioning import _control_plane_for_gateway
 from app.services.openclaw.shared import GatewayAgentIdentity
+from app.services.openclaw.constants import HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
 
 _T = TypeVar("_T")
 
@@ -241,6 +246,74 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             "gateway.coordination.nudge.success trace_id=%s board_id=%s actor_agent_id=%s "
             "target_agent_id=%s",
             trace_id,
+            board.id,
+            actor_agent.id,
+            target_agent_id,
+        )
+
+    async def recover_board_agent(
+        self,
+        *,
+        board: Board,
+        actor_agent: Agent,
+        target_agent_id: str,
+    ) -> None:
+        self.logger.log(
+            TRACE_LEVEL,
+            "gateway.coordination.recover.start board_id=%s actor_agent_id=%s target_agent_id=%s",
+            board.id,
+            actor_agent.id,
+            target_agent_id,
+        )
+        target = await self._board_agent_or_404(board=board, agent_id=target_agent_id)
+        if (
+            target.last_wake_sent_at is not None
+            and utcnow() - target.last_wake_sent_at < HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Target agent was recently recovered; wait before retrying.",
+            )
+        gateway = await Gateway.objects.by_id(target.gateway_id).first(self.session)
+        if gateway is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Target agent gateway not found",
+            )
+        auth_token = await _get_existing_auth_token(
+            agent_gateway_id=agent_key(target),
+            control_plane=_control_plane_for_gateway(gateway),
+        )
+        if not auth_token:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Target agent auth token unavailable for recovery",
+            )
+        await AgentLifecycleOrchestrator(self.session).run_lifecycle(
+            gateway=gateway,
+            agent_id=target.id,
+            board=board,
+            user=None,
+            action="update",
+            auth_token=auth_token,
+            force_bootstrap=False,
+            reset_session=True,
+            wake=True,
+            deliver_wakeup=True,
+            wakeup_verb="updated",
+            clear_confirm_token=True,
+            raise_gateway_errors=True,
+        )
+        record_activity(
+            self.session,
+            event_type="agent.recovery.requested",
+            message=f"Recovery wake requested for {target.name}.",
+            agent_id=actor_agent.id,
+            board_id=board.id,
+        )
+        await self.session.commit()
+        self.logger.info(
+            "gateway.coordination.recover.success board_id=%s actor_agent_id=%s target_agent_id=%s",
             board.id,
             actor_agent.id,
             target_agent_id,

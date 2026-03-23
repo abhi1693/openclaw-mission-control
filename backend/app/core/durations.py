@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 _DURATION_RE = re.compile(
-    r"^(?P<num>[1-9]\\d*)\\s*(?P<unit>[smhdw])$",
+    r"^(?P<num>[1-9]\d*)\s*(?P<unit>[smhdw])$",
     flags=re.IGNORECASE,
 )
 
