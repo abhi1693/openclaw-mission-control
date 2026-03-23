@@ -28,7 +28,7 @@ from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import async_session_maker
 from app.models.activity_events import ActivityEvent
-from app.models.agents import Agent
+from app.models.agents import DEFAULT_APPROVAL_POLICY, Agent
 from app.models.approvals import Approval
 from app.models.board_memory import BoardMemory
 from app.models.board_webhooks import BoardWebhook
@@ -180,6 +180,9 @@ class OpenClawProvisioningService(OpenClawDBService):
             if existing.openclaw_session_id != desired_session_key:
                 existing.openclaw_session_id = desired_session_key
                 changed = True
+            if existing.approval_policy is None:
+                existing.approval_policy = DEFAULT_APPROVAL_POLICY.copy()
+                changed = True
             if changed:
                 existing.updated_at = utcnow()
                 self.session.add(existing)
@@ -209,6 +212,7 @@ class OpenClawProvisioningService(OpenClawDBService):
             heartbeat_config=DEFAULT_HEARTBEAT_CONFIG.copy(),
             identity_profile=merged_identity_profile,
             openclaw_session_id=self.lead_session_key(board),
+            approval_policy=DEFAULT_APPROVAL_POLICY.copy(),
         )
         raw_token = mint_agent_token(agent)
         await self.add_commit_refresh(agent)

@@ -25,6 +25,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SearchableSelect from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const slugify = (value: string) =>
   value
@@ -32,6 +39,13 @@ const slugify = (value: string) =>
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "") || "board";
+
+const APPROVAL_POLICY_OPTIONS = [
+  { value: "immediate", label: "Silent - Auto-approve all operations" },
+  { value: "manual", label: "Manual - Requires human approval for dangerous operations" },
+] as const;
+
+type ApprovalPolicyMode = (typeof APPROVAL_POLICY_OPTIONS)[number]["value"];
 
 export default function NewBoardPage() {
   const router = useRouter();
@@ -43,6 +57,8 @@ export default function NewBoardPage() {
   const [description, setDescription] = useState("");
   const [gatewayId, setGatewayId] = useState<string>("");
   const [boardGroupId, setBoardGroupId] = useState<string>("none");
+  const [approvalPolicyMode, setApprovalPolicyMode] =
+    useState<ApprovalPolicyMode>("immediate");
 
   const [error, setError] = useState<string | null>(null);
 
@@ -143,6 +159,7 @@ export default function NewBoardPage() {
         description: trimmedDescription,
         gateway_id: resolvedGatewayId,
         board_group_id: boardGroupId === "none" ? null : boardGroupId,
+        approval_policy: { mode: approvalPolicyMode },
       },
     });
   };
@@ -215,6 +232,32 @@ export default function NewBoardPage() {
               />
               <p className="text-xs text-slate-500">
                 Optional. Groups increase cross-board visibility.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Default authorization mode
+              </label>
+              <Select
+                value={approvalPolicyMode}
+                onValueChange={(value) =>
+                  setApprovalPolicyMode(value as ApprovalPolicyMode)
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select authorization mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {APPROVAL_POLICY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Default for agents on this board. Can be overridden per agent.
               </p>
             </div>
           </div>

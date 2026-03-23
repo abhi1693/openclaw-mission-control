@@ -97,6 +97,9 @@ export default function EditAgentPage() {
   const [identityProfile, setIdentityProfile] = useState<
     IdentityProfile | undefined
   >(undefined);
+  const [approvalPolicy, setApprovalPolicy] = useState<string | undefined>(
+    undefined,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const boardsQuery = useListBoardsApiV1BoardsGet<
@@ -178,7 +181,16 @@ export default function EditAgentPage() {
   const resolvedIsGatewayMain =
     isGatewayMain ?? Boolean(loadedAgent?.is_gateway_main);
   const resolvedHeartbeatEvery = heartbeatEvery ?? loadedHeartbeat.every;
+  const loadedApprovalPolicy = useMemo(() => {
+    const policy = loadedAgent?.approval_policy;
+    if (policy && typeof policy === "object") {
+      return (policy as Record<string, unknown>).mode === "manual" ? "manual" : "immediate";
+    }
+    return "immediate";
+  }, [loadedAgent?.approval_policy]);
+
   const resolvedIdentityProfile = identityProfile ?? loadedIdentityProfile;
+  const resolvedApprovalPolicy = approvalPolicy ?? loadedApprovalPolicy;
 
   const resolvedBoardId = useMemo(() => {
     if (resolvedIsGatewayMain) return boardId ?? "";
@@ -231,6 +243,7 @@ export default function EditAgentPage() {
         loadedAgent.identity_profile,
         resolvedIdentityProfile,
       ) as unknown as Record<string, unknown> | null,
+      approval_policy: { mode: resolvedApprovalPolicy } as unknown as Record<string, unknown>,
     };
     if (!resolvedIsGatewayMain) {
       payload.board_id = resolvedBoardId || null;
@@ -439,6 +452,35 @@ export default function EditAgentPage() {
               />
               <p className="text-xs text-slate-500">
                 Set how often this agent runs HEARTBEAT.md.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Authorization & safety
+          </p>
+          <div className="mt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900">
+                Authorization mode
+              </label>
+              <Select
+                value={resolvedApprovalPolicy}
+                onValueChange={(value) => setApprovalPolicy(value)}
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="immediate">Auto</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Auto allows OpenClaw to execute commands without manual confirmation.
               </p>
             </div>
           </div>

@@ -165,6 +165,86 @@ curl -s "http://localhost:8000/api/v1/agent/boards/<board-id>/tasks?status=inbox
   -H "X-Agent-Token: $AUTH_TOKEN"
 ```
 
+## Agent approval policy
+
+Agents can be configured with an `approval_policy` that controls how dangerous operations (e.g., executing shell commands via OpenClaw) are authorized.
+
+### Policy modes
+
+| Mode | Value | Description |
+|------|-------|-------------|
+| Auto | `immediate` | Automatically approve dangerous operations without manual confirmation. |
+| Manual | `manual` | Require human approval for dangerous operations. |
+
+### Schema
+
+The `approval_policy` field is an object with a `mode` property:
+
+```json
+{
+  "approval_policy": {
+    "mode": "immediate"  // or "manual"
+  }
+}
+```
+
+### API endpoints
+
+The following endpoints accept or return `approval_policy`:
+
+#### Agent create (`POST /api/v1/agents`)
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Deploy bot",
+    "board_id": "<board-id>",
+    "approval_policy": {"mode": "immediate"}
+  }'
+```
+
+#### Agent update (`PATCH /api/v1/agents/{agent_id}`)
+
+```bash
+curl -s -X PATCH http://localhost:8000/api/v1/agents/<agent-id> \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approval_policy": {"mode": "manual"}
+  }'
+```
+
+#### Agent read (`GET /api/v1/agents/{agent_id}`)
+
+Returns the agent's current `approval_policy` (falls back to `{"mode": "immediate"}` if not set).
+
+### Board-level approval policy
+
+Boards also have an `approval_policy` field that serves as a default for agents created on that board:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/boards \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Infrastructure",
+    "slug": "infra",
+    "description": "Infrastructure automation board",
+    "gateway_id": "<gateway-id>",
+    "approval_policy": {"mode": "manual"}
+  }'
+```
+
+When creating an agent on a board with an `approval_policy`, the agent will inherit the board's policy if not explicitly specified.
+
+### Default behavior
+
+- If `approval_policy` is not specified when creating an agent, it defaults to `{"mode": "immediate"}` (auto-approve).
+- If a board has an `approval_policy`, new agents on that board inherit the board's policy.
+- The policy can be changed at any time via the update endpoint.
+
 ## Gaps / follow-ups
 
 - Per-endpoint documentation of:

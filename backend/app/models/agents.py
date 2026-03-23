@@ -49,5 +49,20 @@ class Agent(QueryModel, table=True):
     checkin_deadline_at: datetime | None = Field(default=None)
     last_provision_error: str | None = Field(default=None, sa_column=Column(Text))
     is_board_lead: bool = Field(default=False, index=True)
+    approval_policy: dict[str, object] | None = Field(
+        default=None,
+        sa_column=Column(JSON),
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+DEFAULT_APPROVAL_POLICY: dict[str, object] = {"mode": "immediate"}
+
+APPROVAL_POLICY_MODE_IMMEDIATE = "immediate"
+APPROVAL_POLICY_MODE_MANUAL = "manual"
+
+
+def get_approval_policy(agent: Agent) -> dict[str, object]:
+    """Return the agent's approval policy, defaulting to immediate mode."""
+    return (agent.approval_policy or DEFAULT_APPROVAL_POLICY).copy()

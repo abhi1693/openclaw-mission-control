@@ -101,6 +101,11 @@ class AgentBase(SQLModel):
         description="Template representing deeper agent instructions.",
         examples=["When critical blockers appear, escalate in plain language."],
     )
+    approval_policy: dict[str, Any] | None = Field(
+        default=None,
+        description="Approval policy controlling how dangerous operations are authorized.",
+        examples=[{"mode": "immediate"}],
+    )
 
     @field_validator("identity_template", "soul_template", mode="before")
     @classmethod
@@ -189,6 +194,11 @@ class AgentUpdate(SQLModel):
         default=None,
         description="Optional replacement soul template.",
         examples=["Escalate only after checking all known mitigations."],
+    )
+    approval_policy: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional approval policy controlling how dangerous operations are authorized.",
+        examples=[{"mode": "immediate"}],
     )
 
     @field_validator("identity_template", "soul_template", mode="before")
