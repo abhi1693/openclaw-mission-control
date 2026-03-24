@@ -69,6 +69,12 @@ class PerGatewayConnection:
 
     async def connect(self) -> None:
         """Establish the WebSocket connection and start listening for events."""
+        await self._establish_connection()
+        self._listener_task = asyncio.create_task(self._listen_loop())
+        logger.info("gateway.listener.started gateway_id=%s", self._gateway.id)
+
+    async def _establish_connection(self) -> None:
+        """Establish the WebSocket connection without starting the listener."""
         gateway_url = self._build_gateway_url()
         logger.info(
             "gateway.listener.connecting gateway_id=%s url=%s",
@@ -181,9 +187,6 @@ class PerGatewayConnection:
                 await asyncio.sleep(1)
                 raise
 
-            self._listener_task = asyncio.create_task(self._listen_loop())
-            logger.info("gateway.listener.started gateway_id=%s", self._gateway.id)
-
         except Exception:
             # Ensure WebSocket is closed and cleaned up on any failure
             if self._ws is not None:
@@ -237,7 +240,7 @@ class PerGatewayConnection:
             )
             await asyncio.sleep(wait_time)
             try:
-                await self.connect()
+                await self._establish_connection()
                 return
             except Exception:
                 logger.exception(
