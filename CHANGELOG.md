@@ -4,7 +4,33 @@ All notable changes to the OpenClaw Mission Control fork.
 
 ## 2026-03-25
 
+### Added
+- **Agent harness improvements plan** (`docs/plans/2026-03-25-agent-harness-improvements.md`): 11-task plan based on Anthropic's "Harness Design for Long-Running Apps" article, Codex-reviewed to 100% compliance. Covers: liveness fixes, continuous workflow, template shrink (19KB→8-10KB), structured handoff files, high-level specs, design-quality anchoring, QA grading rubric with originality/craft dimensions, few-shot calibration, trace review loop, and agent consolidation analysis.
+- **Architect-as-planner role**: Architect expands Supervisor's short task seeds into full specs with sprint contracts. Supervisor remains the sole hub for all assignment, QA routing, and escalation. Bypass rule: LOW/bugfix/<3 files skip Architect.
+- **QA dual routing**: Both QA-Unit (code quality: typecheck, lint, tests) and QA-E2E (browser: rendering, console errors, visual) validate frontend tasks. QA-Unit runs first. Backend tasks use QA-Unit only.
+- **QA grading rubric** with scored dimensions: Originality (20%), Craft (15%), Visual Quality (15%), Spec Fidelity (15%), Interaction (15%), Console/Network (10%), Responsiveness (5%), Code Quality (5%). Hard fail thresholds. 3-round reject/fix/retest loop before Supervisor escalation.
+- **Refine-or-pivot rule**: If QA rejects twice on same issue, developer must decide to refine or pivot approach.
+- **Contract negotiation**: QA signs off on sprint contract before implementation starts (HIGH/MEDIUM tasks).
+- **Chrome MCP for agents**: Installed headless Chromium + chrome-devtools-mcp on gateway for Programmer-Frontend, QA-E2E, and Supervisor.
+- **Frontend skills**: Enabled `frontend-design`, `feature-dev`, `code-simplifier` plugins on gateway. Updated all agent IDENTITY.md with mandatory skill activation instructions.
+- **`BOARD_TIMEZONE` in TOOLS.md**: Agents now know the board's timezone. HEARTBEAT non-negotiable rule: use BOARD_TIMEZONE for date displays, not UTC. Prevents "today/tomorrow" meeting display bugs.
+- **`agent-status.sh`**: CLI dashboard showing all agents, status, current task, heartbeat interval, last seen.
+- **Model changes**: Supervisor, Architect, QA-Unit primary model changed to `openai-codex/gpt-5.4` with MiniMax M2.7 as first fallback. Heartbeat model remains `minimax-m2.5` for all agents.
+
+### Changed
+- **Continuous workflow**: Workers run through PLAN → IMPLEMENT → VALIDATE in one session. No forced stops between states. Small and large tasks both run continuously.
+- **Small task fast-path**: Bug fixes and < 3 file changes can complete all workflow states in a single heartbeat.
+- **Worker heartbeat interval**: 30m for all workers (deliver=True is the work driver, heartbeat is safety net only).
+- **QA routing via Supervisor**: All QA work routed through Supervisor. QA-Unit for code quality, QA-E2E for browser validation. Supervisor sends sprint contracts to QA for pre-build signoff.
+- **Role boundaries**: Workers must ask @lead for cross-role work. Progress updates every 30 min.
+- **Lead nudge**: Changed from "Move to review NOW" to "Post a status update — are you blocked?" Respects workflow gates.
+- **Task rejection**: Updated to match auto-reassignment behavior in backend code.
+- **`board-stop.sh`**: Added `set-heartbeats` RPC (Step 2b), fixed JSON quoting (Step 4).
+- **`board-start.sh`**: Replaced hardcoded Python SDK RPC with CLI command. Added template sync (Step 7b) before heartbeat check-in (Step 7c) for token hash resync.
+- **Methodical rollout policy**: One task at a time, measure impact, rollback criteria. Model reassessment when new versions ship.
+
 ### Fixed
+- **Meeting timezone bug**: Agents displayed "today" for tomorrow's meetings because they used UTC instead of board timezone. Added `BOARD_TIMEZONE` to TOOLS.md and HEARTBEAT rule.
 - **Token rotation lockout — automated resync**: Two-layer fix for the recurring problem where gateway SIGUSR1 restarts rotate TOOLS.md tokens but leave stale hashes in the MC database, locking agents out with 401 Unauthorized.
   - **Layer 1** (`provisioning_db.py`): During template sync, if TOOLS.md token doesn't match DB hash, auto-resync the DB hash from TOOLS.md instead of logging a warning. Only resyncs existing agents (not new ones) and only from trusted gateway workspace reads.
   - **Layer 2** (`board-start.sh` Step 7b): After gateway restart, calls `POST /gateways/{id}/templates/sync` to trigger Layer 1 for all agents before attempting heartbeat check-in. Steps reordered: enable heartbeats (7) → sync templates + resync tokens (7b) → check in agents (7c). Codex-validated: confirmed the API call traces through `sync_gateway_templates → _sync_one_agent → _resolve_agent_auth_token → resync branch`.
