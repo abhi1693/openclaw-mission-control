@@ -4,7 +4,7 @@
 
 **Goal:** Transform the agent system from heartbeat-driven polling to event-driven continuous work, reduce template overhead by 80%, add calibrated QA evaluation, and fix liveness/token issues — based on Anthropic's "Harness Design for Long-Running Apps" article.
 
-**Architecture:** 10-item improvement plan across 4 layers: infrastructure prerequisites (liveness, tokens), execution model (event-driven), templates (shrink), and quality (QA rubrics). Each task is self-contained and deployable independently.
+**Architecture:** 11-item improvement plan across 5 layers: infrastructure prerequisites (liveness, tokens), execution model (event-driven), planning/handoff contracts, quality control (QA rubrics and loops), and observability (trace review). Each task is self-contained and deployable independently.
 
 **Tech Stack:** Python/FastAPI backend, Jinja2 templates, OpenClaw gateway (Node.js), PostgreSQL, Redis
 
@@ -13,6 +13,32 @@
 > - `shared/` artifacts referenced below live on the gateway at `/root/.openclaw/workspace/shared/` and are already scaffolded there. They are not tracked in this git repo.
 > - Deploy `shared/` files manually (`scp`) or create them in-place from an agent session. Template sync only handles files listed in `DEFAULT_GATEWAY_FILES`.
 > - `board-start.sh` already contains template sync support (commit `cb3e6fb`), so none of the tasks below require script changes for template deployment.
+
+## Operating Policies
+
+### Planner Role: Architect as Spec Author
+
+- Supervisor creates a short task seed only: goal, priority, constraints, references, and any hard deadlines.
+- Architect owns planner behavior. It expands the short seed into an ambitious, high-level product spec with explicit success criteria, non-goals, quality bar, and a sprint contract that defines what this sprint will and will not deliver.
+- The sprint contract must be concrete enough for QA to evaluate before coding starts.
+- Architect routes work to Generator/Programmer only after QA signs off on the sprint contract.
+
+### Context Strategy
+
+- Use `isolatedSession=true` only for heartbeat safety-net checks: idle agents, liveness confirmation, progress posting, and other non-building sessions where no active implementation context must be preserved.
+- Use `isolatedSession=false` only for continuous work sessions triggered by `deliver=True`, where an agent already owns an `in_progress` task and needs conversational continuity across plan/build/validate loops.
+- Treat this as a strict policy, not a mixed mode. A task run is either a safety-net check or a continuous work session.
+
+### Methodical Rollout Policy
+
+- Implement one task at a time in dependency order. Do not batch-roll multiple workflow changes together.
+- After each task, measure impact before moving on: agent throughput (tasks completed per day), token cost (per active task/session where available), and error rate (failed runs, false offline, stuck review loops).
+- Use one observation window per task rollout before proceeding. Minimum: the next 10 comparable task runs or one working day, whichever produces more signal.
+- Roll back the most recent change if any of the following hold during the observation window:
+  - throughput drops by more than 10% without a compensating quality gain,
+  - token cost per task rises by more than 15% without a clear reduction in error rate or review churn,
+  - error rate or stuck-task rate rises by more than 10%,
+  - liveness, contract negotiation, or QA routing stops work from progressing for active tasks.
 
 ---
 
@@ -99,11 +125,12 @@ Replace the worker workflow section (lines 386-421) with:
 
 ```
    **Execute your workflow.** Read MEMORY.md for your workflow state block. If none exists, start at PLANNING.
-   Run through ALL applicable states in one session until you reach `review`, hit a real blocker, or run out of time.
+   Run through ALL applicable states in one session until work is accepted, you hit a real blocker, or you run out of time.
 
-   **PLANNING:** Read task description + comments + specs. Write plan to MEMORY.md. Continue to IMPLEMENTING.
-   **IMPLEMENTING:** Delegate to primary ACP. Run feedback loops (typecheck, lint, tests). Review with opposite ACP. Continue to VALIDATING.
-   **VALIDATING:** Run self-validation (Step 8). If passes → PATCH to review (Step 9). If fails → back to IMPLEMENTING.
+   **PLANNING:** Read the short task, Architect spec, sprint contract, comments, and linked docs. If the Architect spec or sprint contract is missing, stop and request it before building.
+   **CONTRACT CHECK:** If QA review is required for this task, send the sprint contract to QA and wait for `qa_signoff=approved` before implementation. If QA rejects the contract, revise it and resubmit.
+   **IMPLEMENTING:** Build against the approved sprint contract. Run feedback loops (typecheck, lint, tests). Continue directly to validation when the current slice is ready.
+   **VALIDATING:** Run self-validation first. If QA review is required, hand off for QA review. If QA rejects, fix the rejection items and send it back to QA for re-test. Maximum 3 QA reject/fix/re-test rounds, then escalate to Supervisor with the rejection history.
 
    Do NOT stop between states unless blocked. Small and large tasks both run continuously.
 ```
@@ -182,11 +209,13 @@ Read TOOLS.md for BASE_URL, AUTH_TOKEN, BOARD_ID.
 2) If fails, stop.
 ## Work
 1) Fetch assigned task. If none, post idle and return HEARTBEAT_OK.
-2) Run continuously: PLAN → IMPLEMENT → VALIDATE → PATCH to review.
-3) Activate skills: frontend-design, feature-dev, superpowers, simplify.
-4) Post progress comment every 30 min while working.
-5) Stay in your role. Ask @lead for cross-role work.
-6) For validation details: read $SHARED_WORKSPACE/docs/validation-cookbook.md
+2) Run continuously: PLAN → CONTRACT CHECK → IMPLEMENT → VALIDATE.
+3) If QA is required, do not code until QA signs off on the sprint contract.
+4) If QA rejects, fix the issue, re-submit, and repeat for up to 3 rounds before escalating.
+5) Activate skills: frontend-design, feature-dev, superpowers, simplify.
+6) Post progress comment every 30 min while working.
+7) Stay in your role. Ask @lead for cross-role work.
+8) For validation details: read $SHARED_WORKSPACE/docs/validation-cookbook.md
 ## HEARTBEAT_OK
 Say HEARTBEAT_OK only when check-in succeeded and work is complete or reported.
 ```
@@ -219,6 +248,8 @@ Each in-progress task has a file: shared/tasks/<task_id>.md
 - task_id: UUID
 - objective: one sentence
 - sprint_contract: what "done" looks like for this sprint
+- qa_signoff: pending | approved | rejected | not_required
+- qa_round: integer, start at 0 and cap at 3 before Supervisor escalation
 - files_touched: list of files modified
 - commands_run: last 5 commands with output summary
 - last_build_result: pass/fail + error if fail
@@ -233,7 +264,11 @@ Add to worker workflow:
 ```
 Before starting work, read handoff file if it exists:
   cat $SHARED_WORKSPACE/tasks/$TASK_ID.md 2>/dev/null
+If `qa_signoff` is `pending` or `rejected`, negotiate the sprint contract with QA before implementation.
+Do not begin coding until `qa_signoff` is `approved` for HIGH/MEDIUM priority work.
+If `qa_signoff` is `not_required`, self-validation is sufficient unless the developer asks QA to review.
 After each work session, update the handoff file with current state.
+After each QA rejection, increment `qa_round`, record the rejection summary, and route the task back through fix -> QA re-test.
 ```
 
 Deployment note: `shared/tasks/` lives on the gateway workspace, not in this repo.
@@ -255,13 +290,24 @@ git commit -m "feat(handoff): add structured task handoff files in shared worksp
 Create `/root/.openclaw/workspace/shared/docs/task-spec-guidelines.md`:
 ```markdown
 # Task Specification Guidelines
+- Supervisor writes a short task seed only: goal, priority, constraints, references
+- Architect acts as planner and expands that seed into a full spec before implementation
 - Goal: one sentence
 - Constraints: tech/deployment/compatibility limits
-- Acceptance checks: 3-5 bullet points (what "done" looks like)
+- Success criteria: 3-5 bullet points (what "done" looks like)
+- Sprint contract: the exact slice QA must approve before coding begins
+- Non-goals: what this sprint will not attempt
 - References: links to specs, plans, shared docs
 - Do NOT include inline code samples — put those in linked spec files
 - Do NOT specify implementation approach — let the agent decide
 ```
+
+**Architect-as-planner workflow:**
+
+1. Supervisor creates a short task with priority, goal, constraints, and references.
+2. Architect expands it into a high-level product spec with success criteria, quality bar, non-goals, and sprint contract.
+3. QA reviews the sprint contract and either approves it or sends it back for revision.
+4. Only after QA approval does Architect route the spec package to Generator (Programmer).
 
 Deployment note: this is a plain markdown doc in the gateway `shared/docs/` workspace, not a repo-backed template.
 
@@ -298,15 +344,31 @@ Update lead template task creation section to include quality anchor in task des
 ```markdown
 # QA Grading Rubric
 
+## Review Entry Policy
+- QA review is required for tasks with priority HIGH or MEDIUM.
+- For LOW priority work, or bug fixes touching fewer than 3 files, self-validation is sufficient and the developer may set `qa_signoff: not_required`.
+- Any developer may still request QA review voluntarily.
+- For QA-required tasks, QA must review the sprint contract first and set `qa_signoff: approved` before implementation begins.
+
+## Review Loop
+1. QA reviews the sprint contract.
+2. If QA rejects, Architect/Programmer revises the contract and resubmits.
+3. During implementation review, QA rejection sends the task back to the developer for fixes.
+4. Developer fixes the issues and resubmits to QA.
+5. QA re-tests.
+6. Stop after 3 reject/fix/re-test rounds and escalate to Supervisor with the rejection history and proposed decision.
+
 ## Frontend Tasks
 | Dimension | Weight | Fail Threshold | How to Check |
 |-----------|--------|----------------|-------------|
-| Spec Fidelity | 25% | <6/10 | Compare against plan docs |
-| Interaction | 20% | <7/10 | Click/drag/toggle all features |
-| Visual Quality | 20% | <7/10 | Typography, color, spacing, motion |
-| Responsiveness | 10% | <5/10 | Resize viewport to mobile/tablet |
-| Console/Network | 15% | Any error = fail | Chrome MCP list_console_messages |
-| Code Quality | 10% | Typecheck fails = fail | tsc --noEmit, npm run lint |
+| Spec Fidelity | 15% | <6/10 | Compare against plan docs and sprint contract |
+| Interaction | 15% | <7/10 | Click/drag/toggle all features |
+| Visual Quality | 15% | <7/10 | Typography, color, spacing, motion |
+| Originality | 20% | <6/10 | Check for custom decisions, not cookie-cutter patterns |
+| Craft | 15% | <6/10 | Assess code cleanliness, polish, and absence of hacks |
+| Responsiveness | 5% | <5/10 | Resize viewport to mobile/tablet |
+| Console/Network | 10% | Any error = fail | Chrome MCP list_console_messages |
+| Code Quality | 5% | Typecheck fails = fail | tsc --noEmit, npm run lint |
 
 ## Backend Tasks
 | Dimension | Weight | Fail Threshold | How to Check |
@@ -324,6 +386,14 @@ Update lead template task creation section to include quality anchor in task des
 - Service returns 5xx
 - Data mismatch vs database
 ```
+
+**Step 2: Update QA identities**
+
+Update QA-E2E and QA-Unit identities to:
+- read the rubric before review,
+- enforce the pre-build sprint-contract signoff for HIGH/MEDIUM work,
+- skip QA automatically only when `qa_signoff=not_required`,
+- run the reject -> fix -> re-test loop with a hard stop at 3 rounds before Supervisor escalation.
 
 Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it from the QA identities there.
 
@@ -343,7 +413,23 @@ Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it
 
 ---
 
-## Task 8: Cost Tracking Per Task (Future Investigation)
+## Task 8: Trace Review and Prompt Tuning Loop
+
+**Files:**
+- Create on gateway shared workspace: `/root/.openclaw/workspace/shared/docs/trace-review-loop.md`
+
+**Problem:** Without regularly reading Architect/Generator/QA session traces, prompt failures show up as anecdotes instead of actionable fixes. The system needs a standing review loop that turns observed failures into targeted prompt and template improvements.
+
+**Action:** Create a standing trace-review playbook that says:
+- review session traces after every escalation and at least once per 5 completed tasks,
+- identify prompt failures such as missing contract negotiation, skipped QA routing, repeated rejection loops, tool misuse, or bloated context,
+- tune one template/instruction at a time based on observed failures,
+- log the hypothesis, change made, and the next observation window,
+- treat this as an ongoing operating practice, not a one-time cleanup task.
+
+---
+
+## Task 9: Cost Tracking Per Task (Future Investigation)
 
 **No implementation in this plan.** Descope this until the gateway API for session token usage is understood.
 
@@ -356,7 +442,7 @@ Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it
 
 ---
 
-## Task 9: Agent Consolidation Analysis (Future)
+## Task 10: Agent Consolidation Analysis (Future)
 
 **No code changes.** Document analysis for future reference.
 
@@ -378,9 +464,11 @@ Task 0 (liveness) ──→ Task 1 (continuous workflow) ──→ Task 2 (shrin
                                                        ├──→ Task 5 (quality anchor)
 
 Task 4 (task specs) ──→ Task 6 (QA rubric) ──→ Task 7 (few-shot calibration)
+                                              └──→ Task 8 (trace review loop, ongoing)
 
-Task 8 (cost tracking) — future investigation, independent
-Task 9 (consolidation) — future, no dependencies
+Task 8 (trace review) — ongoing feedback loop into Tasks 1/3/4/6
+Task 9 (cost tracking) — future investigation, independent
+Task 10 (consolidation) — future, no dependencies
 ```
 
 ## Estimated Effort
@@ -393,7 +481,8 @@ Task 9 (consolidation) — future, no dependencies
 | 3. Handoff files | 30 min | Better context preservation |
 | 4. Task specs | 15 min | Process doc only |
 | 5. Quality anchor | 15 min | Shapes output quality |
-| 6. QA rubric | 2 hours | Calibrated evaluation |
+| 6. QA rubric | 2 hours | Calibrated evaluation and contract gating |
 | 7. Few-shot calibration | 1 hour | Aligned QA judgment |
-| 8. Cost tracking | Future | Requires gateway API investigation first |
-| 9. Consolidation | 0 (doc only) | Future reference |
+| 8. Trace review loop | 30 min setup + ongoing | Continuous prompt tuning from real traces |
+| 9. Cost tracking | Future | Requires gateway API investigation first |
+| 10. Consolidation | 0 (doc only) | Future reference |
