@@ -16,12 +16,14 @@
 
 ## Operating Policies
 
-### Planner Role: Architect as Spec Author
+### Role Split: Supervisor Hub, Architect Specialist
 
-- Supervisor creates a short task seed only: goal, priority, constraints, references, and any hard deadlines.
-- Architect owns planner behavior. It expands the short seed into an ambitious, high-level product spec with explicit success criteria, non-goals, quality bar, and a sprint contract that defines what this sprint will and will not deliver.
+- Supervisor always owns intake and routing: create short task seeds, assign all work, route all QA reviews, make priority decisions, triage inbox, reassign rejected tasks, and escalate to Miguel.
+- Architect is a specialist the Supervisor invokes when a task needs product-spec expansion or architecture review. Architect expands the Supervisor seed into a product spec with explicit success criteria, non-goals, quality bar, and a sprint contract that defines what this sprint will and will not deliver.
+- Architect does not assign tasks, does not route work to QA, and does not triage inbox. Architect posts its spec/contract back as a task comment for the Supervisor to route.
 - The sprint contract must be concrete enough for QA to evaluate before coding starts.
-- Architect routes work to Generator/Programmer only after QA signs off on the sprint contract.
+- Bypass rule: LOW priority work, bug fixes, or tasks touching fewer than 3 files skip Architect and pre-build QA contract signoff. Supervisor assigns those tasks directly to Programmer and self-validation is sufficient unless Supervisor explicitly requests QA.
+- HIGH/MEDIUM new-feature rule: Supervisor creates the seed, assigns Architect, receives the spec/contract comment back, routes the sprint contract to QA for signoff, then assigns Programmer only after QA approval.
 
 ### Context Strategy
 
@@ -127,10 +129,10 @@ Replace the worker workflow section (lines 386-421) with:
    **Execute your workflow.** Read MEMORY.md for your workflow state block. If none exists, start at PLANNING.
    Run through ALL applicable states in one session until work is accepted, you hit a real blocker, or you run out of time.
 
-   **PLANNING:** Read the short task, Architect spec, sprint contract, comments, and linked docs. If the Architect spec or sprint contract is missing, stop and request it before building.
-   **CONTRACT CHECK:** If QA review is required for this task, send the sprint contract to QA and wait for `qa_signoff=approved` before implementation. If QA rejects the contract, revise it and resubmit.
+   **PLANNING:** Read the short task, Architect spec if present, sprint contract if present, comments, and linked docs. If this is a HIGH/MEDIUM new-feature task and the Architect spec or sprint contract is missing, stop and ask @lead to decide whether Architect must be invoked before building. If this is LOW priority work, a bug fix, or a task touching fewer than 3 files, continue without Architect unless @lead says otherwise.
+   **CONTRACT CHECK:** If QA review is required for this task, wait for @lead to route the sprint contract to QA and do not implement until `qa_signoff=approved`. If QA rejects the contract, post the needed revision notes and ask @lead to re-route the updated contract to QA.
    **IMPLEMENTING:** Build against the approved sprint contract. Run feedback loops (typecheck, lint, tests). Continue directly to validation when the current slice is ready.
-   **VALIDATING:** Run self-validation first. If QA review is required, hand off for QA review. If QA rejects, fix the rejection items and send it back to QA for re-test. Maximum 3 QA reject/fix/re-test rounds, then escalate to Supervisor with the rejection history.
+   **VALIDATING:** Run self-validation first. If QA review is required, post the validation summary and ask @lead to route the task to QA. If QA rejects, fix the rejection items and ask @lead to re-route the task to QA for re-test. Maximum 3 QA reject/fix/re-test rounds, then escalate to Supervisor with the rejection history.
 
    Do NOT stop between states unless blocked. Small and large tasks both run continuously.
 ```
@@ -210,12 +212,13 @@ Read TOOLS.md for BASE_URL, AUTH_TOKEN, BOARD_ID.
 ## Work
 1) Fetch assigned task. If none, post idle and return HEARTBEAT_OK.
 2) Run continuously: PLAN → CONTRACT CHECK → IMPLEMENT → VALIDATE.
-3) If QA is required, do not code until QA signs off on the sprint contract.
-4) If QA rejects, fix the issue, re-submit, and repeat for up to 3 rounds before escalating.
-5) Activate skills: frontend-design, feature-dev, superpowers, simplify.
-6) Post progress comment every 30 min while working.
-7) Stay in your role. Ask @lead for cross-role work.
-8) For validation details: read $SHARED_WORKSPACE/docs/validation-cookbook.md
+3) For HIGH/MEDIUM new-feature work, do not code until @lead has routed the sprint contract to QA and `qa_signoff=approved`.
+4) LOW priority work, bug fixes, and tasks touching fewer than 3 files skip Architect and pre-build QA contract signoff unless @lead says otherwise.
+5) If QA rejects a contract or validation review, fix the issue, ask @lead to re-route it to QA, and repeat for up to 3 rounds before escalating.
+6) Activate skills: frontend-design, feature-dev, superpowers, simplify.
+7) Post progress comment every 30 min while working.
+8) Stay in your role. Ask @lead for cross-role work, Architect involvement, or QA routing.
+9) For validation details: read $SHARED_WORKSPACE/docs/validation-cookbook.md
 ## HEARTBEAT_OK
 Say HEARTBEAT_OK only when check-in succeeded and work is complete or reported.
 ```
@@ -264,11 +267,12 @@ Add to worker workflow:
 ```
 Before starting work, read handoff file if it exists:
   cat $SHARED_WORKSPACE/tasks/$TASK_ID.md 2>/dev/null
-If `qa_signoff` is `pending` or `rejected`, negotiate the sprint contract with QA before implementation.
-Do not begin coding until `qa_signoff` is `approved` for HIGH/MEDIUM priority work.
-If `qa_signoff` is `not_required`, self-validation is sufficient unless the developer asks QA to review.
+If `qa_signoff` is `pending` or `rejected`, ask @lead to route or re-route the sprint contract to QA before implementation.
+Do not begin coding until `qa_signoff` is `approved` for HIGH/MEDIUM new-feature work.
+If this is LOW priority work, a bug fix, or a task touching fewer than 3 files, set `qa_signoff` to `not_required` unless @lead explicitly routes QA.
+If `qa_signoff` is `not_required`, self-validation is sufficient unless the developer asks @lead to route QA review.
 After each work session, update the handoff file with current state.
-After each QA rejection, increment `qa_round`, record the rejection summary, and route the task back through fix -> QA re-test.
+After each QA rejection, increment `qa_round`, record the rejection summary, fix the issue, and ask @lead to route the next QA re-test.
 ```
 
 Deployment note: `shared/tasks/` lives on the gateway workspace, not in this repo.
@@ -291,7 +295,7 @@ Create `/root/.openclaw/workspace/shared/docs/task-spec-guidelines.md`:
 ```markdown
 # Task Specification Guidelines
 - Supervisor writes a short task seed only: goal, priority, constraints, references
-- Architect acts as planner and expands that seed into a full spec before implementation
+- Architect, when assigned by Supervisor, expands that seed into a full spec before implementation
 - Goal: one sentence
 - Constraints: tech/deployment/compatibility limits
 - Success criteria: 3-5 bullet points (what "done" looks like)
@@ -300,14 +304,18 @@ Create `/root/.openclaw/workspace/shared/docs/task-spec-guidelines.md`:
 - References: links to specs, plans, shared docs
 - Do NOT include inline code samples — put those in linked spec files
 - Do NOT specify implementation approach — let the agent decide
+- LOW priority work, bug fixes, and tasks touching fewer than 3 files bypass Architect and pre-build QA contract signoff unless Supervisor explicitly opts in
 ```
 
-**Architect-as-planner workflow:**
+**Supervisor-hub planning workflow:**
 
 1. Supervisor creates a short task with priority, goal, constraints, and references.
-2. Architect expands it into a high-level product spec with success criteria, quality bar, non-goals, and sprint contract.
-3. QA reviews the sprint contract and either approves it or sends it back for revision.
-4. Only after QA approval does Architect route the spec package to Generator (Programmer).
+2. For HIGH/MEDIUM new-feature work, Supervisor assigns the task to Architect.
+3. Architect expands the seed into a high-level product spec with success criteria, quality bar, non-goals, and sprint contract.
+4. Architect posts the spec package back to the task as a comment for Supervisor review and routing.
+5. Supervisor routes the sprint contract to QA for signoff and handles any rejected contract reassignment.
+6. Only after QA approval does Supervisor assign the task to Programmer.
+7. For LOW priority work, bug fixes, or tasks touching fewer than 3 files, Supervisor bypasses Architect and pre-build QA contract signoff and assigns Programmer directly.
 
 Deployment note: this is a plain markdown doc in the gateway `shared/docs/` workspace, not a repo-backed template.
 
@@ -345,18 +353,19 @@ Update lead template task creation section to include quality anchor in task des
 # QA Grading Rubric
 
 ## Review Entry Policy
-- QA review is required for tasks with priority HIGH or MEDIUM.
-- For LOW priority work, or bug fixes touching fewer than 3 files, self-validation is sufficient and the developer may set `qa_signoff: not_required`.
-- Any developer may still request QA review voluntarily.
-- For QA-required tasks, QA must review the sprint contract first and set `qa_signoff: approved` before implementation begins.
+- Supervisor routes all QA work.
+- QA review is required for HIGH/MEDIUM new-feature tasks.
+- For LOW priority work, or bug fixes touching fewer than 3 files, self-validation is sufficient and the developer may set `qa_signoff: not_required` unless Supervisor explicitly routes QA.
+- Any developer may still ask Supervisor to route QA review voluntarily.
+- For QA-required tasks, Supervisor sends the sprint contract to QA first and QA must set `qa_signoff: approved` before implementation begins.
 
 ## Review Loop
-1. QA reviews the sprint contract.
-2. If QA rejects, Architect/Programmer revises the contract and resubmits.
-3. During implementation review, QA rejection sends the task back to the developer for fixes.
-4. Developer fixes the issues and resubmits to QA.
-5. QA re-tests.
-6. Stop after 3 reject/fix/re-test rounds and escalate to Supervisor with the rejection history and proposed decision.
+1. Supervisor sends the sprint contract to QA.
+2. If QA rejects the pre-build contract, Supervisor routes it back to Architect for revision and re-submits it to QA.
+3. During implementation review, QA rejection goes back through Supervisor, who reassigns the task to Programmer for fixes.
+4. Programmer fixes the issues and asks @lead to route the task back to QA.
+5. Supervisor re-routes the task to QA for re-test.
+6. Stop after 3 reject/fix/re-test rounds and have Supervisor decide whether to re-scope, pause, or escalate to Miguel with the rejection history and proposed decision.
 
 ## Frontend Tasks
 | Dimension | Weight | Fail Threshold | How to Check |
@@ -392,7 +401,7 @@ Update lead template task creation section to include quality anchor in task des
 Update QA-E2E and QA-Unit identities to:
 - read the rubric before review,
 - enforce the pre-build sprint-contract signoff for HIGH/MEDIUM work,
-- skip QA automatically only when `qa_signoff=not_required`,
+- expect Supervisor to route every QA request and skip QA automatically only when `qa_signoff=not_required`,
 - run the reject -> fix -> re-test loop with a hard stop at 3 rounds before Supervisor escalation.
 
 Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it from the QA identities there.
@@ -418,7 +427,7 @@ Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it
 **Files:**
 - Create on gateway shared workspace: `/root/.openclaw/workspace/shared/docs/trace-review-loop.md`
 
-**Problem:** Without regularly reading Architect/Generator/QA session traces, prompt failures show up as anecdotes instead of actionable fixes. The system needs a standing review loop that turns observed failures into targeted prompt and template improvements.
+**Problem:** Without regularly reading Architect/Programmer/QA session traces, prompt failures show up as anecdotes instead of actionable fixes. The system needs a standing review loop that turns observed failures into targeted prompt and template improvements.
 
 **Action:** Create a standing trace-review playbook that says:
 - review session traces after every escalation and at least once per 5 completed tasks,
@@ -448,7 +457,7 @@ Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it
 
 Create `docs/plans/2026-03-25-agent-consolidation-analysis.md`:
 - Current: 7 agents with 30m heartbeats = 4 layers of latency
-- Proposed: 3 functional roles (Planner/Supervisor, Generator/Programmer, Evaluator/QA)
+- Proposed: 3 functional roles (Supervisor hub, Programmer, Evaluator/QA), with Architect capability retained as a Supervisor-invoked specialist pass when needed
 - Benefit: fewer agents = fewer token rotations, simpler routing, less Supervisor overhead
 - Risk: less specialization, harder to parallelize
 - Decision: defer until items 0-3 deliver measurable improvement
