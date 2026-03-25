@@ -876,3 +876,24 @@ async def test_delete_agent_lifecycle_raises_on_non_missing_agent_error(monkeypa
             delete_files=True,
             delete_session=True,
         )
+
+
+def test_default_heartbeat_config_has_isolation():
+    from app.services.openclaw.constants import DEFAULT_HEARTBEAT_CONFIG
+
+    assert DEFAULT_HEARTBEAT_CONFIG["isolatedSession"] is True
+    assert DEFAULT_HEARTBEAT_CONFIG["lightContext"] is True
+
+
+def test_offline_threshold_exceeds_max_heartbeat():
+    from app.core.durations import parse_every_to_seconds
+    from app.services.openclaw.constants import (
+        DEFAULT_HEARTBEAT_CONFIG,
+        HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
+        OFFLINE_AFTER,
+    )
+
+    configured_interval = parse_every_to_seconds(DEFAULT_HEARTBEAT_CONFIG["every"])
+    assert OFFLINE_AFTER.total_seconds() > (
+        configured_interval + HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL.total_seconds()
+    )

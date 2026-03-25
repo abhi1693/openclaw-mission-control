@@ -15,9 +15,15 @@ DEFAULT_HEARTBEAT_CONFIG: dict[str, Any] = {
     "every": "10m",
     "target": "last",
     "includeReasoning": False,
+    "lightContext": True,
+    "isolatedSession": True,
 }
 
-OFFLINE_AFTER = timedelta(minutes=10)
+# Must exceed the longest configured heartbeat interval + recovery grace.
+# Current max is 30m (workers). 35m + 1m grace = 36m threshold.
+# Tradeoff: Supervisor (5m heartbeat) won't be marked offline until 36m.
+# TODO: Replace with per-agent offline detection from effective heartbeat interval.
+OFFLINE_AFTER = timedelta(minutes=35)
 HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL = timedelta(minutes=1)
 # Provisioning convergence policy:
 # - require first heartbeat/check-in within this deadline after wake

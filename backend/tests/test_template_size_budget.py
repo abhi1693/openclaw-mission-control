@@ -69,8 +69,8 @@ def test_lead_heartbeat_requires_fresh_exec_attempt_before_declaring_blocked() -
     )
 
     assert "Do not assume exec is blocked based on an earlier session." in rendered
-    assert "Attempt the required command once in this session before saying you are blocked." in rendered
-    assert "Only say exec is blocked after a fresh tool result in this session" in rendered
+    assert "Attempt the required command once before saying blocked" in rendered
+    assert "Only blocked after a fresh tool result says so" in rendered
 
 
 def test_lead_heartbeat_includes_recovery_endpoint_for_stale_agents() -> None:
