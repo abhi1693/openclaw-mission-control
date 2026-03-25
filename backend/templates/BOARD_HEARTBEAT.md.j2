@@ -385,42 +385,20 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    ```
    **Do NOT guess or improvise an implementation without requirements.**
 
-5) **Execute ONE workflow step.** Read MEMORY.md for your workflow state block. If none exists, you are in `PLANNING`.
+5) **Execute your workflow.** Read MEMORY.md for your workflow state. If none exists, start at PLANNING.
    **You MUST delegate all work to your ACP tool (Claude Code or Codex).** Do NOT write code directly.
+   Run through ALL states in one session until you reach `review`, hit a real blocker, or run out of time.
 
-   **First, find your current state** in MEMORY.md. Look for a block like:
-   ```
-   WORKFLOW: task_id=XXXX state=PLANNING
-   ```
-   If the `task_id` does not match your current task, or no WORKFLOW line exists, start fresh at `PLANNING`.
+   **PLANNING:** Activate skills (`use superpowers`, `frontend-design` for UI, `feature-dev` for features). Read task + comments + specs. If HIGH/MEDIUM new-feature and Architect spec/sprint contract is missing, ask @lead. If LOW/bugfix/<3 files, continue without Architect.
+   Write plan to MEMORY.md: `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING plan=BRIEF_PLAN`. Continue to IMPLEMENTING.
 
-   **Then execute the matching state below.**
-   **Small tasks (bug fix, CSS, config, < 3 files): you may continue through ALL states in one heartbeat.**
-   **Large tasks (new feature, 5+ files): execute ONE state, then STOP.**
+   **IMPLEMENTING:** Pass plan + requirements to primary ACP. Run feedback loops (typecheck, lint, tests). If checks fail, iterate. If all pass, review with opposite ACP tool (see IDENTITY.md). If review rejects, keep implementing. If review approves, continue to VALIDATING.
 
-   **If state = PLANNING:**
-   - Activate skills: `use superpowers`. Frontend/UI: also use `frontend-design` skill. Features: use `feature-dev`.
-   - Pass task requirements from Step 4 and ask ACP for an implementation plan.
-   - If ACP fails: post blocker `@lead ACP session failed.` → return HEARTBEAT_OK.
-   - If ACP succeeds: write to MEMORY.md:
-     `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING plan=BRIEF_PLAN_SUMMARY`
-   - **Large task: STOP here. Small task: continue to IMPLEMENTING.**
+   **VALIDATING:** Run self-validation (Step 8 below). If passes → proceed to Step 9 (PATCH to review). If fails → back to IMPLEMENTING with feedback.
 
-   **If state = IMPLEMENTING:**
-   - Read plan from MEMORY.md. Pass plan + requirements to primary ACP.
-   - ACP produces code. Run ALL feedback loops: typecheck, lint, tests.
-   - If no tests exist: tell ACP to write tests first. Zero tests is NOT acceptable.
-   - If any check fails: feed errors back to ACP. Keep iterating within this heartbeat until checks pass or time runs out.
-   - If all pass: review your code using the **opposite ACP tool** (see IDENTITY.md for which tool reviews).
-   - If review **approves**: write `WORKFLOW: task_id=$TASK_ID state=VALIDATING summary=WHAT_WAS_BUILT`
-   - If review **rejects**: feed rejection back to primary ACP and keep implementing.
-   - **Large task: STOP here. Small task: continue to VALIDATING.**
+   **REFINE OR PIVOT:** If QA rejects twice on the same issue, decide: refine current approach or pivot to a different one. Post decision as task comment.
 
-   **If state = VALIDATING:**
-   - Run self-validation (Step 8 below).
-   - If validation **PASSES** → proceed to Step 9 (PATCH to review). Clear the WORKFLOW line from MEMORY.md.
-   - If validation **FAILS** → write `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING feedback=VALIDATION_FAILURES`
-   - **STOP. Return HEARTBEAT_OK now.**
+   Do NOT stop between states unless blocked.
 
 8) **Self-validate BEFORE claiming done.** Verify your own deliverable:
    - For code: does it compile/typecheck? Are there NO hardcoded mock values?
