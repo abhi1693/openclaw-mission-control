@@ -41,6 +41,7 @@
   - token cost per task rises by more than 15% without a clear reduction in error rate or review churn,
   - error rate or stuck-task rate rises by more than 10%,
   - liveness, contract negotiation, or QA routing stops work from progressing for active tasks.
+- **Model reassessment rule:** When a new model version ships (e.g., MiniMax M3, GPT-6), re-evaluate which scaffolding is still load-bearing. Every harness component encodes an assumption about what the model can't do alone — test those assumptions on the new model before carrying them forward.
 
 ---
 
@@ -133,6 +134,7 @@ Replace the worker workflow section (lines 386-421) with:
    **CONTRACT CHECK:** If QA review is required for this task, wait for @lead to route the sprint contract to QA and do not implement until `qa_signoff=approved`. If QA rejects the contract, post the needed revision notes and ask @lead to re-route the updated contract to QA.
    **IMPLEMENTING:** Build against the approved sprint contract. Run feedback loops (typecheck, lint, tests). Continue directly to validation when the current slice is ready.
    **VALIDATING:** Run self-validation first. If QA review is required, post the validation summary and ask @lead to route the task to QA. If QA rejects, fix the rejection items and ask @lead to re-route the task to QA for re-test. Maximum 3 QA reject/fix/re-test rounds, then escalate to Supervisor with the rejection history.
+   **REFINE OR PIVOT:** If QA rejects twice on the same issue, stop and decide: is the current approach salvageable (refine), or should you try a fundamentally different approach (pivot)? Post your decision as a task comment before continuing. If pivoting, update the handoff file with the new approach.
 
    Do NOT stop between states unless blocked. Small and large tasks both run continuously.
 ```
@@ -418,7 +420,13 @@ Deployment note: keep the rubric in `shared/qa/` on the gateway and reference it
 
 **Problem:** QA checks pass/fail without calibrated judgment. Article says few-shot examples align evaluator.
 
-**Action:** Extract 4 labeled examples from our actual history (Kanban task approval, UX regression rejection, API spec validation, comments endpoint 404).
+**Action:** Extract 4 labeled examples from our actual history (Kanban task approval, UX regression rejection, API spec validation, comments endpoint 404). Each example MUST include:
+- Task context (what was built, what was reviewed)
+- Dimension-by-dimension scores using the rubric from Task 6 (e.g., Spec Fidelity: 8/10, Originality: 7/10, ...)
+- Overall verdict: PASS or FAIL with the specific dimension that triggered the decision
+- Evaluator reasoning: why each score was given, what evidence supported it
+
+This scored-breakdown format calibrates the evaluator's judgment, not just the pass/fail boundary.
 
 ---
 
