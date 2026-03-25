@@ -158,9 +158,9 @@ ssh root@$MC_DB_HOST "$PSQL" << 'SQLEOF'
 SQLEOF
 echo "  Board resumed in UI"
 
-# Step 7: Enable heartbeats + check in all agents via direct API call
+# Step 7: Enable heartbeats
 echo ""
-echo "--- Step 7: Enabling heartbeats + initial check-in ---"
+echo "--- Step 7: Enabling heartbeats ---"
 sleep 10
 
 # Enable heartbeats via gateway CLI (no hardcoded token needed)
@@ -168,8 +168,26 @@ ssh root@$GATEWAY_HOST "openclaw gateway call set-heartbeats --params '{\"enable
   echo "  heartbeatsEnabled = true" || \
   echo "  WARNING: could not enable heartbeats via RPC (gateway may not be running)"
 
-# Check in each agent directly via MC API (immediate, no wait for heartbeat tick)
+# Step 7b: Sync templates FIRST to resync any token hashes that drifted during gateway restart
 MC_API="http://$MC_APP_HOST:8000"
+echo ""
+echo "--- Step 7b: Syncing templates (token hash resync) ---"
+LOCAL_AUTH_TOKEN=$(ssh root@$MC_APP_HOST "grep LOCAL_AUTH_TOKEN /home/mcontrol/openclaw-mission-control/backend/.env 2>/dev/null | sed 's/LOCAL_AUTH_TOKEN=//' | head -1")
+GW_ID=$(curl -s -H "Authorization: Bearer $LOCAL_AUTH_TOKEN" "$MC_API/api/v1/gateways" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); items=d.get('items',d) if isinstance(d,dict) else d; print(items[0]['id'] if items else '')" 2>/dev/null)
+if [ -n "$GW_ID" ]; then
+  SYNC_RESULT=$(curl -s -X POST "$MC_API/api/v1/gateways/$GW_ID/templates/sync" \
+    -H "Authorization: Bearer $LOCAL_AUTH_TOKEN" \
+    -H "Content-Type: application/json" 2>/dev/null)
+  synced=$(echo "$SYNC_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('agents_updated', d.get('agents_synced','?')))" 2>/dev/null)
+  errors=$(echo "$SYNC_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('errors',[])))" 2>/dev/null)
+  echo "  Synced: $synced agents, $errors errors"
+else
+  echo "  WARNING: could not find gateway ID for template sync"
+fi
+
+# Step 7c: Check in all agents AFTER token hashes are resynced
+echo ""
+echo "--- Step 7c: Initial agent check-in ---"
 TOKENS=$(ssh root@$GATEWAY_HOST "grep -rh 'AUTH_TOKEN=' /root/.openclaw/workspace/workspace-mc-*/TOOLS.md /root/.openclaw/workspace/workspace-lead-*/TOOLS.md 2>/dev/null | sed 's/.*AUTH_TOKEN=//' | sed 's/\`//' | sort -u")
 
 count=0
