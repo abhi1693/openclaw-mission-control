@@ -2,6 +2,18 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-03-25
+
+### Fixed
+- **Token rotation lockout — automated resync**: Two-layer fix for the recurring problem where gateway SIGUSR1 restarts rotate TOOLS.md tokens but leave stale hashes in the MC database, locking agents out with 401 Unauthorized.
+  - **Layer 1** (`provisioning_db.py`): During template sync, if TOOLS.md token doesn't match DB hash, auto-resync the DB hash from TOOLS.md instead of logging a warning. Only resyncs existing agents (not new ones) and only from trusted gateway workspace reads.
+  - **Layer 2** (`board-start.sh` Step 7b): After gateway restart, calls `POST /gateways/{id}/templates/sync` to trigger Layer 1 for all agents before attempting heartbeat check-in. Steps reordered: enable heartbeats (7) → sync templates + resync tokens (7b) → check in agents (7c). Codex-validated: confirmed the API call traces through `sync_gateway_templates → _sync_one_agent → _resolve_agent_auth_token → resync branch`.
+  - **Root cause confirmed**: `lifecycle_orchestrator.run_lifecycle()` mints new tokens every cycle via `mint_agent_token()`, flushes to DB before gateway write, and commits even on gateway failure — creating DB-new/TOOLS-old mismatch when writes fail (e.g., active session blocks file write). Template sync is the only code path that reads TOOLS.md and can detect/fix the drift.
+  - **RQ worker restart required**: The RQ worker process (lifecycle reconciler) must be restarted after deploying `provisioning_db.py` changes — `kill -HUP` only reloads the uvicorn web server, not the separate RQ worker process.
+
+### Changed
+- **RQ worker restarted** on MC server (was running since March 22 with old code).
+
 ## 2026-03-24
 
 ### Added
