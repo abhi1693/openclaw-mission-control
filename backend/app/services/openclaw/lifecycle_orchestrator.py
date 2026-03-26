@@ -85,7 +85,54 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
                     ),
                 )
 
-        raw_token = auth_token or mint_agent_token(locked)
+        # Only mint a new token when the agent has no token hash (first provision)
+        # or when a caller provides one explicitly. Skip minting on update/reconcile
+        # to avoid DB-new/TOOLS-old mismatch when the TOOLS.md write fails.
+        if auth_token:
+            raw_token = auth_token
+        elif not locked.agent_token_hash:
+            raw_token = mint_agent_token(locked)
+        else:
+            # Reuse existing token from TOOLS.md (lazy import to avoid circular dep).
+            # If gateway is unreachable or TOOLS.md is unreadable, skip this lifecycle
+            # entirely rather than minting — minting would create the DB/TOOLS mismatch.
+            from app.services.openclaw.gateway_resolver import optional_gateway_client_config
+            from app.services.openclaw.internal.agent_key import agent_key as _agent_key
+            from app.services.openclaw.provisioning import OpenClawGatewayControlPlane
+            from app.services.openclaw.provisioning_db import _get_existing_auth_token
+
+            raw_token = None
+            try:
+                gw_config = optional_gateway_client_config(gateway)
+                if gw_config:
+                    control_plane = OpenClawGatewayControlPlane(gw_config)
+                    raw_token = await _get_existing_auth_token(
+                        agent_gateway_id=_agent_key(locked),
+                        control_plane=control_plane,
+                    )
+            except (OpenClawGatewayError, TimeoutError, OSError):
+                raw_token = None
+
+            if raw_token and locked.agent_token_hash:
+                # Verify the TOOLS.md token matches the DB hash. If not, resync.
+                from app.core.agent_tokens import hash_agent_token, verify_agent_token
+                if not verify_agent_token(raw_token, locked.agent_token_hash):
+                    locked.agent_token_hash = hash_agent_token(raw_token)
+                    locked.updated_at = utcnow()
+                    self.session.add(locked)
+
+            if not raw_token:
+                # Gateway unreachable or TOOLS.md unreadable.
+                # Skip this lifecycle to avoid DB/TOOLS mismatch from minting.
+                locked.last_provision_error = (
+                    "Skipped: could not read existing token from TOOLS.md. "
+                    "Will retry next cycle."
+                )
+                locked.updated_at = utcnow()
+                self.session.add(locked)
+                await self.session.commit()
+                await self.session.refresh(locked)
+                return locked
         mark_provision_requested(
             locked,
             action=action,
