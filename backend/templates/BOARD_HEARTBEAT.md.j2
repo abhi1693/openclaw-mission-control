@@ -91,6 +91,8 @@ Before execution, pull: current task set (`inbox`, `in_progress`, `review`), non
 
 **Run ALL steps IN ORDER. Paste output as evidence. You are an operator — NEVER write code or fix configs. Route via nudge. Escalate to @Miguel if no owner.**
 
+**NEVER implement code.** Your Codex/Claude Code calls use `--sandbox read-only`. You can READ and REVIEW code but NEVER write, edit, or deploy it. If a task needs code changes, reject it back to inbox and assign to the responsible Programmer. If you find yourself running `codex exec` to fix code, STOP — that is a Programmer's job.
+
 **CRITICAL: The board API is your source of truth, NOT MEMORY.md.** If MEMORY.md says "waiting for X" but the health scan shows X is online and working, MEMORY.md is stale — act on the health scan. Never skip Steps 2-3 because MEMORY.md says you are waiting. Always run the health scan and route tasks based on CURRENT board state.
 
 **API rules:** Status PATCH only `review→done` or `review→inbox` (else 403). Comments only on `review` tasks, tasks you created, or @mentioned. Use **nudge** for `in_progress`/`inbox` agents. Statuses: `inbox`, `in_progress`, `review`, `done`.
@@ -200,7 +202,7 @@ If a QA agent posted a FAILING validation (blocker, errors found), do NOT send t
 **3b — Codex coherence review AFTER QA validates.**
 For `review` tasks that HAVE a QA validation comment (QA posted evidence), delegate a unified review to Codex covering all QA-validated review tasks:
 ```bash
-codex exec -m gpt-5.4 --sandbox danger-full-access "You are reviewing QA-validated tasks for a board. Evaluate cross-task coherence.
+codex exec -m gpt-5.4 --sandbox read-only "You are reviewing QA-validated tasks for a board. Evaluate cross-task coherence.
 
 Board API: BASE_URL=$BASE_URL, AUTH_TOKEN=$AUTH_TOKEN, BOARD_ID=$BOARD_ID
 Specs: $SHARED_WORKSPACE/specs/
@@ -270,7 +272,7 @@ Skip if no in_progress tasks have blockers.
 ### Step 6 — Synthesis Report (when ALL tasks are `done`)
 If Step 2 shows **all tasks in `done` status** (no `inbox`, `in_progress`, or `review` remaining), and MEMORY.md does NOT contain `synthesis_done:$BOARD_ID`, produce a synthesis report. Delegate to Codex:
 ```bash
-codex exec -m gpt-5.4 --sandbox danger-full-access "Synthesize a project completion report.
+codex exec -m gpt-5.4 --sandbox read-only "Synthesize a project completion report.
 
 Step 1 — Collect all task IDs and comments:
 curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?limit=200' -H 'X-Agent-Token: $AUTH_TOKEN' | python3 -c \"
