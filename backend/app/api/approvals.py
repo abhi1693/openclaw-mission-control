@@ -439,14 +439,30 @@ async def create_approval(
 async def update_approval(
     approval_id: str,
     payload: ApprovalUpdate,
-    board: Board = BOARD_USER_WRITE_DEP,
+    board: Board = BOARD_WRITE_DEP,
     session: AsyncSession = SESSION_DEP,
+    _actor: ActorContext = Depends(require_user_or_agent),
 ) -> ApprovalRead:
-    """Update an approval's status and resolution timestamp."""
+    """Update an approval's status and resolution timestamp.
+
+    Agents (board lead only) can reject approvals to unblock rework.
+    Only humans can approve (final quality gate).
+    """
+    updates = payload.model_dump(exclude_unset=True)
+    if _actor.agent and "status" in updates:
+        if updates["status"] != "rejected":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Agents can only reject approvals, not approve. Human approval required.",
+            )
+        if not _actor.agent.is_board_lead:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only board leads can reject approvals.",
+            )
     approval = await Approval.objects.by_id(approval_id).first(session)
     if approval is None or approval.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    updates = payload.model_dump(exclude_unset=True)
     prior_status = approval.status
     if "status" in updates:
         target_status = updates["status"]
