@@ -2,6 +2,17 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-03-26
+
+### Fixed
+- **Token minting root cause fix** (`lifecycle_orchestrator.py`): `run_lifecycle()` no longer mints a new token on every update/reconcile call. Only mints on first provision (no token hash) or explicit caller token. For updates, reads existing token from TOOLS.md via gateway RPC and reuses it. If gateway unreachable, skips lifecycle entirely (logs error, retries next cycle) instead of minting and creating DB/TOOLS.md mismatch. Verifies reused token against DB hash and resyncs if mismatched. Uses lazy imports to avoid circular dependency. This was the #1 infrastructure problem — caused 5-6 agent lockouts per day.
+- **Multiple RQ workers** cleaned up: 4 stale workers were running simultaneously with old code. Killed all, started one clean worker with the fix.
+
+### Changed
+- **Supervisor Codex review removed entirely**: Step 3b codex exec block deleted from lead template. QA-E2E is the sole Evaluator. Supervisor reads QA evidence and approves/rejects — no Codex subprocess. Lead template: 16.9KB → 14.6KB.
+- **QA routing**: Backend-only tasks use QA-Unit only (not "wait for BOTH"). Validation check matches correct prefixes ("QA-Unit validation" / "QA-E2E validation"). QA-E2E nudge includes "be SKEPTICAL" instruction.
+- **Board API is source of truth**: Supervisor must always run health scan, never skip because MEMORY.md says "waiting for X".
+
 ## 2026-03-25
 
 ### Added
