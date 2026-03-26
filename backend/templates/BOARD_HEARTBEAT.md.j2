@@ -188,51 +188,29 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$QA_UNIT_AGENT
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$QA_E2E_AGENT_ID/nudge" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "QA-E2E validate task TITLE. Use Chrome MCP (navigate_page, take_screenshot, list_console_messages) to verify: UI renders, zero console errors, matches spec. Run Playwright tests if available. Post evidence as comment with prefix QA-E2E validation."}'
+  -d '{"message": "QA-E2E EVALUATE task TITLE. You are the Evaluator. Score using shared/qa/rubric.md. Use Chrome MCP for browser review. Review code quality, design, originality. Post scored rubric as comment with prefix QA-E2E validation."}'
 ```
-4. **Wait for BOTH QA agents** to post validation. Do NOT run Codex review until all applicable QA validates.
+4. **Wait for BOTH QA agents** to post validation before proceeding.
 
 **3a-fail — Handle QA validation failures.**
-If a QA agent posted a FAILING validation (blocker, errors found), do NOT send to Codex. Instead:
+If a QA agent posted a FAILING validation (blocker, errors found):
 1. PATCH the task back to `inbox`: `curl -fsS -X PATCH ".../tasks/$TASK_ID" -d '{"status": "inbox"}'`
-2. Reassign to the original developer (from task comments — find who moved it to review).
+2. Reassign to the original developer.
 3. Post a comment with the QA failure details so the developer knows what to fix.
-4. The developer fixes, re-validates, and moves back to `review` — the cycle repeats.
 
-**3b — Codex coherence review AFTER QA validates.**
-For `review` tasks that HAVE a QA validation comment (QA posted evidence), delegate a unified review to Codex covering all QA-validated review tasks:
-```bash
-codex exec -m gpt-5.4 --sandbox read-only "You are reviewing QA-validated tasks for a board. Evaluate cross-task coherence.
-
-Board API: BASE_URL=$BASE_URL, AUTH_TOKEN=$AUTH_TOKEN, BOARD_ID=$BOARD_ID
-Specs: $SHARED_WORKSPACE/specs/
-
-Step 1 — Collect all review tasks and their QA validation comments:
-curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?status=review&limit=50' -H 'X-Agent-Token: $AUTH_TOKEN'
-For each task, read comments:
-curl -fsS '$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/TASK_ID/comments?limit=20' -H 'X-Agent-Token: $AUTH_TOKEN'
-
-Step 2 — Check QA evidence: did QA validate? What did they find?
-Step 3 — Evaluate CROSS-TASK coherence: do the deliverables work together? Does the frontend match the API spec? Does the deployment serve the right build?
-Step 4 — For each task, APPROVE or REJECT based on QA evidence + coherence.
-APPROVE: curl -fsS -X POST .../tasks/TASK_ID/comments -d '{\"message\":\"Approved: QA_EVIDENCE + COHERENCE_CHECK\"}'
-REJECT: curl -fsS -X POST .../tasks/TASK_ID/comments -d '{\"message\":\"Rejected: ISSUES\"}' then PATCH status=inbox
-
-Step 5 — Post a COHERENCE SUMMARY as board memory:
-curl -fsS -X POST '$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory' -H 'X-Agent-Token: $AUTH_TOKEN' -H 'Content-Type: application/json' -d '{\"content\":\"REVIEW COHERENCE: N approved, M rejected. Cross-task: COHERENCE_ASSESSMENT\",\"tags\":[\"review\",\"coherence\"]}'
-This persists the synthesis rationale so Step 6 (final report) can reference it."
-```
-**Do NOT review tasks yourself.** Route to QA first, then Codex reviews QA evidence.
-**If Codex fails or times out:** escalate `@Miguel Codex review failed. Need manual review.` Skip to Step 4.
+**3b — Approve or reject based on QA evidence.**
+For `review` tasks where BOTH QA agents posted passing validation:
+- Read QA-E2E's evaluation (scored rubric, browser evidence, code review) and QA-Unit's report (typecheck, lint, tests).
+- If both pass: approve. If either fails: reject back to inbox.
+- Do NOT run your own Codex review. QA-E2E is the Evaluator. Trust their scored rubric.
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
-**This board requires human approval before `done`.** When Codex approves a task (after QA validation), do NOT PATCH to done. Instead create an approval request:
+**This board requires human approval before `done`.** When QA approves, create an approval request:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"task_id": "TASK_UUID", "action_type": "move_to_done", "confidence": CODEX_CONFIDENCE_0_TO_100, "lead_reasoning": "QA validated + Codex coherence approved", "payload": {"qa_evidence": "QA_SUMMARY", "codex_verdict": "approved", "evidence": "BRIEF_EVIDENCE"}}'
+  -d '{"task_id": "TASK_UUID", "action_type": "move_to_done", "confidence": QA_CONFIDENCE_0_TO_100, "lead_reasoning": "QA-E2E + QA-Unit both passed", "payload": {"qa_e2e_evidence": "SUMMARY", "qa_unit_evidence": "SUMMARY"}}'
 ```
-Then notify: `@Miguel Task TITLE ready for your approval. QA validated + Codex confidence: X%.`
-The task stays in `review` until the human approves in the UI.
+Then notify: `@Miguel Task TITLE ready for your approval. QA-E2E + QA-Unit both passed.`
 {% endif %}
 
 ### Step 4 — Dependency Check

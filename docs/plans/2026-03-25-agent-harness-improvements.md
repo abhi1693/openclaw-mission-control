@@ -16,14 +16,20 @@
 
 ## Operating Policies
 
-### Role Split: Supervisor Hub, Architect Specialist
+### Role Split: Three Functional Roles (Article-Aligned)
 
-- Supervisor always owns intake and routing: create short task seeds, assign all work, route all QA reviews, make priority decisions, triage inbox, reassign rejected tasks, and escalate to Miguel.
-- Architect is a specialist the Supervisor invokes when a task needs product-spec expansion or architecture review. Architect expands the Supervisor seed into a product spec with explicit success criteria, non-goals, quality bar, and a sprint contract that defines what this sprint will and will not deliver.
-- Architect does not assign tasks, does not route work to QA, and does not triage inbox. Architect posts its spec/contract back as a task comment for the Supervisor to route.
-- The sprint contract must be concrete enough for QA to evaluate before coding starts.
-- Bypass rule: LOW priority work, bug fixes, or tasks touching fewer than 3 files skip Architect and pre-build QA contract signoff. Supervisor assigns those tasks directly to Programmer and self-validation is sufficient unless Supervisor explicitly requests QA.
-- HIGH/MEDIUM new-feature rule: Supervisor creates the seed, assigns Architect, receives the spec/contract comment back, routes the sprint contract to QA for signoff, then assigns Programmer only after QA approval.
+Following the article's Planner/Generator/Evaluator pattern:
+
+- **Planner = Supervisor + Architect.** Supervisor owns intake and routing (create seeds, assign work, route QA, triage, escalate). Architect is a specialist Supervisor invokes for HIGH/MEDIUM new features to expand seeds into full specs with sprint contracts. Architect posts specs back as comments for Supervisor to route.
+- **Generator = Programmer-Frontend, Programmer-Backend, DevOps.** They implement. They self-review with opposite ACP. They do NOT evaluate quality — that's the Evaluator's job.
+- **Evaluator = QA-E2E (primary) + QA-Unit (mechanical).** QA-E2E is the sole Evaluator: reviews code quality, design quality, originality, craft, AND functionality using the scored rubric, Chrome MCP, and Playwright. QA-Unit handles mechanical checks (typecheck, lint, unit tests, bundle size). Supervisor does NOT run its own Codex review — it reads QA-E2E's scored rubric and approves or rejects.
+
+Key rules:
+- Supervisor NEVER writes or reviews code. It reads QA evidence and routes.
+- Architect does NOT assign tasks, route to QA, or triage inbox.
+- QA-E2E scores every review using `shared/qa/rubric.md` with dimension-by-dimension scores.
+- Bypass rule: LOW/bugfix/<3 files skip Architect and QA contract. Self-validation sufficient.
+- HIGH/MEDIUM new-feature: Supervisor seed → Architect spec → QA contract signoff → Programmer → QA-E2E evaluation → Supervisor approval → Miguel.
 
 ### Supervisor Sandbox Policy
 
