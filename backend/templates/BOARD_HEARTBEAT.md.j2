@@ -169,40 +169,36 @@ If agents stuck 30+ min or inconsistencies suspected:
 - `lcm_grep(pattern: "decision|blocker|completed", allConversations: true)` — search all agent conversations for state drift or unreported blockers
 - `memory_recall(query: "task status decisions blockers")` — check team memory
 
-### Step 3 — Route `review` Tasks to QA, Then Coherence Review
+### Step 3 — Route `review` Tasks to QA Evaluation
 If Step 2 shows tasks in `review` status, follow this flow:
 
-**3a — Route to QA for validation FIRST.**
-For each `review` task that has NOT been validated by QA yet (no QA comment with "QA validation" in it):
-1. Route to BOTH QA agents for their speciality:
-   - **QA-Unit**: code quality — typecheck, lint, bundle size, unit tests. Applies to ALL tasks (frontend AND backend).
-   - **QA-E2E**: browser/integration — UI renders, console errors, E2E tests, visual check. Applies to frontend/deploy tasks.
-   - For backend-only tasks: QA-Unit only. For frontend tasks: BOTH.
-2. Nudge QA-Unit first (code quality is faster):
+**3a — Route to QA for evaluation.**
+For each `review` task not yet validated (no comment with "QA-Unit validation" or "QA-E2E validation"):
+1. **QA-Unit** (ALL tasks): mechanical checks — typecheck, lint, unit tests, bundle size.
+2. **QA-E2E** (frontend/deploy tasks ONLY): full evaluation — code review, design quality, browser testing, scored rubric.
+3. Backend-only tasks: QA-Unit only. Frontend tasks: BOTH.
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$QA_UNIT_AGENT_ID/nudge" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "QA-Unit validate task TITLE: run typecheck (tsc --noEmit), lint, unit tests, check bundle size. Post evidence as comment with prefix QA-Unit validation."}'
+  -d '{"message": "QA-Unit validate task TITLE: typecheck, lint, unit tests, bundle size. Post with prefix QA-Unit validation."}'
 ```
-3. Nudge QA-E2E for browser validation (frontend/deploy tasks):
+For frontend/deploy tasks, also nudge QA-E2E:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$QA_E2E_AGENT_ID/nudge" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "QA-E2E EVALUATE task TITLE. You are the Evaluator. Score using shared/qa/rubric.md. Use Chrome MCP for browser review. Review code quality, design, originality. Post scored rubric as comment with prefix QA-E2E validation."}'
+  -d '{"message": "QA-E2E EVALUATE task TITLE. You are the Evaluator — be SKEPTICAL. Score using shared/qa/rubric.md with hard fail thresholds. Use Chrome MCP. Review code quality, design, originality. Challenge weak evidence. Post scored rubric with prefix QA-E2E validation."}'
 ```
-4. **Wait for BOTH QA agents** to post validation before proceeding.
+4. Wait for all applicable QA agents to post. Backend: QA-Unit only. Frontend: both.
 
-**3a-fail — Handle QA validation failures.**
-If a QA agent posted a FAILING validation (blocker, errors found):
-1. PATCH the task back to `inbox`: `curl -fsS -X PATCH ".../tasks/$TASK_ID" -d '{"status": "inbox"}'`
-2. Reassign to the original developer.
-3. Post a comment with the QA failure details so the developer knows what to fix.
+**3a-fail — Handle QA failures.**
+If any QA agent posts a FAILING validation:
+1. PATCH the task back to `inbox`.
+2. Reassign to the original developer with QA failure details.
 
 **3b — Approve or reject based on QA evidence.**
-For `review` tasks where BOTH QA agents posted passing validation:
-- Read QA-E2E's evaluation (scored rubric, browser evidence, code review) and QA-Unit's report (typecheck, lint, tests).
-- If both pass: approve. If either fails: reject back to inbox.
-- Do NOT run your own Codex review. QA-E2E is the Evaluator. Trust their scored rubric.
+Read QA evidence. If all applicable QA passed: approve. If any failed: reject.
+- Do NOT run your own review. QA-E2E is the Evaluator.
+- Challenge if QA evidence is thin (no scores, no screenshots, vague "looks good"). Send back to QA with: "Insufficient evidence. Score each rubric dimension."
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
 **This board requires human approval before `done`.** When QA approves, create an approval request:
 ```bash
