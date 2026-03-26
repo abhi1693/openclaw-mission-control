@@ -370,7 +370,7 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    Write plan to MEMORY.md: `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING plan=BRIEF_PLAN`. Continue to IMPLEMENTING.
    **CONTRACT CHECK:** If this is HIGH/MEDIUM new-feature work, do not implement until @lead has routed the sprint contract to QA and `qa_signoff=approved`. If `qa_signoff` is missing or rejected, ask @lead.
 
-   **IMPLEMENTING:** Pass plan + requirements to primary ACP. Run feedback loops (typecheck, lint, tests). If no tests exist, tell ACP to write tests first — zero tests is NOT acceptable. If checks fail, iterate. If all pass, review with opposite ACP tool (see IDENTITY.md). If review rejects, keep implementing. If review approves, continue to VALIDATING.
+   **IMPLEMENTING:** Pass plan + requirements to primary ACP. Run feedback loops (typecheck, lint, tests). If no tests exist, tell ACP to write tests first — zero tests is NOT acceptable. If checks fail, iterate. When all checks pass, review your code by spawning a separate Claude Code session with `/simplify` — this reviews for reuse, quality, and efficiency. See IDENTITY.md for your review tool. If review finds issues, fix and re-check. When review passes, continue to VALIDATING.
 
    **VALIDATING:** Run self-validation (Step 8 below). If passes → proceed to Step 9 (PATCH to review). Clear the WORKFLOW line from MEMORY.md. If fails → back to IMPLEMENTING with feedback.
 
