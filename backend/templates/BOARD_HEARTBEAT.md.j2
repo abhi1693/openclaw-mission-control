@@ -173,7 +173,7 @@ If agents stuck 30+ min or inconsistencies suspected:
 If Step 2 shows tasks in `review` status, follow this flow:
 
 **3a — Route to QA for evaluation.**
-For each `review` task not yet validated (no comment containing "QA-Unit validation", "QA-E2E validation", "QA validation", "PASS", or "Approved"):
+For each `review` task not yet validated (no comment containing "QA-Unit validation", "QA-E2E validation", or "QA validation"):
 1. **QA-Unit** (ALL tasks): mechanical checks — typecheck, lint, unit tests, bundle size.
 2. **QA-E2E** (frontend/deploy tasks ONLY): full evaluation — code review, design quality, browser testing, scored rubric.
 3. Backend-only tasks: QA-Unit only. Frontend tasks: BOTH.
@@ -197,7 +197,7 @@ If any QA agent posts a FAILING validation:
 
 **3b — Approve or reject based on QA evidence.**
 Read QA evidence. If all applicable QA passed: approve. If any failed: reject.
-- Do NOT run your own review. QA-E2E is the Evaluator.
+- Do NOT run your own review. Review chain: workers self-review with `/simplify`, Architect reviews code (via Codex, read-only), QA-E2E evaluates quality + browser.
 - Challenge if QA evidence is thin (no scores, no screenshots, vague "looks good"). Send back to QA with: "Insufficient evidence. Score each rubric dimension."
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
 **This board requires human approval before `done`.** When QA approves, create an approval request:
@@ -370,7 +370,7 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    Write plan to MEMORY.md: `WORKFLOW: task_id=$TASK_ID state=IMPLEMENTING plan=BRIEF_PLAN`. Continue to IMPLEMENTING.
    **CONTRACT CHECK:** If this is HIGH/MEDIUM new-feature work, do not implement until @lead has routed the sprint contract to QA and `qa_signoff=approved`. If `qa_signoff` is missing or rejected, ask @lead.
 
-   **IMPLEMENTING:** Pass plan + requirements to primary ACP. Run feedback loops (typecheck, lint, tests). If no tests exist, tell ACP to write tests first — zero tests is NOT acceptable. If checks fail, iterate. When all checks pass, review your code by spawning a separate Claude Code session with `/simplify` — this reviews for reuse, quality, and efficiency. See IDENTITY.md for your review tool. If review finds issues, fix and re-check. When review passes, continue to VALIDATING.
+   **IMPLEMENTING:** Pass plan + requirements to primary ACP. Run feedback loops (typecheck, lint, tests). If no tests exist, tell ACP to write tests first — zero tests is NOT acceptable. If checks fail, iterate. When all checks pass, review your code with `/simplify` (see IDENTITY.md). If review finds issues, fix and re-check. When review passes, continue to VALIDATING.
 
    **VALIDATING:** Run self-validation (Step 8 below). If passes → proceed to Step 9 (PATCH to review). Clear the WORKFLOW line from MEMORY.md. If fails → back to IMPLEMENTING with feedback.
 
