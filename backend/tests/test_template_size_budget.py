@@ -11,7 +11,7 @@ from __future__ import annotations
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
-HEARTBEAT_CONTEXT_LIMIT = 20_000
+HEARTBEAT_CONTEXT_LIMIT = 10_000
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
 _BOARD_RULE_DEFAULTS = {

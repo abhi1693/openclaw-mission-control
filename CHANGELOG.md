@@ -9,6 +9,7 @@ All notable changes to the OpenClaw Mission Control fork.
 - **Multiple RQ workers** cleaned up: 4 stale workers were running simultaneously with old code. Killed all, started one clean worker with the fix.
 
 ### Changed
+- **HEARTBEAT template shrink (Plan Task 2)**: Reduced from 19KB worker / 15KB lead to 8.0KB worker / 8.4KB lead (44-59% smaller). First pass was too aggressive (3.6KB) — Codex review caught missing task fetch curls, health scan fields, QA nudge commands. Restored essential content to hit 8-10KB target: worker gets task fetch + comments fetch curls, is_blocked/no-spec handling, expanded validation (placeholder grep, Chrome MCP, deployment checks, import resolution); lead gets expanded health scan (is_blocked, deps, last_seen, done tasks), recovery curl, QA nudge curls for both agents, dependency patch curl, sub-task creation, API rules. Test budget tightened from 20KB to 10KB.
 - **Supervisor Codex review removed entirely**: Step 3b codex exec block deleted from lead template. QA-E2E is the sole Evaluator. Supervisor reads QA evidence and approves/rejects — no Codex subprocess. Lead template: 16.9KB → 14.6KB.
 - **QA routing**: Backend-only tasks use QA-Unit only (not "wait for BOTH"). Validation check matches correct prefixes ("QA-Unit validation" / "QA-E2E validation"). QA-E2E nudge includes "be SKEPTICAL" instruction.
 - **Board API is source of truth**: Supervisor must always run health scan, never skip because MEMORY.md says "waiting for X".

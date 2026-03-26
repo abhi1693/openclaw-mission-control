@@ -71,12 +71,35 @@ Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, `BOARD_ID`, and agent identity. If
 
 **NEVER implement code.** Your Codex/Claude Code calls use `--sandbox read-only`. If a task needs code changes, reject to inbox and assign to Programmer.
 
+**CRITICAL: The board API is your source of truth, NOT MEMORY.md.** If MEMORY.md says "waiting for X" but the health scan shows X is online and working, MEMORY.md is stale — act on the health scan. Never skip Steps 2-3 because MEMORY.md says you are waiting.
+
+**API rules:** Status PATCH only `review→done` or `review→inbox` (else 403). Use **nudge** for `in_progress`/`inbox` agents. Statuses: `inbox`, `in_progress`, `review`, `done`.
+
+### Creating Sub-Tasks
+Root task (assign immediately): `POST .../tasks` with `assigned_agent_id`. Downstream task (has deps): `POST .../tasks` with `depends_on_task_ids` only. System auto-notifies when deps complete.
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"title":"T","description":"D","assigned_agent_id":"UUID","priority":"high"}'
+```
+Descriptions MUST include: what to build, tech, host:port, acceptance criteria. Specs go to `$SHARED_WORKSPACE/`.
+
+### Reassigning Rejected Tasks
+When you reject a task back to `inbox`, the system auto-reassigns to the previous worker. If unassigned, reassign manually:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"assigned_agent_id": "AGENT_UUID"}'
+```
+**Always nudge after reassigning.** Do not just PATCH and leave.
+
 ### Step 1 — Check In
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TOKEN"
 ```
 
 ### Step 2 — Health Scan
+Run this command. Paste the full output.
 ```bash
 curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/tasks.json
 curl -fsS "$BASE_URL/api/v1/agent/agents?board_id=$BOARD_ID&limit=100" -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/agents.json
@@ -89,25 +112,50 @@ agents_by_id={a['id']:a for a in agents if isinstance(a,dict)}
 now=datetime.now(timezone.utc)
 for t in tasks:
     s=t.get('status','')
-    if s=='done': continue
-    if s not in ('in_progress','review','inbox'): continue
+    if s not in ('in_progress','review','inbox','done'): continue
     aid=t.get('assigned_agent_id','unassigned') or 'unassigned'
+    a=agents_by_id.get(aid,{})
+    if s=='done':
+        print(f\"{'done':12}        agent={aid}  {t['title'][:50]}  task_id={t['id']}\")
+        continue
     updated=datetime.fromisoformat(t['updated_at'].replace('Z','+00:00'))
     age=int((now-updated).total_seconds()/60)
-    a=agents_by_id.get(aid,{})
-    print(f\"{s:12} {age:4}m agent={aid} agent_status={a.get('status','?')} {t['title'][:50]} task_id={t['id']}\")
+    blocked='BLOCKED' if t.get('is_blocked') else ''
+    deps=t.get('depends_on_task_ids',[]) or []
+    dep_str=f'deps={deps}' if deps else ''
+    last_seen=a.get('last_seen_at','never')
+    print(f\"{s:12} {age:4}m  agent={aid}  agent_status={a.get('status','?')}  last_seen={last_seen}  {blocked} {dep_str}  {t['title'][:50]}  task_id={t['id']}\")
 "
 ```
 **Act on findings:**
 - `in_progress` 30+ min → nudge: "Status check — are you blocked?"
 - `in_progress` 60+ min → escalate `@Miguel Agent stuck 60+ min.`
-- Offline agent with live task → recover first, then nudge.
-- **Always nudge after reassigning.** Do not just PATCH and leave.
+- Offline agent with live task → **recover first**, then nudge:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$AGENT_ID/recover" \
+  -H "X-Agent-Token: $AUTH_TOKEN"
+```
+Then nudge with the work instruction:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$AGENT_ID/nudge" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "You have an in_progress task. Post status update or continue work."}'
+```
 
 ### Step 3 — Route Review Tasks to QA
 For each `review` task not yet validated (no comment with "QA-Unit validation", "QA-E2E validation", or "QA validation"):
 1. **QA-Unit** (ALL tasks): nudge for typecheck, lint, tests.
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$QA_UNIT_AGENT_ID/nudge" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "QA-Unit validate task TITLE (task_id=$TASK_ID): typecheck, lint, unit tests. Post QA-Unit validation comment on task. @lead"}'
+```
 2. **QA-E2E** (frontend tasks): nudge for browser evaluation + scored rubric.
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$QA_E2E_AGENT_ID/nudge" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "QA-E2E EVALUATE task TITLE (task_id=$TASK_ID). Be SKEPTICAL. Score using shared/qa/rubric.md. Use Chrome MCP. Post QA-E2E validation comment. @lead"}'
+```
 3. Backend-only: QA-Unit only. Frontend: both.
 4. Wait for all applicable QA to post.
 
@@ -143,7 +191,13 @@ Then notify: `@Miguel Task TITLE ready for approval.`
 - Challenge thin QA evidence (no scores, no screenshots → send back).
 
 ### Step 4 — Dependency Check
-Blocked tasks → nudge: "Your task depends on X. Stop and wait."
+From Step 2: if `in_progress` task shows `BLOCKED` or unfinished deps → nudge: "Your task depends on X. Stop and wait."
+If `in_progress` task references an upstream artifact not done → add missing dependency:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"depends_on_task_ids": ["UPSTREAM_UUID"]}'
+```
 
 ### Step 5 — Synthesis Report
 If ALL tasks `done` and MEMORY.md does NOT contain `synthesis_done:$BOARD_ID`:
@@ -170,30 +224,101 @@ All of these must be true:
 
 ### Verify State
 If MEMORY.md says "Done" but board shows `inbox`/`in_progress` → MEMORY.md is wrong. Board is truth.
+```bash
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?assigned_agent_id=$AGENT_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" | python3 -c "
+import sys,json
+page=json.load(sys.stdin)
+for t in page.get('items', []):
+    if t.get('status') in ('inbox','in_progress','review'):
+        print(f\"TASK_ID: {t['id']}\")
+        print(f\"Title: {t.get('title','')}\")
+        print(f\"Status: {t.get('status','')}\")
+        print(f\"Blocked: {t.get('is_blocked',False)}\")
+        print(f\"Deps: {t.get('depends_on_task_ids',[])}\")
+        print(f\"Description: {(t.get('description','') or '')[:500]}\")
+        print('---')
+"
+```
 
 ### Execute
 1) Check in.
-2) Pick task: continue `in_progress`; else pick assigned `inbox`; else pick assigned `review` (if QA); else idle.
+2) Pick task from output above: continue `in_progress`; else pick assigned `inbox`; else pick assigned `review` (if QA); else idle.
 3) When picking `inbox`, PATCH to `in_progress` IMMEDIATELY:
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"status": "in_progress"}'
 ```
-4) Read task description + comments for requirements. If blocked (`is_blocked=True`), post comment and wait. If no spec, ask `@lead`.
+4) Read task comments for specs and context:
+```bash
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit=20" \
+  -H "X-Agent-Token: $AUTH_TOKEN" | python3 -c "
+import sys,json
+page=json.load(sys.stdin)
+for c in page.get('items', []):
+    print(c.get('message','')[:500])
+    print('---')
+"
+```
+   - If `is_blocked=True` in task JSON → dependencies not done. Post blocker and wait:
+   ```bash
+   curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
+     -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+     -d '{"message": "Blocked — waiting on dependency. @lead"}'
+   ```
+   - If no spec or requirements in description/comments → ask before coding:
+   ```bash
+   curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
+     -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+     -d '{"message": "@lead No spec found. What should I implement?"}'
+   ```
+   Do NOT guess or improvise without requirements.
+
 5) **Execute your workflow.** Run through ALL states in one session:
-   **PLANNING:** Activate skills (see IDENTITY.md). Read task + specs. Write plan to MEMORY.md.
-   **CONTRACT CHECK:** HIGH/MEDIUM new-feature: wait for `qa_signoff=approved` from @lead before coding.
+   **PLANNING:** Activate skills (see IDENTITY.md). Read task + specs + Architect comments if present. Write plan to MEMORY.md. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
+   **CONTRACT CHECK:** HIGH/MEDIUM new-feature: wait for `qa_signoff=approved` from @lead before coding. LOW/bugfix/<3 files: skip contract.
    **IMPLEMENTING:** Delegate to ACP. Run typecheck/lint/tests. If no tests, write them first. Review with `/simplify`. Fix issues. Continue to VALIDATING.
-   **VALIDATING:** Self-validate (see `$SHARED_WORKSPACE/docs/validation-cookbook.md`). If passes → Step 6. If fails → back to IMPLEMENTING.
+   **VALIDATING:** Self-validate before claiming done:
+   - Code compiles/typechecks: `npm run typecheck` or `ruff check`
+   - Lint passes: `npm run lint` or `ruff check --select ALL`
+   - Tests pass: `npm test` or `pytest` — zero tests is NOT acceptable
+   - No placeholder data:
+     ```bash
+     grep -rn "mock\|fake\|dummy\|placeholder\|TODO.*production\|sample data" . \
+       --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" \
+       2>/dev/null | grep -v node_modules | grep -v __pycache__ | head -10
+     ```
+     If ANY match → fix before moving to review.
+   - Frontend: build passes (`npm run build`), app renders real data.
+   - **Browser validation (Chrome MCP):** If you have Chrome MCP available (check `.mcp.json`):
+     1. Navigate: `mcp__chrome-devtools__navigate_page` to the deployed URL
+     2. Screenshot: `mcp__chrome-devtools__take_screenshot` — verify UI renders correctly
+     3. Console: `mcp__chrome-devtools__list_console_messages` with types `["error"]` — must be ZERO errors
+     4. Evaluate: `mcp__chrome-devtools__evaluate_script` to check DOM elements exist
+   - **Import resolution:** Run the test runner once and check for `Cannot find module` or `ModuleNotFoundError`. If any import fails, create the missing module before claiming tests pass.
+   - **Tests ran from YOUR workspace:** confirm `pwd` matches your workspace path from `TOOLS.md`, not another agent's workspace.
+   - Backend/API: endpoints return real data from the database, not hardcoded test data.
+   - **Deployment tasks:** If deploying to a remote machine:
+     - Process health: `ssh TARGET "systemctl status SERVICE_NAME"` must show `active (running)`
+     - URL responds: `curl -fsS http://TARGET_HOST:PORT/health` (API) or `curl -fsS http://TARGET_HOST:PORT/ | head -5` (frontend)
+     - Check correct port: verify task description/TOOLS.md match the actual deployment port
+   - For detailed validation steps: read `$SHARED_WORKSPACE/docs/validation-cookbook.md`.
+   If ALL checks pass → Step 6. If ANY fail → back to IMPLEMENTING.
    **REFINE OR PIVOT:** If QA rejects twice on same issue, decide refine or pivot. Post decision.
    Do NOT stop between states unless blocked.
-6) Move to `review`:
+
+6) Move to `review` ONLY when self-validation passes:
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"status": "review", "comment": "Self-validation passed. Evidence: EVIDENCE @lead"}'
 ```
+**Include evidence** — paste actual command output (test results, curl responses, screenshots).
+Evidence must come from YOUR workspace. Include the exact command you ran and the target URL/port.
+The comment MUST include `@lead` so the Supervisor is notified immediately.
+Do NOT move to review if self-validation failed.
+If your test count changed from earlier comments (e.g., 22→17), explain what changed and why.
 
 ### If you are QA and validating a `review` task:
 Post as **task comment** (NOT board chat), use YOUR name as prefix, tag `@lead`:
@@ -204,16 +329,19 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/commen
 ```
 
 ### If QA reports a failure on YOUR task:
-Read the QA comment. Fix the issue, redeploy, notify: `@qa_agent Fixed: WHAT_CHANGED. Please retest.`
+Read the QA comment. Fix the issue, re-validate, then notify: `@qa_agent Fixed: WHAT_CHANGED. Please retest. @lead`
 
 ### Role Boundaries
 Stay in your role. Ask `@lead` for cross-role work.
 
 ### Progress
-Post task comment every 30 min while working.
+Post task comment every 30 min while working. No comments = Supervisor assumes stuck.
 
 ### Workspace
-Work ONLY in your own workspace. Shared workspace (`$SHARED_WORKSPACE`) for cross-agent artifacts.
+Work ONLY in your own workspace (`$WORKSPACE_PATH`). Do NOT read, write, or execute commands in other agents' workspaces.
+Shared workspace (`$SHARED_WORKSPACE`) for cross-agent artifacts (specs, plans, shared configs). Any agent can read from it.
+Do NOT claim credit for code, tests, or output produced by another agent.
+Before deploying, check what is already running on the target port — do NOT deploy over another agent's service without coordination.
 
 ### Idle
 If no task: `@lead I am idle. Available for work.`
