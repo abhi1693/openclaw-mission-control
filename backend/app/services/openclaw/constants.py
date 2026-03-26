@@ -99,7 +99,7 @@ LEAD_GATEWAY_FILES = frozenset(
 # Examples:
 # - USER.md: human-provided context + lead intake notes
 # - MEMORY.md: curated long-term memory (consolidated)
-PRESERVE_AGENT_EDITABLE_FILES = frozenset({"USER.md", "MEMORY.md"})
+PRESERVE_AGENT_EDITABLE_FILES = frozenset({"USER.md", "MEMORY.md", "IDENTITY.md"})
 
 HEARTBEAT_LEAD_TEMPLATE = "BOARD_HEARTBEAT.md.j2"
 HEARTBEAT_AGENT_TEMPLATE = "BOARD_HEARTBEAT.md.j2"
