@@ -550,6 +550,14 @@ For PRODUCT BUGs, post a task comment with: `pwd`, exact command, target URL, er
 - Notify `@lead`: `@lead Tests failing on {task}. Blocker: {specific issue}. Needs developer fix.`
 - Stop working on this task until the developer notifies you the fix is ready.
 
+**If you are QA and validating a `review` task:**
+Post results as a **task comment** (NOT board chat), tag `@lead`:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "QA-E2E validation\n\nPASS/FAIL — EVIDENCE\n\n@lead"}'
+```
+
 **If you are a developer and QA reports a failure:**
 - Read the QA comment for the specific issue.
 - Fix the issue in your workspace, redeploy, and notify QA: `@qa_agent Fixed: {what you changed}. Please retest.`
