@@ -68,12 +68,11 @@ def test_lead_heartbeat_requires_fresh_exec_attempt_before_declaring_blocked() -
         **_BOARD_RULE_DEFAULTS,
     )
 
-    assert "Do not assume exec is blocked based on an earlier session." in rendered
-    assert "Attempt the required command once before saying blocked" in rendered
-    assert "Only blocked after a fresh tool result says so" in rendered
+    assert "Do not assume exec is blocked" in rendered
+    assert "Try the command first" in rendered
 
 
-def test_lead_heartbeat_includes_recovery_endpoint_for_stale_agents() -> None:
+def test_lead_heartbeat_includes_recovery_and_health_scan() -> None:
     rendered = _render_template(
         "BOARD_HEARTBEAT.md.j2",
         is_main_agent=False,
@@ -83,6 +82,5 @@ def test_lead_heartbeat_includes_recovery_endpoint_for_stale_agents() -> None:
 
     assert "/api/v1/agent/agents?board_id=$BOARD_ID" in rendered
     assert "agent_status=" in rendered
-    assert "Use the literal agent_id from Step 2 output" in rendered
-    assert "/api/v1/agent/boards/$BOARD_ID/agents/$AGENT_ID/recover" in rendered
-    assert "Recover first, then nudge." in rendered
+    assert "recover" in rendered.lower()
+    assert "nudge" in rendered.lower()
