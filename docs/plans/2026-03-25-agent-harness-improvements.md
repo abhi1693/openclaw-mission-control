@@ -25,6 +25,13 @@
 - Bypass rule: LOW priority work, bug fixes, or tasks touching fewer than 3 files skip Architect and pre-build QA contract signoff. Supervisor assigns those tasks directly to Programmer and self-validation is sufficient unless Supervisor explicitly requests QA.
 - HIGH/MEDIUM new-feature rule: Supervisor creates the seed, assigns Architect, receives the spec/contract comment back, routes the sprint contract to QA for signoff, then assigns Programmer only after QA approval.
 
+### Supervisor Sandbox Policy
+
+- Supervisor's Codex/Claude Code calls MUST use `--sandbox read-only`. Never `workspace-write` or `danger-full-access`.
+- Supervisor can READ and REVIEW code but NEVER write, edit, build, or deploy it.
+- If a review task needs code changes, Supervisor rejects to inbox and assigns to the responsible Programmer.
+- This prevents the observed failure mode where Supervisor runs Codex to implement code directly on review tasks, bypassing the Programmer and violating the "NEVER write code" operator rule.
+
 ### Context Strategy
 
 - Use `isolatedSession=true` only for heartbeat safety-net checks: idle agents, liveness confirmation, progress posting, and other non-building sessions where no active implementation context must be preserved.
