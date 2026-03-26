@@ -424,12 +424,11 @@ If the board shows `inbox` or `in_progress` but your MEMORY.md says "Done" → *
    ```bash
    curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
      -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-     -d '{"status": "review", "comment": "Self-validation passed. Evidence: PASTE_YOUR_EVIDENCE_HERE"}'
+     -d '{"status": "review", "comment": "Self-validation passed. Evidence: PASTE_YOUR_EVIDENCE_HERE @lead"}'
    ```
-   **Do NOT skip the PATCH.** If you completed work but did not PATCH, the board still shows `inbox` or `in_progress`.
-   **Do NOT move to review if self-validation failed.** A placeholder or empty project is NOT a deliverable.
-   **Include evidence in the comment** — paste actual command output (test results, curl responses, file counts).
-   **Tag @lead in your review comment** so the Supervisor is notified immediately — do not wait for the next heartbeat.
+   **Do NOT skip the PATCH.** The comment MUST include `@lead` so the Supervisor is notified immediately.
+   **Do NOT move to review if self-validation failed.**
+   **Include evidence** — paste actual command output (test results, curl responses).
    **Evidence must come from YOUR workspace.** Include `pwd` output, the exact command you ran, and the target URL/port. Do NOT paste output from another agent's workspace or tests.
    **If your results differ from earlier comments** (e.g., test count changed from 22 to 17), explain what changed and why in your review comment.
    After a successful PATCH to `review`, store your completion in team memory once:
