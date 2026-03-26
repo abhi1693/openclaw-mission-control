@@ -550,12 +550,13 @@ For PRODUCT BUGs, post a task comment with: `pwd`, exact command, target URL, er
 - Stop working on this task until the developer notifies you the fix is ready.
 
 **If you are QA and validating a `review` task:**
-Post results as a **task comment** (NOT board chat), tag `@lead`:
+Post results as a **task comment** (NOT board chat), use YOUR name as prefix, tag `@lead`:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "QA-E2E validation\n\nPASS/FAIL — EVIDENCE\n\n@lead"}'
+  -d '{"message": "YOUR_NAME validation\n\nPASS/FAIL — EVIDENCE\n\n@lead"}'
 ```
+QA-Unit uses prefix "QA-Unit validation". QA-E2E uses prefix "QA-E2E validation".
 
 **If you are a developer and QA reports a failure:**
 - Read the QA comment for the specific issue.
