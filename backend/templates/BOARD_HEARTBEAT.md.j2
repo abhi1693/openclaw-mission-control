@@ -237,7 +237,7 @@ curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
 ```
 {% endif %}
 - Do NOT run your own review. Review chain: workers /simplify, Architect reviews code, QA-E2E evaluates.
-- **For UI/frontend tasks:** reject QA-E2E PASS that has no scored rubric table or Chrome MCP evidence. Bundle grep is not valid.
+- **UI tasks:** reject QA PASS without BOTH scored rubric table AND literal `mcp__chrome-devtools__` output.
 
 ### Step 4 — Dependency Check
 From Step 2: if `in_progress` task shows `BLOCKED` or unfinished deps → nudge agent to stop and wait.

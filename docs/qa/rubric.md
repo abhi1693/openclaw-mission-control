@@ -59,12 +59,12 @@ Read this ENTIRE file before starting any validation. Score every dimension. Pos
 
 ## Hard Fail Rules (ANY = automatic REJECT)
 
-- Console errors > 0 (excluding third-party deprecation warnings)
+- Console errors > 0 (the `types: ["error"]` filter already excludes warnings)
 - Typecheck fails
 - Build fails
 - Service returns 5xx on valid requests
 - URL unreachable (CORS, network, server down)
-- No Chrome MCP tool calls in evidence for UI tasks
+- Validation comment contains no `mcp__chrome-devtools__` tool call references for UI tasks
 
 ## Validation Comment Format
 
@@ -87,7 +87,7 @@ URL: http://192.168.2.63:3000/boards/BOARD_ID
 | Code Quality | 5% | X/10 | [typecheck/lint exit code] |
 | Responsiveness | 5% | X/10 | [mobile viewport result] |
 
-**Weighted total:** (Spec×0.15)+(Interaction×0.15)+(Visual×0.15)+(Originality×0.20)+(Craft×0.15)+(Console×0.10)+(CodeQuality×0.05)+(Responsive×0.05) = XX/10
+**Weighted total:** (Spec×0.15)+(Visual×0.15)+(Interaction×0.15)+(Originality×0.20)+(Craft×0.15)+(Console×0.10)+(CodeQuality×0.05)+(Responsive×0.05) = XX/10
 **Verdict: PASS/FAIL**
 **Fail reason:** [dimension that triggered fail, if any]
 
