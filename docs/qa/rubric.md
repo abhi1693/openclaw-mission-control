@@ -11,6 +11,7 @@ Read this ENTIRE file before starting any validation. Score every dimension. Pos
 - Bundle/code grep is NEVER valid evidence for UI dimensions.
 - Re-validate EVERY time with a FRESH Chrome MCP session. Previous PASS/FAIL is irrelevant.
 - If the URL is unreachable, report FAIL — that IS the bug.
+- If the build hash changes during your validation (different from the one in the review comment), STOP and report "BUILD CHANGED — validation invalid. Waiting for stable build." Do NOT re-validate on the new build — the developer must freeze and re-request QA.
 - If your validation does not include at least one `mcp__chrome-devtools__navigate_page` call, you have not started.
 
 **QA-Unit (mechanical checks):**

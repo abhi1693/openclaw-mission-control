@@ -339,7 +339,9 @@ for c in page.get('items', []):
    **REFINE OR PIVOT:** If QA rejects twice on same issue, decide refine or pivot. Post decision.
    Do NOT stop between states unless blocked.
 
-7) Move to `review` ONLY when self-validation passes:
+7) **BUILD FREEZE:** Once you move to review, do NOT deploy new builds until QA completes validation. If you need to fix something, move BACK to in_progress first, then redeploy.
+
+8) Move to `review` ONLY when self-validation passes:
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
