@@ -194,7 +194,7 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/QA_UNIT_ID/nud
 ```
 For frontend tasks, also nudge QA-E2E: "Read $SHARED_WORKSPACE/qa/rubric.md. Post scored table." Backend-only: QA-Unit only. Frontend: BOTH must post.
 If not all required QA have posted → proceed to Step 4, check next heartbeat.
-- **QA posted FAIL** → reject approval if pending, move to inbox, nudge dev (use `agent=UUID` from the review task line in Step 2 as DEV_AGENT_UUID):
+- **QA posted FAIL or PARTIAL** → treat PARTIAL as FAIL. Reject approval if pending, move to inbox, nudge dev with the specific failing dimensions:
 ```bash
 APPROVAL_ID=$(curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals?status=pending" \
   -H "X-Agent-Token: $AUTH_TOKEN" | python3 -c "
