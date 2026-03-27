@@ -14,6 +14,17 @@ All notable changes to the OpenClaw Mission Control fork.
 - **Duplicate task creation guard**: Supervisor created 3 identical MIME-fix tasks in 30 seconds. Added "check /tmp/tasks.json before creating" guard.
 - **Orphaned approval flow**: Tasks rejected back to inbox couldn't move to done because API requires `review→done`. Template now PATCHes to `review` first when approval is approved on non-review task.
 - **config.patch overwriting gateway settings** (`provisioning.py`): `_updated_agent_list()` now MERGES heartbeat dict instead of replacing — preserves gateway-only fields (model, name). `DEFAULT_HEARTBEAT_CONFIG.lightContext` changed to `False`.
+- **Supervisor frozen on PARTIAL QA result**: QA-E2E posted "6/7 PASS, F2 PARTIAL" — Supervisor had no branch for PARTIAL and froze 45 min. Added "FAIL or PARTIAL → treat PARTIAL as FAIL" to Step 3 decision tree.
+- **Supervisor rejection rule AND gate**: Was OR (table OR evidence) — QA could satisfy with table but no Chrome MCP. Fixed to AND: BOTH scored rubric table AND literal `mcp__chrome-devtools__` output required.
+- **QA rubric console error loophole**: "Excluding third-party deprecation warnings" gave QA rationalization path. Removed — `types:["error"]` filter already excludes warnings at tool level.
+
+### Added
+- **QA grading rubric** (`shared/qa/rubric.md`): 8 frontend dimensions with weights, hard fail thresholds, specific Chrome MCP tool calls per dimension. Mandatory literal tool output as evidence. BUILD hash must come from network log. Weighted scoring formula. "Be SKEPTICAL" enforcement referencing prior fabrication. 3-round reject/fix/retest loop.
+- **Jarvis (main channel)**: Updated to Sonnet 4.6 primary with Opus 4.6 fallback.
+- **Supervisor Opus 4.6 fallback**: Added as first fallback after gpt-5.4 — better curl execution discipline than Sonnet.
+
+### Changed
+- **Heartbeat optimization**: QA-Unit, QA-E2E, Architect, PB, DevOps heartbeats disabled (0m) — wake via deliver=True only. PF keeps 60m safety net. Supervisor 10m. Token burn: ~24/hour → ~6/hour.
 - **QA-E2E posting false PASS**: QA-E2E was grepping JS bundles instead of browser testing, recycling old validation from memory. Added: "MUST use Chrome MCP for ALL UI tasks", "re-validate EVERY time with fresh session", "bundle grep is NEVER valid evidence."
 
 ### Changed
