@@ -2,6 +2,33 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-03-27
+
+### Fixed
+- **Supervisor fake approval guardrail**: Supervisor was posting "Miguel approved. Moving to done." while approval was still PENDING. Added "NEVER approve tasks. Only HUMANS approve. PENDING = WAIT." to lead template.
+- **Duplicate task creation guard**: Supervisor created 3 identical MIME-fix tasks in 30 seconds. Added "check /tmp/tasks.json before creating" guard.
+- **Orphaned approval flow**: Tasks rejected back to inbox couldn't move to done because API requires `review→done`. Template now PATCHes to `review` first when approval is approved on non-review task.
+- **config.patch overwriting gateway settings** (`provisioning.py`): `_updated_agent_list()` now MERGES heartbeat dict instead of replacing — preserves gateway-only fields (model, name). `DEFAULT_HEARTBEAT_CONFIG.lightContext` changed to `False`.
+- **QA-E2E posting false PASS**: QA-E2E was grepping JS bundles instead of browser testing, recycling old validation from memory. Added: "MUST use Chrome MCP for ALL UI tasks", "re-validate EVERY time with fresh session", "bundle grep is NEVER valid evidence."
+
+### Changed
+- **Model config overhaul** (M2M live testing across all roles):
+  - Primary: Sonnet 4.6 for PF/QA-Unit/DevOps/Supervisor, Opus 4.6 for Architect/QA-E2E, gpt-5.4 for PB
+  - Heartbeat: Qwen 3.5 for Supervisor (10/10 escalation test), M2.1 for workers (9-10/10, fastest)
+  - Fallback chain: Sonnet 4.6 → gpt-5.4 → qwen3.5:cloud → m2.1:cloud
+  - Anthropic provider added: direct API (`anthropic-messages`), models: opus-4-6, sonnet-4-6, haiku-4-5
+  - M2.5 retired from all roles (worst on all dimensions: 1/10 QA, 8/10 Supervisor, slowest)
+- **`lightContext=false` for all agents**: Key fix — Supervisor escalation only worked with full file context. All agents now see TOOLS.md, IDENTITY.md, AGENTS.md in heartbeat sessions.
+- **Worker heartbeats: 30m → 60m safety net**: Workers wake via `deliver=True` on task assign/nudge. 60m heartbeat catches orphaned inbox tasks. Supervisor: 5m → 10m.
+- **Worker "pick next or idle" (step 8)**: After moving to review, worker checks for more inbox tasks or posts `@lead idle`.
+- **`activeHours` 07:00-22:00**: All agents stop heartbeating overnight (America/Fortaleza timezone).
+- **Review chain enforcement**: Supervisor must route Architect for code review BEFORE QA (skip for bugfixes/<3 files). Supervisor must reject QA-E2E PASS without Chrome MCP evidence for UI tasks.
+- **PF Chrome MCP required**: Frontend workers must use Chrome MCP (navigate, screenshot, console check) before moving UI tasks to review.
+
+### Investigated
+- **Heartbeat model comparison** (local E2E tests via Ollama): M2.5 (8/10), M2.1 (9/10, 11s), M2.7 (9/10, 27s), Qwen 3.5 (10/10, 15s), Haiku 4.5 (poor — wrong targets, no escalation). All models perform well locally but fail in production with `lightContext=true` due to missing file context.
+- **Execution environment vs model quality**: The "Supervisor discusses but won't execute curls" problem is NOT model-specific — Sonnet 4.6, gpt-5.4, and Qwen 3.5 all exhibit it in production. Root cause: `isolatedSession=true` + `lightContext=true` starves the model of context needed for multi-step curl execution. `lightContext=false` was the fix.
+
 ## 2026-03-26
 
 ### Fixed
