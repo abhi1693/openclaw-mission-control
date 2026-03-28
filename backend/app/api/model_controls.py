@@ -72,16 +72,13 @@ async def get_catalog(
     capability_class: str | None = None,
     supports_primary: bool | None = None,
     supports_fallback: bool | None = None,
-    gateway_id: str | None = None,
+    gateway_id: UUID | None = None,
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> ModelCatalogResponse:
-    from uuid import UUID as _UUID
-
-    gw_uuid = _UUID(gateway_id) if gateway_id else None
     entries = await get_model_catalog(
         session,
-        gateway_id=gw_uuid,
+        gateway_id=gateway_id,
         role_fit=role_fit,
         capability_class=capability_class,
         supports_primary=supports_primary,
