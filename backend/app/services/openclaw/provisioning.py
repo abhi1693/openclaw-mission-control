@@ -1155,9 +1155,12 @@ class OpenClawGatewayProvisioner:
             raise OpenClawGatewayError(msg)
         entries: list[tuple[str, str, dict[str, Any]]] = []
         for agent in agents:
+            heartbeat = _heartbeat_config(agent)
+            # Skip disabled heartbeats — don't send config.patch for them.
+            if _is_disabled_heartbeat_every(heartbeat.get("every")):
+                continue
             agent_id = _agent_key(agent)
             workspace_path = _workspace_path(agent, gateway.workspace_root)
-            heartbeat = _heartbeat_config(agent)
             entries.append((agent_id, workspace_path, heartbeat))
         if not entries:
             return
