@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import ActorContext, require_user_or_agent
+from app.api.deps import ActorContext, authorize_gateway_access, require_user_or_agent
 from app.db.session import get_session
 from app.schemas.gateway_model_profiles import (
     GatewayModelProfileDefaultsRead,
@@ -53,6 +53,7 @@ async def get_model_profile_defaults(
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> GatewayModelProfileDefaultsRead:
+    await authorize_gateway_access(gateway_id, session, actor)
     svc = GatewayModelProfileService(session)
     return await svc.get_defaults(gateway_id)
 
@@ -80,6 +81,7 @@ async def patch_model_profile_defaults(
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> GatewayModelProfileDefaultsRead:
+    await authorize_gateway_access(gateway_id, session, actor)
     svc = GatewayModelProfileService(session)
     try:
         return await svc.patch_defaults(gateway_id, payload)

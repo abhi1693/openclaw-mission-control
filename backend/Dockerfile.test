@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Test image: includes dev dependencies (pytest, aiosqlite, httpx, etc.)
+
+FROM python:3.12-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates git \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+# --- deps layer (with dev extras) ---
+FROM base AS deps
+
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --extra dev
+
+# --- test runner ---
+FROM base AS runtime
+
+COPY --from=deps /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# Copy app source
+COPY backend/migrations ./migrations
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/app ./app
+COPY backend/templates ./templates
+COPY backend/tests ./tests
+
+# Copy provisioning scripts
+COPY scripts ./scripts
+
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]

@@ -13,11 +13,19 @@ Key invariants:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field
 from sqlmodel import SQLModel
+
+# Enum-like types for request validation
+SelectionMode = Literal["manual", "auto"]
+OverrideMode = Literal["none", "append", "replace"]
+TriggerType = Literal[
+    "unavailable", "timeout", "rate_limited",
+    "capability_mismatch", "manual_only", "generic",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +267,7 @@ class AgentModelAssignmentRead(SQLModel):
 class PatchPrimaryRequest(SQLModel):
     """Request body for PATCH .../model-assignment/primary."""
 
-    selection_mode: str = Field(
+    selection_mode: SelectionMode = Field(
         description="manual | auto",
         examples=["manual", "auto"],
     )
@@ -279,7 +287,7 @@ class FallbackEntryInput(SQLModel):
 
     model_id: str = Field(description="Canonical 9router/... model identifier.")
     position: int = Field(ge=0)
-    trigger_type: str = Field(default="unavailable")
+    trigger_type: TriggerType = Field(default="unavailable")
     enabled: bool = Field(default=True)
     constraints: dict[str, Any] | None = None
 
@@ -291,7 +299,7 @@ class PutFallbackOverrideRequest(SQLModel):
     existing manual entries atomically. Ordering is taken from position fields.
     """
 
-    override_mode: str = Field(
+    override_mode: OverrideMode = Field(
         description="none | append | replace",
         examples=["replace"],
     )

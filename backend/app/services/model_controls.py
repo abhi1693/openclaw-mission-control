@@ -12,10 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -25,11 +22,6 @@ from sqlalchemy.exc import NoResultFound
 from app.core.time import utcnow
 
 logger = logging.getLogger(__name__)
-
-# OpenClaw agent config root (configurable via env)
-_OPENCLAW_STATE_DIR = Path(
-    os.environ.get("OPENCLAW_STATE_DIR", os.path.expanduser("~/.openclaw"))
-)
 from app.models.agents import Agent
 from app.models.gateway_model_profiles import GatewayModelProfileDefaults
 from app.models.model_controls import (
@@ -55,162 +47,266 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# In-memory model catalog (replaces static _ACTIVE_MODEL_IDS stub)
+# Dynamic model catalog — fetched from gateway via models.list RPC
 # ---------------------------------------------------------------------------
-# Structured catalog derived from catalog-seed.json.  Provides validation,
-# display metadata, capability filtering, and the data for the catalog
-# endpoint in one place.  A future iteration may back this by a DB table
-# or external catalog service; the in-memory structure ensures a clean
-# upgrade path.
+# No static fallback: if the gateway is unreachable the catalog is empty.
+# Results are cached in-memory with a short TTL to avoid hitting the gateway
+# on every request.
+
+import time as _time
 
 from app.schemas.model_controls import CatalogEntry
 
-# Canonical catalog — sourced strictly from OpenClaw gateway config
-# (`~/.openclaw/agents/mc-gateway-<id>/agent/models.json`).
-# Only models present in the active gateway are listed.
-# Phantom families (gemini, ag/claude-*-thinking, codex-xhigh/high/low)
-# that were never in gateway config have been removed.
-_MODEL_CATALOG: list[CatalogEntry] = [
-    # --- Premium tier ---
-    CatalogEntry(
-        model_id="9router/cc/claude-opus-4-6",
-        display_name="Claude Opus 4.6",
-        provider_family="9router",
-        routing_family="cc",
-        family="claude",
-        tier="premium",
-        capability_class="reasoning",
-        role_fit=["lead", "coding", "review"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cc/claude-sonnet-4-6", "9router/cx/gpt-5.4"],
-    ),
-    CatalogEntry(
-        model_id="9router/cx/gpt-5.4",
-        display_name="GPT 5.4 (Codex)",
-        provider_family="9router",
-        routing_family="cx",
-        family="gpt",
-        tier="premium",
-        capability_class="reasoning",
-        role_fit=["lead", "coding", "worker", "review"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cx/gpt-5.3-codex", "9router/cc/claude-sonnet-4-6"],
-    ),
-    CatalogEntry(
-        model_id="9router/gh/gpt-5.4",
-        display_name="GPT 5.4 (GitHub)",
-        provider_family="9router",
-        routing_family="gh",
-        family="gpt",
-        tier="premium",
-        capability_class="reasoning",
-        role_fit=["lead", "coding", "worker", "review"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cx/gpt-5.3-codex", "9router/gh/gpt-5-mini"],
-    ),
-    # --- Balanced tier ---
-    CatalogEntry(
-        model_id="9router/cc/claude-sonnet-4-6",
-        display_name="Claude Sonnet 4.6",
-        provider_family="9router",
-        routing_family="cc",
-        family="claude",
-        tier="balanced",
-        capability_class="general",
-        role_fit=["lead", "worker", "review"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cc/claude-opus-4-6", "9router/cx/gpt-5.3-codex"],
-    ),
-    CatalogEntry(
-        model_id="9router/cx/gpt-5.3-codex",
-        display_name="GPT 5.3 Codex",
-        provider_family="9router",
-        routing_family="cx",
-        family="gpt",
-        tier="specialized",
-        capability_class="coding",
-        role_fit=["coding", "worker", "automation"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cx/gpt-5.3-codex-none", "9router/cx/gpt-5.3-codex-spark"],
-    ),
-    CatalogEntry(
-        model_id="9router/cx/gpt-5.3-codex-none",
-        display_name="GPT 5.3 Codex (No Reasoning)",
-        provider_family="9router",
-        routing_family="cx",
-        family="gpt",
-        tier="balanced",
-        capability_class="coding",
-        role_fit=["coding", "worker"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cx/gpt-5.3-codex-spark", "9router/cx/gpt-5.3-codex"],
-    ),
-    # --- Budget tier ---
-    CatalogEntry(
-        model_id="9router/gh/gpt-5-mini",
-        display_name="GPT 5 Mini (GitHub)",
-        provider_family="9router",
-        routing_family="gh",
-        family="gpt",
-        tier="budget",
-        capability_class="fast",
-        role_fit=["automation", "worker"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cx/gpt-5.3-codex-spark", "9router/cc/claude-sonnet-4-6"],
-    ),
-    CatalogEntry(
-        model_id="9router/cx/gpt-5.3-codex-spark",
-        display_name="GPT 5.3 Codex Spark",
-        provider_family="9router",
-        routing_family="cx",
-        family="gpt",
-        tier="budget",
-        capability_class="coding",
-        role_fit=["automation", "coding", "worker"],
-        supports_primary=True,
-        supports_fallback=True,
-        status="active",
-        fallback_candidates=["9router/cx/gpt-5.3-codex-none", "9router/gh/gpt-5-mini"],
-    ),
-]
-
-# Derived lookup sets for fast validation
-_ACTIVE_MODEL_IDS: set[str] = {m.model_id for m in _MODEL_CATALOG if m.status == "active"}
-_CATALOG_INDEX: dict[str, CatalogEntry] = {m.model_id: m for m in _MODEL_CATALOG}
+_CATALOG_CACHE_TTL_SECONDS = 60
+_catalog_cache: dict[str, tuple[list[CatalogEntry], float]] = {}
 
 
-def _is_valid_model(model_id: str) -> bool:
-    return model_id in _ACTIVE_MODEL_IDS
+_ROUTING_LABELS: dict[str, str] = {
+    "cc": "Anthropic",
+    "cx": "Codex",
+    "gh": "GitHub",
+    "ag": "Agentic",
+}
+
+_TIER_HINTS: dict[str, str] = {
+    "opus": "premium",
+    "gpt-5.4": "premium",
+    "sonnet": "balanced",
+    "codex-spark": "budget",
+    "codex-none": "balanced",
+    "codex": "specialized",
+    "mini": "budget",
+    "haiku": "budget",
+}
+
+_CAPABILITY_HINTS: dict[str, str] = {
+    "opus": "reasoning",
+    "gpt-5.4": "reasoning",
+    "sonnet": "general",
+    "codex": "coding",
+    "codex-spark": "coding",
+    "codex-none": "coding",
+    "mini": "fast",
+    "haiku": "fast",
+}
 
 
-def get_model_catalog(
+def _infer_tier(model_name: str) -> str:
+    """Infer tier from model name patterns."""
+    for hint, tier in _TIER_HINTS.items():
+        if hint in model_name:
+            return tier
+    return "balanced"
+
+
+def _infer_capability(model_name: str) -> str:
+    """Infer capability class from model name patterns."""
+    for hint, cap in _CAPABILITY_HINTS.items():
+        if hint in model_name:
+            return cap
+    return "general"
+
+
+def _build_display_name(model_name: str, routing: str) -> str:
+    """Build a human-readable display name from model name and routing family.
+
+    Examples:
+        ("claude-opus-4-6", "cc") -> "Claude Opus 4.6 (Anthropic)"
+        ("gpt-5.4", "cx") -> "GPT 5.4 (Codex)"
+        ("gpt-5.4", "gh") -> "GPT 5.4 (GitHub)"
+        ("gpt-5.3-codex-spark", "cx") -> "GPT 5.3 Codex Spark (Codex)"
+    """
+    # Convert hyphens to spaces, handle version numbers (4-6 -> 4.6)
+    import re
+    # Replace version-like patterns: digits-digits -> digits.digits
+    name = re.sub(r"(\d+)-(\d+)$", r"\1.\2", model_name)
+    name = re.sub(r"(\d+)-(\d+)-", r"\1.\2-", name)
+    # Title-case the rest
+    name = name.replace("-", " ").title()
+    # Fix common casing: GPT not Gpt, etc.
+    name = re.sub(r"\bGpt\b", "GPT", name)
+    name = re.sub(r"\bClaude\b", "Claude", name)
+
+    routing_label = _ROUTING_LABELS.get(routing)
+    if routing_label:
+        return f"{name} ({routing_label})"
+    return name
+
+
+def _infer_role_fit(model_name: str) -> list[str]:
+    """Infer role fit from model name patterns."""
+    if "opus" in model_name or "gpt-5.4" in model_name:
+        return ["lead", "coding", "review"]
+    if "sonnet" in model_name:
+        return ["lead", "worker", "review"]
+    if "codex" in model_name:
+        return ["coding", "worker", "automation"]
+    if "mini" in model_name or "haiku" in model_name:
+        return ["automation", "worker"]
+    return ["worker"]
+
+
+def _parse_model_entry(raw: object) -> CatalogEntry | None:
+    """Best-effort parse of a single model entry from gateway models.list response.
+
+    Handles both rich dict entries and plain string model IDs.
+    """
+    if isinstance(raw, str):
+        model_id = raw
+        parts = model_id.split("/")
+        provider = parts[0] if len(parts) >= 3 else "9router"
+        routing = parts[1] if len(parts) >= 3 else "unknown"
+        model_name = parts[-1] if parts else raw
+        family = model_name.split("-")[0] if "-" in model_name else model_name
+
+        return CatalogEntry(
+            model_id=model_id,
+            display_name=_build_display_name(model_name, routing),
+            provider_family=provider,
+            routing_family=routing,
+            family=family,
+            tier=_infer_tier(model_name),
+            capability_class=_infer_capability(model_name),
+            role_fit=_infer_role_fit(model_name),
+            supports_primary=True,
+            supports_fallback=True,
+            status="active",
+            fallback_candidates=[],
+        )
+
+    if isinstance(raw, dict):
+        model_id = raw.get("model_id") or raw.get("id") or raw.get("name")
+        if not model_id or not isinstance(model_id, str):
+            return None
+
+        parts = model_id.split("/")
+        provider = raw.get("provider_family") or raw.get("provider") or (parts[0] if len(parts) >= 3 else "9router")
+        routing = raw.get("routing_family") or raw.get("routing") or (parts[1] if len(parts) >= 3 else "unknown")
+        model_name = parts[-1] if parts else model_id
+        family = raw.get("family") or (model_name.split("-")[0] if "-" in model_name else model_name)
+
+        return CatalogEntry(
+            model_id=model_id,
+            display_name=raw.get("display_name") or raw.get("name") or raw.get("label") or _build_display_name(model_name, str(routing)),
+            provider_family=str(provider),
+            routing_family=str(routing),
+            family=str(family),
+            tier=raw.get("tier") or _infer_tier(model_name),
+            capability_class=raw.get("capability_class") or raw.get("capability") or _infer_capability(model_name),
+            role_fit=raw.get("role_fit") or _infer_role_fit(model_name),
+            supports_primary=raw.get("supports_primary", True),
+            supports_fallback=raw.get("supports_fallback", True),
+            status=raw.get("status", "active"),
+            fallback_candidates=raw.get("fallback_candidates", []),
+        )
+
+    return None
+
+
+async def _fetch_catalog_from_gateway(
+    session: "AsyncSession",
+    gateway_id: UUID | None = None,
+) -> list[CatalogEntry]:
+    """Fetch the model catalog from a gateway via models.list RPC.
+
+    Returns an empty list if the gateway is unreachable or the response
+    is unparseable. No static fallback.
+    """
+    from app.models.gateways import Gateway
+    from app.services.openclaw.gateway_rpc import OpenClawGatewayError, openclaw_call
+    from app.services.openclaw.gateway_resolver import gateway_client_config
+
+    try:
+        if gateway_id:
+            gateway = await session.get(Gateway, gateway_id)
+        else:
+            # Use first available gateway
+            result = await session.execute(select(Gateway).limit(1))
+            gateway = result.scalars().first()
+
+        if not gateway:
+            logger.warning("catalog.fetch: no gateway available")
+            return []
+
+        config = gateway_client_config(gateway)
+        raw_response = await openclaw_call("models.list", config=config)
+
+        # Log the raw response shape on first encounter for debugging
+        logger.info(
+            "catalog.fetch: models.list response type=%s gateway_id=%s",
+            type(raw_response).__name__, gateway.id,
+        )
+        logger.debug("catalog.fetch: raw response=%r", raw_response)
+
+        # Parse response — handle list of models or dict with models key
+        raw_models: list[object] = []
+        if isinstance(raw_response, list):
+            raw_models = raw_response
+        elif isinstance(raw_response, dict):
+            raw_models = (
+                raw_response.get("models")
+                or raw_response.get("list")
+                or raw_response.get("data")
+                or []
+            )
+            if not isinstance(raw_models, list):
+                raw_models = []
+
+        entries: list[CatalogEntry] = []
+        for raw in raw_models:
+            entry = _parse_model_entry(raw)
+            if entry:
+                entries.append(entry)
+
+        logger.info("catalog.fetch: parsed %d models from gateway %s", len(entries), gateway.id)
+        return entries
+
+    except (OpenClawGatewayError, TimeoutError) as exc:
+        logger.warning("catalog.fetch: gateway RPC failed: %s", exc)
+        return []
+    except Exception as exc:  # pragma: no cover
+        logger.error("catalog.fetch: unexpected error: %s", exc)
+        return []
+
+
+async def get_model_catalog(
+    session: "AsyncSession",
     *,
+    gateway_id: UUID | None = None,
     role_fit: str | None = None,
     capability_class: str | None = None,
     supports_primary: bool | None = None,
     supports_fallback: bool | None = None,
 ) -> list[CatalogEntry]:
-    """Return filtered model catalog entries.
+    """Return filtered model catalog from gateway, with in-memory caching.
 
-    All filters are optional; omitting a filter includes all values for that axis.
-    Only active models are returned.
+    Cache is keyed by gateway_id (or "default") with a 60s TTL.
+    Returns empty list if gateway is unreachable.
     """
+    cache_key = str(gateway_id) if gateway_id else "default"
+    now = _time.monotonic()
+
+    # Check cache
+    if cache_key in _catalog_cache:
+        cached_entries, cached_at = _catalog_cache[cache_key]
+        if now - cached_at < _CATALOG_CACHE_TTL_SECONDS:
+            all_entries = cached_entries
+        else:
+            all_entries = await _fetch_catalog_from_gateway(session, gateway_id)
+            # Only cache non-empty results; don't cache gateway failures
+            if all_entries:
+                _catalog_cache[cache_key] = (all_entries, now)
+            else:
+                # Serve stale cache on failure rather than empty
+                all_entries = cached_entries
+    else:
+        all_entries = await _fetch_catalog_from_gateway(session, gateway_id)
+        if all_entries:
+            _catalog_cache[cache_key] = (all_entries, now)
+
+    # Apply filters
     results: list[CatalogEntry] = []
-    for entry in _MODEL_CATALOG:
+    for entry in all_entries:
         if entry.status != "active":
             continue
         if role_fit and role_fit not in entry.role_fit:
@@ -223,6 +319,31 @@ def get_model_catalog(
             continue
         results.append(entry)
     return results
+
+
+async def _get_active_model_ids(session: "AsyncSession", gateway_id: UUID | None = None) -> set[str]:
+    """Return the set of active model IDs from the cached gateway catalog."""
+    entries = await get_model_catalog(session, gateway_id=gateway_id)
+    return {e.model_id for e in entries if e.status == "active"}
+
+
+async def _is_valid_model_async(session: "AsyncSession", model_id: str, gateway_id: UUID | None = None) -> bool:
+    """Check if a model_id is in the active gateway catalog."""
+    active = await _get_active_model_ids(session, gateway_id=gateway_id)
+    return model_id in active
+
+
+def _is_valid_model(model_id: str) -> bool:
+    """Synchronous validation against the cached catalog.
+
+    Uses the cache directly without a gateway fetch. Returns True if the
+    model_id is found in any cached catalog, False otherwise.
+    """
+    for entries, _ts in _catalog_cache.values():
+        for e in entries:
+            if e.model_id == model_id and e.status == "active":
+                return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -431,11 +552,25 @@ class AgentModelAssignmentService:
     # -----------------------------------------------------------------------
 
     async def _get_or_create_profile(self, agent_id: UUID) -> AgentModelProfile:
-        """Return the existing profile for an agent or bootstrap a new pending one."""
+        """Return the existing profile for an agent or bootstrap a new pending one.
+
+        Raises HTTPException 404 if the agent does not exist (prevents phantom records).
+        """
         stmt = select(AgentModelProfile).where(AgentModelProfile.agent_id == agent_id)
         result = await self._exec_scalars(stmt)
         profile = result.one_or_none()
         if profile is None:
+            # Verify the agent actually exists before creating a profile
+            from fastapi import HTTPException, status as http_status
+
+            agent_check = await self._session.execute(
+                select(Agent.id).where(Agent.id == agent_id)
+            )
+            if agent_check.scalar_one_or_none() is None:
+                raise HTTPException(
+                    status_code=http_status.HTTP_404_NOT_FOUND,
+                    detail="Agent not found",
+                )
             profile = AgentModelProfile(
                 agent_id=agent_id,
                 primary_selection_mode="auto",
@@ -603,129 +738,17 @@ class AgentModelAssignmentService:
         self._session.add(profile)
 
     # -----------------------------------------------------------------------
-    # Runtime sync — config-file bridge to OpenClaw gateway
+    # Runtime sync — gateway RPC bridge
     # -----------------------------------------------------------------------
-
-    async def _resolve_agent_dir(self, agent_id: UUID) -> str | None:
-        """Resolve the OpenClaw agent directory name from the agent's session ID.
-
-        Session IDs follow the pattern: agent:{agent_dir}:main
-        Agent dirs follow: mc-{agent_id} (workers) or lead-{board_id} (leads).
-        """
-        stmt = select(Agent.openclaw_session_id).where(Agent.id == agent_id)
-        result = await self._session.execute(stmt)
-        session_id = result.scalar_one_or_none()
-        if not session_id:
-            return None
-        # Parse: "agent:mc-xxxx:main" → "mc-xxxx"
-        parts = session_id.split(":")
-        if len(parts) >= 2:
-            return parts[1]
-        return None
-
-    def _sync_model_to_runtime(
-        self,
-        agent_dir: str,
-        effective_model_id: str,
-    ) -> RuntimeSyncResult:
-        """Write effective model into the agent's entry in openclaw.json.
-
-        Per-agent model override lives at:
-            openclaw.json → agents.list[n].model.primary
-
-        This is the config path OpenClaw gateway reads at session start.
-        MC DB write is always the source of truth; this is best-effort.
-        """
-        from app.schemas.model_controls import RuntimeSyncResult
-
-        config_path = _OPENCLAW_STATE_DIR / "openclaw.json"
-
-        try:
-            if not config_path.exists():
-                return RuntimeSyncResult(
-                    status="skipped",
-                    error=f"Gateway config not found: {config_path}",
-                    target_path=str(config_path),
-                )
-        except OSError as exc:
-            logger.warning("Cannot stat openclaw.json: %s", exc)
-            return RuntimeSyncResult(
-                status="failed",
-                error=f"Cannot access config: {exc}",
-                target_path=str(config_path),
-            )
-
-        try:
-            config = json.loads(config_path.read_text())
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            logger.error("Corrupt openclaw.json: %s", exc)
-            return RuntimeSyncResult(
-                status="failed",
-                error=f"Corrupt config: {exc}",
-                target_path=str(config_path),
-            )
-        except OSError as exc:
-            logger.warning("Cannot read openclaw.json: %s", exc)
-            return RuntimeSyncResult(
-                status="failed",
-                error=f"Read error: {exc}",
-                target_path=str(config_path),
-            )
-
-        # Find the agent entry in agents.list by agent_dir id
-        agents_list = config.get("agents", {}).get("list", [])
-        agent_entry = None
-        for entry in agents_list:
-            if entry.get("id") == agent_dir:
-                agent_entry = entry
-                break
-
-        if agent_entry is None:
-            return RuntimeSyncResult(
-                status="skipped",
-                error=f"Agent '{agent_dir}' not found in openclaw.json agents.list",
-                target_path=str(config_path),
-            )
-
-        # Set agents.list[n].model.primary to the effective model
-        existing_model = agent_entry.get("model")
-        if isinstance(existing_model, dict):
-            agent_entry["model"]["primary"] = effective_model_id
-        elif isinstance(existing_model, str):
-            # Simple string model → upgrade to object with primary
-            agent_entry["model"] = {"primary": effective_model_id}
-        else:
-            # No model set yet → create
-            agent_entry["model"] = {"primary": effective_model_id}
-
-        # Write in-place to preserve file ownership (container user may differ
-        # from host user; atomic rename would change ownership).
-        try:
-            config_path.write_text(json.dumps(config, indent=2))
-        except OSError as exc:
-            logger.warning("Failed to write openclaw.json: %s", exc)
-            return RuntimeSyncResult(
-                status="failed",
-                error=f"Write error: {exc}",
-                target_path=str(config_path),
-            )
-
-        now = utcnow()
-        logger.info(
-            "Runtime sync: %s → %s (path=%s, field=agents.list[].model.primary)",
-            agent_dir, effective_model_id, config_path,
-        )
-        return RuntimeSyncResult(
-            status="synced",
-            synced_at=now,
-            target_path=str(config_path),
-            next_effective="next_session_start",
-        )
 
     async def _sync_effective_to_runtime(
         self, agent_id: UUID, effective_model_id: str | None
-    ) -> RuntimeSyncResult | None:
-        """Resolve agent dir and sync effective model to gateway runtime."""
+    ) -> "RuntimeSyncResult | None":
+        """Sync effective model to gateway runtime via config.patch RPC.
+
+        Uses the same config.patch mechanism as provisioning heartbeat sync.
+        MC DB is the source of truth; this is best-effort.
+        """
         from app.schemas.model_controls import RuntimeSyncResult
 
         if not effective_model_id:
@@ -734,14 +757,90 @@ class AgentModelAssignmentService:
                 error="No effective model to sync",
             )
 
-        agent_dir = await self._resolve_agent_dir(agent_id)
-        if not agent_dir:
+        # Load the agent to resolve its board and gateway
+        agent = await self._session.get(Agent, agent_id)
+        if not agent or not agent.board_id:
             return RuntimeSyncResult(
                 status="skipped",
-                error="Agent has no openclaw_session_id",
+                error="Agent has no board; cannot resolve gateway",
             )
 
-        return self._sync_model_to_runtime(agent_dir, effective_model_id)
+        from app.models.boards import Board
+        board = await self._session.get(Board, agent.board_id)
+        if not board or not board.gateway_id:
+            return RuntimeSyncResult(
+                status="skipped",
+                error="Board has no gateway configured",
+            )
+
+        try:
+            from app.services.openclaw.gateway_dispatch import GatewayDispatchService
+            from app.services.openclaw.gateway_rpc import (
+                OpenClawGatewayError,
+                openclaw_call,
+            )
+            from app.services.openclaw.internal.agent_key import agent_key
+            from app.services.openclaw.provisioning import (
+                _gateway_config_agent_list,
+            )
+
+            dispatch = GatewayDispatchService(self._session)
+            _gw, config = await dispatch.require_gateway_config_for_board(board)
+
+            # Fetch current agent list from gateway
+            base_hash, agent_list, _config_data = await _gateway_config_agent_list(config)
+
+            # Find agent entry and patch model.primary
+            agent_dir = agent_key(agent)
+            found = False
+            for entry in agent_list:
+                if entry.get("id") == agent_dir:
+                    model = entry.get("model", {})
+                    if isinstance(model, str):
+                        model = {"primary": model}
+                    elif not isinstance(model, dict):
+                        model = {}
+                    model["primary"] = effective_model_id
+                    entry["model"] = model
+                    found = True
+                    break
+
+            if not found:
+                return RuntimeSyncResult(
+                    status="skipped",
+                    error=f"Agent '{agent_dir}' not found in gateway config agents.list",
+                )
+
+            # Send config.patch RPC
+            patch = {"agents": {"list": agent_list}}
+            params: dict[str, str] = {"raw": json.dumps(patch)}
+            if base_hash:
+                params["baseHash"] = base_hash
+            await openclaw_call("config.patch", params, config=config)
+
+            now = utcnow()
+            logger.info(
+                "Runtime sync via RPC: agent=%s model=%s",
+                agent_dir, effective_model_id,
+            )
+            return RuntimeSyncResult(
+                status="synced",
+                synced_at=now,
+                next_effective="next_session_start",
+            )
+
+        except (OpenClawGatewayError, TimeoutError) as exc:
+            logger.warning("Runtime sync RPC failed: %s", exc)
+            return RuntimeSyncResult(
+                status="failed",
+                error=f"Gateway RPC error: {exc}",
+            )
+        except Exception as exc:  # pragma: no cover — defensive guard
+            logger.error("Runtime sync unexpected error: %s", exc)
+            return RuntimeSyncResult(
+                status="failed",
+                error=f"Unexpected error: {exc}",
+            )
 
     # -----------------------------------------------------------------------
     # Public API
@@ -769,7 +868,7 @@ class AgentModelAssignmentService:
         if payload.selection_mode == "manual":
             if not payload.model_id:
                 raise ValueError("model_id is required when selection_mode=manual")
-            if not _is_valid_model(payload.model_id):
+            if not await _is_valid_model_async(self._session, payload.model_id):
                 raise ValueError(f"Invalid model_id: {payload.model_id}")
             profile.primary_model_id = payload.model_id
             profile.primary_selection_mode = "manual"
@@ -985,8 +1084,15 @@ class AgentModelAssignmentService:
         profile.recommendation_status = "fresh"
         profile.recommendation_generated_at = now
         profile.recommendation_version = version
-        # Build explanation summary
-        cat_entry = _CATALOG_INDEX.get(recommended_primary)
+        # Build explanation summary — look up display name from cache
+        cat_entry = None
+        for _cached_entries, _ts in _catalog_cache.values():
+            for _ce in _cached_entries:
+                if _ce.model_id == recommended_primary:
+                    cat_entry = _ce
+                    break
+            if cat_entry:
+                break
         model_display = cat_entry.display_name if cat_entry else recommended_primary
         summary_parts = [
             f"Recommended '{model_display}' for role '{role}'",

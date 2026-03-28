@@ -22,7 +22,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import ActorContext, require_user_or_agent
+from app.api.deps import ActorContext, authorize_agent_access, require_user_or_agent
 from app.db.session import get_session
 from app.schemas.model_controls import (
     AgentModelAssignmentRead,
@@ -72,9 +72,16 @@ async def get_catalog(
     capability_class: str | None = None,
     supports_primary: bool | None = None,
     supports_fallback: bool | None = None,
+    gateway_id: str | None = None,
+    session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> ModelCatalogResponse:
-    entries = get_model_catalog(
+    from uuid import UUID as _UUID
+
+    gw_uuid = _UUID(gateway_id) if gateway_id else None
+    entries = await get_model_catalog(
+        session,
+        gateway_id=gw_uuid,
         role_fit=role_fit,
         capability_class=capability_class,
         supports_primary=supports_primary,
@@ -116,6 +123,7 @@ async def get_model_assignment(
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> AgentModelAssignmentRead:
+    await authorize_agent_access(agent_id, session, actor)
     svc = AgentModelAssignmentService(session)
     return await svc.get_assignment(agent_id)
 
@@ -142,6 +150,7 @@ async def patch_primary(
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> AgentModelAssignmentRead:
+    await authorize_agent_access(agent_id, session, actor)
     svc = AgentModelAssignmentService(session)
     try:
         return await svc.patch_primary(agent_id, payload)
@@ -172,6 +181,7 @@ async def put_fallback_override(
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> AgentModelAssignmentRead:
+    await authorize_agent_access(agent_id, session, actor)
     svc = AgentModelAssignmentService(session)
     try:
         return await svc.put_fallback_override(agent_id, payload)
@@ -201,5 +211,6 @@ async def regenerate_recommendation(
     session: "AsyncSession" = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> AgentModelAssignmentRead:
+    await authorize_agent_access(agent_id, session, actor)
     svc = AgentModelAssignmentService(session)
     return await svc.regenerate_recommendation(agent_id, payload)

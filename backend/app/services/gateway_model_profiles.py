@@ -14,7 +14,7 @@ from app.schemas.gateway_model_profiles import (
     PatchGatewayModelProfileDefaultsRequest,
     ProfileSlotRead,
 )
-from app.services.model_controls import _CATALOG_INDEX, _is_valid_model
+from app.services.model_controls import _catalog_cache, _is_valid_model
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -58,7 +58,6 @@ def _resolve_slot(
             )
         # Coder/budget fall back to general when unset
         if general_model_id is not None and general_model_id != DEFAULT_SENTINEL:
-            cat_entry = _CATALOG_INDEX.get(general_model_id)
             return ProfileSlotRead(
                 model_id=None,
                 source="fallback_to_general",
@@ -80,12 +79,17 @@ def _resolve_slot(
             effective_model_id=DEFAULT_SENTINEL,
         )
 
-    # Concrete catalog model_id
-    cat_entry = _CATALOG_INDEX.get(model_id)
+    # Concrete catalog model_id — look up display name from cache
+    display_name = model_id
+    for _entries, _ts in _catalog_cache.values():
+        for _ce in _entries:
+            if _ce.model_id == model_id:
+                display_name = _ce.display_name
+                break
     return ProfileSlotRead(
         model_id=model_id,
         source="explicit",
-        display_name=cat_entry.display_name if cat_entry else model_id,
+        display_name=display_name,
         effective_model_id=model_id,
     )
 

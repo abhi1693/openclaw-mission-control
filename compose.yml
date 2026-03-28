@@ -114,5 +114,16 @@ services:
       RQ_DISPATCH_MAX_RETRIES: ${RQ_DISPATCH_MAX_RETRIES:-3}
     restart: unless-stopped
 
+  test:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.test
+    command: ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+    environment:
+      AUTH_MODE: local
+      LOCAL_AUTH_TOKEN: test-local-token-0123456789-0123456789-0123456789x
+      BASE_URL: http://localhost:8000
+
 volumes:
   postgres_data:

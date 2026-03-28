@@ -28,6 +28,7 @@ from app.core.agent_auth import get_agent_auth_context_optional
 from app.core.auth import AuthContext, get_auth_context, get_auth_context_optional
 from app.db.session import get_session
 from app.models.boards import Board
+from app.models.gateways import Gateway
 from app.models.organizations import Organization
 from app.models.tasks import Task
 from app.services.admin_access import require_user_actor
@@ -35,6 +36,7 @@ from app.services.organizations import (
     OrganizationContext,
     ensure_member_for_user,
     get_active_membership,
+    get_member,
     is_org_admin,
     require_board_access,
 )
@@ -44,6 +46,8 @@ if TYPE_CHECKING:
 
     from app.models.agents import Agent
     from app.models.users import User
+
+from sqlalchemy import select as sa_select
 
 AUTH_DEP = Depends(get_auth_context)
 SESSION_DEP = Depends(get_session)
@@ -219,3 +223,77 @@ async def get_task_or_404(
     if task is None or task.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return task
+
+
+# ---------------------------------------------------------------------------
+# Agent / Gateway resource-level authorization
+# ---------------------------------------------------------------------------
+
+
+async def authorize_agent_access(
+    agent_id: UUID,
+    session: "AsyncSession",
+    actor: ActorContext,
+) -> "Agent":
+    """Load an agent and verify the actor is authorized to access it.
+
+    - Agent callers may only access their own record.
+    - User callers must have write access to the agent's board (via org membership).
+    """
+    from app.models.agents import Agent as AgentModel
+
+    result = await session.execute(
+        sa_select(AgentModel).where(AgentModel.id == agent_id)
+    )
+    agent = result.scalars().one_or_none()
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    if actor.actor_type == "agent":
+        if not actor.agent or actor.agent.id != agent.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        return agent
+
+    # User path: require org membership through the agent's board
+    if actor.user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if agent.board_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent has no board; cannot verify access.",
+        )
+    board = await Board.objects.by_id(agent.board_id).first(session)
+    if board is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Board not found")
+    await require_board_access(session, user=actor.user, board=board, write=True)
+    return agent
+
+
+async def authorize_gateway_access(
+    gateway_id: UUID,
+    session: "AsyncSession",
+    actor: ActorContext,
+) -> Gateway:
+    """Load a gateway and verify the actor is authorized to access it.
+
+    - Agent callers must belong to the same gateway.
+    - User callers must be a member of the gateway's organization.
+    """
+    gateway = await Gateway.objects.by_id(gateway_id).first(session)
+    if gateway is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gateway not found")
+
+    if actor.actor_type == "agent":
+        if not actor.agent or actor.agent.gateway_id != gateway.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        return gateway
+
+    # User path: require org membership for the gateway's organization
+    if actor.user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    member = await get_member(
+        session, user_id=actor.user.id, organization_id=gateway.organization_id
+    )
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No org access")
+    return gateway
