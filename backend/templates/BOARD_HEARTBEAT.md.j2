@@ -348,6 +348,7 @@ curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -d '{"status": "review", "comment": "Self-validation passed. Evidence: EVIDENCE @lead"}'
 ```
 **Include evidence** — paste actual command output. Must come from YOUR workspace.
+**Include the build hash** (e.g. `index-ABC123.js`) so QA can verify the exact build.
 The comment MUST include `@lead` so the Supervisor is notified immediately.
 
 8) After moving to review, check for more assigned inbox tasks (step 2 output). If you have another inbox task, pick it and go back to step 4. If no more tasks, post idle:

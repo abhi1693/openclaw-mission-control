@@ -9,9 +9,18 @@ Read this ENTIRE file before starting any validation. Score every dimension. Pos
 - Evidence must quote the **literal tool result** — not a summary, not "I checked and saw no errors." Paste the actual output.
 - The BUILD hash MUST be captured from the browser network log (`mcp__chrome-devtools__list_network_requests`), not from memory or a prior validation.
 - Bundle/code grep is NEVER valid evidence for UI dimensions.
-- Re-validate EVERY time with a FRESH Chrome MCP session. Previous PASS/FAIL is irrelevant.
+- Re-validate EVERY time. Previous PASS/FAIL is irrelevant.
+- **FRESH session procedure** (do this BEFORE every validation):
+  1. Navigate to `about:blank` first to clear page state
+  2. Clear storage: `mcp__chrome-devtools__evaluate_script`: `localStorage.clear(); sessionStorage.clear();`
+  3. Check for service workers: `navigator.serviceWorker.getRegistrations().then(r => r.forEach(s => s.unregister()))`
+  4. Navigate to the target URL
+  5. Hard refresh: `mcp__chrome-devtools__evaluate_script`: `location.reload(true)`
+  6. **Wait 2 seconds** for React hydration before any clicks or DOM checks
+  7. Capture build hash from `mcp__chrome-devtools__list_network_requests` — verify it matches the developer's review comment hash
+  8. If hash doesn't match → STOP, report "BUILD MISMATCH"
 - If the URL is unreachable, report FAIL — that IS the bug.
-- If the build hash changes during your validation (different from the one in the review comment), STOP and report "BUILD CHANGED — validation invalid. Waiting for stable build." Do NOT re-validate on the new build — the developer must freeze and re-request QA.
+- If the build hash changes during your validation, STOP and report "BUILD CHANGED — validation invalid."
 - If your validation does not include at least one `mcp__chrome-devtools__navigate_page` call, you have not started.
 
 **QA-Unit (mechanical checks):**
