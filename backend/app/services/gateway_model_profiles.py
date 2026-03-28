@@ -155,38 +155,49 @@ class GatewayModelProfileService:
 
         Creates the record if it doesn't exist. Validates model IDs
         against the active catalog.
+
+        Only fields that are actually provided in the payload are updated.
+        Explicit nulls will clear fields; omitted fields are left unchanged.
         """
-        # Validate all provided model IDs
-        if payload.general_model_id is not None:
-            _validate_model_id(payload.general_model_id, "general_model_id")
-        if payload.coder_model_id is not None:
-            _validate_model_id(payload.coder_model_id, "coder_model_id")
-        if payload.budget_model_id is not None:
-            _validate_model_id(payload.budget_model_id, "budget_model_id")
+        # Determine which fields were actually provided in the request.
+        # __pydantic_fields_set__ is available in both Pydantic v1 and v2.
+        fields_set = getattr(payload, "__pydantic_fields_set__", set())
 
         record = await self._get_record(gateway_id)
 
+        # If no fields were provided and no record exists yet, there's nothing to do.
+        if not fields_set and record is None:
+            return _build_read(gateway_id, record)
+
+        # Create a new record if needed and at least one field is being set.
         if record is None:
-            # Create new record
-            record = GatewayModelProfileDefaults(
-                gateway_id=gateway_id,
-                general_model_id=payload.general_model_id,
-                coder_model_id=payload.coder_model_id,
-                budget_model_id=payload.budget_model_id,
-            )
-            self._session.add(record)
-        else:
-            # Update existing — only update fields that are provided
-            # We use a sentinel approach: the field being present in the
-            # payload means "set this", including setting to null.
-            # Since Pydantic doesn't distinguish "not provided" from "null"
-            # in this schema, we update all three fields.
-            record.general_model_id = payload.general_model_id
-            record.coder_model_id = payload.coder_model_id
-            record.budget_model_id = payload.budget_model_id
-            record.updated_at = utcnow()
+            record = GatewayModelProfileDefaults(gateway_id=gateway_id)
             self._session.add(record)
 
+        updated = False
+
+        # Validate and apply only the fields that were explicitly provided.
+        if "general_model_id" in fields_set:
+            _validate_model_id(payload.general_model_id, "general_model_id")
+            record.general_model_id = payload.general_model_id
+            updated = True
+
+        if "coder_model_id" in fields_set:
+            _validate_model_id(payload.coder_model_id, "coder_model_id")
+            record.coder_model_id = payload.coder_model_id
+            updated = True
+
+        if "budget_model_id" in fields_set:
+            _validate_model_id(payload.budget_model_id, "budget_model_id")
+            record.budget_model_id = payload.budget_model_id
+            updated = True
+
+        # If nothing was actually updated (e.g. empty payload), return current state.
+        if not updated:
+            return _build_read(gateway_id, record)
+
+        record.updated_at = utcnow()
+        self._session.add(record)
         await self._session.commit()
         await self._session.refresh(record)
 
