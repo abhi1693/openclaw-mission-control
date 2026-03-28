@@ -2,6 +2,23 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-03-28
+
+### Fixed
+- **Lifecycle orchestrator stuck "updating" status** (`lifecycle_orchestrator.py`): Agents with disabled heartbeats (`every="disabled"`) got set to `status="updating"` during lifecycle reconciliation, but never reset because they have no heartbeat timer to check in. Fix: skip `mark_provision_requested` for disabled-heartbeat agents on `action="update"` while still allowing file sync to proceed.
+- **Browser tools unavailable to agents**: `.mcp.json` files existed in PF/QA-E2E workspaces but were ignored — OpenClaw ACP bridge mode does not support per-session MCP servers. PF fell back to bundle grep (8 builds, 8 fails on scrollbar task). QA-E2E used Playwright as workaround.
+- **PF blind copy-paste from old tasks**: PF copied CSS classes from a prior task (B1bt8iXR) without checking if the DOM still matched after layout changes (stats bar removal, header gap fixes). Added "Inspect current state before coding — NEVER copy fixes from other tasks without verifying they still apply" to IMPLEMENTING step.
+
+### Added
+- **Native browser support on gateway** (`openclaw.json`): Configured `browser` section with headless Chromium 145 (Playwright's bundled Chrome) on CDP port 18800. `browser.enabled=true`, `headless=true`, `noSandbox=true`. All agents now have the `browser` tool via `tools.allow: ["browser"]`.
+- **Gateway-level Chrome DevTools MCP** (`mcp.servers.chrome-devtools`): Registered at gateway level (not per-workspace `.mcp.json`), connects to native browser on :18800. Gives all agents `mcp__chrome-devtools__*` tools. Bypasses ACP bridge mode limitation.
+- **Browser tools in TOOLS.md**: All agents now see "Browser tools available: `browser` (native), `mcp__chrome-devtools__*` (Chrome MCP), `npx playwright test` (fallback)" in their TOOLS.md.
+- **Browser tools in IDENTITY.md**: PF has "Browser Tools (MANDATORY for frontend/UI work)" section — diagnose before fixing, never use bundle grep. QA-E2E has "Browser Tools (MANDATORY for all UI tasks)" section — fresh browser session for every validation.
+- **Three-option browser validation in HEARTBEAT template**: Workers' VALIDATING step now lists Chrome MCP, native `browser` tool, and Playwright as options. "Bundle grep is NOT evidence."
+
+### Changed
+- **HEARTBEAT template IMPLEMENTING step**: Added "Inspect current state (DOM/API/files) before coding — NEVER copy fixes from other tasks without verifying they still apply."
+
 ## 2026-03-27
 
 ### Fixed

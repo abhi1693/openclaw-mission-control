@@ -312,7 +312,7 @@ for c in page.get('items', []):
 6) **Execute your workflow.** Run through ALL states in one session:
    **PLANNING:** Activate skills (see IDENTITY.md). Read task + specs + Architect comments if present. Write plan to MEMORY.md. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
    **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from @lead before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
-   **IMPLEMENTING:** Delegate to ACP. Run typecheck/lint/tests. If no tests, write them first. Review with `/simplify`. Fix issues. Continue to VALIDATING.
+   **IMPLEMENTING:** Inspect current state (DOM/API/files) before coding — NEVER copy fixes from other tasks without verifying they still apply. Delegate to ACP. Run typecheck/lint/tests. If no tests, write them first. Review with `/simplify`. Fix issues. Continue to VALIDATING.
    **VALIDATING:** Self-validate before claiming done:
    - Code compiles/typechecks: `npm run typecheck` or `ruff check`
    - Lint passes: `npm run lint` or `ruff check --select ALL`
@@ -325,11 +325,11 @@ for c in page.get('items', []):
      ```
      If ANY match → fix before moving to review.
    - Frontend: build passes (`npm run build`), app renders real data.
-   - **Browser validation (Chrome MCP) — REQUIRED for frontend/UI tasks:**
-     1. `mcp__chrome-devtools__navigate_page` to deployed URL
-     2. `mcp__chrome-devtools__take_screenshot` — verify UI renders correctly
-     3. `mcp__chrome-devtools__list_console_messages` types `["error"]` — must be ZERO
-     Do NOT move to review without Chrome MCP evidence for UI tasks.
+   - **Browser validation — REQUIRED for frontend/UI tasks** (use whichever tool is available):
+     - Chrome MCP: `mcp__chrome-devtools__navigate_page`, `take_screenshot`, `list_console_messages`
+     - Native: `browser` tool with `navigate`, `screenshot`, `snapshot` actions
+     - Fallback: `npx playwright test` or Playwright script to measure DOM
+     Do NOT move to review without real browser evidence. Bundle grep is NOT evidence.
    - **Import resolution:** Run tests, check for `Cannot find module` / `ModuleNotFoundError`.
    - **Tests ran from YOUR workspace:** `pwd` must match `$WORKSPACE_PATH` from TOOLS.md.
    - Backend/API: endpoints return real data from database, not hardcoded test data.

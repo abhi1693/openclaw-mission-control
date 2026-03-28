@@ -28,7 +28,11 @@ from app.services.openclaw.lifecycle_queue import (
     QueuedAgentLifecycleReconcile,
     enqueue_lifecycle_reconcile,
 )
-from app.services.openclaw.provisioning import OpenClawGatewayProvisioner
+from app.services.openclaw.provisioning import (
+    OpenClawGatewayProvisioner,
+    _heartbeat_config,
+    _is_disabled_heartbeat_every,
+)
 from app.services.organizations import get_org_owner_user
 
 if TYPE_CHECKING:
@@ -133,11 +137,21 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
                 await self.session.commit()
                 await self.session.refresh(locked)
                 return locked
-        mark_provision_requested(
-            locked,
-            action=action,
-            status="updating" if action == "update" else "provisioning",
-        )
+        # For agents with disabled heartbeats on update: skip setting
+        # status="updating" (they have no heartbeat timer to reset it)
+        # but still proceed with the file sync lifecycle.
+        _skip_status_update = False
+        if action == "update":
+            hb = _heartbeat_config(locked)
+            if _is_disabled_heartbeat_every(hb.get("every")):
+                _skip_status_update = True
+
+        if not _skip_status_update:
+            mark_provision_requested(
+                locked,
+                action=action,
+                status="updating" if action == "update" else "provisioning",
+            )
         locked.lifecycle_generation += 1
         locked.last_provision_error = None
         locked.checkin_deadline_at = utcnow() + CHECKIN_DEADLINE_AFTER_WAKE if wake else None
