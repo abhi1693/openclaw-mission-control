@@ -246,34 +246,51 @@ class TestAgentModelAssignmentServiceStubs:
     @pytest.mark.asyncio
     async def test_get_assignment_bootstraps_new_profile(self):
         session = AsyncMock()
-        exec_result = MagicMock()
-        exec_result.one_or_none.return_value = None  # no existing profile
-        exec_result.all.return_value = []
-        session.exec = AsyncMock(return_value=exec_result)
+
+        # First exec: no existing profile for this agent
+        exec_result_profile = MagicMock()
+        exec_result_profile.one_or_none.return_value = None
+        exec_result_profile.all.return_value = []
+
+        # Second exec: fallback entries (empty on bootstrap)
+        exec_result_fallbacks = MagicMock()
+        exec_result_fallbacks.one_or_none.return_value = None
+        exec_result_fallbacks.all.return_value = []
+
+        # Simulate multiple exec calls with appropriate results
+        session.exec = AsyncMock(side_effect=[exec_result_profile, exec_result_fallbacks])
         session.add = MagicMock()
         session.flush = AsyncMock()
         session.commit = AsyncMock()
         session.refresh = AsyncMock()
 
-        # After flush, simulate profile with an id
+        # After add/flush, simulate profile with an id so downstream queries work
         new_profile = make_profile()
         added_models: list = []
-        original_add = session.add
 
         def capture_add(obj):
             added_models.append(obj)
             if isinstance(obj, AgentModelProfile):
+                # simulate DB assigning a primary key
                 obj.id = new_profile.id
 
         session.add.side_effect = capture_add
 
         svc = AgentModelAssignmentService(session)
-        # This will raise because exec is called again to fetch fallback entries
-        # In a real test we'd use a proper in-memory DB. This validates it doesn't
-        # crash on happy path call shape.
-        with pytest.raises(Exception):
-            await svc.get_assignment(uuid4())
+        agent_id = uuid4()
 
+        # Call should succeed on the happy path without raising
+        result = await svc.get_assignment(agent_id)
+
+        # A new profile should have been created for this agent
+        created_profiles = [m for m in added_models if isinstance(m, AgentModelProfile)]
+        assert len(created_profiles) == 1
+        assert created_profiles[0].agent_id == agent_id
+
+        # Service should have attempted to persist changes
+        assert session.commit.await_count >= 1
+        # And we got some aggregate assignment payload back
+        assert result is not None
     @pytest.mark.asyncio
     async def test_patch_primary_manual_mode(self):
         profile = make_profile(
