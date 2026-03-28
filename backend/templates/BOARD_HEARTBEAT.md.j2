@@ -192,7 +192,7 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/QA_UNIT_ID/nud
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"message": "QA-Unit validate task TITLE (task_id=TASK_UUID): typecheck, lint, tests. Post QA-Unit validation comment. @lead"}'
 ```
-For frontend tasks, also nudge QA-E2E: "Read $SHARED_WORKSPACE/qa/rubric.md. Post scored table." Backend-only: QA-Unit only. Frontend: BOTH must post.
+Frontend: ASSIGN to QA-E2E (PATCH `assigned_agent_id`) then nudge: "Read $SHARED_WORKSPACE/qa/rubric.md. Post scored table." Backend: QA-Unit only. Frontend: BOTH.
 If not all required QA have posted → proceed to Step 4, check next heartbeat.
 - **QA posted FAIL or PARTIAL** → treat PARTIAL as FAIL. Reject approval if pending, move to inbox, nudge dev with the specific failing dimensions:
 ```bash
