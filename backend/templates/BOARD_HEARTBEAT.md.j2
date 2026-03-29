@@ -156,7 +156,7 @@ curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit
 import sys,json
 for c in json.load(sys.stdin).get('items',[]):
     a=c.get('author_name',c.get('agent_name','?'))
-    print(f'[{a}] '+c.get('message','')[:300]); print('---')
+    print(f'[{a}] '+c.get('message','')); print('---')
 "
 ```
 **3b — Fetch approvals** for this task (both pending and approved):
@@ -192,7 +192,7 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/QA_UNIT_ID/nud
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"message": "QA-Unit validate task TITLE (task_id=TASK_UUID): typecheck, lint, tests. Post QA-Unit validation comment. @lead"}'
 ```
-Frontend: ASSIGN to QA-E2E (PATCH `assigned_agent_id`) then nudge: "Read $SHARED_WORKSPACE/qa/rubric.md. Post scored table." Backend: QA-Unit only. Frontend: BOTH.
+Frontend: ASSIGN to QA-E2E then nudge with ALL acceptance criteria from task description. Backend: QA-Unit only. Frontend: BOTH.
 If not all required QA have posted → proceed to Step 4, check next heartbeat.
 - **QA posted FAIL or PARTIAL** → treat PARTIAL as FAIL. Reject approval if pending, move to inbox, nudge dev with the specific failing dimensions:
 ```bash
@@ -271,7 +271,7 @@ for t in page.get('items', []):
         print(f\"Status: {t.get('status','')}\")
         print(f\"Blocked: {t.get('is_blocked',False)}\")
         print(f\"Deps: {t.get('depends_on_task_ids',[])}\")
-        print(f\"Description: {(t.get('description','') or '')[:500]}\")
+        print(f\"Description: {(t.get('description','') or '')}\")
         print('---')
 "
 ```
@@ -291,7 +291,7 @@ curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit
 import sys,json
 page=json.load(sys.stdin)
 for c in page.get('items', []):
-    print(c.get('message','')[:500])
+    print(c.get('message',''))
     print('---')
 "
 ```
@@ -363,8 +363,9 @@ Extract the `task_id` from the nudge message. Fetch the task and **check its sta
 ```bash
 curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" -H "X-Agent-Token: $AUTH_TOKEN"
 ```
-**QA-E2E MUST use Chrome MCP for ALL UI/frontend tasks.** Navigate to the deployed URL, take screenshots, check rendered DOM. Bundle/code grep is NEVER valid evidence. If the URL is unreachable, report FAIL.
-**Re-validate EVERY time.** Do NOT reuse previous validation results from memory. Each review request requires a FRESH Chrome MCP session with new screenshots. Previous PASS/FAIL is irrelevant — the code may have changed.
+**Validate EVERY item in the task description — not just the title.** Missing items = FAIL.
+**QA-E2E MUST use Chrome MCP or Playwright for ALL UI/frontend tasks.** Navigate to the deployed URL, take screenshots, check rendered DOM. Bundle/code grep is NEVER valid evidence. If the URL is unreachable, report FAIL.
+**Re-validate EVERY time.** Do NOT reuse previous validation results from memory. Each review request requires a FRESH browser session with new screenshots. Previous PASS/FAIL is irrelevant — the code may have changed.
 
 Post as **task comment** using `$AGENT_NAME` as prefix:
 ```bash

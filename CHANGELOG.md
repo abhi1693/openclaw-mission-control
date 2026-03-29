@@ -2,6 +2,23 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-03-29
+
+### Fixed
+- **Task description truncation** (`BOARD_HEARTBEAT.md.j2`): Worker step 2 truncated descriptions at 500 chars — PF never saw background color requirements on 1112-char task. Removed `[:500]` limit. Also removed `[:300]` on Supervisor comment fetch and `[:500]` on worker comment fetch. Agents now read full descriptions, QA reports, and rejection details.
+- **QA-E2E partial validation**: QA-E2E only validated items matching the task title, ignoring other acceptance criteria in the description. Added "Validate EVERY item in the task description — not just the title. Missing items = FAIL."
+- **Supervisor nudge missing criteria**: When routing to QA-E2E, Supervisor only sent task title. Now must include ALL acceptance criteria from task description in the nudge.
+- **Compaction model failing** (`gpt-5.4`): LCM plugin used `openai-codex/gpt-5.4` for context compaction which failed 10+ consecutive times, bloating sessions until agents couldn't function. Changed to `ollama/qwen3.5:cloud` (local, no API dependency). Required gateway restart — `touch` doesn't reload LCM plugin config.
+- **`tools.allow` breaking exec**: Adding `tools.allow: ["browser"]` at global level blocked all agent tool calls despite Codex/docs saying it's additive. Caused 90+ min outage twice. Removed — browser tool not available via `coding` profile, agents use Playwright via exec instead.
+
+### Changed
+- **PF model**: Switched to `anthropic/claude-opus-4-6` primary (was Sonnet) with Sonnet as first fallback. Trial for scrollbar task after 9 consecutive Sonnet failures.
+- **Supervisor heartbeat model**: Changed from `minimax/minimax-m2.5` to `ollama/qwen3.5:cloud`.
+- **Compaction model**: `agents.defaults.compaction.model` set to `ollama/qwen3.5:cloud`, `plugins.entries.lossless-claw.config.summaryModel` set to `ollama/qwen3.5:cloud`.
+
+### Added
+- **Tailscale proxy CT** (`thales-tailscale`, VMID 111): Minimal Debian 12 container on Proxmox (192.168.2.14) for routing remote machine access to 192.168.2.13 via Tailscale. 1 core, 256MB RAM, exit node + subnet route, auto-start on boot.
+
 ## 2026-03-28
 
 ### Fixed
