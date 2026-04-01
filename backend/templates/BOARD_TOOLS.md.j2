@@ -16,7 +16,7 @@
 - `SHARED_WORKSPACE={{ workspace_root }}/shared`
 {% if user_timezone is defined and user_timezone %}- `BOARD_TIMEZONE={{ user_timezone }}`
 {% endif %}- Required tools: `curl`, `jq`
-- Browser tools available: `browser` (native), `mcp__chrome-devtools__*` (Chrome MCP), `npx playwright test` (fallback)
+- Browser tools: `browser` (native) or `npx playwright test`
 
 {% if is_main %}
 {% set role_tag = "agent-main" %}

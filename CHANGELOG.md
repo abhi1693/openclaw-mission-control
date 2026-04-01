@@ -2,6 +2,21 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-04-01 (cont.)
+
+### Fixed
+- **Chrome MCP zombie processes**: 98 `chrome-devtools-mcp` processes consuming 8.6 GB RAM. Root cause: `mcp.servers` config spawned per-session stdio processes, gateway mode never calls `disposeSessionMcpRuntime()`. Fix: removed `mcp.servers`, use native `browser` config (shared instance with session cache).
+- **Heartbeat disable**: `0m` is the correct gateway value (per docs). Previous `"disabled"` string and key-stripping approaches didn't work. Updated provisioning to send `"0m"`, MC database updated.
+- **Worker token burn**: All 6 workers had drifted to `1h` heartbeat (from lifecycle config.patch). Reset to `0m` (disabled). Only Supervisor (10m) heartbeats actively.
+
+### Changed
+- **Phase 1A deployed and approved**: PATCH/DELETE/comments endpoints + SQLite WAL live on production (.63). TaskDetailPanel edits, drag-and-drop, comments, delete all functional.
+- **Removed Chrome MCP references**: All templates (HEARTBEAT, TOOLS.md) and agent identities (PF, QA-E2E) updated. Agents use native `browser` tool or Playwright — no more `mcp__chrome-devtools__*`.
+- **PB model workflow**: Changed from Codex to Claude Code CLI. One session per task, `/simplify` mandatory before review.
+- **PF workflow**: Added one Claude Code session per task, `/simplify` mandatory, no Codex.
+- **HEARTBEAT IMPLEMENTING step**: Explicit "Use ONE Claude Code CLI session via ACP — do not spawn multiple. Then run `/simplify` on changed files."
+- **Supervisor guardrail**: Spot-check worker evidence before accepting review tasks.
+
 ## 2026-03-31 / 2026-04-01
 
 ### Added
