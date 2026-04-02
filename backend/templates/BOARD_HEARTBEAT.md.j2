@@ -315,7 +315,7 @@ for c in page.get('items', []):
 6) **Execute your workflow.** Run through ALL states in one session:
    **PLANNING:** Activate skills (see IDENTITY.md). Read task + specs + Architect comments if present. Write plan to MEMORY.md. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
    **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from @lead before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
-   **IMPLEMENTING:** Inspect current state before coding. Use ONE Claude Code CLI session via ACP to implement — do not spawn multiple. Run typecheck/lint/tests. Then run `/simplify` on changed files. Fix issues. Continue to VALIDATING.
+   **IMPLEMENTING:** Inspect current state before coding. Follow the tool workflow in your IDENTITY.md (Codex CLI, Claude Code CLI, or both via ACP). Run typecheck/lint/tests. Fix issues. Continue to VALIDATING.
    **VALIDATING:** Self-validate before claiming done:
    - Code compiles/typechecks: `npm run typecheck` or `ruff check`
    - Lint passes: `npm run lint` or `ruff check --select ALL`

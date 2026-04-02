@@ -2,6 +2,27 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-04-02
+
+### Added
+- **Phase 1B: Auth endpoints approved**: OTP request, verify (JWT + httpOnly cookies), refresh (token rotation), logout, /me. Rate limiting (5/15min → 429). DB tables: users, otp_requests, sessions. Full E2E validated via Chrome MCP browser login.
+- **Phase 1B: OTP IPC plugin approved**: `send-otp.ts` on skill/taskflow branch (.160). Handles `send_otp` IPC type, verifies phone on WhatsApp via `lookupPhoneJid`, main-only guard. 5/5 tests pass.
+- **Phase 1B regression fix approved**: verify-otp now sets httpOnly cookies (access_token 15min, refresh_token 7d, SameSite=lax). Frontend `credentials:include` flow works. 22/22 tests.
+- **Phase 1D: Enhanced task editing approved**: Click-to-edit title, description textarea, labels add/remove with PATCH. Chrome MCP validated.
+- **Chat unread badge approved**: HTTP polling (5s) detects new messages, red badge on Chat button, clears on panel open. No phantom badge on reload. 18+ QA rounds.
+- **Codex plugin for Claude Code**: `codex@openai-codex` v1.0.2 installed on gateway (.60). Skills: /codex (review, adversarial-review, rescue), /simplify.
+
+### Changed
+- **ACP defaultAgent**: `codex` → `claude` in openclaw.json. ACP sessions now use Claude Code where /codex and /simplify skills are available.
+- **Agent ACP workflow**: PF, PB, Architect SOUL.md updated with concrete `sessions_spawn` tool call (`runtime: "acp"`, `agentId: "claude"`). Previously said "delegate to Claude Code CLI via ACP" — agents didn't know how and never used ACP. E2E validated: sessions_spawn works, ACP Claude session sees /simplify + /codex skills.
+- **HEARTBEAT IMPLEMENTING step**: Now defers to IDENTITY.md for tool choice instead of hardcoding "Claude Code CLI".
+- **Superpowers symlink fix**: `/root/.agents/skills/superpowers` was a symlink outside configured root (rejected by gateway). Copied instead.
+
+### Investigated
+- **Why agents never used Codex or Claude Code**: `acp.defaultAgent` was "codex" but agents never called `sessions_spawn` — they coded directly via Bash/Edit tools. The SOUL.md instructions were vague ("delegate via ACP") with no concrete tool call. Fixed by adding exact `sessions_spawn` JSON to SOUL.md.
+- **Claude Code skills ≠ OpenClaw skills**: Different format, different paths, not interchangeable. Claude Code plugins at `~/.claude/plugins/`, OpenClaw skills at `~/.agents/skills/`. Cannot add Claude Code plugin paths to OpenClaw `skills.load.extraDirs`.
+- **`runtime` object in agent entries**: Gateway rejects it silently, breaks config reloads + heartbeat timers (2026-03-22 incident). ACP routing must use root-level `acp.defaultAgent`, not per-agent runtime fields.
+
 ## 2026-04-01 (cont.)
 
 ### Fixed
