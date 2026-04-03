@@ -1,7 +1,21 @@
 # TaskFlow Phase 2 — Product Features
 
-> Engine inventory: 7,827 lines, 10 MCP tools, 50+ query types, 25+ actions.
-> Most features need only API endpoints + frontend UI — engine logic already exists.
+> Engine inventory: 7,827 lines, 10 MCP tools, 44 query types, 25+ actions.
+> **Codex validation (2026-04-03):** Not all features are "just SQL wrappers" — engine has JS aggregation, BFS cycle detection, embedding search. PB must port logic, not just SQL.
+
+## Validated Reality (Codex gpt-5.4 audit on live DB)
+
+| Feature | Codex Verdict | Notes |
+|---------|--------------|-------|
+| Engine queries | **44 types** (not 50+) | Still rich |
+| Same DB (engine + API) | ✅ REAL | Both hit taskflow.db |
+| `/tasks/search` | **ID-only** — doesn't search title/description | Needs real implementation |
+| `/tasks/overdue` | ✅ REAL — 29 rows live | Works |
+| Dependencies | **Code exists, 0 live data** | Can't validate from prod |
+| Meeting minutes | ✅ REAL — 16 meetings, 2 with notes | Works but limited |
+| File attachments | **STUB** — 0 rows, no logic | Needs full build |
+| Recurring tasks | **3 tasks, inconsistent data** | Fragile, needs normalization |
+| Board hierarchy | ✅ REAL — 17 registrations, 149 delegated tasks | One-directional only |
 
 ## Feature Matrix: Engine Has It → Web UI Needs It
 
@@ -165,6 +179,13 @@
 - **QA-E2E**: Validate each sub-phase on live build
 - **QA-Unit**: Validate backend endpoints
 
-## Key Principle
+## Key Principles
 
-The NanoClaw engine (7,827 lines) already has the logic. PB's job is to write thin API wrappers that call the engine's SQLite operations directly. PF's job is to build the UI. Don't re-implement engine logic — port the SQL queries from the engine's TypeScript to Python.
+1. The engine (7,827 lines) has rich logic but it's **NOT thin SQL wrappers** — it has JS aggregation, JSON parsing, BFS cycle detection, embedding search. PB must port the logic, not just copy SQL.
+2. `/tasks/search` is **ID-only** today — needs real full-text implementation before search UI is built.
+3. **Dependencies and attachments have 0 live data** — build and test from scratch, can't validate from prod.
+4. **Recurring task data model is inconsistent** — some use string enum, some use JSON object. Normalize before building UI.
+5. The Architect should review API contracts BEFORE PB implements — use `/codex:adversarial-review` to challenge design.
+
+## Codex Validation Date
+2026-04-03 — validated against live DB on .63 and engine source on .160.
