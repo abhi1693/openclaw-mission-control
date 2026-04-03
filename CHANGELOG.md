@@ -2,6 +2,40 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-04-03
+
+### Added
+- **MC heartbeat monitor design**: RQ sweep every 5min, nudge/wake/offline recovery ladder. Uses existing lifecycle infrastructure. Design doc at `docs/plans/2026-04-03-mc-heartbeat-monitor-design.md`. PB implementing.
+- **Supervisor nudge rules**: Workers now nudge Supervisor via RPC after moving tasks to review or posting QA results. No more waiting for heartbeat tick.
+- **Supervisor Architect hard rule**: "Every feature task MUST go through Architect review BEFORE QA." Enforced in SOUL.md + IDENTITY.md.
+- **OpenClaw 2026.4.2 optimizations**: `agents.defaults.params.cacheRetention: "long"`, `compaction.notifyUser: false`, `pluginToolsMcpBridge: true`, `acp.stream.coalesceIdleMs: 1000`.
+
+### Changed
+- **Supervisor heartbeat**: 10m → 5m, removed `activeHours` (was causing timer to die overnight and not resume).
+- **ACP TTL**: 120m → 30m. Prevents resource accumulation from long-lived ACP sessions that caused gateway crash (load avg 36+).
+- **QA-E2E model**: claude-sonnet-4-6 → openai-codex/gpt-5.4 (sonnet as fallback). E2E tested both — equivalent quality, gpt-5.4 provides more verbose evidence.
+- **Supervisor model**: claude-opus-4-6 → claude-sonnet-4-6. Orchestration doesn't need Opus reasoning.
+- **BOARD_SOUL.md.j2**: Merged Ralph Loop + sessions_spawn into template. Cleared `soul_template` DB field for workers so template renders. Supervisor keeps DB override with Squad Matrix.
+- **BOARD_IDENTITY.md.j2**: Added ACP Delegation section. Used `identity_template` DB override for all agents (IDENTITY.md is in PRESERVE_AGENT_EDITABLE_FILES, template sync won't overwrite).
+- **BOARD_HEARTBEAT.md.j2**: Added nudge-Supervisor curls after moving to review and after QA posts results.
+- **Removed `temperature: 0.2`** from agents.defaults.params — gpt-5.4 rejects it.
+
+### Fixed
+- **IPC path bug**: `get_ipc_base_dir()` wrote OTP files to `data/taskflow/data/ipc/` instead of `data/ipc/`. NanoClaw never saw them — WhatsApp OTPs were never delivered. One-line fix: `db_path.parent.parent / "ipc"`. 101 stale files cleaned up.
+- **Gateway crash recovery**: All agents need manual wake after gateway restart. Poisoned sessions (tool_use without tool_result) need `/reset`. Documented pattern.
+- **QA-E2E stale cron**: Deleted orphan `qa-e2e-heartbeat` cron job running every 30s, causing 81 timed_out + 7 failed background tasks.
+- **Supervisor heartbeat not resuming**: `activeHours` pause/resume cycle killed the timer. Removed activeHours entirely.
+
+### Security
+- **TEST_OTP reverted**: Deployed as QA testing aid, flagged as backdoor. Code exists in main.py but env var not set. PB reverting through normal pipeline.
+- **OTP phone validation**: Posted task for PB — `request-otp` should check if phone exists in board people before sending OTP. Currently any number can request codes.
+
+### Investigated
+- **Supervisor stuck pattern**: Gateway timer dies → Supervisor offline → nobody nudges workers → whole team idle. Root cause: `activeHours` and gateway restarts kill the timer. Fix: removed activeHours + MC heartbeat monitor (in development).
+- **ACP session accumulation**: Multiple concurrent ACP Claude sessions (PF + Architect) consumed 100% CPU, gateway crashed (load avg 36+). Fix: reduced TTL from 120m to 30m.
+- **Architect never used**: Supervisor never assigned tasks to Architect — 0 tasks in history. Fixed with hard rule in Supervisor SOUL.md + IDENTITY.md.
+- **QA-E2E model comparison**: claude-sonnet-4-6 (35s, 73K tokens, concise table) vs gpt-5.4 (47s, 69K tokens, verbose JSON). Both produce correct 4/4 PASS results.
+
 ## 2026-04-02 (cont.)
 
 ### Changed

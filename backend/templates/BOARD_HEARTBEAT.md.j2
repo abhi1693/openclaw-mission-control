@@ -351,6 +351,13 @@ curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
 **Include evidence** — paste actual command output. Must come from YOUR workspace.
 **Include the build hash** (e.g. `index-ABC123.js`) so QA can verify the exact build.
 The comment MUST include `@lead` so the Supervisor is notified immediately.
+**THEN nudge the Supervisor** so it routes to Architect/QA without waiting for the next heartbeat:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/LEAD_AGENT_UUID/nudge" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "Task $TASK_ID moved to review. Route to Architect then QA. @lead"}'
+```
+Replace `LEAD_AGENT_UUID` with the Supervisor agent UUID from Step 2 health scan output.
 
 8) After moving to review, check for more assigned inbox tasks (step 2 output). If you have another inbox task, pick it and go back to step 4. If no more tasks, post idle:
 ```bash
@@ -378,6 +385,12 @@ Post as **task comment** using `$AGENT_NAME` as prefix:
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"message": "$AGENT_NAME validation\n\nPASS/FAIL — EVIDENCE\n\n@lead"}'
+```
+**THEN nudge the Supervisor** so it processes the result immediately:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/LEAD_AGENT_UUID/nudge" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "QA validation posted for task $TASK_ID. @lead"}'
 ```
 
 ### If QA reports a failure on YOUR task:
