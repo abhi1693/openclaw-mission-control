@@ -126,6 +126,18 @@ async def process_lifecycle_queue_task(task: QueuedTask) -> None:
                 )
                 return
 
+        # Skip reconcile for paused boards — reuse existing pause detection.
+        if board is not None:
+            from app.services.openclaw.provisioning_db import _paused_board_ids
+
+            paused = await _paused_board_ids(session, [board.id])
+            if board.id in paused:
+                logger.info(
+                    "lifecycle.reconcile.skip_paused_board",
+                    extra={"agent_id": str(agent.id), "board_id": str(board.id)},
+                )
+                return
+
         orchestrator = AgentLifecycleOrchestrator(session)
         await asyncio.wait_for(
             orchestrator.run_lifecycle(
