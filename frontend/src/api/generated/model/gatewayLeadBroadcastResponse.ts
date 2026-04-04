@@ -10,11 +10,11 @@ import type { GatewayLeadBroadcastBoardResult } from "./gatewayLeadBroadcastBoar
  * Aggregate response for a lead broadcast operation.
  */
 export interface GatewayLeadBroadcastResponse {
-  /** Number of boards that failed messaging. */
-  failed?: number;
   /** Whether broadcast execution succeeded. */
   ok?: boolean;
-  results?: GatewayLeadBroadcastBoardResult[];
   /** Number of boards successfully messaged. */
   sent?: number;
+  /** Number of boards that failed messaging. */
+  failed?: number;
+  results?: GatewayLeadBroadcastBoardResult[];
 }

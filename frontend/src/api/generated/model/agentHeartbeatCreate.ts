@@ -9,13 +9,13 @@
  * Heartbeat payload used to create an agent lazily.
  */
 export interface AgentHeartbeatCreate {
-  /** Optional board context for bootstrap. */
-  board_id?: string | null;
+  /** Agent health status string. */
+  status?: string | null;
   /**
    * Display name assigned during first heartbeat bootstrap.
    * @minLength 1
    */
   name: string;
-  /** Agent health status string. */
-  status?: string | null;
+  /** Optional board context for bootstrap. */
+  board_id?: string | null;
 }

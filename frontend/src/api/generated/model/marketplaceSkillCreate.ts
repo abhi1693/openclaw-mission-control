@@ -9,8 +9,8 @@
  * Payload used to register a skill URL in the organization marketplace.
  */
 export interface MarketplaceSkillCreate {
-  description?: string | null;
-  name?: string | null;
   /** @minLength 1 */
   source_url: string;
+  name?: string | null;
+  description?: string | null;
 }

@@ -13,18 +13,18 @@ import type { AgentUpdateIdentityProfile } from "./agentUpdateIdentityProfile";
 export interface AgentUpdate {
   /** Optional new board assignment. */
   board_id?: string | null;
+  /** Whether this agent is treated as the board gateway main. */
+  is_gateway_main?: boolean | null;
+  /** Optional replacement display name. */
+  name?: string | null;
+  /** Optional replacement lifecycle status. */
+  status?: string | null;
   /** Optional heartbeat policy override. */
   heartbeat_config?: AgentUpdateHeartbeatConfig;
   /** Optional identity profile update values. */
   identity_profile?: AgentUpdateIdentityProfile;
   /** Optional replacement identity template. */
   identity_template?: string | null;
-  /** Whether this agent is treated as the board gateway main. */
-  is_gateway_main?: boolean | null;
-  /** Optional replacement display name. */
-  name?: string | null;
   /** Optional replacement soul template. */
   soul_template?: string | null;
-  /** Optional replacement lifecycle status. */
-  status?: string | null;
 }

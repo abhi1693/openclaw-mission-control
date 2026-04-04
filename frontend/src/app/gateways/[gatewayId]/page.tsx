@@ -8,6 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/auth/clerk";
 import { useQueryClient } from "@tanstack/react-query";
 import { AgentsTable } from "@/components/agents/AgentsTable";
+import { GatewayModelProfilesPanel } from "@/components/gateways/GatewayModelProfilesPanel";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
@@ -279,6 +280,13 @@ export default function GatewayDetailPage() {
                 </div>
               </div>
             </div>
+
+            {gatewayId && (
+              <GatewayModelProfilesPanel
+                gatewayId={gatewayId}
+                isAdmin={isAdmin ?? false}
+              />
+            )}
 
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between">

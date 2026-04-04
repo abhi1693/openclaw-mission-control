@@ -10,13 +10,13 @@ import type { ActivityEventReadRouteParams } from "./activityEventReadRouteParam
  * Serialized activity event payload returned by activity endpoints.
  */
 export interface ActivityEventRead {
-  agent_id: string | null;
-  board_id?: string | null;
-  created_at: string;
-  event_type: string;
   id: string;
+  event_type: string;
   message: string | null;
+  agent_id: string | null;
+  task_id: string | null;
+  board_id?: string | null;
   route_name?: string | null;
   route_params?: ActivityEventReadRouteParams;
-  task_id: string | null;
+  created_at: string;
 }

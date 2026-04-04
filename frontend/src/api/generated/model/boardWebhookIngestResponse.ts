@@ -9,8 +9,8 @@
  * Response payload for inbound webhook ingestion.
  */
 export interface BoardWebhookIngestResponse {
-  board_id: string;
   ok?: boolean;
-  payload_id: string;
+  board_id: string;
   webhook_id: string;
+  payload_id: string;
 }

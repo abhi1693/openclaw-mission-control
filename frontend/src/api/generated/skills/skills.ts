@@ -1234,126 +1234,6 @@ export const useCreateSkillPackApiV1SkillsPacksPost = <
   );
 };
 /**
- * Delete one pack source from the organization.
- * @summary Delete Skill Pack
- */
-export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse200 = {
-  data: OkResponse;
-  status: 200;
-};
-
-export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse422 = {
-  data: HTTPValidationError;
-  status: 422;
-};
-
-export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseSuccess =
-  deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseError =
-  deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse422 & {
-    headers: Headers;
-  };
-
-export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse =
-  | deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseSuccess
-  | deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseError;
-
-export const getDeleteSkillPackApiV1SkillsPacksPackIdDeleteUrl = (
-  packId: string,
-) => {
-  return `/api/v1/skills/packs/${packId}`;
-};
-
-export const deleteSkillPackApiV1SkillsPacksPackIdDelete = async (
-  packId: string,
-  options?: RequestInit,
-): Promise<deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse> => {
-  return customFetch<deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse>(
-    getDeleteSkillPackApiV1SkillsPacksPackIdDeleteUrl(packId),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export const getDeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationOptions = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
-    TError,
-    { packId: string },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
-  TError,
-  { packId: string },
-  TContext
-> => {
-  const mutationKey = ["deleteSkillPackApiV1SkillsPacksPackIdDelete"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
-    { packId: string }
-  > = (props) => {
-    const { packId } = props ?? {};
-
-    return deleteSkillPackApiV1SkillsPacksPackIdDelete(packId, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>
-  >;
-
-export type DeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Delete Skill Pack
- */
-export const useDeleteSkillPackApiV1SkillsPacksPackIdDelete = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
-      TError,
-      { packId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
-  TError,
-  { packId: string },
-  TContext
-> => {
-  return useMutation(
-    getDeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationOptions(options),
-    queryClient,
-  );
-};
-/**
  * Get one skill pack by ID.
  * @summary Get Skill Pack
  */
@@ -1685,6 +1565,126 @@ export const useUpdateSkillPackApiV1SkillsPacksPackIdPatch = <
 > => {
   return useMutation(
     getUpdateSkillPackApiV1SkillsPacksPackIdPatchMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * Delete one pack source from the organization.
+ * @summary Delete Skill Pack
+ */
+export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse200 = {
+  data: OkResponse;
+  status: 200;
+};
+
+export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseSuccess =
+  deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseError =
+  deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse =
+  | deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseSuccess
+  | deleteSkillPackApiV1SkillsPacksPackIdDeleteResponseError;
+
+export const getDeleteSkillPackApiV1SkillsPacksPackIdDeleteUrl = (
+  packId: string,
+) => {
+  return `/api/v1/skills/packs/${packId}`;
+};
+
+export const deleteSkillPackApiV1SkillsPacksPackIdDelete = async (
+  packId: string,
+  options?: RequestInit,
+): Promise<deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse> => {
+  return customFetch<deleteSkillPackApiV1SkillsPacksPackIdDeleteResponse>(
+    getDeleteSkillPackApiV1SkillsPacksPackIdDeleteUrl(packId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
+    TError,
+    { packId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
+  TError,
+  { packId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteSkillPackApiV1SkillsPacksPackIdDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
+    { packId: string }
+  > = (props) => {
+    const { packId } = props ?? {};
+
+    return deleteSkillPackApiV1SkillsPacksPackIdDelete(packId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>
+  >;
+
+export type DeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Delete Skill Pack
+ */
+export const useDeleteSkillPackApiV1SkillsPacksPackIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
+      TError,
+      { packId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSkillPackApiV1SkillsPacksPackIdDelete>>,
+  TError,
+  { packId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteSkillPackApiV1SkillsPacksPackIdDeleteMutationOptions(options),
     queryClient,
   );
 };

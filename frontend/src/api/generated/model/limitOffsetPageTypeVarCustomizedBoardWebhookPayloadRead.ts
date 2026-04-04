@@ -8,10 +8,10 @@ import type { BoardWebhookPayloadRead } from "./boardWebhookPayloadRead";
 
 export interface LimitOffsetPageTypeVarCustomizedBoardWebhookPayloadRead {
   items: BoardWebhookPayloadRead[];
+  /** @minimum 0 */
+  total: number;
   /** @minimum 1 */
   limit: number;
   /** @minimum 0 */
   offset: number;
-  /** @minimum 0 */
-  total: number;
 }

@@ -9,8 +9,8 @@
  * Install/uninstall action response payload.
  */
 export interface MarketplaceSkillActionResponse {
-  gateway_id: string;
-  installed: boolean;
   ok?: boolean;
   skill_id: string;
+  gateway_id: string;
+  installed: boolean;
 }

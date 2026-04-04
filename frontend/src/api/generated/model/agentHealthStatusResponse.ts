@@ -9,16 +9,16 @@
  * Agent-authenticated liveness payload for agent route probes.
  */
 export interface AgentHealthStatusResponse {
+  /** Indicates whether the probe check succeeded. */
+  ok: boolean;
   /** Authenticated agent id derived from `X-Agent-Token`. */
   agent_id: string;
   /** Board scope for the authenticated agent, when applicable. */
   board_id?: string | null;
   /** Gateway owning the authenticated agent. */
   gateway_id: string;
-  /** Whether the authenticated agent is the board lead. */
-  is_board_lead: boolean;
-  /** Indicates whether the probe check succeeded. */
-  ok: boolean;
   /** Current persisted lifecycle status for the authenticated agent. */
   status: string;
+  /** Whether the authenticated agent is the board lead. */
+  is_board_lead: boolean;
 }

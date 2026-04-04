@@ -11,12 +11,12 @@ import type { BoardOnboardingReadMessages } from "./boardOnboardingReadMessages"
  * Stored onboarding session state returned by API endpoints.
  */
 export interface BoardOnboardingRead {
-  board_id: string;
-  created_at: string;
-  draft_goal?: BoardOnboardingAgentComplete | null;
   id: string;
-  messages?: BoardOnboardingReadMessages;
+  board_id: string;
   session_key: string;
   status: string;
+  messages?: BoardOnboardingReadMessages;
+  draft_goal?: BoardOnboardingAgentComplete | null;
+  created_at: string;
   updated_at: string;
 }

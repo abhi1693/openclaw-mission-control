@@ -10,6 +10,6 @@ import type { DashboardRangeSeries } from "./dashboardRangeSeries";
  * Primary vs comparison pair for generic series metrics.
  */
 export interface DashboardSeriesSet {
-  comparison: DashboardRangeSeries;
   primary: DashboardRangeSeries;
+  comparison: DashboardRangeSeries;
 }

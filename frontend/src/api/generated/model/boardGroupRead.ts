@@ -9,11 +9,11 @@
  * Board-group payload returned from read endpoints.
  */
 export interface BoardGroupRead {
-  created_at: string;
+  name: string;
+  slug: string;
   description?: string | null;
   id: string;
-  name: string;
   organization_id: string;
-  slug: string;
+  created_at: string;
   updated_at: string;
 }

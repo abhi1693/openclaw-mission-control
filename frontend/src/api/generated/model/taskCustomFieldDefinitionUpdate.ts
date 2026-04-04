@@ -9,9 +9,7 @@
  * Payload for editing an existing task custom field definition.
  */
 export interface TaskCustomFieldDefinitionUpdate {
-  board_ids?: string[] | null;
-  default_value?: unknown | null;
-  description?: string | null;
+  label?: string | null;
   field_type?:
     | "text"
     | "text_long"
@@ -23,8 +21,10 @@ export interface TaskCustomFieldDefinitionUpdate {
     | "url"
     | "json"
     | null;
-  label?: string | null;
-  required?: boolean | null;
   ui_visibility?: "always" | "if_set" | "hidden" | null;
   validation_regex?: string | null;
+  description?: string | null;
+  required?: boolean | null;
+  default_value?: unknown | null;
+  board_ids?: string[] | null;
 }

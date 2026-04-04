@@ -11,15 +11,15 @@ import type { TaskCustomFieldDefinitionCreateUiVisibility } from "./taskCustomFi
  * Payload for creating a task custom field definition.
  */
 export interface TaskCustomFieldDefinitionCreate {
-  /** @minItems 1 */
-  board_ids: string[];
-  default_value?: unknown | null;
-  description?: string | null;
   /** @minLength 1 */
   field_key: string;
-  field_type?: TaskCustomFieldDefinitionCreateFieldType;
   label?: string | null;
-  required?: boolean;
+  field_type?: TaskCustomFieldDefinitionCreateFieldType;
   ui_visibility?: TaskCustomFieldDefinitionCreateUiVisibility;
   validation_regex?: string | null;
+  description?: string | null;
+  required?: boolean;
+  default_value?: unknown | null;
+  /** @minItems 1 */
+  board_ids: string[];
 }

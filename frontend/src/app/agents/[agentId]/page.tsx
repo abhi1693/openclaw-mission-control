@@ -33,6 +33,7 @@ import type {
   BoardRead,
 } from "@/api/generated/model";
 import { Markdown } from "@/components/atoms/Markdown";
+import { ModelControlsPanel } from "@/components/agents/ModelControlsPanel";
 import { StatusPill } from "@/components/atoms/StatusPill";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
@@ -317,6 +318,13 @@ export default function AgentDetailPage() {
                       </div>
                     </div>
                   </div>
+
+                  {agentId && (
+                    <ModelControlsPanel
+                      agentId={agentId}
+                      isAdmin={isAdmin ?? false}
+                    />
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-5">

@@ -10,14 +10,14 @@ import type { SkillPackReadMetadata } from "./skillPackReadMetadata";
  * Serialized skill pack record.
  */
 export interface SkillPackRead {
-  branch: string;
-  created_at: string;
-  description?: string | null;
   id: string;
-  metadata?: SkillPackReadMetadata;
-  name: string;
   organization_id: string;
-  skill_count?: number;
+  name: string;
+  description?: string | null;
   source_url: string;
+  branch: string;
+  metadata?: SkillPackReadMetadata;
+  skill_count?: number;
+  created_at: string;
   updated_at: string;
 }

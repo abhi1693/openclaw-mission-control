@@ -9,6 +9,7 @@
  * Error detail payload listing blocking dependency task identifiers.
  */
 export interface BlockedTaskDetail {
-  blocked_by_task_ids?: string[];
   message: string;
+  code?: string | null;
+  blocked_by_task_ids?: string[];
 }

@@ -13,19 +13,19 @@ import type { AgentCreateIdentityProfile } from "./agentCreateIdentityProfile";
 export interface AgentCreate {
   /** Board id that scopes this agent. Omit only when policy allows global agents. */
   board_id?: string | null;
+  /**
+   * Human-readable agent display name.
+   * @minLength 1
+   */
+  name: string;
+  /** Current lifecycle state used by coordinator logic. */
+  status?: string;
   /** Runtime heartbeat behavior overrides for this agent. */
   heartbeat_config?: AgentCreateHeartbeatConfig;
   /** Optional profile hints used by routing and policy checks. */
   identity_profile?: AgentCreateIdentityProfile;
   /** Template that helps define initial intent and behavior. */
   identity_template?: string | null;
-  /**
-   * Human-readable agent display name.
-   * @minLength 1
-   */
-  name: string;
   /** Template representing deeper agent instructions. */
   soul_template?: string | null;
-  /** Current lifecycle state used by coordinator logic. */
-  status?: string;
 }

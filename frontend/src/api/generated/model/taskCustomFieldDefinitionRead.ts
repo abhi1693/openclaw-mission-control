@@ -11,17 +11,17 @@ import type { TaskCustomFieldDefinitionReadUiVisibility } from "./taskCustomFiel
  * Payload returned for custom field definitions.
  */
 export interface TaskCustomFieldDefinitionRead {
+  field_key: string;
+  label: string;
+  field_type: TaskCustomFieldDefinitionReadFieldType;
+  ui_visibility: TaskCustomFieldDefinitionReadUiVisibility;
+  validation_regex?: string | null;
+  description?: string | null;
+  required?: boolean;
+  default_value?: unknown | null;
+  id: string;
+  organization_id: string;
   board_ids?: string[];
   created_at: string;
-  default_value?: unknown | null;
-  description?: string | null;
-  field_key: string;
-  field_type: TaskCustomFieldDefinitionReadFieldType;
-  id: string;
-  label: string;
-  organization_id: string;
-  required?: boolean;
-  ui_visibility: TaskCustomFieldDefinitionReadUiVisibility;
   updated_at: string;
-  validation_regex?: string | null;
 }

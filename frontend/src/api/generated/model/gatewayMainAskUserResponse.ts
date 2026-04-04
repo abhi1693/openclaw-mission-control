@@ -9,12 +9,12 @@
  * Response payload for user-question dispatch via gateway main agent.
  */
 export interface GatewayMainAskUserResponse {
+  /** Whether ask-user dispatch was accepted. */
+  ok?: boolean;
   /** Board context used for the request. */
   board_id: string;
   /** Resolved main agent id handling the ask. */
   main_agent_id?: string | null;
   /** Resolved main agent display name. */
   main_agent_name?: string | null;
-  /** Whether ask-user dispatch was accepted. */
-  ok?: boolean;
 }

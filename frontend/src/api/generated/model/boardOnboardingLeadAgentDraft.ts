@@ -10,11 +10,11 @@ import type { BoardOnboardingLeadAgentDraftIdentityProfile } from "./boardOnboar
  * Editable lead-agent draft configuration.
  */
 export interface BoardOnboardingLeadAgentDraft {
-  autonomy_level?: "ask_first" | "balanced" | "autonomous" | null;
-  custom_instructions?: string | null;
-  identity_profile?: BoardOnboardingLeadAgentDraftIdentityProfile;
   name?: string | null;
+  identity_profile?: BoardOnboardingLeadAgentDraftIdentityProfile;
+  autonomy_level?: "ask_first" | "balanced" | "autonomous" | null;
+  verbosity?: "concise" | "balanced" | "detailed" | null;
   output_format?: "bullets" | "mixed" | "narrative" | null;
   update_cadence?: "asap" | "hourly" | "daily" | "weekly" | null;
-  verbosity?: "concise" | "balanced" | "detailed" | null;
+  custom_instructions?: string | null;
 }

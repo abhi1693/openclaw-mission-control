@@ -9,17 +9,17 @@
  * Request payload for asking the end user via a main gateway agent.
  */
 export interface GatewayMainAskUserRequest {
+  /** Optional correlation token for tracing request/response flow. */
+  correlation_id?: string | null;
   /**
    * Prompt that should be asked to the human.
    * @minLength 1
    */
   content: string;
-  /** Optional correlation token for tracing request/response flow. */
-  correlation_id?: string | null;
   /** Optional preferred messaging channel. */
   preferred_channel?: string | null;
-  /** Reply destination key for user confirmation loops. */
-  reply_source?: string | null;
   /** Tags required for routing the user response. */
   reply_tags?: string[];
+  /** Reply destination key for user confirmation loops. */
+  reply_source?: string | null;
 }

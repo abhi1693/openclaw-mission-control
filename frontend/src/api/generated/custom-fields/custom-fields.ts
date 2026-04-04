@@ -426,158 +426,6 @@ export const useCreateOrgCustomFieldApiV1OrganizationsMeCustomFieldsPost = <
   );
 };
 /**
- * Delete an org-level definition when it has no persisted task values.
- * @summary Delete Org Custom Field
- */
-export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse200 =
-  {
-    data: OkResponse;
-    status: 200;
-  };
-
-export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse422 =
-  {
-    data: HTTPValidationError;
-    status: 422;
-  };
-
-export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseSuccess =
-  deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse200 & {
-    headers: Headers;
-  };
-export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseError =
-  deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse422 & {
-    headers: Headers;
-  };
-
-export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse =
-
-    | deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseSuccess
-    | deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseError;
-
-export const getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteUrl =
-  (taskCustomFieldDefinitionId: string) => {
-    return `/api/v1/organizations/me/custom-fields/${taskCustomFieldDefinitionId}`;
-  };
-
-export const deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete =
-  async (
-    taskCustomFieldDefinitionId: string,
-    options?: RequestInit,
-  ): Promise<deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse> => {
-    return customFetch<deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse>(
-      getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteUrl(
-        taskCustomFieldDefinitionId,
-      ),
-      {
-        ...options,
-        method: "DELETE",
-      },
-    );
-  };
-
-export const getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<
-          typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
-        >
-      >,
-      TError,
-      { taskCustomFieldDefinitionId: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  }): UseMutationOptions<
-    Awaited<
-      ReturnType<
-        typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
-      >
-    >,
-    TError,
-    { taskCustomFieldDefinitionId: string },
-    TContext
-  > => {
-    const mutationKey = [
-      "deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete",
-    ];
-    const { mutation: mutationOptions, request: requestOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey }, request: undefined };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<
-          typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
-        >
-      >,
-      { taskCustomFieldDefinitionId: string }
-    > = (props) => {
-      const { taskCustomFieldDefinitionId } = props ?? {};
-
-      return deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete(
-        taskCustomFieldDefinitionId,
-        requestOptions,
-      );
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type DeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationResult =
-  NonNullable<
-    Awaited<
-      ReturnType<
-        typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
-      >
-    >
-  >;
-
-export type DeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Delete Org Custom Field
- */
-export const useDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete =
-  <TError = HTTPValidationError, TContext = unknown>(
-    options?: {
-      mutation?: UseMutationOptions<
-        Awaited<
-          ReturnType<
-            typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
-          >
-        >,
-        TError,
-        { taskCustomFieldDefinitionId: string },
-        TContext
-      >;
-      request?: SecondParameter<typeof customFetch>;
-    },
-    queryClient?: QueryClient,
-  ): UseMutationResult<
-    Awaited<
-      ReturnType<
-        typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
-      >
-    >,
-    TError,
-    { taskCustomFieldDefinitionId: string },
-    TContext
-  > => {
-    return useMutation(
-      getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationOptions(
-        options,
-      ),
-      queryClient,
-    );
-  };
-/**
  * Update an organization-level task custom field definition.
  * @summary Update Org Custom Field
  */
@@ -744,6 +592,158 @@ export const useUpdateOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFi
   > => {
     return useMutation(
       getUpdateOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdPatchMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * Delete an org-level definition when it has no persisted task values.
+ * @summary Delete Org Custom Field
+ */
+export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse200 =
+  {
+    data: OkResponse;
+    status: 200;
+  };
+
+export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseSuccess =
+  deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse200 & {
+    headers: Headers;
+  };
+export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseError =
+  deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse422 & {
+    headers: Headers;
+  };
+
+export type deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse =
+
+    | deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseSuccess
+    | deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponseError;
+
+export const getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteUrl =
+  (taskCustomFieldDefinitionId: string) => {
+    return `/api/v1/organizations/me/custom-fields/${taskCustomFieldDefinitionId}`;
+  };
+
+export const deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete =
+  async (
+    taskCustomFieldDefinitionId: string,
+    options?: RequestInit,
+  ): Promise<deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse> => {
+    return customFetch<deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteResponse>(
+      getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteUrl(
+        taskCustomFieldDefinitionId,
+      ),
+      {
+        ...options,
+        method: "DELETE",
+      },
+    );
+  };
+
+export const getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
+        >
+      >,
+      TError,
+      { taskCustomFieldDefinitionId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
+      >
+    >,
+    TError,
+    { taskCustomFieldDefinitionId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
+        >
+      >,
+      { taskCustomFieldDefinitionId: string }
+    > = (props) => {
+      const { taskCustomFieldDefinitionId } = props ?? {};
+
+      return deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete(
+        taskCustomFieldDefinitionId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type DeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
+      >
+    >
+  >;
+
+export type DeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Delete Org Custom Field
+ */
+export const useDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
+          >
+        >,
+        TError,
+        { taskCustomFieldDefinitionId: string },
+        TContext
+      >;
+      request?: SecondParameter<typeof customFetch>;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof deleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDelete
+      >
+    >,
+    TError,
+    { taskCustomFieldDefinitionId: string },
+    TContext
+  > => {
+    return useMutation(
+      getDeleteOrgCustomFieldApiV1OrganizationsMeCustomFieldsTaskCustomFieldDefinitionIdDeleteMutationOptions(
         options,
       ),
       queryClient,

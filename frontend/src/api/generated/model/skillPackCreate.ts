@@ -10,10 +10,10 @@ import type { SkillPackCreateMetadata } from "./skillPackCreateMetadata";
  * Payload used to register a pack URL in the organization.
  */
 export interface SkillPackCreate {
-  branch?: string;
-  description?: string | null;
-  metadata?: SkillPackCreateMetadata;
-  name?: string | null;
   /** @minLength 1 */
   source_url: string;
+  name?: string | null;
+  description?: string | null;
+  branch?: string;
+  metadata?: SkillPackCreateMetadata;
 }

@@ -10,15 +10,15 @@ import type { MarketplaceSkillReadMetadata } from "./marketplaceSkillReadMetadat
  * Serialized marketplace skill catalog record.
  */
 export interface MarketplaceSkillRead {
-  category?: string | null;
-  created_at: string;
-  description?: string | null;
   id: string;
-  metadata?: MarketplaceSkillReadMetadata;
-  name: string;
   organization_id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
   risk?: string | null;
   source?: string | null;
   source_url: string;
+  metadata?: MarketplaceSkillReadMetadata;
+  created_at: string;
   updated_at: string;
 }

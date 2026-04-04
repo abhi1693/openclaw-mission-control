@@ -9,8 +9,8 @@
  * Embedded user fields included in organization member payloads.
  */
 export interface OrganizationUserRead {
-  email?: string | null;
   id: string;
+  email?: string | null;
   name?: string | null;
   preferred_name?: string | null;
 }

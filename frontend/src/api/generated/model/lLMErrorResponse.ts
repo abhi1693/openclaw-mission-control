@@ -10,12 +10,12 @@ import type { LLMErrorResponseDetail } from "./lLMErrorResponseDetail";
  * Standardized LLM-facing error payload used by API contracts.
  */
 export interface LLMErrorResponse {
-  /** Optional machine-readable error code. */
-  code?: string | null;
   /** Error payload. Agents should rely on `code` when present and default to `message` for fallback display. */
   detail: LLMErrorResponseDetail;
   /** Request correlation identifier injected by middleware. */
   request_id?: string | null;
+  /** Optional machine-readable error code. */
+  code?: string | null;
   /** Whether a client should retry the call after remediating transient conditions. */
   retryable?: boolean | null;
 }
