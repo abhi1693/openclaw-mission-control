@@ -91,3 +91,5 @@ Apr 4, 01:21 PM
 
     Line [lcm] Compaction summarization model: ollama/qwen3.5:cloud (override) — the restart loaded the old LCM model from config instead of qwen3-coder. The fix-heartbeats script and LCM model changes were overwritten by the MC
    sync.
+
+   The Supervisor side is now working as designed. The remaining gap is the worker agents' responsiveness to nudges.
