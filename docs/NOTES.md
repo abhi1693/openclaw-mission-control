@@ -31,3 +31,5 @@ Review the tasks waiting for approval, use Chome MCP if necessary, the expected 
 
 
   Investigate why the agents aren't nudging each other as instructed 
+
+ ❯ Run an E2E live test using .13 ollama model qwen3.5:35b-a3b-coding-nvfp4 and compare against the qwen3-coder:latest 
