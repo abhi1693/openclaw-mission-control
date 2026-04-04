@@ -52,7 +52,13 @@ Do real work with low noise while sharing useful knowledge across the board.
 {% endif %}
 
 ## Setup
-Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, `BOARD_ID`, `AGENT_ID`, `AGENT_NAME`, and agent identity. If missing, stop.
+```
+BASE_URL={{ base_url }}
+AUTH_TOKEN={{ auth_token }}
+BOARD_ID={{ board_id }}
+AGENT_ID={{ agent_id }}
+AGENT_NAME={{ agent_name }}
+```
 
 ## Rules
 - **Board API is source of truth.** Do NOT rely on memory for task status. Check the API before posting idle, waiting, or blocked.
