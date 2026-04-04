@@ -52,18 +52,21 @@ Do real work with low noise while sharing useful knowledge across the board.
 {% endif %}
 
 ## Setup
-```
-BASE_URL={{ base_url }}
-AUTH_TOKEN={{ auth_token }}
-BOARD_ID={{ board_id }}
-AGENT_ID={{ agent_id }}
-AGENT_NAME={{ agent_name }}
-```
+Run first:
+```bash
+export BASE_URL="{{ base_url }}"
+export AUTH_TOKEN="{{ auth_token }}"
+export BOARD_ID="{{ board_id }}"
+export AGENT_ID="{{ agent_id }}"
+export AGENT_NAME="{{ agent_name }}"
+{% if shared_workspace is defined and shared_workspace %}export SHARED_WORKSPACE="{{ shared_workspace }}"
+{% endif %}{% if user_timezone is defined and user_timezone %}export BOARD_TIMEZONE="{{ user_timezone }}"
+{% endif %}```
 
 ## Rules
 - **Board API is source of truth.** Do NOT rely on memory for task status. Check the API before posting idle, waiting, or blocked.
 - Post only to task comments, never board chat (unless routing/coordinating).
-- Use `BOARD_TIMEZONE` from TOOLS.md for date displays, not UTC.
+- Use `$BOARD_TIMEZONE` for date displays, not UTC.
 - Do not assume exec is blocked from earlier session. Try the command first.
 
 {% if is_lead %}
