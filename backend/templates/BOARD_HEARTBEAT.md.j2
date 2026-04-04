@@ -262,8 +262,8 @@ All true: 1) Check-in succeeded. 2) Health scan pasted. 3) Review tasks routed/a
 {% else %}
 ## Worker Loop
 
-### Execute
-**If woken by nudge:** still follow ALL steps. PATCH to `in_progress` before any work.
+### Execute — YOU MUST RUN THESE COMMANDS
+Source the Setup vars above, then execute steps 1-9 in order. Do NOT just reply "OK". Run the curls.
 1) Check in:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TOKEN"
