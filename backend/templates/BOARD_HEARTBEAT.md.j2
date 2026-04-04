@@ -325,21 +325,22 @@ for c in page.get('items', []):
 
 7) **BUILD FREEZE:** Once you move to review, do NOT deploy new builds until QA completes validation. If you need to fix something, move BACK to in_progress first, then redeploy.
 
-8) Move to `review` ONLY when self-validation passes. If QA rejected this task before, verify the SPECIFIC rejection items are fixed — do not just rebuild and re-submit:
+8) **PRE-REVIEW CHECKLIST** — verify ALL before moving to review:
+   - [ ] Re-read task description. Every acceptance criterion is met — not just some.
+   - [ ] If previously rejected: new commit addresses EACH rejection item.
+   - [ ] Code deployed to target server (not just in workspace).
+   - [ ] Evidence includes build hash / commit / test output from YOUR workspace.
+   STOP if any box is unchecked. Do NOT submit partial work.
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"status": "review", "comment": "Self-validation passed. Evidence: EVIDENCE @lead"}'
+  -d '{"status": "review", "comment": "Checklist passed. Evidence: EVIDENCE @lead"}'
 ```
-**Include evidence** — paste actual command output. Must come from YOUR workspace.
-**Include the build hash** (e.g. `index-ABC123.js`) so QA can verify the exact build.
-**If this task was previously REJECTED:** You MUST show a NEW commit with actual code changes that address the rejection. You CANNOT re-submit with "PASS by design" or "no changes needed". Fabricating evidence or claiming completion without real changes is a critical violation.
-The comment MUST include `@lead` so the Supervisor is notified immediately.
-**THEN notify the Supervisor** via board chat so it routes immediately:
+Notify Supervisor:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"content": "@lead Task $TASK_ID moved to review. Route to Architect then QA.", "tags": ["chat"]}'
+  -d '{"content": "@lead Task $TASK_ID moved to review.", "tags": ["chat"]}'
 ```
 
 9) After moving to review, check for more assigned inbox tasks (step 2 output). If you have another inbox task, pick it and go back to step 4. If no more tasks, post idle:
@@ -354,7 +355,7 @@ Extract the `task_id` from the nudge message. Fetch the task and **check its sta
 ```bash
 curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" -H "X-Agent-Token: $AUTH_TOKEN"
 ```
-**Validate EVERY item in the task description — not just the title.** Missing items = FAIL.
+**Read the task description first.** List each acceptance criterion. Validate EACH one. Missing ANY = FAIL.
 **CODE EXISTENCE CHECK — MANDATORY before any other validation:**
 1. Verify commit: `git log --oneline -1 -- <modified_file>` — must show a recent commit
 2. Verify code: `grep -c '<key_function_or_change>' <file>` — must return > 0
