@@ -76,6 +76,14 @@ class AgentBase(SQLModel):
         description="Human-readable agent display name.",
         examples=["Ops triage lead"],
     )
+    system_key: str | None = Field(
+        default=None,
+        description=(
+            "Stable, system-assigned identifier used for deterministic routing. "
+            "Do not treat this as a user-facing label."
+        ),
+        examples=["yas_claw"],
+    )
     status: str = Field(
         default="provisioning",
         description="Current lifecycle state used by coordinator logic.",
@@ -122,6 +130,18 @@ class AgentBase(SQLModel):
         """Normalize identity-profile values into trimmed string mappings."""
         return _normalize_identity_profile(value)
 
+    @field_validator("system_key", mode="before")
+    @classmethod
+    def normalize_system_key(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return None
+            return normalized.lower()
+        return None
+
 
 class AgentCreate(AgentBase):
     """Payload for creating a new agent."""
@@ -164,6 +184,11 @@ class AgentUpdate(SQLModel):
         default=None,
         description="Optional replacement display name.",
         examples=["Ops triage lead"],
+    )
+    system_key: str | None = Field(
+        default=None,
+        description="Optional replacement stable system identifier.",
+        examples=["yas_claw"],
     )
     status: str | None = Field(
         default=None,
@@ -210,6 +235,18 @@ class AgentUpdate(SQLModel):
     ) -> dict[str, str] | None:
         """Normalize identity-profile values into trimmed string mappings."""
         return _normalize_identity_profile(value)
+
+    @field_validator("system_key", mode="before")
+    @classmethod
+    def normalize_system_key(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return None
+            return normalized.lower()
+        return None
 
 
 class AgentRead(AgentBase):

@@ -24,6 +24,9 @@ class Agent(QueryModel, table=True):
     board_id: UUID | None = Field(default=None, foreign_key="boards.id", index=True)
     gateway_id: UUID = Field(foreign_key="gateways.id", index=True)
     name: str = Field(index=True)
+    # Stable, system-assigned identifier used for routing and deterministic lookups
+    # (e.g. Mission Control's top-level operator agent).
+    system_key: str | None = Field(default=None, index=True, unique=True)
     status: str = Field(default="provisioning", index=True)
     openclaw_session_id: str | None = Field(default=None, index=True)
     agent_token_hash: str | None = Field(default=None, index=True)
