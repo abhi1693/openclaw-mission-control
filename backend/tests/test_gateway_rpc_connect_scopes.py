@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import platform
+
 import pytest
 
 import app.services.openclaw.gateway_rpc as gateway_rpc
@@ -57,6 +59,7 @@ def test_build_connect_params_defaults_to_device_pairing(
     assert params["scopes"] == list(GATEWAY_OPERATOR_SCOPES)
     assert params["client"]["id"] == DEFAULT_GATEWAY_CLIENT_ID
     assert params["client"]["mode"] == DEFAULT_GATEWAY_CLIENT_MODE
+    assert params["client"]["platform"] == platform.system().lower()
     assert params["device"] == expected_device_payload
     assert "auth" not in params
     assert captured["client_id"] == DEFAULT_GATEWAY_CLIENT_ID
@@ -80,6 +83,7 @@ def test_build_connect_params_uses_control_ui_when_pairing_disabled() -> None:
     assert params["scopes"] == list(GATEWAY_OPERATOR_SCOPES)
     assert params["client"]["id"] == CONTROL_UI_CLIENT_ID
     assert params["client"]["mode"] == CONTROL_UI_CLIENT_MODE
+    assert params["client"]["platform"] == platform.system().lower()
     assert "device" not in params
 
 
