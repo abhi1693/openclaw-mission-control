@@ -1,6 +1,8 @@
 
 Review the tasks waiting for approval, use Chome MCP if necessary, the expected behavior is fully compliance with the task spect, only approve with full evidence check
 
+Investigate why the agents aren't nudging each other as instructed 
+
 
   │ mc-3c920c2a (Supervisor MC) │ FAIL   │ Missing IDENTITY.md                          │
   ├─────────────────────────────┼────────┼──────────────────────────────────────────────┤
@@ -30,9 +32,9 @@ Review the tasks waiting for approval, use Chome MCP if necessary, the expected 
 
 
 
-  Investigate why the agents aren't nudging each other as instructed 
+  
 
- ❯ Run an E2E live test using .13 ollama model qwen3.5:35b-a3b-coding-nvfp4 and compare against the qwen3-coder:latest 
+
 
 
 List the heartbeat times
@@ -63,11 +65,29 @@ Apr 4, 01:21 PM
 
 
                                                                                                                                                                               
-  ❯ Are there any bug in the Supervisor heartbeat? 
 
-   Work on Phase 1D: Profile page + Board CRUD UI (frontend) task                                                                                                                                                                   
- Why some simple tasks are going and back all the time?
+                                                                                                                         
 
- ⏺ The auth calls authApi.getMe() which hits GET /auth/me. The JWT cookie approach should work — the issue might be that getMe is using Authorization: Bearer from localStorage, not the cookie. Let me check:
+  Why the Supervisor heartbeat says "OK" without nudging
 
- This is frontend-only work — the backend APIs are ready. Want me to implement the API wiring, or should PF handle it since the task is assigned to them?
+  With lightContext: true + isolatedSession: true, here's what happens every 5 minutes:
+
+  1. Gateway fires heartbeat timer → creates a fresh isolated session for the Supervisor
+  2. Only HEARTBEAT.md is loaded into the context (lightContext strips everything else — no TOOLS.md, no AGENTS.md, no MEMORY.md, no session history)
+  3. The model reads HEARTBEAT.md — sees curls with $BASE_URL, $AUTH_TOKEN, $BOARD_ID
+  4. BUT those variables aren't set — in an isolated session with lightContext, the model doesn't have TOOLS.md which defines them
+  5. The model can't execute the curls because it doesn't know the actual values
+  6. It returns HEARTBEAT_OK — "I read the checklist, nothing I can act on"
+
+  The 22 "ok" events with zero nudges confirm this — the model runs, sees the template, but can't DO anything because it lacks the credentials.
+
+  Why it worked when we tested manually: We used openclaw agent --agent ... which creates a FULL session (not lightContext), so TOOLS.md is loaded and the model has $BASE_URL, $AUTH_TOKEN, etc.
+
+  The fix options:
+  1. Set lightContext: false for the Supervisor — it needs full context to execute curls (costs more tokens but actually works)
+  2. Embed the credentials directly in HEARTBEAT.md via Jinja template variables (already available: {{ base_url }}, {{ auth_token }})
+
+  Option 2 is better — the HEARTBEAT.md already renders with those variables but the curls reference $BASE_URL (shell variable from TOOLS.md) instead of using the rendered values directly.
+
+    Line [lcm] Compaction summarization model: ollama/qwen3.5:cloud (override) — the restart loaded the old LCM model from config instead of qwen3-coder. The fix-heartbeats script and LCM model changes were overwritten by the MC
+   sync.
