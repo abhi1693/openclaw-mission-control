@@ -15,6 +15,7 @@ import {
 import { BrandMark } from "@/components/atoms/BrandMark";
 import { OrgSwitcher } from "@/components/organisms/OrgSwitcher";
 import { UserMenu } from "@/components/organisms/UserMenu";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { isOnboardingComplete } from "@/lib/onboarding";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
@@ -94,13 +95,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-app text-strong" data-sidebar={sidebarOpen ? "open" : "closed"}>
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
+      <header className="sticky top-0 z-50 border-b border-[color:var(--border)] bg-[color:var(--surface)] shadow-sm">
         <div className="flex items-center py-3">
           <div className="flex items-center px-4 md:px-6 md:w-[260px]">
             {isSignedIn ? (
               <button
                 type="button"
-                className="mr-3 rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+                className="mr-3 rounded-lg p-2 text-muted hover:bg-[color:var(--surface-muted)] md:hidden"
                 onClick={toggleSidebar}
                 aria-label="Toggle navigation"
               >
@@ -118,11 +119,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </SignedIn>
           <SignedIn>
             <div className="ml-auto flex items-center gap-3 px-4 md:px-6">
+              <ThemeToggle />
               <div className="hidden text-right lg:block">
-                <p className="text-sm font-semibold text-slate-900">
-                  {displayName}
-                </p>
-                <p className="text-xs text-slate-500">Operator</p>
+                <p className="text-sm font-semibold text-strong">{displayName}</p>
+                <p className="text-xs text-muted">Operator</p>
               </div>
               <UserMenu displayName={displayName} displayEmail={displayEmail} />
             </div>
@@ -140,7 +140,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         />
       ) : null}
 
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[260px_1fr] bg-slate-50">
+      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[260px_1fr] bg-app">
         {children}
       </div>
     </div>

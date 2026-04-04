@@ -231,7 +231,7 @@ export default function SkillsPacksPage() {
         stickyHeader
       >
         <div className="space-y-6">
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-sm">
             <SkillPacksTable
               packs={packs}
               isLoading={packsQuery.isLoading}
@@ -255,20 +255,20 @@ export default function SkillsPacksPage() {
           </div>
 
           {packsQuery.error ? (
-            <p className="text-sm text-rose-600">{packsQuery.error.message}</p>
+            <p className="text-sm text-[color:var(--danger)]">{packsQuery.error.message}</p>
           ) : null}
           {deleteMutation.error ? (
-            <p className="text-sm text-rose-600">
+            <p className="text-sm text-[color:var(--danger)]">
               {deleteMutation.error.message}
             </p>
           ) : null}
           {syncMutation.error ? (
-            <p className="text-sm text-rose-600">
+            <p className="text-sm text-[color:var(--danger)]">
               {syncMutation.error.message}
             </p>
           ) : null}
           {syncAllError ? (
-            <p className="text-sm text-rose-600">{syncAllError}</p>
+            <p className="text-sm text-[color:var(--danger)]">{syncAllError}</p>
           ) : null}
           {syncWarnings.length > 0 ? (
             <div className="space-y-1">

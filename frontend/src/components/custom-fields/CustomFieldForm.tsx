@@ -93,15 +93,15 @@ export function CustomFieldForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-6"
+      className="max-w-3xl rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-6 shadow-sm space-y-6"
     >
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">
           Basic configuration
         </p>
         <div className="mt-4 grid gap-6 md:grid-cols-2">
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-strong">
               Field key
             </span>
             <Input
@@ -118,14 +118,14 @@ export function CustomFieldForm({
               required={mode === "create"}
             />
             {mode === "edit" ? (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted">
                 Field key cannot be changed after creation.
               </span>
             ) : null}
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">Label</span>
+            <span className="text-sm font-semibold text-strong">Label</span>
             <Input
               value={formState.label}
               onChange={(event) =>
@@ -138,7 +138,7 @@ export function CustomFieldForm({
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-strong">
               Field type
             </span>
             <Select
@@ -165,7 +165,7 @@ export function CustomFieldForm({
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-strong">
               UI visible
             </span>
             <Select
@@ -192,7 +192,7 @@ export function CustomFieldForm({
           </label>
         </div>
 
-        <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
+        <label className="mt-4 flex items-center gap-2 text-sm text-muted">
           <input
             type="checkbox"
             checked={formState.required}
@@ -209,12 +209,12 @@ export function CustomFieldForm({
       </div>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">
           Validation and defaults
         </p>
         <div className="mt-4 space-y-4">
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-strong">
               Validation regex
             </span>
             <Input
@@ -231,13 +231,13 @@ export function CustomFieldForm({
                 !STRING_VALIDATION_FIELD_TYPES.has(formState.fieldType)
               }
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted">
               Supported for text/date/date-time/url fields.
             </p>
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-strong">
               Default value
             </span>
             <Textarea
@@ -255,7 +255,7 @@ export function CustomFieldForm({
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-strong">
               Description
             </span>
             <Textarea
@@ -276,10 +276,10 @@ export function CustomFieldForm({
 
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Board bindings
           </p>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted">
             {selectedBoardIds.size} selected
           </span>
         </div>
@@ -290,17 +290,17 @@ export function CustomFieldForm({
             placeholder="Search boards..."
             disabled={isSubmitting}
           />
-          <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-slate-50/40">
+          <div className="max-h-64 overflow-auto rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-muted)]/60">
             {boardsLoading ? (
-              <div className="px-4 py-6 text-sm text-slate-500">
+              <div className="px-4 py-6 text-sm text-muted">
                 Loading boards…
               </div>
             ) : boardsError ? (
-              <div className="px-4 py-6 text-sm text-rose-700">
+              <div className="px-4 py-6 text-sm text-[color:var(--danger)]">
                 {boardsError}
               </div>
             ) : filteredBoards.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-slate-500">
+              <div className="px-4 py-6 text-sm text-muted">
                 No boards found.
               </div>
             ) : (
@@ -312,7 +312,7 @@ export function CustomFieldForm({
                       <label className="flex cursor-pointer items-start gap-3">
                         <input
                           type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600"
+                          className="mt-1 h-4 w-4 rounded border-[color:var(--border-strong)] text-[color:var(--accent)]"
                           checked={checked}
                           onChange={() => {
                             setSelectedBoardIds((prev) => {
@@ -328,10 +328,10 @@ export function CustomFieldForm({
                           disabled={isSubmitting}
                         />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-slate-900">
+                          <p className="truncate text-sm font-medium text-strong">
                             {board.name}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-muted">
                             {board.slug}
                           </p>
                         </div>
@@ -342,14 +342,14 @@ export function CustomFieldForm({
               </ul>
             )}
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             Required. The custom field appears on tasks in selected boards.
           </p>
         </div>
       </div>
 
       {submitError ? (
-        <p className="text-sm text-rose-600">{submitError}</p>
+        <p className="text-sm text-[color:var(--danger)]">{submitError}</p>
       ) : null}
       <div className="flex items-center gap-2">
         <Link

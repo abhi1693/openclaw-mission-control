@@ -102,7 +102,7 @@ export default function BoardGroupsPage() {
         }
         stickyHeader
       >
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-sm">
           <BoardGroupsTable
             groups={groups}
             isLoading={groupsQuery.isLoading}
@@ -122,7 +122,7 @@ export default function BoardGroupsPage() {
         </div>
 
         {groupsQuery.error ? (
-          <p className="mt-4 text-sm text-red-500">
+          <p className="mt-4 text-sm text-[color:var(--danger)]">
             {groupsQuery.error.message}
           </p>
         ) : null}

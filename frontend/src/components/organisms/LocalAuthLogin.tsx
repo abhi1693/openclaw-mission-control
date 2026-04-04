@@ -125,7 +125,7 @@ export function LocalAuthLogin({ onAuthenticated }: LocalAuthLoginProps) {
               />
             </div>
             {error ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p className="rounded-lg border border-[color:var(--danger)]/30 bg-[color:var(--danger)]/10 px-3 py-2 text-sm text-[color:var(--danger)]">
                 {error}
               </p>
             ) : (
