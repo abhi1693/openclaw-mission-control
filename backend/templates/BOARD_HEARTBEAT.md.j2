@@ -58,17 +58,16 @@ Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, `BOARD_ID`, `AGENT_ID`, `AGENT_NAM
 - **Board API is source of truth.** Do NOT rely on memory for task status. Check the API before posting idle, waiting, or blocked.
 - Post only to task comments, never board chat (unless routing/coordinating).
 - Use `BOARD_TIMEZONE` from TOOLS.md for date displays, not UTC.
-- Do not assume exec is blocked from an earlier session. Try the command first.
+- Do not assume exec is blocked from earlier session. Try the command first.
 
 {% if is_lead %}
 ## Board Lead Checklist
 
-**NEVER write code. EXECUTE curls.** Board API is truth, not MEMORY.md. Use **nudge** to reach agents. Do NOT tag `@lead`.
-
-**NEVER approve tasks.** Only HUMANS approve. `PENDING` = WAIT. Only act on `APPROVED` from Step 3b API output.
+**NEVER write code. EXECUTE curls.** Board API is truth, not MEMORY.md. Use **nudge** to reach agents.
+**NEVER approve tasks.** Only HUMANS approve. `PENDING` = WAIT. Only act on `APPROVED` from Step 3b.
 
 ### Creating Sub-Tasks
-**Before creating, check Step 2 `/tmp/tasks.json` for existing tasks with similar title/scope. Do NOT create duplicates.**
+**Check `/tmp/tasks.json` for existing tasks with similar title. Do NOT create duplicates.**
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
@@ -99,7 +98,11 @@ for t in T:
     dt=datetime.fromisoformat(ua.replace('Z','+00:00')) if ua else now
     age=int((now-dt).total_seconds()/60)
     blk='BLOCKED' if t.get('is_blocked') else ''
-    print(f\"{s:12} {age:4}m  agent={aid}  agent_status={a.get('status','?')}  {blk}  {t['title'][:50]}  id={t['id']}\")
+    dp=t.get('depends_on_task_ids') or []
+    print(f\"{s:12} {age:4}m  agent={aid}  agent_status={a.get('status','?')}  {blk}{(' deps='+str(dp)) if dp else ''}  {t['title'][:40]}  {t['id']}\")
+done=sum(1 for t in T if t.get('status')=='done')
+total=len(T)
+print(f'done={done}/{total}')
 busy={t.get('assigned_agent_id') for t in T if t.get('status') in ('in_progress','review')}
 for a in json.load(open('/tmp/agents.json')).get('items',[]):
     n,i=a.get('name',''),a['id']
@@ -116,13 +119,13 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/WORKER_UUID/nu
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"message": "Status check — task unchanged 30+ min. Are you blocked? @lead"}'
 ```
-- `in_progress` **60+ min** → nudge "URGENT: post status NOW" AND escalate to board memory: `@Miguel Agent stuck 60+ min` (tags: `chat,escalation`)
+- `in_progress` **60+ min** → nudge "URGENT: post status NOW" + escalate: `@Miguel Agent stuck 60+ min`
 - Offline agent with live task → **recover first**, then nudge:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/WORKER_UUID/recover" -H "X-Agent-Token: $AUTH_TOKEN"
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/WORKER_UUID/nudge" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "You have an in_progress task. Post status update or continue work."}'
+  -d '{"message": "You have an in_progress task. Post status or continue."}'
 ```
 
 ### Step 2b — Route Inbox Tasks
@@ -264,8 +267,8 @@ import sys,json
 for t in json.load(sys.stdin).get('items',[]):
     s=t.get('status','')
     if s in ('inbox','in_progress','review'):
-        print(f\"{t['id']} {s} blocked={t.get('is_blocked',False)} {t.get('title','')}\")
-        if t.get('description'): print(f\"  desc: {t['description'][:200]}\")
+        print(f\"{t['id']} {s} blocked={t.get('is_blocked',False)} deps={t.get('depends_on_task_ids',[])} {t.get('title','')}\")
+        if t.get('description'): print(t['description'])
 "
 ```
 If MEMORY.md says "Done" but board shows `inbox`/`in_progress` → MEMORY.md is wrong. Board is truth.
