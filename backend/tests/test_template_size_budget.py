@@ -173,18 +173,45 @@ def test_lead_heartbeat_requires_fresh_exec_attempt_before_declaring_blocked() -
     assert "Try the command first" in rendered
 
 
-def test_lead_heartbeat_includes_recovery_and_health_scan() -> None:
-    rendered = _render_template(
+def test_lead_board_playbook_includes_recovery_and_health_scan() -> None:
+    """Phase B2 moved the lead health scan / route / recover / nudge
+    content out of BOARD_HEARTBEAT.md.j2 and into BOARD_AGENTS.md.j2's
+    ``## Lead Board Playbook`` section. The heartbeat now references
+    the playbook by step number; the actual curl commands and the
+    Python health-scan script live in AGENTS.md.
+    """
+    agents_rendered = _render_template(
+        "BOARD_AGENTS.md.j2",
+        is_main_agent=False,
+        is_board_lead=True,
+        agent_name="Supervisor",
+        agent_id="lead-id",
+        base_url="http://example.test",
+        auth_token="token",
+        board_id="board-id",
+        **_BOARD_RULE_DEFAULTS,
+    )
+
+    # Health-scan endpoints must still be present somewhere the agent
+    # can read them — they just live in AGENTS.md now, not HEARTBEAT.md.
+    assert "/api/v1/agent/agents?board_id=$BOARD_ID" in agents_rendered, (
+        "Lead Board Playbook must contain the health-scan agents endpoint"
+    )
+    assert "agent_status=" in agents_rendered
+    assert "recover" in agents_rendered.lower()
+    assert "nudge" in agents_rendered.lower()
+
+    # The HEARTBEAT heartbeat should reference the playbook by name so
+    # the model knows where to find the actual curl commands.
+    heartbeat_rendered = _render_template(
         "BOARD_HEARTBEAT.md.j2",
         is_main_agent=False,
         is_board_lead=True,
         **_BOARD_RULE_DEFAULTS,
     )
-
-    assert "/api/v1/agent/agents?board_id=$BOARD_ID" in rendered
-    assert "agent_status=" in rendered
-    assert "recover" in rendered.lower()
-    assert "nudge" in rendered.lower()
+    assert "Lead Board Playbook" in heartbeat_rendered, (
+        "HEARTBEAT must point workers at AGENTS.md § Lead Board Playbook"
+    )
 
 
 def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -> None:
