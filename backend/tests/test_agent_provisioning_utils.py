@@ -1524,7 +1524,19 @@ def test_default_heartbeat_config_has_isolation():
     from app.services.openclaw.constants import DEFAULT_HEARTBEAT_CONFIG
 
     assert DEFAULT_HEARTBEAT_CONFIG["isolatedSession"] is True
-    assert DEFAULT_HEARTBEAT_CONFIG["lightContext"] is True
+    # Regression guard: lightContext MUST remain False. In lightweight
+    # mode the gateway strips every bootstrap file except HEARTBEAT.md,
+    # so the heartbeat session cannot resolve $BASE_URL / $AUTH_TOKEN /
+    # $BOARD_ID, cannot read AGENTS.md/IDENTITY.md/MEMORY.md, and cannot
+    # execute any check-in curl or follow any operating rule. This was a
+    # real production incident in April 2026 (commit e37a34e flipped to
+    # True for token savings and caused 22 heartbeat "ok" events with
+    # zero nudges — see docs/NOTES.md §"Why the Supervisor heartbeat
+    # says OK without nudging"). The post-refactor templates assume full
+    # bootstrap context; flipping this default back to True MUST NOT
+    # happen without also redesigning every template to be fully self-
+    # contained in HEARTBEAT.md.
+    assert DEFAULT_HEARTBEAT_CONFIG["lightContext"] is False
 
 
 def test_offline_threshold_exceeds_max_heartbeat():

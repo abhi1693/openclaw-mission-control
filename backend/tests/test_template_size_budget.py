@@ -1,9 +1,22 @@
 # ruff: noqa: S101
-"""Template size guardrails for injected heartbeat context.
+"""Template size guardrails for injected bootstrap context.
 
-The source .j2 file contains multiple branches (main/lead/worker) but only one
-is rendered per agent.  We check the RENDERED output for each variant, not the
-raw source, because the gateway injects the rendered markdown into context.
+The source .j2 files contain multiple branches (main/lead/worker) but only one
+is rendered per agent. We check the RENDERED output for each variant with
+realistic provisioning context (matching what ``_build_context`` injects at
+runtime) because the gateway injects the rendered markdown into the model's
+bootstrap context.
+
+The hard cap aligns with the OpenClaw docs at
+https://docs.openclaw.ai/concepts/context which declare
+``agents.defaults.bootstrapMaxChars = 20000`` as the per-file cap and
+``agents.defaults.bootstrapTotalMaxChars = 150000`` as the total-across-files
+cap. Files over the per-file cap get truncated by the gateway, which would
+silently drop instructions. The previous ``HEARTBEAT_CONTEXT_LIMIT = 10_500``
+guard was fake — nothing in the runtime enforced that number, it was just
+test hygiene from a prior era — and it rendered with minimal context so it
+lied about headroom. This test now uses the documented runtime contract and
+realistic context matching ``_build_context``.
 """
 
 from __future__ import annotations
@@ -11,7 +24,16 @@ from __future__ import annotations
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
-HEARTBEAT_CONTEXT_LIMIT = 10_500
+# Docs-backed per-file injection cap:
+# https://docs.openclaw.ai/concepts/context — ``agents.defaults.bootstrapMaxChars``
+BOOTSTRAP_PER_FILE_MAX_CHARS = 20_000
+
+# Soft budget for HEARTBEAT specifically — prompt-cost hygiene, not a
+# runtime contract. Heartbeats fire on every cron tick so a bloated
+# HEARTBEAT.md burns tokens on every tick, unlike AGENTS.md which is
+# read once per session start.
+HEARTBEAT_SOFT_BUDGET = 12_000
+
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
 _BOARD_RULE_DEFAULTS = {
@@ -23,25 +45,104 @@ _BOARD_RULE_DEFAULTS = {
     "board_rule_max_agents": "6",
 }
 
+# Realistic provisioning context matching what
+# ``_build_context`` in ``backend/app/services/openclaw/provisioning.py``
+# injects at runtime. Using minimal context in the old test produced a
+# fake 10,486-char headroom when the realistic render was 10,512 chars
+# — over the (also-fake) 10,500 limit.
+_REALISTIC_RENDER_CONTEXT = {
+    "agent_name": "Worker-Agent-Sample",
+    "agent_id": "00000000-0000-4000-8000-000000000001",
+    "board_id": "00000000-0000-4000-8000-000000000002",
+    "base_url": "http://192.168.2.64:8000",
+    "auth_token": "sample-agent-token-with-realistic-length-000000000000",
+    "user_timezone": "America/Sao_Paulo",
+    "shared_workspace": "/shared",
+    "workspace_path": "/root/.openclaw/workspace/workspace-mc-sample",
+    **_BOARD_RULE_DEFAULTS,
+}
+
 
 def _render_template(name: str, **context: object) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
     return env.get_template(name).render(**context)
 
 
-def test_heartbeat_templates_fit_in_injected_context_limit() -> None:
-    """Each rendered heartbeat variant must stay under gateway injected-context truncation limit."""
+def test_heartbeat_templates_fit_in_bootstrap_per_file_cap() -> None:
+    """Each rendered heartbeat variant must stay under the gateway's
+    documented per-file bootstrap injection cap (20,000 chars). Files
+    over the cap get silently truncated by the gateway which would drop
+    instructions. This is the real runtime contract — the old
+    ``HEARTBEAT_CONTEXT_LIMIT = 10_500`` was test-only hygiene with no
+    runtime enforcement.
+
+    Rendered with realistic context (matching ``_build_context``) because
+    minimal-context rendering under-reports the real size.
+    """
     variants = {
-        "main": {"is_main_agent": True, "is_board_lead": False},
-        "lead": {"is_main_agent": False, "is_board_lead": True, **_BOARD_RULE_DEFAULTS},
-        "worker": {"is_main_agent": False, "is_board_lead": False, **_BOARD_RULE_DEFAULTS},
+        "main": {"is_main_agent": True, "is_board_lead": False, **_REALISTIC_RENDER_CONTEXT},
+        "lead": {"is_main_agent": False, "is_board_lead": True, **_REALISTIC_RENDER_CONTEXT},
+        "worker": {"is_main_agent": False, "is_board_lead": False, **_REALISTIC_RENDER_CONTEXT},
     }
     for variant_name, ctx in variants.items():
         rendered = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
         size = len(rendered)
-        assert size <= HEARTBEAT_CONTEXT_LIMIT, (
+        assert size <= BOOTSTRAP_PER_FILE_MAX_CHARS, (
             f"BOARD_HEARTBEAT.md.j2 ({variant_name}) renders to {size} chars "
-            f"(limit {HEARTBEAT_CONTEXT_LIMIT})"
+            f"(docs-backed per-file cap {BOOTSTRAP_PER_FILE_MAX_CHARS})"
+        )
+
+
+def test_heartbeat_templates_stay_within_soft_budget() -> None:
+    """Prompt-cost hygiene: HEARTBEAT.md is injected on every cron tick,
+    so its size directly impacts per-tick token cost. This test is NOT a
+    runtime contract — the gateway only enforces the 20,000-char hard
+    cap. It's a soft budget to catch bloat early. If it fires, either
+    shrink the template or raise the budget deliberately.
+    """
+    variants = {
+        "main": {"is_main_agent": True, "is_board_lead": False, **_REALISTIC_RENDER_CONTEXT},
+        "lead": {"is_main_agent": False, "is_board_lead": True, **_REALISTIC_RENDER_CONTEXT},
+        "worker": {"is_main_agent": False, "is_board_lead": False, **_REALISTIC_RENDER_CONTEXT},
+    }
+    for variant_name, ctx in variants.items():
+        rendered = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
+        size = len(rendered)
+        assert size <= HEARTBEAT_SOFT_BUDGET, (
+            f"BOARD_HEARTBEAT.md.j2 ({variant_name}) renders to {size} chars "
+            f"(soft budget {HEARTBEAT_SOFT_BUDGET}) — consider shrinking "
+            "or raising the budget deliberately"
+        )
+
+
+def test_agents_md_fits_in_bootstrap_per_file_cap() -> None:
+    """AGENTS.md is injected at session start (not every tick) but it
+    still has to fit under the gateway's per-file bootstrap cap to avoid
+    silent truncation of operating instructions. Since the ACP delegation
+    refactor moved playbook content into AGENTS.md, this file is now the
+    biggest single contributor to the bootstrap budget.
+    """
+    variants = {
+        "main": {"is_main_agent": True, "is_board_lead": False, **_REALISTIC_RENDER_CONTEXT},
+        "lead": {
+            "is_main_agent": False,
+            "is_board_lead": True,
+            "agent_name": "Supervisor",
+            **_REALISTIC_RENDER_CONTEXT,
+        },
+        "worker": {
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Worker-Agent-Sample",
+            **_REALISTIC_RENDER_CONTEXT,
+        },
+    }
+    for variant_name, ctx in variants.items():
+        rendered = _render_template("BOARD_AGENTS.md.j2", **ctx)
+        size = len(rendered)
+        assert size <= BOOTSTRAP_PER_FILE_MAX_CHARS, (
+            f"BOARD_AGENTS.md.j2 ({variant_name}) renders to {size} chars "
+            f"(docs-backed per-file cap {BOOTSTRAP_PER_FILE_MAX_CHARS})"
         )
 
 
@@ -101,11 +202,17 @@ def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -
         agent_name="Programmer-Backend",
         is_board_lead=False,
     )
-    # SOUL.md is allowed to mention the concept ("delegate via
-    # sessions_spawn") as a reference, but it must NOT carry the
-    # concrete JSON payload — that's the drift risk. The payload has
-    # an ``"agentId": "..."`` field that never appears outside the
-    # actual `sessions_spawn` call shape.
+    # Stricter guard (Codex round-2 feedback): forbid the literal
+    # ``sessions_spawn`` mechanism name, not just the JSON payload.
+    # Allowing the mechanism name still leaves drift risk — if the
+    # delegation tool ever changes name (e.g. from sessions_spawn to a
+    # different spawn API), every template mentioning it would need to
+    # be updated. AGENTS.md is the single source of truth for BOTH the
+    # payload shape AND the mechanism name.
+    assert "sessions_spawn" not in worker_soul, (
+        "SOUL.md must not reference the `sessions_spawn` mechanism by "
+        "name — delegate per AGENTS.md § Code Delegation (ACP) only"
+    )
     assert '"agentId"' not in worker_soul, (
         "SOUL.md must not embed the ACP sessions_spawn JSON payload "
         "(no `\"agentId\"` field) — reference AGENTS.md instead"
@@ -124,6 +231,10 @@ def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -
         identity_communication_style="direct",
         identity_emoji=":gear:",
     )
+    assert "sessions_spawn" not in worker_identity, (
+        "IDENTITY.md must not reference `sessions_spawn` — identity is "
+        "name/vibe/emoji, not tool-use mechanics"
+    )
     assert '"agentId"' not in worker_identity, (
         "IDENTITY.md is for name/vibe/emoji only — no ACP JSON payload"
     )
@@ -136,7 +247,12 @@ def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -
         "BOARD_HEARTBEAT.md.j2",
         is_main_agent=False,
         is_board_lead=False,
-        **_BOARD_RULE_DEFAULTS,
+        **_REALISTIC_RENDER_CONTEXT,
+    )
+    assert "sessions_spawn" not in worker_heartbeat, (
+        "HEARTBEAT.md must not reference `sessions_spawn` — heartbeat "
+        "should be a tiny checklist referencing AGENTS.md for the "
+        "delegation mechanism"
     )
     assert '"agentId"' not in worker_heartbeat, (
         "HEARTBEAT.md must stay small — the delegation JSON payload "
@@ -188,11 +304,17 @@ def test_agents_md_contains_code_delegation_section_for_workers() -> None:
     )
 
 
-def test_agents_md_code_delegation_programmer_backend_uses_codex_plus_claude_review() -> None:
-    """Programmer-Backend's Code Delegation section in AGENTS.md must
-    describe a two-stage workflow: Codex implements, Claude Code
-    reviews. Two separate `sessions_spawn` calls per task iteration,
-    with the review running after the implementation commit exists.
+def test_agents_md_code_delegation_codex_then_claude_review_flow() -> None:
+    """Workers with ``identity_profile.dev_acp_flow =
+    'codex_then_claude_review'`` must render a two-stage workflow in
+    their AGENTS.md Code Delegation section: Codex implements, Claude
+    Code reviews. Two separate spawn payloads, with review running
+    after the implementation commit exists.
+
+    This test uses the per-agent flow flag, not the literal agent name.
+    The previous implementation branched on ``agent_name ==
+    "Programmer-Backend"`` which was brittle — agent names are editable
+    display fields, so a rename would silently drop the two-stage flow.
     """
     pb_agents = _render_template(
         "BOARD_AGENTS.md.j2",
@@ -200,16 +322,17 @@ def test_agents_md_code_delegation_programmer_backend_uses_codex_plus_claude_rev
         is_board_lead=False,
         agent_name="Programmer-Backend",
         agent_id="pb-id",
+        identity_dev_acp_flow="codex_then_claude_review",
     )
     assert "## Code Delegation (ACP)" in pb_agents
     assert "Stage 1" in pb_agents and "Stage 2" in pb_agents, (
-        "PB must have two distinct ACP stages documented in AGENTS.md"
+        "codex_then_claude_review flow must have two distinct ACP stages"
     )
     assert '"agentId": "codex"' in pb_agents, (
-        "PB Stage 1 must use codex as the implementation ACP agent"
+        "Stage 1 must use codex as the implementation ACP agent"
     )
     assert '"agentId": "claude"' in pb_agents, (
-        "PB Stage 2 must use claude as the review ACP agent"
+        "Stage 2 must use claude as the review ACP agent"
     )
     assert "Codex implements, Claude Code reviews" in pb_agents
     # Review must run after the implementation commit exists.
@@ -217,27 +340,59 @@ def test_agents_md_code_delegation_programmer_backend_uses_codex_plus_claude_rev
     assert "after" in lowered and "commit" in lowered
 
 
-def test_agents_md_code_delegation_non_pb_workers_keep_single_claude_spawn() -> None:
-    """Workers other than Programmer-Backend must keep the single-spawn
-    Claude-Code-does-it-all flow (implement + /simplify + /codex review
-    inside one ACP session). Only PB uses the two-stage split.
+def test_agents_md_code_delegation_renamed_programmer_backend_keeps_two_stage_flow() -> None:
+    """Regression: if Programmer-Backend is renamed in the DB (agents are
+    display-name-editable), the two-stage Codex+Claude flow MUST still
+    render because we key on ``identity_profile.dev_acp_flow``, not on
+    ``agent_name``. This test would have caught the old brittle
+    discriminator.
     """
-    qa_agents = _render_template(
+    renamed_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        is_main_agent=False,
+        is_board_lead=False,
+        agent_name="Backend Engineer",  # renamed from "Programmer-Backend"
+        agent_id="pb-id",
+        identity_dev_acp_flow="codex_then_claude_review",
+    )
+    assert '"agentId": "codex"' in renamed_agents, (
+        "renaming the display name must not drop the two-stage flow"
+    )
+    assert "Stage 1" in renamed_agents and "Stage 2" in renamed_agents
+
+
+def test_agents_md_code_delegation_default_workers_keep_single_claude_spawn() -> None:
+    """Workers without an explicit dev_acp_flow flag (absent, empty, or
+    any value other than ``'codex_then_claude_review'``) must render the
+    default single-spawn Claude-Code-does-it-all flow.
+    """
+    default_agents = _render_template(
         "BOARD_AGENTS.md.j2",
         is_main_agent=False,
         is_board_lead=False,
         agent_name="QA-Unit",
         agent_id="qa-id",
+        # identity_dev_acp_flow intentionally omitted → default flow
     )
-    assert '"agentId": "claude"' in qa_agents, (
-        "non-PB workers must still see the Claude Code spawn payload"
+    assert '"agentId": "claude"' in default_agents
+    assert '"agentId": "codex"' not in default_agents, (
+        "absent flow flag must default to single-spawn Claude Code"
     )
-    assert '"agentId": "codex"' not in qa_agents, (
-        "non-PB workers must NOT be switched to the Codex-implementer "
-        "flow — that's specific to Programmer-Backend"
+    assert "Stage 1" not in default_agents
+
+    # Even with the literal agent_name "Programmer-Backend", an absent
+    # flow flag must NOT trigger the two-stage branch — the template
+    # must key on the flag, not the name.
+    pb_name_no_flag = _render_template(
+        "BOARD_AGENTS.md.j2",
+        is_main_agent=False,
+        is_board_lead=False,
+        agent_name="Programmer-Backend",
+        agent_id="pb-id",
+        # no identity_dev_acp_flow
     )
-    assert "Stage 1" not in qa_agents, (
-        "non-PB workers use a single-stage flow, not the two-stage PB flow"
+    assert '"agentId": "codex"' not in pb_name_no_flag, (
+        "template MUST NOT key on agent_name — absent flag means default flow"
     )
 
 

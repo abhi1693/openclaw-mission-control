@@ -284,7 +284,7 @@ identity, persona, or heartbeat files. Do NOT write code directly in
 your own session; delegate to ACP and let the harness produce the
 commit.
 
-{% if agent_name == "Programmer-Backend" %}
+{% if identity_dev_acp_flow == "codex_then_claude_review" %}
 **Two-stage workflow: Codex implements, Claude Code reviews.**
 
 ### Stage 1 — Implementation (Codex)

@@ -135,6 +135,32 @@ def _heartbeat_config(agent: Agent) -> dict[str, Any]:
     merged = DEFAULT_HEARTBEAT_CONFIG.copy()
     if isinstance(agent.heartbeat_config, dict):
         merged.update(agent.heartbeat_config)
+    # Architectural contract (per Codex round-2 review): the
+    # post-refactor templates (slim HEARTBEAT.md referencing AGENTS.md
+    # playbooks) assume the gateway injects the full bootstrap file set
+    # — AGENTS.md, SOUL.md, IDENTITY.md, TOOLS.md, USER.md, BOOTSTRAP.md,
+    # HEARTBEAT.md — into the heartbeat session context. That only
+    # happens when lightContext is False. In lightweight mode the
+    # gateway keeps ONLY HEARTBEAT.md (see pi-embedded-BYdcxQ5A.js:338
+    # applyContextModeFilter + runtime-BXvktGYG.js:1152) and the agent
+    # loses the playbook references, loses TOOLS.md's credential vars,
+    # and ends up emitting HEARTBEAT_OK without executing anything —
+    # the April 2026 incident documented in docs/NOTES.md. Warn
+    # operators who explicitly opt into the broken pairing so they
+    # either override the templates or flip the flag back.
+    if merged.get("lightContext") is True:
+        logger.warning(
+            "gateway.heartbeat.lightContext_true_with_full_context_templates "
+            "agent_id=%s name=%s — lightContext=True strips every bootstrap "
+            "file except HEARTBEAT.md, but the current templates assume full "
+            "context (AGENTS.md playbooks, TOOLS.md credentials). This "
+            "combination produced 22 heartbeat 'ok' events with zero nudges "
+            "in the April 2026 Supervisor incident. Either override "
+            "heartbeat_config.lightContext to False or make HEARTBEAT.md "
+            "fully self-contained for this agent.",
+            getattr(agent, "id", "?"),
+            getattr(agent, "name", "?"),
+        )
     return merged
 
 

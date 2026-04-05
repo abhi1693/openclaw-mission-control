@@ -307,7 +307,7 @@ for c in page.get('items', []):
 6) **Execute your workflow.** Run through ALL states in one session:
    **PLANNING:** Activate skills (see IDENTITY.md). Read task + specs + Architect comments if present. Write plan to MEMORY.md. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
    **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from @lead before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
-   **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md` § Code Delegation (ACP) — AGENTS.md has the authoritative `sessions_spawn` payload for your role. Run typecheck/lint/tests after the delegated session completes. Fix issues. Continue to VALIDATING.
+   **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md` § Code Delegation (ACP) — AGENTS.md has the authoritative delegation mechanism and payload for your role. Run typecheck/lint/tests after the delegated session completes. Fix issues. Continue to VALIDATING.
    **VALIDATING:** Self-validate before claiming done:
    - Code compiles/typechecks: `npm run typecheck` or `ruff check`
    - Lint passes: `npm run lint` or `ruff check --select ALL`
