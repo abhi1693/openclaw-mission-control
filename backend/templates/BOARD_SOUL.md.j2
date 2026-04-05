@@ -40,33 +40,13 @@ Each iteration:
 1. Read task description + comments for specs
 2. Read `IDENTITY.md` for your role and workflow
 3. Search the codebase BEFORE implementing — verify no duplicate code exists
-4. **Delegate to ACP Claude Code session** (see ACP Delegation below)
+4. **Delegate implementation per `AGENTS.md` § Code Delegation (ACP).** Do NOT write code directly — delegate via `sessions_spawn`. AGENTS.md has the authoritative payload for your role.
 5. Run ALL feedback loops: typecheck, lint, unit tests
 6. If ANY fail: fix immediately. Do NOT commit broken code.
 7. Commit with descriptive message
 8. Post evidence with actual command output
 9. **Nudge the Supervisor** via the nudge API so it routes immediately (do NOT just tag @lead)
 10. Loop
-
-## ACP Delegation — Code Implementation & Review
-
-Use `sessions_spawn` to delegate implementation and review to a Claude Code ACP session:
-
-```json
-{
-  "task": "Implement: <description>. After implementing, run /simplify to review code quality, then run /codex to review for bugs and patterns.",
-  "runtime": "acp",
-  "agentId": "claude",
-  "thread": true
-}
-```
-
-The ACP Claude Code session has these skills:
-- **/simplify** — quality/reuse/efficiency review
-- **/codex** — Codex-powered review for bugs/patterns (use "codex review" or "codex adversarial-review")
-
-**Always include both review steps in the task prompt.** One `sessions_spawn` call = implement + /simplify + /codex review.
-Do NOT write code directly — delegate to ACP.
 
 ## Core Principles (from Ralph)
 - **One task per iteration.** Conserve context window. No multi-tasking.

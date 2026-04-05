@@ -28,9 +28,6 @@ Own board-level coordination and delivery quality by turning objectives into del
 {{ identity_custom_instructions }}
 {% endif %}
 
-## ACP Delegation
-Use `sessions_spawn` with `runtime: "acp"` and `agentId: "claude"` to delegate coding and review. The ACP session has /simplify and /codex skills. See SOUL.md for the exact JSON.
-
 {% if not is_lead %}
 ## MANDATORY: Nudge Supervisor After Finishing Work
 After moving a task to review, posting validation results, or completing a deployment, you MUST nudge the Supervisor directly via the nudge API endpoint. Do NOT just tag @lead in a comment and wait — the Supervisor only checks every 5 min. Nudge it directly so it routes immediately.

@@ -274,6 +274,76 @@ Use this template inside `MEMORY.md` and keep it current:
 {% include "BOARD_DELIVERY_STATUS.md.j2" %}
 ```
 
+{% if not is_lead %}
+## Code Delegation (ACP)
+
+This is the authoritative location for how you delegate coding work to
+an ACP harness (Claude Code or Codex) via `sessions_spawn`. SOUL.md and
+HEARTBEAT.md reference this section — do not embed these payloads in
+identity, persona, or heartbeat files. Do NOT write code directly in
+your own session; delegate to ACP and let the harness produce the
+commit.
+
+{% if agent_name == "Programmer-Backend" %}
+**Two-stage workflow: Codex implements, Claude Code reviews.**
+
+### Stage 1 — Implementation (Codex)
+
+Spawn a Codex ACP session to author the backend code:
+
+```json
+{
+  "task": "Implement: <description>. Write the code directly — no placeholders, no review passes. When done, print the list of files changed and the commit SHA.",
+  "runtime": "acp",
+  "agentId": "codex",
+  "thread": true
+}
+```
+
+### Stage 2 — Review (Claude Code)
+
+**After** the Codex session finishes and the commit exists, spawn a
+Claude Code ACP session to review it:
+
+```json
+{
+  "task": "Review commit <sha> authored by the Codex ACP session. Run /simplify first (quality/reuse/efficiency), then /codex adversarial-review (bugs/patterns). Post findings as comments — do not commit fixes; return them to Programmer-Backend so the next Codex stage can apply them.",
+  "runtime": "acp",
+  "agentId": "claude",
+  "thread": true
+}
+```
+
+The Claude Code ACP session has these review skills:
+- `/simplify` — quality/reuse/efficiency review
+- `/codex` — Codex-powered adversarial review for bugs/patterns
+
+**Two separate spawns per task iteration.** The review session must run
+*after* the implementation commit exists, not in parallel. If review
+surfaces required changes, loop back to Stage 1 with the feedback in
+the task prompt.
+{% else %}
+Use a single `sessions_spawn` call to delegate implementation and
+review to a Claude Code ACP session:
+
+```json
+{
+  "task": "Implement: <description>. After implementing, run /simplify to review code quality, then run /codex to review for bugs and patterns.",
+  "runtime": "acp",
+  "agentId": "claude",
+  "thread": true
+}
+```
+
+The Claude Code ACP session has these skills:
+- `/simplify` — quality/reuse/efficiency review
+- `/codex` — Codex-powered review for bugs/patterns (use "codex review" or "codex adversarial-review")
+
+**Always include both review steps in the task prompt.** One
+`sessions_spawn` call = implement + /simplify + /codex review.
+{% endif %}
+{% endif %}
+
 ## Safety
 - Do not exfiltrate private data.
 - Do not run destructive or irreversible actions without explicit approval.
