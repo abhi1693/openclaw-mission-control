@@ -30,7 +30,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.core.logging import get_logger
 from app.services.mentions import extract_mentions, matches_agent_mention
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
-from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig, openclaw_call
 
 logger = get_logger(__name__)
 
@@ -166,6 +166,35 @@ async def _send_control_command(
         sent,
         failed,
         skipped,
+    )
+
+    # Disable/enable gateway heartbeats for board agents on pause/resume.
+    enable = not is_pause
+    for agent in pause_targets:
+        if not agent.heartbeat_config or not agent.heartbeat_config.get("every"):
+            continue
+        agent_key = f"mc-{agent.id}" if not agent.is_board_lead else f"lead-{board.id}"
+        try:
+            await openclaw_call(
+                "set-heartbeats",
+                {"agentId": agent_key, "enabled": enable},
+                config=config,
+            )
+        except Exception as exc:
+            logger.warning(
+                "board_memory.control_command.set_heartbeats_failed "
+                "command=%s agent=%s enabled=%s error=%s",
+                command,
+                agent.name,
+                enable,
+                str(exc),
+            )
+    logger.info(
+        "board_memory.control_command.heartbeats "
+        "command=%s board_id=%s enabled=%s",
+        command,
+        board.id,
+        enable,
     )
 
 
