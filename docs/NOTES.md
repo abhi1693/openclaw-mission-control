@@ -3,6 +3,11 @@ Review the tasks waiting for approval, use Chome MCP if necessary, the expected 
 
 Investigate why the agents aren't nudging each other as instructed 
 
+## 2026-04-04 — Heartbeat System Stabilized
+
+Root cause: fix-heartbeats.py unconditionally rewrote openclaw.json → 92 gateway restarts/day → workers never reached their heartbeat interval.
+Fix: idempotent write (compare before/after). Gateway stable 2+ hours. Recovery scripts disabled — OpenClaw handles it natively.
+
 
   │ mc-3c920c2a (Supervisor MC) │ FAIL   │ Missing IDENTITY.md                          │
   ├─────────────────────────────┼────────┼──────────────────────────────────────────────┤
