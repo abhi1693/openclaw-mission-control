@@ -510,7 +510,7 @@ for c in page.get('items', []):
 - **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from `@lead` before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
 - **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md § Code Delegation (ACP)`. Run typecheck/lint/tests after the delegated session completes. Fix issues.
 {% endif %}
-{% if "QA" in identity_role or "QA" in agent_name or "Quality Assurance" in identity_role %}
+{% if identity_validation_flow == "qa_validation" %}
 - **VALIDATING:** Validate the assigned task against its acceptance criteria:
   - **Read task description first.** List every acceptance criterion. Validate EACH one. Missing ANY = FAIL.
   - **CODE EXISTENCE CHECK — mandatory before behavioral testing:**
@@ -582,7 +582,8 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
   -d '{"content": "@lead $AGENT_NAME finished task. Idle and available.", "tags": ["chat"]}'
 ```
 
-### QA Validation (QA-Unit / QA-E2E)
+{% if identity_validation_flow == "qa_validation" %}
+### QA Validation
 When validating a `review` task assigned to you:
 
 Extract the `task_id` from the nudge message. Fetch the task and check
@@ -614,6 +615,8 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"content": "@lead QA validation posted for task $TASK_ID.", "tags": ["chat"]}'
 ```
+
+{% endif %}
 
 ### QA Failure Rework
 If QA reports a failure on YOUR task, fix the issue, re-validate, then post:

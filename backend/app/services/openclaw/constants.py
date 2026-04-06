@@ -105,6 +105,21 @@ EXTRA_IDENTITY_PROFILE_FIELDS = {
     # brittle because agent names are editable display fields. This
     # profile field survives renames.
     "dev_acp_flow": "identity_dev_acp_flow",
+    # Per-agent validation workflow selector. Controls which VALIDATING
+    # checklist and HARD RULES variant a worker renders.
+    # Valid values:
+    #   - ``"qa_validation"`` → QA-specific checklist (code-existence
+    #     check, acceptance-criterion validation, proof-format rules,
+    #     re-validate mandate) + QA HARD RULES ("re-validate with fresh
+    #     evidence"). Used for QA-Unit and QA-E2E currently.
+    #   - absent/default → developer checklist (typecheck, lint, tests,
+    #     build, deploy health) + developer HARD RULES ("implement real
+    #     changes and show a new commit").
+    #
+    # Replaces the brittle ``"QA" in identity_role or agent_name``
+    # heuristic which would false-positive on agents like "QA-Security"
+    # with role "Security Auditor".
+    "validation_flow": "identity_validation_flow",
 }
 
 DEFAULT_GATEWAY_FILES = frozenset(

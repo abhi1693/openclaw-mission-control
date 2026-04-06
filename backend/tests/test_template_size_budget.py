@@ -516,6 +516,10 @@ def test_soul_skips_oversized_directory_persona_preamble() -> None:
     assert "Ralph Loop" in soul_with_large, (
         "Ralph Loop section must still render even when persona is skipped"
     )
+    assert "skipped" in soul_with_large.lower(), (
+        "SOUL.md must include an operator-visible warning when persona is "
+        "skipped due to size — silent drops are hard to debug"
+    )
 
     small_persona = "# DevOps Engineer\n\nShort useful guidance."  # ~45 chars
     soul_with_small = _render_template(
@@ -543,6 +547,7 @@ def test_qa_agents_get_validation_specific_checklist_not_developer_checklist() -
             "agent_name": "QA-Unit",
             "agent_id": "qa-id",
             "identity_role": "Quality Assurance and Reverse-Mode Validator",
+            "identity_validation_flow": "qa_validation",
         },
     )
     assert "CODE EXISTENCE CHECK" in qa_agents, (
@@ -587,6 +592,7 @@ def test_qa_agents_get_qa_specific_hard_rules_in_identity() -> None:
         identity_role="Quality Assurance and Reverse-Mode Validator",
         identity_communication_style="methodical",
         identity_emoji=":gear:",
+        identity_validation_flow="qa_validation",
     )
     assert "re-validate" in qa_identity.lower(), (
         "QA HARD RULES must mention re-validation"
@@ -613,6 +619,33 @@ def test_qa_agents_get_qa_specific_hard_rules_in_identity() -> None:
     )
     assert "deploy to a different machine" in dev_identity.lower(), (
         "Developer workers must keep the deploy safety rule"
+    )
+
+
+def test_qa_discriminator_does_not_false_positive_on_name_containing_qa() -> None:
+    """Regression: an agent named 'QA-Security' with role 'Security
+    Auditor' must NOT get the QA validation checklist. The previous
+    heuristic (``'QA' in agent_name``) would false-positive on this.
+    The stable ``identity_validation_flow`` flag prevents that.
+    """
+    qa_security = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "QA-Security",
+            "agent_id": "sec-id",
+            "identity_role": "Security Auditor",
+            # No identity_validation_flow → should get developer checklist
+        },
+    )
+    assert "CODE EXISTENCE CHECK" not in qa_security, (
+        "QA-Security with Security Auditor role must NOT get QA checklist — "
+        "the discriminator must key on identity_validation_flow, not agent_name"
+    )
+    assert "npm run build" in qa_security or "ruff check" in qa_security, (
+        "QA-Security should get the default developer VALIDATING checklist"
     )
 
 

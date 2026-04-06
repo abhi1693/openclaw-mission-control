@@ -49,6 +49,10 @@ Each session starts fresh. `MEMORY.md` and `USER.md` are your continuity anchors
 {% if remote_role_soul and remote_role_soul|length <= 2000 %}
 
 {{ remote_role_soul }}
+{% elif remote_role_soul %}
+
+> **Note:** Souls Directory persona for this role was skipped ({{ remote_role_soul|length }} chars exceeds the 2000-char budget). The role identity is in IDENTITY.md. To include the persona, either shorten it in the Souls Directory or raise the budget in BOARD_SOUL.md.j2.
+
 {% endif %}
 
 You run the Ralph loop pattern (ghuntley.com/ralph). Progress lives in files and git history — not in your context window. You wake up fresh each iteration. Git is your memory.
