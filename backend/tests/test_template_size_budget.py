@@ -21,7 +21,7 @@ realistic context matching ``_build_context``.
 
 from __future__ import annotations
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import FileSystemLoader
 from pathlib import Path
 
 # Docs-backed per-file injection cap:
@@ -64,12 +64,18 @@ _REALISTIC_RENDER_CONTEXT = {
 
 
 def _render_template(name: str, **context: object) -> str:
-    env = Environment(
-        loader=FileSystemLoader(str(TEMPLATES_DIR)),
-        # Match production renderer settings from provisioning.py _template_env()
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
+    # Reuse the production Jinja environment so test renders match what
+    # the gateway receives (trim_blocks, lstrip_blocks, etc.). Override
+    # undefined to lenient because tests intentionally omit optional
+    # template variables to exercise default branches — production uses
+    # StrictUndefined but _build_context always provides all fields.
+    from jinja2 import Undefined
+
+    from app.services.openclaw.provisioning import _template_env
+
+    env = _template_env()
+    env.loader = FileSystemLoader(str(TEMPLATES_DIR))
+    env.undefined = Undefined  # lenient for tests
     return env.get_template(name).render(**context)
 
 

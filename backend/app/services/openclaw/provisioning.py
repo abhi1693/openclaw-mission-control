@@ -68,6 +68,9 @@ class ProvisionOptions:
     overwrite: bool = False
 
 
+WAKE_SKIP_CREDENTIALS_NOT_VISIBLE = "credentials_not_visible"
+
+
 @dataclass(frozen=True, slots=True)
 class LifecycleResult:
     """Outcome of ``OpenClawGatewayProvisioner.apply_agent_lifecycle``.
@@ -131,6 +134,9 @@ def _templates_root() -> Path:
     return _repo_root() / "templates"
 
 
+_lightcontext_warned_ids: set[object] = set()
+
+
 def _heartbeat_config(agent: Agent) -> dict[str, Any]:
     merged = DEFAULT_HEARTBEAT_CONFIG.copy()
     if isinstance(agent.heartbeat_config, dict):
@@ -149,18 +155,21 @@ def _heartbeat_config(agent: Agent) -> dict[str, Any]:
     # operators who explicitly opt into the broken pairing so they
     # either override the templates or flip the flag back.
     if merged.get("lightContext") is True:
-        logger.warning(
-            "gateway.heartbeat.lightContext_true_with_full_context_templates "
-            "agent_id=%s name=%s — lightContext=True strips every bootstrap "
-            "file except HEARTBEAT.md, but the current templates assume full "
-            "context (AGENTS.md playbooks, TOOLS.md credentials). This "
-            "combination produced 22 heartbeat 'ok' events with zero nudges "
-            "in the April 2026 Supervisor incident. Either override "
-            "heartbeat_config.lightContext to False or make HEARTBEAT.md "
-            "fully self-contained for this agent.",
-            getattr(agent, "id", "?"),
-            getattr(agent, "name", "?"),
-        )
+        agent_id = getattr(agent, "id", "?")
+        if agent_id not in _lightcontext_warned_ids:
+            _lightcontext_warned_ids.add(agent_id)
+            logger.warning(
+                "gateway.heartbeat.lightContext_true_with_full_context_templates "
+                "agent_id=%s name=%s — lightContext=True strips every bootstrap "
+                "file except HEARTBEAT.md, but the current templates assume full "
+                "context (AGENTS.md playbooks, TOOLS.md credentials). This "
+                "combination produced 22 heartbeat 'ok' events with zero nudges "
+                "in the April 2026 Supervisor incident. Either override "
+                "heartbeat_config.lightContext to False or make HEARTBEAT.md "
+                "fully self-contained for this agent.",
+                agent_id,
+                getattr(agent, "name", "?"),
+            )
     return merged
 
 
@@ -1403,7 +1412,7 @@ class OpenClawGatewayProvisioner:
             )
             return LifecycleResult(
                 wake_delivered=False,
-                wake_skip_reason="credentials_not_visible",
+                wake_skip_reason=WAKE_SKIP_CREDENTIALS_NOT_VISIBLE,
             )
 
         client_config = GatewayClientConfig(

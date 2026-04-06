@@ -272,7 +272,7 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
                 clear_confirm_token=clear_confirm_token,
             )
             locked.last_provision_error = None
-        elif wake and not lifecycle_result.wake_delivered:
+        elif wake:  # wake requested but not delivered (skipped)
             # Wake was requested but skipped. Do not mutate wake_attempts
             # or last_wake_sent_at — no wake happened. Do not mark the
             # agent online — the gateway could not answer the wake. Do
