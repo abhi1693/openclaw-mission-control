@@ -527,7 +527,7 @@ for c in page.get('items', []):
     print('---')
 "
 ```
-- If `is_blocked=True` → post comment `"Blocked — waiting on dependency. @lead"` and wait.
+- If `is_blocked=True` → post comment `"Blocked — waiting on dependency. @lead"` and nudge Supervisor. If still blocked on the NEXT heartbeat tick (30+ min), escalate: nudge Supervisor with `"ESCALATION: Task $TASK_ID blocked 30+ min on dependency. Please route/unblock."` Do NOT silently wait across multiple heartbeats — escalate if no progress.
 {% if identity_dev_acp_flow == "review_only" %}
 - If no spec or review target in description/comments → post `"@lead No spec/review target found. What should I review?"` and stop.
 {% else %}
