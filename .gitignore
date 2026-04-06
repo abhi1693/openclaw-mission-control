@@ -18,6 +18,9 @@ node_modules/
 # Worktrees
 .worktrees/
 
+# Pi coding agent — keep config, exclude session transcripts
+.pi/sessions/
+
 # Accidental literal "~" directories (e.g. when a configured path contains "~" but isn't expanded)
 backend/~/
 backend/coverage.*

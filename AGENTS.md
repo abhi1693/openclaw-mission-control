@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+## Domain Context
+This repo is **Mission Control (MC)** — the operator UI and API layer for an **OpenClaw agent gateway** running on separate infrastructure. The gateway runs a pool of long-lived AI agent sessions; MC provides the web UI, REST API, and template plumbing that operators use to supervise them. References to "heartbeats", "gateway", "sessions", "SOUL.md", "watchdog", or "board runs" are gateway-side concepts MC orchestrates. Start at `docs/README.md` for the full picture. Pi-specific operational guardrails (never restart gateway, template sync discipline, etc.) live in `.pi/APPEND_SYSTEM.md`.
+
 ## Project Structure & Module Organization
 - `backend/`: FastAPI service. Main app code lives in `backend/app/` with API routes in `backend/app/api/`, data models in `backend/app/models/`, schemas in `backend/app/schemas/`, and service logic in `backend/app/services/`.
 - `backend/migrations/`: Alembic migrations (`backend/migrations/versions/` for generated revisions).

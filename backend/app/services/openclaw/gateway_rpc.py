@@ -47,6 +47,7 @@ GatewayConnectMode = Literal["device", "control_ui"]
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
+# Updated for OpenClaw 2026.4.5 (3e72c03).
 GATEWAY_METHODS = [
     "health",
     "logs.tail",
@@ -66,17 +67,22 @@ GATEWAY_METHODS = [
     "config.apply",
     "config.patch",
     "config.schema",
+    "config.schema.lookup",
     "exec.approvals.get",
     "exec.approvals.set",
     "exec.approvals.node.get",
     "exec.approvals.node.set",
+    "exec.approval.get",
     "exec.approval.request",
     "exec.approval.resolve",
+    "exec.approval.waitDecision",
     "wizard.start",
     "wizard.next",
     "wizard.cancel",
     "wizard.status",
     "talk.mode",
+    "talk.config",
+    "talk.speak",
     "models.list",
     "agents.list",
     "agents.create",
@@ -89,26 +95,50 @@ GATEWAY_METHODS = [
     "skills.bins",
     "skills.install",
     "skills.update",
+    "skills.search",
+    "skills.detail",
     "update.run",
     "voicewake.get",
     "voicewake.set",
     "sessions.list",
     "sessions.preview",
+    "sessions.create",
     "sessions.patch",
     "sessions.reset",
     "sessions.delete",
     "sessions.compact",
+    "sessions.send",
+    "sessions.steer",
+    "sessions.abort",
+    "sessions.resolve",
+    "sessions.subscribe",
+    "sessions.unsubscribe",
+    "sessions.messages.subscribe",
+    "sessions.messages.unsubscribe",
     "last-heartbeat",
     "set-heartbeats",
     "wake",
+    "secrets.reload",
+    "secrets.resolve",
+    "doctor.memory.status",
+    "doctor.memory.dreamDiary",
+    "tools.catalog",
+    "tools.effective",
+    "gateway.identity.get",
     "node.pair.request",
     "node.pair.list",
     "node.pair.approve",
     "node.pair.reject",
     "node.pair.verify",
+    "node.pending.drain",
+    "node.pending.enqueue",
+    "node.pending.pull",
+    "node.pending.ack",
+    "node.canvas.capability.refresh",
     "device.pair.list",
     "device.pair.approve",
     "device.pair.reject",
+    "device.pair.remove",
     "device.token.rotate",
     "device.token.revoke",
     "node.rename",
@@ -124,6 +154,9 @@ GATEWAY_METHODS = [
     "cron.remove",
     "cron.run",
     "cron.runs",
+    "plugin.approval.request",
+    "plugin.approval.resolve",
+    "plugin.approval.waitDecision",
     "system-presence",
     "system-event",
     "send",
@@ -136,6 +169,7 @@ GATEWAY_METHODS = [
     "chat.send",
 ]
 
+# Updated for OpenClaw 2026.4.5 (3e72c03).
 GATEWAY_EVENTS = [
     "connect.challenge",
     "agent",
@@ -147,6 +181,9 @@ GATEWAY_EVENTS = [
     "health",
     "heartbeat",
     "cron",
+    "session.message",
+    "session.tool",
+    "sessions.changed",
     "node.pair.requested",
     "node.pair.resolved",
     "node.invoke.request",
@@ -155,6 +192,9 @@ GATEWAY_EVENTS = [
     "voicewake.changed",
     "exec.approval.requested",
     "exec.approval.resolved",
+    "plugin.approval.requested",
+    "plugin.approval.resolved",
+    "update.available",
 ]
 
 GATEWAY_METHODS_SET = frozenset(GATEWAY_METHODS)
@@ -579,3 +619,77 @@ async def ensure_session(
     if label:
         params["label"] = label
     return await openclaw_call("sessions.patch", params, config=config)
+
+
+# ---------------------------------------------------------------------------
+# 2026.4.5 helpers
+# ---------------------------------------------------------------------------
+
+
+async def steer_session(
+    message: str,
+    *,
+    session_key: str,
+    config: GatewayConfig,
+    deliver: bool = False,
+) -> object:
+    """Send a message with interruptIfActive — interrupts a stuck agent run."""
+    params: dict[str, Any] = {
+        "sessionKey": session_key,
+        "message": message,
+        "deliver": deliver,
+        "interruptIfActive": True,
+        "idempotencyKey": str(uuid4()),
+    }
+    return await openclaw_call("sessions.steer", params, config=config)
+
+
+async def reload_secrets(*, config: GatewayConfig) -> object:
+    """Re-resolve secret references and swap the runtime snapshot."""
+    return await openclaw_call("secrets.reload", config=config)
+
+
+async def create_session(
+    *,
+    config: GatewayConfig,
+    agent_id: str | None = None,
+    label: str | None = None,
+    model: str | None = None,
+    parent_session_key: str | None = None,
+    message: str | None = None,
+) -> object:
+    """Create a new session, optionally triggering a run with an initial message."""
+    params: dict[str, Any] = {}
+    if agent_id:
+        params["agentId"] = agent_id
+    if label:
+        params["label"] = label
+    if model:
+        params["model"] = model
+    if parent_session_key:
+        params["parentSessionKey"] = parent_session_key
+    if message:
+        params["message"] = message
+    return await openclaw_call("sessions.create", params, config=config)
+
+
+async def get_tools_effective(
+    session_key: str,
+    *,
+    config: GatewayConfig,
+) -> object:
+    """Get the effective tool inventory for a session."""
+    return await openclaw_call(
+        "tools.effective", {"sessionKey": session_key}, config=config
+    )
+
+
+async def get_memory_status(
+    agent_id: str,
+    *,
+    config: GatewayConfig,
+) -> object:
+    """Get memory/embedding/dreaming status for an agent."""
+    return await openclaw_call(
+        "doctor.memory.status", {"agentId": agent_id}, config=config
+    )

@@ -448,7 +448,7 @@ If not found, read and follow `$SHARED_WORKSPACE/docs/synthesis-protocol.md`.
 
 ### Enforcing the Ralph Loop
 Workers (PF, PB, Architect, QA-Unit, QA-E2E, DevOps) run the Ralph loop. You enforce it on every health scan:
-1. **ACP delegation**: agents must delegate per `AGENTS.md § Code Delegation`. If an agent writes code directly: `"@agent Delegate per AGENTS.md § Code Delegation. Do not write code directly."`
+1. **Code Delegation**: agents must follow their assigned workflow per `AGENTS.md § Code Delegation`. Agents with ACP workflows must delegate — if they write code directly: `"@agent Delegate per AGENTS.md § Code Delegation."` Agents with `direct` workflow implement in their own session — that is correct behavior, not a violation.
 2. **Feedback loops**: every iteration must show typecheck + lint + test output. If missing: `"@agent Where are the feedback loop results?"`
 3. **Code review**: every implementation must include /simplify + /codex. If missing: `"@agent Code review is mandatory."`
 4. **Self-validation**: deliverable must exist and work (not empty, not placeholder). If incomplete: `"@agent Deliverable incomplete. Fix before claiming done."`
@@ -457,7 +457,7 @@ Workers (PF, PB, Architect, QA-Unit, QA-E2E, DevOps) run the Ralph loop. You enf
 ### Squad Capability Matrix
 | Agent | Role | ACP Workflow | Capabilities |
 |---|---|---|---|
-| Programmer-Frontend | Frontend Dev | Claude Code (single-stage) | React 19, TypeScript, Tailwind, Radix UI |
+| Programmer-Frontend | Frontend Dev | Direct (Claude model) | React 19, TypeScript, Tailwind, Radix UI |
 | Programmer-Backend | Backend Dev | Codex implements, Claude Code reviews | FastAPI, Python, API, database |
 | Architect | System Architect | Review-only (no implementation) | Specs, API contracts, system design, code review |
 | QA-Unit | Unit QA | QA validation flow | Unit tests, reverse-mode validation, clean room |
@@ -543,7 +543,11 @@ for c in page.get('items', []):
 6) **Execute your workflow state machine** — run through ALL states in one session:
 - **PLANNING:** Activate skills (see `IDENTITY.md`). Read task + specs + Architect comments if present. Write plan to `MEMORY.md`. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
 - **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from `@lead` before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
+{% if identity_dev_acp_flow == "direct" %}
+- **IMPLEMENTING:** Inspect current state before coding. Implement directly per `AGENTS.md § Code Delegation`. Run typecheck/lint/tests after each change. Fix issues.
+{%- else %}
 - **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md § Code Delegation (ACP)`. Run typecheck/lint/tests after the delegated session completes. Fix issues.
+{%- endif %}
 {% endif %}
 {% if identity_validation_flow == "qa_validation" %}
 - **VALIDATING:** Validate the assigned task against its acceptance criteria:
@@ -705,16 +709,53 @@ After moving a task to review, posting validation results, or completing a deplo
 {% endif %}
 - Fabricating evidence (fake build output, fake test results) is a critical violation.
 
+{% if identity_dev_acp_flow == "direct" %}
+## Code Delegation
+
+This is the authoritative location for how you produce code.
+
+{% else %}
 ## Code Delegation (ACP)
 
 This is the authoritative location for how you delegate coding work to
 an ACP harness (Claude Code or Codex) via `sessions_spawn`. SOUL.md and
 HEARTBEAT.md reference this section — do not embed these payloads in
-identity, persona, or heartbeat files. Do NOT write code directly in
-your own session; delegate to ACP and let the harness produce the
-commit.
+identity, persona, or heartbeat files.
+{% endif %}
+{%- if identity_dev_acp_flow == "direct" %}
+**Direct implementation.** You write code directly in your own session
+using your model's native tool access (exec, file read/write). No ACP
+sub-sessions needed.
 
-{%- if identity_dev_acp_flow == "review_only" %}
+### Workflow
+1. **Implement** the task. Write real code — no placeholders, no stubs.
+2. **Feedback loop** after each change: run typecheck, lint, tests, build.
+   Fix issues before proceeding.
+3. **Commit** with a clear message. Post files changed + commit SHA as
+   a task comment.
+4. **Code review** — run directly from the workspace:
+   ```bash
+   # Quality/reuse/efficiency review (Claude Code skill — launches 3 review agents)
+   printf '/simplify' | claude -p --dangerously-skip-permissions 2>/dev/null
+   # Adversarial bug/pattern review (Codex CLI directly)
+   printf 'Adversarial review of recent changes. Look for bugs, logic errors, security issues.' | codex exec --sandbox read-only - 2>/dev/null
+   # Frontend-specific review (Claude Code skill — when UI work is involved)
+   printf '/frontend-review' | claude -p --dangerously-skip-permissions 2>/dev/null
+   ```
+   Fix any real issues found. Skip false positives.
+5. **Deploy/validate** if applicable (build output, browser check, etc.).
+
+**Available tools:**
+- `claude -p --dangerously-skip-permissions` — Claude Code CLI with skills:
+  - `/simplify` — code reuse, quality, efficiency review
+  - `/frontend-review` — preflight + final review audit
+  - `/frontend-architecture` — planning/foundation for greenfield UI
+  - `/frontend-aesthetics` — typography, color, motion enforcement
+- `codex exec --sandbox read-only` — Codex CLI directly for adversarial review
+
+Do NOT spawn ACP sessions. Do NOT use `sessions_spawn`. Run CLI tools
+directly via exec.
+{%- elif identity_dev_acp_flow == "review_only" %}
 **Review-only workflow.** You do NOT implement production code. Use ACP for spec assistance and code review only.
 
 ### Code Review
@@ -764,7 +805,7 @@ The Claude Code ACP session has these skills:
 **Always include both review steps in the task prompt.** One
 `sessions_spawn` call = implement + /simplify + /codex review.
 {%- endif %}
-
+{% if identity_dev_acp_flow != "direct" %}
 ### ACP Session Timeout
 ACP sessions can die silently (gateway restart, model timeout, network
 error). If your ACP session has not returned output within **30
@@ -777,6 +818,7 @@ minutes** of spawning, treat it as dead:
 Check the age of your ACP session on each heartbeat. If you posted
 "waiting on ACP session" on the previous tick and no output arrived,
 the session is likely dead.
+{% endif %}
 {% endif %}
 
 ## Safety

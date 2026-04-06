@@ -3,6 +3,42 @@ Review the tasks waiting for approval, use Chome MCP if necessary, the expected 
 
 Investigate why the agents aren't nudging each other as instructed
 
+## 2026-04-06 — Direct Flow + OpenClaw 2026.4.5 Upgrade + Gateway RPC Expansion
+
+### PF Direct Implementation Flow
+- PF switched from ACP delegation to **direct implementation** (`dev_acp_flow = "direct"`). Primary model changed from `openai-codex/gpt-5.4` to `anthropic/claude-sonnet-4-6`.
+- Root cause: 3 dead ACP sessions in one day (2394ddbb, 2db3cb97, and a predecessor). Each died silently and PF waited hours posting "still waiting for ACP run" every heartbeat tick.
+- Direct flow: PF implements code in its own session, runs reviews via CLI (`printf '/simplify' | claude -p --dangerously-skip-permissions`, `codex exec --sandbox read-only`).
+- Template changes: new `"direct"` branch in Code Delegation section, conditional IMPLEMENTING step, ACP Session Timeout excluded for direct flow, section title `## Code Delegation` (no `(ACP)` suffix).
+- Agent-level `auth-profiles.json` required manual `anthropic:manual` credential injection — MC provisioning doesn't manage this file (architectural gap).
+
+### OpenClaw 2026.4.5 Upgrade (from 2026.4.2)
+- **28 new RPC methods** added to `gateway_rpc.py`: `sessions.create`, `sessions.steer`, `sessions.send`, `sessions.subscribe`, `secrets.reload`, `secrets.resolve`, `tools.catalog`, `tools.effective`, `doctor.memory.status`, plus node/plugin/config methods.
+- **6 new events**: `session.message`, `session.tool`, `sessions.changed`, `plugin.approval.*`, `update.available`.
+- **Helper functions** added: `steer_session()` (interrupt stuck agents), `reload_secrets()`, `create_session()`, `get_tools_effective()`, `get_memory_status()`.
+- Key 2026.4.5 fix: `config.patch` to heartbeat fields now **auto-restarts the heartbeat timer** — the dead-timer bug that required gateway restart is fixed at gateway level.
+- ACPX runtime embedded in gateway (no separate ACP CLI hop). ACP validated working via `sessions.create` test.
+
+### Dead Heartbeat Timer Recovery
+- Changing PF primary model to `anthropic/claude-sonnet-4-6` without agent-level auth killed PF's heartbeat timer. Gateway silently dropped the timer on auth failure.
+- `touch openclaw.json`, `sync+reset_sessions`, model revert — none restarted the dead timer.
+- **Fix**: `set-heartbeats {enabled: false}` then `{enabled: true}` via gateway RPC restarts the timer without gateway restart.
+- PB, DevOps, Gateway Agent also had dead timers after gateway restart — same toggle fix applied.
+
+### bootstrapMaxChars Persistence Fix
+- `bootstrapMaxChars` was set as a top-level key in `openclaw.json` 3 times and dropped each time on config reload.
+- Root cause: top-level `bootstrapMaxChars` is not a recognized schema key. Gateway drops unknown top-level keys on serialization.
+- Correct path: `agents.defaults.bootstrapMaxChars` (confirmed via `openclaw config schema`). Set via `openclaw config set agents.defaults.bootstrapMaxChars 23000`. Now persists across reloads.
+
+### Deployment Regression on .63
+- Build `index-DsOspM2l.js` (828KB) deployed to .63 at 19:22 overwrote the org-management build `index-oHZtLfst.js` (1.12MB). QA-E2E confirmed FAIL — org management features missing.
+- PF deployed newer build `index-qNN-yFYP.js` with Board CRUD changes but OrgSwitcher auth guard regressed (401 on every page load).
+- Operator scope decisions posted: fix OrgSwitcher auth guard (1-line fix), defer phone invite + invite status + profile edit to Phase 2.
+
+### Task Status (end of session)
+- 87/90 tasks done. 3 remaining: Phase 1C (review, needs auth guard fix), Phase 1D (in_progress, PF implementing directly), Phase 1 umbrella (tracker).
+- All 8 agents online and heartbeating. System pipeline working: PF implements → QA-E2E validates → Supervisor routes.
+
 ## 2026-04-05/06 — Template Architecture Refactor + Wake Contract Hardening + Memory Fixes
 
 ### Investigation: QA-E2E + Architect stuck offline
@@ -118,4 +154,15 @@ Fix: idempotent write (compare before/after). Gateway stable 2+ hours. Recovery 
    The Supervisor side is now working as designed. The remaining gap is the worker agents' responsiveness to nudges.
 
                                                                                                                                                                     
-                                                                                                                                                                                 You run the Ralph loop pattern (ghuntley.com/ralph). Progress lives in files and git history — not in your context window. You wake up fresh each iteration. Git is your memory.
+                                                                                                                                                                                 
+                                                                                                                                                                                You run the Ralph loop pattern (ghuntley.com/ralph). Progress lives in files and git history — not in your context window. You wake up fresh each iteration. Git is your memory.
+
+                                                                                                                                                                                  ┌───────────────┬─────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐                  
+  │     Agent     │ isolatedSession │                                                                                   Why                                                                                    │                
+  ├───────────────┼─────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Supervisor    │ false           │ Continuous context — sees prior routing decisions, useful for incremental board-state tracking. Saves ~325K chars/hour.                                                  │
+  ├───────────────┼─────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ All 6 workers │ true            │ Clean slate each tick — context-switch between tasks, prior heartbeat history is noise. Model gets fresh bootstrap files every tick (the cost is worth the reliability). │                  
+  └───────────────┴─────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+
+All tasks are stuck, Phase 1C: Organization management UI (frontend) is to review for a long time. What's happening? These tasks are there for almost three days   
