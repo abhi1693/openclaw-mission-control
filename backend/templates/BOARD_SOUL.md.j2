@@ -46,7 +46,7 @@ Each session starts fresh. `MEMORY.md` and `USER.md` are your continuity anchors
 {% else %}
 {% set remote_role_soul = directory_role_soul_markdown | default("") | trim %}
 # SOUL.md — Ralph Loop
-{% if remote_role_soul %}
+{% if remote_role_soul and remote_role_soul|length <= 2000 %}
 
 {{ remote_role_soul }}
 {% endif %}

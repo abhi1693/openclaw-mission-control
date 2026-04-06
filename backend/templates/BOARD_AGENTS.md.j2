@@ -500,19 +500,32 @@ for c in page.get('items', []):
 - **PLANNING:** Activate skills (see `IDENTITY.md`). Read task + specs + Architect comments if present. Write plan to `MEMORY.md`. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
 - **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from `@lead` before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
 - **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md § Code Delegation (ACP)`. Run typecheck/lint/tests after the delegated session completes. Fix issues.
+{% if "QA" in identity_role or "QA" in agent_name or "Quality Assurance" in identity_role %}
+- **VALIDATING:** Validate the assigned task against its acceptance criteria:
+  - **Read task description first.** List every acceptance criterion. Validate EACH one. Missing ANY = FAIL.
+  - **CODE EXISTENCE CHECK — mandatory before behavioral testing:**
+    1. `git log --oneline -1 -- <modified_file>` — must show a recent commit
+    2. `grep -c '<key_function_or_change>' <file>` — must return > 0
+    If either returns empty or 0, report FAIL immediately.
+  - **QA-E2E: browser/Playwright is REQUIRED for UI/frontend tasks.** Bundle grep is NEVER valid evidence.
+  - **Re-validate every time.** Previous PASS/FAIL is irrelevant.
+  - **PROOF FORMAT:** every evidence MUST show `$ command` + raw output. Cannot show output = INCONCLUSIVE. Fabricated evidence = FAIL.
+  If validation passes → step 7 (post results). If ANY criterion fails → report FAIL with specific failing items.
+{% else %}
 - **VALIDATING:** Self-validate before claiming done:
   - Code compiles/typechecks (`npm run typecheck` or `ruff check`)
   - Lint passes (`npm run lint` or `ruff check --select ALL`)
   - Tests pass (`npm test` or `pytest`) — zero tests is NOT acceptable
   - No placeholder data: `grep -rn "mock\|fake\|dummy\|placeholder\|TODO.*production\|sample data" . --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | grep -v node_modules | grep -v __pycache__ | head -10` — if any match, fix before moving to review
   - Frontend: build passes (`npm run build`), app renders real data
-  - **Browser validation — REQUIRED for frontend/UI tasks:** use `browser` tool (navigate, screenshot, snapshot) or `npx playwright test`. Do NOT move to review without real browser evidence. Bundle grep is NOT evidence.
+  - **Browser validation — REQUIRED for frontend/UI tasks:** use `browser` tool or `npx playwright test`. Do NOT move to review without real browser evidence.
   - **Import resolution:** run tests, check for `Cannot find module` / `ModuleNotFoundError`
   - **Tests ran from YOUR workspace:** `pwd` must match `$WORKSPACE_PATH` from `TOOLS.md`
   - Backend/API: endpoints return real data from database, not hardcoded test data
   - **Deployment tasks:** process health (`systemctl status`), URL responds, correct port from `TOOLS.md`
   - Detailed steps: `$SHARED_WORKSPACE/docs/validation-cookbook.md`
   If ALL pass → step 7. If ANY fail → back to IMPLEMENTING.
+{% endif %}
 - **REFINE OR PIVOT:** If QA rejects twice on the same issue, decide refine or pivot. Post the decision.
 
 Do NOT stop between states unless blocked.

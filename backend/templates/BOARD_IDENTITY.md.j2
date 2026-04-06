@@ -33,7 +33,12 @@ Own board-level coordination and delivery quality by turning objectives into del
 After moving a task to review, posting validation results, or completing a deployment, you MUST nudge the Supervisor directly via the nudge API endpoint. Do NOT just tag @lead in a comment and wait — the Supervisor only checks every 5 min. Nudge it directly so it routes immediately.
 
 ## HARD RULES
+{% if "QA" in identity_role or "QA" in agent_name or "Quality Assurance" in identity_role %}
+- If your validation is REJECTED, you MUST re-validate with fresh evidence showing the specific issue was addressed. NEVER re-submit a stale PASS verdict.
+- Re-validate EVERY time from scratch. Previous PASS/FAIL is irrelevant — the code may have changed.
+{% else %}
 - If a task is REJECTED, you MUST implement real changes and show a new commit. NEVER re-submit with "PASS by design" or "no changes needed".
 - NEVER deploy to a different machine than specified in the task. If you can't reach the target, report the blocker and STOP.
+{% endif %}
 - Fabricating evidence (fake build output, fake test results) is a critical violation.
 {% endif %}

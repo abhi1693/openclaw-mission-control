@@ -496,6 +496,126 @@ def test_soul_ralph_loop_step4_is_role_aware() -> None:
     )
 
 
+def test_soul_skips_oversized_directory_persona_preamble() -> None:
+    """Souls Directory can return huge persona preambles (75+ lines of
+    generic philosophy). SOUL.md must cap the injection to avoid wasting
+    bootstrap tokens on content that has no operational value. Preambles
+    over 2000 chars are skipped.
+    """
+    large_persona = "# Role Persona\n\n" + "Philosophy line.\n" * 200  # ~3400 chars
+    soul_with_large = _render_template(
+        "BOARD_SOUL.md.j2",
+        agent_name="DevOps",
+        is_board_lead=False,
+        is_main_agent=False,
+        directory_role_soul_markdown=large_persona,
+    )
+    assert "Philosophy line" not in soul_with_large, (
+        "SOUL.md must skip Souls Directory persona over 2000 chars"
+    )
+    assert "Ralph Loop" in soul_with_large, (
+        "Ralph Loop section must still render even when persona is skipped"
+    )
+
+    small_persona = "# DevOps Engineer\n\nShort useful guidance."  # ~45 chars
+    soul_with_small = _render_template(
+        "BOARD_SOUL.md.j2",
+        agent_name="DevOps",
+        is_board_lead=False,
+        is_main_agent=False,
+        directory_role_soul_markdown=small_persona,
+    )
+    assert "Short useful guidance" in soul_with_small, (
+        "Small Souls Directory personas (<= 2000 chars) must still render"
+    )
+
+
+def test_qa_agents_get_validation_specific_checklist_not_developer_checklist() -> None:
+    """QA agents (QA-Unit, QA-E2E) should get a validation-focused
+    VALIDATING checklist, not the developer build/deploy/lint checklist.
+    """
+    qa_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "QA-Unit",
+            "agent_id": "qa-id",
+            "identity_role": "Quality Assurance and Reverse-Mode Validator",
+        },
+    )
+    assert "CODE EXISTENCE CHECK" in qa_agents, (
+        "QA VALIDATING must include code-existence check"
+    )
+    assert "npm run build" not in qa_agents, (
+        "QA agents must NOT get developer build checks (npm run build)"
+    )
+    assert "systemctl status" not in qa_agents, (
+        "QA agents must NOT get deployment health checks"
+    )
+
+    # Non-QA worker keeps developer checklist
+    dev_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Programmer-Frontend",
+            "agent_id": "pf-id",
+            "identity_role": "Frontend Developer",
+        },
+    )
+    assert "npm run build" in dev_agents, (
+        "Developer workers must keep the build check in VALIDATING"
+    )
+    assert "systemctl status" in dev_agents, (
+        "Developer workers must keep the deployment health check"
+    )
+
+
+def test_qa_agents_get_qa_specific_hard_rules_in_identity() -> None:
+    """QA agents should see 're-validate with fresh evidence' in HARD
+    RULES, not 'implement real changes and show a new commit'.
+    """
+    qa_identity = _render_template(
+        "BOARD_IDENTITY.md.j2",
+        agent_name="QA-Unit",
+        agent_id="qa-id",
+        is_board_lead=False,
+        identity_role="Quality Assurance and Reverse-Mode Validator",
+        identity_communication_style="methodical",
+        identity_emoji=":gear:",
+    )
+    assert "re-validate" in qa_identity.lower(), (
+        "QA HARD RULES must mention re-validation"
+    )
+    assert "implement real changes" not in qa_identity.lower(), (
+        "QA agents must NOT see developer-centric 'implement real changes'"
+    )
+    assert "Fabricating evidence" in qa_identity, (
+        "Fabrication rule must apply to ALL agents including QA"
+    )
+
+    # Non-QA worker keeps developer hard rules
+    dev_identity = _render_template(
+        "BOARD_IDENTITY.md.j2",
+        agent_name="Programmer-Backend",
+        agent_id="pb-id",
+        is_board_lead=False,
+        identity_role="Backend Developer",
+        identity_communication_style="direct",
+        identity_emoji=":gear:",
+    )
+    assert "implement real changes" in dev_identity.lower(), (
+        "Developer workers must keep the developer HARD RULES"
+    )
+    assert "deploy to a different machine" in dev_identity.lower(), (
+        "Developer workers must keep the deploy safety rule"
+    )
+
+
 def test_soul_and_heartbeat_reference_agents_md_for_delegation() -> None:
     """SOUL.md's Ralph loop and HEARTBEAT.md's IMPLEMENTING state must
     reference AGENTS.md as the source of delegation instructions,
