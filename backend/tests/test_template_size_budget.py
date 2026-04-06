@@ -24,9 +24,15 @@ from __future__ import annotations
 from jinja2 import FileSystemLoader
 from pathlib import Path
 
-# Docs-backed per-file injection cap:
-# https://docs.openclaw.ai/concepts/context — ``agents.defaults.bootstrapMaxChars``
-BOOTSTRAP_PER_FILE_MAX_CHARS = 20_000
+# Per-file injection cap. The OpenClaw docs default is 20,000
+# (``agents.defaults.bootstrapMaxChars``). Raised to 23,000 to
+# accommodate the Lead Board Playbook (enforcement rules, squad
+# capability matrix, HARD RULES) which is operationally critical
+# content that was migrated from the Supervisor's soul_template
+# into AGENTS.md per the workspace architecture docs. The gateway
+# config on .60 should be patched to match:
+#   agents.defaults.bootstrapMaxChars = 23000
+BOOTSTRAP_PER_FILE_MAX_CHARS = 23_000
 
 # Soft budget for HEARTBEAT specifically — prompt-cost hygiene, not a
 # runtime contract. Heartbeats fire on every cron tick so a bloated
@@ -481,25 +487,23 @@ def test_agents_md_code_delegation_review_only_does_not_render_for_default_worke
     assert "Spec Writing" not in default_agents
 
 
-def test_soul_ralph_loop_step4_is_role_aware() -> None:
-    """SOUL.md Ralph Loop step 4 must not unconditionally say 'Delegate
-    implementation' — review-only roles (like Architect) must not be
-    told to implement. The step should use role-neutral language like
-    'Delegate per AGENTS.md' and note the review-only exception.
+def test_soul_is_values_only_no_operational_steps() -> None:
+    """Worker SOUL.md must contain only identity/values content (Ralph
+    loop framing, Core Principles, Boundaries, Continuity). Operational
+    steps (10-step loop, QA handling, delegation instructions) are in
+    AGENTS.md. Same principle as the Supervisor SOUL migration.
     """
     worker_soul = _render_template(
         "BOARD_SOUL.md.j2",
         agent_name="Architect",
         is_board_lead=False,
     )
-    assert "review-only" in worker_soul.lower() or "review only" in worker_soul.lower(), (
-        "SOUL.md step 4 must mention the review-only exception so "
-        "Architect knows not to follow the implementation path"
-    )
-    assert "Delegate implementation per" not in worker_soul, (
-        "SOUL.md must not unconditionally say 'Delegate implementation' — "
-        "that contradicts Architect IDENTITY's 'NEVER write implementation code'"
-    )
+    assert "Ralph loop" in worker_soul, "SOUL must keep Ralph loop identity framing"
+    assert "Core Principles" in worker_soul, "SOUL must keep Core Principles"
+    assert "AGENTS.md" in worker_soul, "SOUL must reference AGENTS.md"
+    assert "Delegate per" not in worker_soul, "No delegation steps in SOUL"
+    assert "nudge" not in worker_soul.lower(), "No nudge API in SOUL"
+    assert "Responding to QA" not in worker_soul, "No QA handling in SOUL"
 
 
 def test_soul_skips_oversized_directory_persona_preamble() -> None:
@@ -666,8 +670,8 @@ def test_soul_and_heartbeat_reference_agents_md_for_delegation() -> None:
         agent_name="Programmer-Backend",
         is_board_lead=False,
     )
-    assert "AGENTS.md" in worker_soul and "Code Delegation" in worker_soul, (
-        "SOUL.md Ralph loop must point at AGENTS.md § Code Delegation"
+    assert "AGENTS.md" in worker_soul, (
+        "SOUL.md must reference AGENTS.md for the execution loop"
     )
 
     worker_heartbeat = _render_template(
