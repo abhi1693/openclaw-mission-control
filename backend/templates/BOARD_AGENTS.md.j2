@@ -764,6 +764,19 @@ The Claude Code ACP session has these skills:
 **Always include both review steps in the task prompt.** One
 `sessions_spawn` call = implement + /simplify + /codex review.
 {%- endif %}
+
+### ACP Session Timeout
+ACP sessions can die silently (gateway restart, model timeout, network
+error). If your ACP session has not returned output within **30
+minutes** of spawning, treat it as dead:
+1. Do NOT keep waiting — the session will not recover.
+2. Spawn a fresh `sessions_spawn` with the same task description.
+3. Post a comment: `"ACP session <id> timed out after 30 min. Respawning."`
+4. If the second spawn also dies, report the blocker to `@lead`.
+
+Check the age of your ACP session on each heartbeat. If you posted
+"waiting on ACP session" on the previous tick and no output arrived,
+the session is likely dead.
 {% endif %}
 
 ## Safety
