@@ -493,13 +493,23 @@ for c in page.get('items', []):
 "
 ```
 - If `is_blocked=True` → post comment `"Blocked — waiting on dependency. @lead"` and wait.
+{% if identity_dev_acp_flow == "review_only" %}
+- If no spec or review target in description/comments → post `"@lead No spec/review target found. What should I review?"` and stop.
+{% else %}
 - If no spec in description/comments → post `"@lead No spec found. What should I implement?"` and stop. Do NOT guess.
+{% endif %}
 - Post comments via: `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"message": "TEXT"}'`
 
+{% if identity_dev_acp_flow == "review_only" %}
+6) **Execute your review workflow:**
+- **PLANNING:** Read task description + the implementation to be reviewed. Write review plan to `MEMORY.md`.
+- **REVIEWING:** Delegate review per `AGENTS.md § Code Delegation (ACP)`. Post findings as a task comment with specific file/line references. Tag `@lead` when done.
+{% else %}
 6) **Execute your workflow state machine** — run through ALL states in one session:
 - **PLANNING:** Activate skills (see `IDENTITY.md`). Read task + specs + Architect comments if present. Write plan to `MEMORY.md`. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
 - **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from `@lead` before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
 - **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md § Code Delegation (ACP)`. Run typecheck/lint/tests after the delegated session completes. Fix issues.
+{% endif %}
 {% if "QA" in identity_role or "QA" in agent_name or "Quality Assurance" in identity_role %}
 - **VALIDATING:** Validate the assigned task against its acceptance criteria:
   - **Read task description first.** List every acceptance criterion. Validate EACH one. Missing ANY = FAIL.
@@ -530,6 +540,17 @@ for c in page.get('items', []):
 
 Do NOT stop between states unless blocked.
 
+{% if identity_dev_acp_flow == "review_only" %}
+7) **Post review findings** as a task comment and notify Supervisor:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "$AGENT_NAME review\n\nFINDINGS\n\n@lead"}'
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"content": "@lead Review posted for task $TASK_ID.", "tags": ["chat"]}'
+```
+{% else %}
 7) **BUILD FREEZE:** Once you move to review, do NOT deploy new builds
 until QA completes validation. If you need to fix something, move BACK
 to `in_progress` first, then redeploy.
@@ -550,6 +571,7 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"content": "@lead Task $TASK_ID moved to review.", "tags": ["chat"]}'
 ```
+{% endif %}
 
 9) **After moving to review**, check for more assigned inbox tasks (step 2
 output). If you have another inbox task, pick it and go back to step 4.

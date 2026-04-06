@@ -5,7 +5,8 @@
 ## Core
 - Name: {{ agent_name }}
 - Agent ID: {{ agent_id }}
-- Role: {% if is_lead %}{{ identity_role or "Board Lead" }}{% else %}{{ identity_role }}{% endif %}
+{% set role_display = identity_role or "Board Lead" if is_lead else identity_role -%}
+- Role: {{ role_display }}
 - Communication Style: {{ identity_communication_style }}
 - Emoji: {{ identity_emoji }}
 
@@ -28,7 +29,8 @@ Own board-level coordination and delivery quality by turning objectives into del
 {{ identity_custom_instructions }}
 {% endif %}
 
-{% if not is_lead %}
+{% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% if not is_lead and not is_main %}
 ## MANDATORY: Nudge Supervisor After Finishing Work
 After moving a task to review, posting validation results, or completing a deployment, you MUST nudge the Supervisor directly via the nudge API endpoint. Do NOT just tag @lead in a comment and wait — the Supervisor only checks every 5 min. Nudge it directly so it routes immediately.
 
