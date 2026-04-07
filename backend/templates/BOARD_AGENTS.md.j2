@@ -649,9 +649,9 @@ If either returns empty or 0, report FAIL immediately. Do NOT proceed to behavio
 **Re-validate EVERY time.** Previous PASS/FAIL is irrelevant.
 **PROOF FORMAT:** every evidence MUST show `$ command` + raw output. Cannot show output = INCONCLUSIVE. Fabricated evidence = FAIL.
 
-**RE-VALIDATION GATE:** After a FAIL, refuse re-validation unless a `DIAGNOSIS for $TASK_ID:` comment exists since your last FAIL. No diagnosis = `"BLOCKED: no DIAGNOSIS posted. @lead"`.
+**RE-VALIDATION GATE:** After a FAIL, check task comments for a `DIAGNOSIS for` comment from the developer that includes `Total bugs found:` and at least one `file:` reference. If missing or incomplete: `"BLOCKED: no valid DIAGNOSIS posted since last FAIL. @lead"`.
 
-**BUILD HASH GATE:** Verify live hash matches developer's claim before testing. Mismatch = `"BUILD DRIFT: live=$LIVE developer=$CLAIMED. @lead"`. Do NOT test mismatched builds.
+**BUILD HASH GATE:** Before testing, verify live hash: `curl -s <target_url> | grep -o 'index-[^"]*\.js'`. If it differs from the developer's claimed build: `"BUILD DRIFT: live=$LIVE developer=$CLAIMED. @lead"`. Do NOT test mismatched builds.
 
 Post as **task comment** using `$AGENT_NAME` as prefix, then notify the
 Supervisor via board chat:
@@ -691,7 +691,7 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/commen
 {% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow != "review_only" %}
 ### Pre-QA Self-Test (mandatory before moving to review)
 1. Typecheck/build passes (frontend: `npm run typecheck && npm run build`, backend: `pytest`)
-2. If task has a deploy target: deploy, then verify the live build matches your commit
+2. If task requires deploy: run `bash $SHARED_WORKSPACE/scripts/deploy.sh <task_id>` from the project root. Requires `.deploy-config` in the project with target host/dir/URL.
 3. All checks must PASS. If ANY fails, fix first.
 {% endif %}
 
