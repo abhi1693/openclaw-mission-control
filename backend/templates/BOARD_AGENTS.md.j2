@@ -690,11 +690,9 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/commen
 
 {% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow != "review_only" %}
 ### Pre-QA Self-Test (mandatory before moving to review)
-1. Typecheck/build: `npm run typecheck && npm run build` (or `pytest`)
-2. Deploy to target, then run the smoke test:
-   `bash $SHARED_WORKSPACE/scripts/qa-smoke-test.sh <your_build_hash>`
+1. Typecheck/build passes (frontend: `npm run typecheck && npm run build`, backend: `pytest`)
+2. If task has a deploy target: deploy, then verify the live build matches your commit
 3. All checks must PASS. If ANY fails, fix first.
-4. Check deploy lock: `ssh nanoclaw@192.168.2.63 "bash /home/nanoclaw/taskflow-dashboard/deploy-lock.sh verify"`
 {% endif %}
 
 ### Escalation Rule
@@ -707,8 +705,10 @@ If your task has received **3+ consecutive QA FAILs** without a PASS:
 ### Scope Authority
 Operator scope decisions are authoritative. Items deferred by the operator must NOT be reopened unless the operator revises the decision. If QA fails on a deferred item: `"Item X deferred by operator. Not in scope. @lead"`
 
+{% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow != "review_only" %}
 ### Deploy Target Rule
-The deploy target (host, path, URL) MUST come from the **task description**. Do NOT guess paths. If the task says `Deploy to http://192.168.2.63:3000`, read the task for the exact rsync/scp command and target directory. If no deploy target is specified, ask `@lead` before deploying.
+Deploy target (host, path, URL) MUST come from the **task description**. Do NOT guess paths. If no deploy target specified, ask `@lead`.
+{% endif %}
 
 ### Role Boundaries
 Stay in your role. Ask `@lead` for cross-role work.
