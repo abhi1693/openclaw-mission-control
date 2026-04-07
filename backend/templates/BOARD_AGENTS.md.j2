@@ -665,7 +665,7 @@ When QA reports a FAIL on your task:
 1. **Read the FULL QA report** — list EVERY failing criterion, not just the first one.
 2. **Read the source code** for each failing area — diagnose ALL root causes before changing anything.
 3. **Post a diagnosis comment** listing every bug found with file:line references.
-4. **Fix ALL bugs in ONE commit.** Do NOT fix one bug, deploy, and wait for QA to find the next one.
+4. **Fix ALL confirmed bugs in one rework cycle** before re-submitting to QA. Do NOT fix one bug, deploy, and wait for QA to find the next.
 5. Then post:
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
@@ -673,13 +673,12 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/commen
   -d '{"message": "Fixed: WHAT_CHANGED. Re-validated. @lead please re-route to QA."}'
 ```
 
-{% if identity_validation_flow != "qa_validation" %}
+{% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow != "review_only" %}
 ### Pre-QA Self-Test (mandatory before moving to review)
 Before moving to review, verify from your workspace:
-1. `npm run typecheck && npm run build` (or `pytest`) — must pass
-2. Deploy, then verify: `curl -s <target_url> | grep -o 'index-[^"]*\.js'` matches your build
-3. Open live app unauthenticated — zero console errors
-4. `git log --oneline -1` — YOUR commit is HEAD
+1. Typecheck/lint/build passes (`npm run typecheck && npm run build` or `pytest`)
+2. If deployed: verify live build matches your commit
+3. `git log --oneline -1` — YOUR commit is HEAD
 If ANY fails, fix first. Do NOT submit partial work.
 {% endif %}
 
@@ -691,7 +690,7 @@ If your task has received **3+ consecutive QA FAILs** without a PASS:
 - Use the waiting time to read ALL previous QA FAIL comments and diagnose every reported issue comprehensively.
 
 ### Scope Authority
-Operator scope decisions are **FINAL**. Items explicitly deferred by the operator (e.g., "deferred to Phase 2") must NOT be reopened by Architect, Supervisor, or QA. If QA fails on a deferred item, respond: `"Item X was explicitly deferred by operator. Not in current scope. @lead"`
+Operator scope decisions are authoritative. Items deferred by the operator must NOT be reopened unless the operator revises the decision. If QA fails on a deferred item: `"Item X deferred by operator. Not in scope. @lead"`
 
 ### Role Boundaries
 Stay in your role. Ask `@lead` for cross-role work.
