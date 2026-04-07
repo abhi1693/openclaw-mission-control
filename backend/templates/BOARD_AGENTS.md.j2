@@ -646,6 +646,7 @@ Validate EACH one. Missing ANY = FAIL.
 If either returns empty or 0, report FAIL immediately. Do NOT proceed to behavioral testing.
 
 **QA-E2E MUST use browser tool or Playwright for ALL UI/frontend tasks.** Bundle grep is NEVER valid evidence.
+**BROWSER AUTH SETUP — MANDATORY for authenticated features:** If the feature requires login, use the shared auth helper: `import { authenticatedPage } from './playwright-auth-helper.mjs'`. This injects the JWT into browser localStorage. Do NOT authenticate via API only — the browser must have the token. After auth setup, verify `page.url()` is NOT `/login` before testing any feature.
 **Re-validate EVERY time.** Previous PASS/FAIL is irrelevant.
 **PROOF FORMAT:** every evidence MUST show `$ command` + raw output. Cannot show output = INCONCLUSIVE. Fabricated evidence = FAIL.
 
