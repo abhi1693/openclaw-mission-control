@@ -38,7 +38,7 @@ type BoardsTableProps = {
 
 const DEFAULT_EMPTY_ICON = (
   <svg
-    className="h-16 w-16 text-slate-300"
+    className="h-16 w-16 text-[var(--text-quiet)]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -117,7 +117,7 @@ export function BoardsTable({
         cell: ({ row }) => {
           const groupId = row.original.board_group_id;
           if (!groupId) {
-            return <span className="text-sm text-slate-400">—</span>;
+            return <span className="text-sm text-[var(--text-quiet)]">—</span>;
           }
           const group = groupById.get(groupId);
           const label = group?.name ?? compactId(groupId);
@@ -161,7 +161,7 @@ export function BoardsTable({
       isLoading={isLoading}
       stickyHeader={stickyHeader}
       emptyMessage={emptyMessage}
-      rowClassName="transition hover:bg-slate-50"
+      rowClassName="transition hover:bg-[var(--surface-muted)]"
       cellClassName="px-3 py-3 md:px-6 md:py-4 align-top"
       rowActions={
         showActions

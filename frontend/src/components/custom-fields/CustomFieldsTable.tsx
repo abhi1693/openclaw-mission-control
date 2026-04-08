@@ -33,7 +33,7 @@ type CustomFieldsTableProps = {
 
 const DEFAULT_EMPTY_ICON = (
   <svg
-    className="h-16 w-16 text-slate-300"
+    className="h-16 w-16 text-[var(--text-quiet)]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -77,13 +77,13 @@ export function CustomFieldsTable({
         header: "Field",
         cell: ({ row }) => (
           <div>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-sm font-semibold text-[var(--text)]">
               {row.original.label || row.original.field_key}
             </p>
-            <p className="mt-1 font-mono text-xs text-slate-500">
+            <p className="mt-1 font-mono text-xs text-[var(--text-muted)]">
               key: {row.original.field_key}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               {row.original.description || "No description"}
             </p>
           </div>
@@ -93,7 +93,7 @@ export function CustomFieldsTable({
         accessorKey: "required",
         header: "Required",
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="text-sm text-[var(--text-muted)]">
             {row.original.required === true ? "Required" : "Optional"}
           </span>
         ),
@@ -102,7 +102,7 @@ export function CustomFieldsTable({
         accessorKey: "field_type",
         header: "Type",
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="text-sm text-[var(--text-muted)]">
             {row.original.field_type}
           </span>
         ),
@@ -111,7 +111,7 @@ export function CustomFieldsTable({
         accessorKey: "ui_visibility",
         header: "UI visible",
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="text-sm text-[var(--text-muted)]">
             {row.original.ui_visibility}
           </span>
         ),
@@ -121,7 +121,7 @@ export function CustomFieldsTable({
         header: "Default value",
         enableSorting: false,
         cell: ({ row }) => (
-          <p className="font-mono text-xs break-all text-slate-700">
+          <p className="font-mono text-xs break-all text-[var(--text-muted)]">
             {formatCustomFieldDefaultValue(row.original.default_value) || "—"}
           </p>
         ),
@@ -152,7 +152,7 @@ export function CustomFieldsTable({
       table={table}
       isLoading={isLoading}
       stickyHeader={stickyHeader}
-      rowClassName="transition hover:bg-slate-50"
+      rowClassName="transition hover:bg-[var(--surface-muted)]"
       cellClassName="px-6 py-4 align-top"
       rowActions={
         editHref || onDelete

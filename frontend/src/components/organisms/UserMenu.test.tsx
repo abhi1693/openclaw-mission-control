@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { UserMenu } from "./UserMenu";
 
 const useUserMock = vi.hoisted(() => vi.fn());
@@ -62,7 +63,11 @@ describe("UserMenu", () => {
     useUserMock.mockReturnValue({ user: null });
     isLocalAuthModeMock.mockReturnValue(true);
 
-    render(<UserMenu />);
+    render(
+      <ThemeProvider>
+        <UserMenu />
+      </ThemeProvider>,
+    );
 
     await user.click(screen.getByRole("button", { name: /open user menu/i }));
 
@@ -87,7 +92,11 @@ describe("UserMenu", () => {
       reload: reloadSpy,
     } as Location);
 
-    render(<UserMenu />);
+    render(
+      <ThemeProvider>
+        <UserMenu />
+      </ThemeProvider>,
+    );
 
     await user.click(screen.getByRole("button", { name: /open user menu/i }));
     await user.click(screen.getByRole("button", { name: /sign out/i }));

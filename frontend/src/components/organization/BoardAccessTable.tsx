@@ -37,7 +37,7 @@ export function BoardAccessTable({
             href: `/boards/${row.original.id}`,
             label: row.original.name,
             subtitle: row.original.slug,
-            subtitleClassName: "mt-1 text-xs text-slate-500",
+            subtitleClassName: "mt-1 text-xs text-[var(--text-muted)]",
           }),
       },
       {
@@ -97,8 +97,8 @@ export function BoardAccessTable({
   return (
     <DataTable
       table={table}
-      rowClassName="border-t border-slate-200 hover:bg-slate-50"
-      headerClassName="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"
+      rowClassName="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]"
+      headerClassName="bg-[var(--surface-muted)] text-[11px] uppercase tracking-wide text-[var(--text-muted)]"
       headerCellClassName="px-4 py-2 font-medium"
       cellClassName="px-4 py-3"
     />
