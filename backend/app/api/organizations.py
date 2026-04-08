@@ -54,6 +54,7 @@ from app.schemas.organizations import (
 )
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.services.organizations import (
+    ROLE_RANK,
     OrganizationContext,
     accept_invite,
     apply_invite_board_access,
@@ -481,7 +482,16 @@ async def update_org_member(
     )
     updates = payload.model_dump(exclude_unset=True)
     if "role" in updates and updates["role"] is not None:
-        updates["role"] = normalize_role(updates["role"])
+        new_role = normalize_role(updates["role"])
+        # Prevent granting roles at or above the caller's level.
+        caller_rank = ROLE_RANK.get(ctx.member.role, 0)
+        new_rank = ROLE_RANK.get(new_role, 0)
+        if new_rank >= caller_rank:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot grant a role equal to or above your own",
+            )
+        updates["role"] = new_role
     updates["updated_at"] = utcnow()
     member = await crud.patch(session, member, updates)
     user = await User.objects.by_id(member.user_id).first(session)
@@ -628,12 +638,22 @@ async def create_org_invite(
         if existing_member is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT)
 
+    # Prevent granting roles at or above the caller's level.
+    requested_role = normalize_role(payload.role)
+    caller_rank = ROLE_RANK.get(ctx.member.role, 0)
+    requested_rank = ROLE_RANK.get(requested_role, 0)
+    if requested_rank >= caller_rank:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot grant a role equal to or above your own",
+        )
+
     token = secrets.token_urlsafe(24)
     invite = OrganizationInvite(
         organization_id=ctx.organization.id,
         invited_email=email,
         token=token,
-        role=normalize_role(payload.role),
+        role=requested_role,
         all_boards_read=payload.all_boards_read,
         all_boards_write=payload.all_boards_write,
         created_by_user_id=ctx.member.user_id,
@@ -702,11 +722,15 @@ async def accept_org_invite(
     ).first(session)
     if invite is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    if (
-        invite.invited_email
-        and auth.user.email
-        and normalize_invited_email(invite.invited_email)
-        != normalize_invited_email(auth.user.email)
+    # Require both emails to be present — reject if either is missing to
+    # prevent bypassing the email-binding check via None/empty values.
+    if not invite.invited_email or not auth.user.email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invite requires a matching email address",
+        )
+    if normalize_invited_email(invite.invited_email) != normalize_invited_email(
+        auth.user.email
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
