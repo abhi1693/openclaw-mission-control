@@ -14,7 +14,7 @@ import ssl
 from dataclasses import dataclass
 from time import perf_counter, time
 from typing import Any, Literal
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
 
 import websockets
@@ -185,12 +185,10 @@ def _build_gateway_url(config: GatewayConfig) -> str:
     if not base_url:
         message = "Gateway URL is not configured."
         raise OpenClawGatewayError(message)
-    token = config.token
-    if not token:
-        return base_url
-    parsed = urlparse(base_url)
-    query = urlencode({"token": token})
-    return str(urlunparse(parsed._replace(query=query)))
+    # Do not append auth tokens to URL query parameters.
+    # Authentication is sent in the connect payload (`params.auth.token`) to
+    # reduce leakage via URL logs and tracing systems.
+    return base_url
 
 
 def _redacted_url_for_log(raw_url: str) -> str:

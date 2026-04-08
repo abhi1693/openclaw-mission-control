@@ -880,7 +880,7 @@ Access URLs:
 
 Auth:
 - AUTH_MODE=local
-- LOCAL_AUTH_TOKEN=$local_auth_token
+- LOCAL_AUTH_TOKEN is configured in .env / backend/.env (redacted)
 
 Stop stack:
   docker compose -f compose.yml --env-file .env down
@@ -949,7 +949,7 @@ Access URLs:
 
 Auth:
 - AUTH_MODE=local
-- LOCAL_AUTH_TOKEN=$local_auth_token
+- LOCAL_AUTH_TOKEN is configured in .env / backend/.env (redacted)
 
 If services were started by this script, logs are under:
 - $LOG_DIR/backend.log

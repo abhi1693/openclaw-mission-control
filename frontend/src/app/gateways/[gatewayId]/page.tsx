@@ -34,12 +34,6 @@ import { formatTimestamp } from "@/lib/formatters";
 import { createOptimisticListDeleteMutation } from "@/lib/list-delete";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 
-const maskToken = (value?: string | null) => {
-  if (!value) return "—";
-  if (value.length <= 8) return "••••";
-  return `••••${value.slice(-4)}`;
-};
-
 export default function GatewayDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -114,7 +108,6 @@ export default function GatewayDetailPage() {
   const statusParams = gateway
     ? {
         gateway_url: gateway.url,
-        gateway_token: gateway.token ?? undefined,
         gateway_disable_device_pairing: gateway.disable_device_pairing,
         gateway_allow_insecure_tls: gateway.allow_insecure_tls,
       }
@@ -231,7 +224,7 @@ export default function GatewayDetailPage() {
                   <div>
                     <p className="text-xs uppercase text-slate-400">Token</p>
                     <p className="mt-1 text-sm font-medium text-slate-900">
-                      {maskToken(gateway.token)}
+                      {gateway.has_token ? "Configured" : "Not set"}
                     </p>
                   </div>
                   <div>

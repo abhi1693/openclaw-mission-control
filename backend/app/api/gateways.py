@@ -72,6 +72,21 @@ def _template_sync_query(
 SYNC_QUERY_DEP = Depends(_template_sync_query)
 
 
+def _to_gateway_read(gateway: Gateway) -> GatewayRead:
+    return GatewayRead(
+        id=gateway.id,
+        organization_id=gateway.organization_id,
+        name=gateway.name,
+        url=gateway.url,
+        workspace_root=gateway.workspace_root,
+        allow_insecure_tls=gateway.allow_insecure_tls,
+        disable_device_pairing=gateway.disable_device_pairing,
+        has_token=bool((gateway.token or "").strip()),
+        created_at=gateway.created_at,
+        updated_at=gateway.updated_at,
+    )
+
+
 @router.get("", response_model=DefaultLimitOffsetPage[GatewayRead])
 async def list_gateways(
     session: AsyncSession = SESSION_DEP,
@@ -84,7 +99,11 @@ async def list_gateways(
         .statement
     )
 
-    return await paginate(session, statement)
+    def _transform(items):
+        gateways = [item for item in items if isinstance(item, Gateway)]
+        return [_to_gateway_read(gateway) for gateway in gateways]
+
+    return await paginate(session, statement, transformer=_transform)
 
 
 @router.post("", response_model=GatewayRead)
@@ -93,7 +112,7 @@ async def create_gateway(
     session: AsyncSession = SESSION_DEP,
     auth: AuthContext = AUTH_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
-) -> Gateway:
+) -> GatewayRead:
     """Create a gateway and provision or refresh its main agent."""
     service = GatewayAdminLifecycleService(session)
     await service.assert_gateway_runtime_compatible(
@@ -108,7 +127,7 @@ async def create_gateway(
     data["organization_id"] = ctx.organization.id
     gateway = await crud.create(session, Gateway, **data)
     await service.ensure_main_agent(gateway, auth, action="provision")
-    return gateway
+    return _to_gateway_read(gateway)
 
 
 @router.get("/{gateway_id}", response_model=GatewayRead)
@@ -116,14 +135,14 @@ async def get_gateway(
     gateway_id: UUID,
     session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
-) -> Gateway:
+) -> GatewayRead:
     """Return one gateway by id for the caller's organization."""
     service = GatewayAdminLifecycleService(session)
     gateway = await service.require_gateway(
         gateway_id=gateway_id,
         organization_id=ctx.organization.id,
     )
-    return gateway
+    return _to_gateway_read(gateway)
 
 
 @router.patch("/{gateway_id}", response_model=GatewayRead)
@@ -133,7 +152,7 @@ async def update_gateway(
     session: AsyncSession = SESSION_DEP,
     auth: AuthContext = AUTH_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
-) -> Gateway:
+) -> GatewayRead:
     """Patch a gateway and refresh the main-agent provisioning state."""
     service = GatewayAdminLifecycleService(session)
     gateway = await service.require_gateway(
@@ -165,7 +184,7 @@ async def update_gateway(
             )
     await crud.patch(session, gateway, updates)
     await service.ensure_main_agent(gateway, auth, action="update")
-    return gateway
+    return _to_gateway_read(gateway)
 
 
 @router.post("/{gateway_id}/templates/sync", response_model=GatewayTemplatesSyncResult)

@@ -50,7 +50,9 @@ Webhook ingest enforces a payload size limit (default **1 MB** / 1,048,576 bytes
 
 ## Gateway tokens
 
-Gateway tokens are currently returned in API responses. A future release will redact them from read endpoints (replacing the raw value with a `has_token` boolean). Until then, treat gateway API responses as sensitive.
+Gateway read endpoints redact raw gateway tokens. Responses expose `has_token` to indicate whether a token is configured, without returning the secret value.
+
+For connectivity checks that require a token, prefer `POST /api/v1/gateways/status/check` with a JSON body instead of query-string tokens.
 
 ## Container security
 
