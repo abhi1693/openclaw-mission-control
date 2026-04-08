@@ -316,9 +316,10 @@ jobs:
             "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/pgdata" -m fast stop || true
           fi
 
-  e2e:
+  e2e-stubbed:
     runs-on: ubuntu-latest
     needs: [check]
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -338,12 +339,10 @@ jobs:
       - name: Cache Next.js build cache
         uses: actions/cache@v4
         with:
-          path: |
-            frontend/.next/cache
+          path: frontend/.next/cache
           key: nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('frontend/package-lock.json') }}
           restore-keys: |
             nextjs-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-
-
 
       - name: Start frontend (dev server)
         env:
@@ -352,15 +351,16 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
         run: |
           cd frontend
-          npm run dev -- --hostname 0.0.0.0 --port 3000 &
+          npm run dev -- --hostname 0.0.0.0 --port 3000 > /tmp/frontend.log 2>&1 &
           for i in {1..60}; do
             if curl -sf http://localhost:3000/ > /dev/null; then exit 0; fi
             sleep 2
           done
-          echo "Frontend did not start"
+          echo "Frontend did not start. Logs:"
+          cat /tmp/frontend.log
           exit 1
 
-      - name: Run Cypress E2E
+      - name: Run Cypress stubbed E2E
         env:
           NEXT_PUBLIC_API_URL: "http://localhost:8000"
           NEXT_PUBLIC_AUTH_MODE: "local"
@@ -373,8 +373,79 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cypress-artifacts
+          name: cypress-stubbed-artifacts
           if-no-files-found: ignore
           path: |
             frontend/cypress/screenshots/**
             frontend/cypress/videos/**
+            /tmp/frontend.log
+
+  e2e-integration:
+    runs-on: ubuntu-latest
+    needs: [check]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start E2E Docker stack
+        run: make e2e-up
+
+      - name: Seed E2E database
+        run: make e2e-seed
+
+      - name: Install frontend dependencies
+        run: make frontend-sync
+
+      - name: Start frontend (dev server pointing to E2E backend)
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8001"
+          NEXT_PUBLIC_AUTH_MODE: "local"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          cd frontend
+          npm run dev -- --hostname 0.0.0.0 --port 3000 > /tmp/frontend-e2e.log 2>&1 &
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "Frontend did not start. Logs:"
+          cat /tmp/frontend-e2e.log
+          exit 1
+
+      - name: Run integration E2E tests
+        run: make e2e-integration
+
+      - name: Dump Docker logs on failure
+        if: failure()
+        run: |
+          docker compose --profile e2e logs backend-e2e --tail 200 || true
+          docker compose --profile e2e logs db-test --tail 50 || true
+          docker compose --profile e2e logs redis --tail 50 || true
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-integration-artifacts
+          if-no-files-found: ignore
+          path: |
+            frontend/cypress/screenshots/**
+            frontend/cypress/videos/**
+            /tmp/frontend-e2e.log
+
+      - name: Tear down E2E stack
+        if: always()
+        run: make e2e-down

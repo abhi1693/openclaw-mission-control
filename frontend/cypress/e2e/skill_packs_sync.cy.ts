@@ -1,13 +1,13 @@
 /// <reference types="cypress" />
 
-import { setupCommonPageTestHooks } from "../support/testHooks";
+import { stubAuth } from "../support/intercepts";
 
 describe("Skill packs", () => {
   const apiBase = "**/api/v1";
 
-  setupCommonPageTestHooks(apiBase);
-
   it("can sync a pack and surface warnings", () => {
+    stubAuth(apiBase);
+
     cy.intercept("GET", `${apiBase}/skills/packs*`, {
       statusCode: 200,
       body: [

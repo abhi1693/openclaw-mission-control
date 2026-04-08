@@ -1,9 +1,15 @@
 /// <reference types="cypress" />
 
+import {
+  buildBoard,
+  buildBoardSnapshot,
+  buildTask,
+  buildOrgMember,
+} from "../support/factories";
+import { stubAuth, stubBoards, stubEmptySSEStreams } from "../support/intercepts";
+
 describe("/boards/:id task board", () => {
   const apiBase = "**/api/v1";
-  const email = "local-auth-user@example.com";
-
   const originalDefaultCommandTimeout = Cypress.config("defaultCommandTimeout");
 
   beforeEach(() => {
@@ -13,26 +19,6 @@ describe("/boards/:id task board", () => {
   afterEach(() => {
     Cypress.config("defaultCommandTimeout", originalDefaultCommandTimeout);
   });
-
-  function stubEmptySse() {
-    // Keep known board-related SSE endpoints quiet in tests.
-    const emptySse = {
-      statusCode: 200,
-      headers: { "content-type": "text/event-stream" },
-      body: "",
-    };
-
-    cy.intercept("GET", `${apiBase}/boards/*/tasks/stream*`, emptySse).as(
-      "tasksStream",
-    );
-    cy.intercept("GET", `${apiBase}/boards/*/approvals/stream*`, emptySse).as(
-      "approvalsStream",
-    );
-    cy.intercept("GET", `${apiBase}/boards/*/memory/stream*`, emptySse).as(
-      "memoryStream",
-    );
-    cy.intercept("GET", `${apiBase}/agents/stream*`, emptySse).as("agentsStream");
-  }
 
   function openEditTaskDialog() {
     cy.get('button[title="Edit task"]', { timeout: 20_000 })
@@ -50,42 +36,35 @@ describe("/boards/:id task board", () => {
   });
 
   it("happy path: renders tasks from snapshot and supports create + status update + delete (stubbed)", () => {
-    stubEmptySse();
+    const board = buildBoard({
+      id: "b1",
+      name: "Demo Board",
+      slug: "demo-board",
+      description: "Demo",
+      gateway_id: "g1",
+      goal_source: "test",
+      organization_id: "o1",
+    });
 
-    cy.intercept("GET", `${apiBase}/organizations/me/member*`, {
-      statusCode: 200,
-      body: {
+    const existingTask = buildTask({
+      id: "t1",
+      board_id: "b1",
+      title: "Inbox task",
+      status: "inbox",
+    });
+
+    stubEmptySSEStreams(apiBase);
+
+    stubAuth(apiBase, {
+      user: { id: "u1", clerk_user_id: "clerk_u1", email: "local-auth-user@example.com", name: "Jane Test", preferred_name: "Jane", timezone: "America/New_York", is_super_admin: false },
+      org: { id: "o1", name: "Personal" },
+      member: buildOrgMember({
         id: "m1",
         organization_id: "o1",
         user_id: "u1",
-        role: "owner",
-        all_boards_read: true,
-        all_boards_write: true,
-        created_at: "2026-02-11T00:00:00Z",
-        updated_at: "2026-02-11T00:00:00Z",
         board_access: [{ board_id: "b1", can_read: true, can_write: true }],
-      },
-    }).as("membership");
-
-    cy.intercept("GET", `${apiBase}/users/me*`, {
-      statusCode: 200,
-      body: {
-        id: "u1",
-        clerk_user_id: "clerk_u1",
-        email,
-        name: "Jane Test",
-        preferred_name: "Jane",
-        timezone: "America/New_York",
-        is_super_admin: false,
-      },
-    }).as("me");
-
-    cy.intercept("GET", `${apiBase}/organizations/me/list*`, {
-      statusCode: 200,
-      body: [
-        { id: "o1", name: "Personal", role: "owner", is_active: true },
-      ],
-    }).as("organizations");
+      }),
+    });
 
     cy.intercept("GET", `${apiBase}/tags*`, {
       statusCode: 200,
@@ -99,51 +78,7 @@ describe("/boards/:id task board", () => {
 
     cy.intercept("GET", `${apiBase}/boards/b1/snapshot*`, {
       statusCode: 200,
-      body: {
-        board: {
-          id: "b1",
-          name: "Demo Board",
-          slug: "demo-board",
-          description: "Demo",
-          gateway_id: "g1",
-          board_group_id: null,
-          board_type: "general",
-          objective: null,
-          success_metrics: null,
-          target_date: null,
-          goal_confirmed: true,
-          goal_source: "test",
-          organization_id: "o1",
-          created_at: "2026-02-11T00:00:00Z",
-          updated_at: "2026-02-11T00:00:00Z",
-        },
-        tasks: [
-          {
-            id: "t1",
-            board_id: "b1",
-            title: "Inbox task",
-            description: "",
-            status: "inbox",
-            priority: "medium",
-            due_at: null,
-            assigned_agent_id: null,
-            depends_on_task_ids: [],
-            created_by_user_id: null,
-            in_progress_at: null,
-            created_at: "2026-02-11T00:00:00Z",
-            updated_at: "2026-02-11T00:00:00Z",
-            blocked_by_task_ids: [],
-            is_blocked: false,
-            assignee: null,
-            approvals_count: 0,
-            approvals_pending_count: 0,
-          },
-        ],
-        agents: [],
-        approvals: [],
-        chat_messages: [],
-        pending_approvals_count: 0,
-      },
+      body: buildBoardSnapshot(board, { tasks: [existingTask] }),
     }).as("snapshot");
 
     cy.intercept("GET", `${apiBase}/boards/b1/group-snapshot*`, {
@@ -152,58 +87,25 @@ describe("/boards/:id task board", () => {
     }).as("groupSnapshot");
 
     cy.intercept("POST", `${apiBase}/boards/b1/tasks`, (req) => {
-      // Minimal assertion the UI sends expected fields.
       expect(req.body).to.have.property("title");
-      req.reply({
-        statusCode: 200,
-        body: {
-          id: "t2",
-          board_id: "b1",
-          title: req.body.title,
-          description: req.body.description ?? "",
-          status: "inbox",
-          priority: req.body.priority ?? "medium",
-          due_at: null,
-          assigned_agent_id: null,
-          depends_on_task_ids: [],
-          created_by_user_id: null,
-          in_progress_at: null,
-          created_at: "2026-02-11T00:00:00Z",
-          updated_at: "2026-02-11T00:00:00Z",
-          blocked_by_task_ids: [],
-          is_blocked: false,
-          assignee: null,
-          approvals_count: 0,
-          approvals_pending_count: 0,
-        },
+      const newTask = buildTask({
+        id: "t2",
+        board_id: "b1",
+        title: req.body.title,
+        description: req.body.description ?? "",
+        priority: req.body.priority ?? "medium",
       });
+      req.reply({ statusCode: 200, body: newTask });
     }).as("createTask");
 
     cy.intercept("PATCH", `${apiBase}/boards/b1/tasks/t1`, (req) => {
       expect(req.body).to.have.property("status");
-      req.reply({
-        statusCode: 200,
-        body: {
-          id: "t1",
-          board_id: "b1",
-          title: "Inbox task",
-          description: "",
-          status: req.body.status,
-          priority: "medium",
-          due_at: null,
-          assigned_agent_id: null,
-          depends_on_task_ids: [],
-          created_by_user_id: null,
-          in_progress_at: null,
-          created_at: "2026-02-11T00:00:00Z",
-          updated_at: "2026-02-11T00:00:01Z",
-          blocked_by_task_ids: [],
-          is_blocked: false,
-          assignee: null,
-          approvals_count: 0,
-          approvals_pending_count: 0,
-        },
+      const updated = buildTask({
+        ...existingTask,
+        status: req.body.status,
+        updated_at: "2026-01-01T00:00:01.000Z",
       });
+      req.reply({ statusCode: 200, body: updated });
     }).as("updateTask");
 
     cy.intercept("DELETE", `${apiBase}/boards/b1/tasks/t1`, {
@@ -223,9 +125,9 @@ describe("/boards/:id task board", () => {
     cy.wait([
       "@snapshot",
       "@groupSnapshot",
-      "@membership",
-      "@me",
-      "@organizations",
+      "@orgMeMember",
+      "@usersMe",
+      "@organizationsList",
       "@tags",
       "@customFields",
     ]);
@@ -233,8 +135,7 @@ describe("/boards/:id task board", () => {
     // Existing task visible.
     cy.contains("Inbox task").should("be.visible");
 
-    // Open create task flow.
-    // Board page uses an icon-only button with aria-label="New task".
+    // Create task flow.
     cy.get('button[aria-label="New task"]')
       .should("be.visible")
       .and("not.be.disabled")
@@ -250,7 +151,6 @@ describe("/boards/:id task board", () => {
           .click();
       });
     cy.wait(["@createTask"]);
-
     cy.contains("New task").should("be.visible");
 
     // Open edit task dialog.
@@ -267,7 +167,6 @@ describe("/boards/:id task board", () => {
           cy.get('[role="combobox"]').first().should("be.visible").click();
         });
     });
-
     cy.contains("In progress").should("be.visible").click();
 
     cy.contains("button", /save changes/i)
@@ -277,11 +176,10 @@ describe("/boards/:id task board", () => {
     cy.wait(["@updateTask"]);
     cy.get('[aria-label="Edit task"]').should("not.exist");
 
-    // Save closes the edit dialog; reopen it from task detail.
+    // Reopen and delete.
     cy.contains(/task detail/i).should("be.visible");
     openEditTaskDialog();
 
-    // Delete task via delete dialog.
     cy.get('[aria-label="Edit task"]').within(() => {
       cy.contains("button", /^Delete task$/)
         .scrollIntoView()
@@ -298,7 +196,6 @@ describe("/boards/:id task board", () => {
         .click();
     });
     cy.wait(["@deleteTask"]);
-
     cy.contains("Inbox task").should("not.exist");
   });
 });
