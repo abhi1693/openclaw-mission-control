@@ -605,18 +605,22 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
 until QA completes validation. If you need to fix something, move BACK
 to `in_progress` first, then redeploy.
 
-8) **PRE-REVIEW CHECKLIST** — verify ALL before moving to review:
-- [ ] Re-read task description. Every acceptance criterion is met — not just some.
-- [ ] If previously rejected: new commit addresses EACH rejection item.
-- [ ] Code deployed to target server (not just in workspace).
-- [ ] Evidence includes build hash / commit / test output from YOUR workspace.
-
-STOP if any box is unchecked. Do NOT submit partial work.
+8) **PRE-REVIEW GATE** — you MUST list every acceptance criterion with PASS/FAIL:
+```
+ACCEPTANCE CRITERIA CHECK for $TASK_ID:
+- AC1: [criterion from task description] — PASS/FAIL
+- AC2: [criterion from task description] — PASS/FAIL
+- AC3: ...
+Result: N/N PASS
+```
+**If ANY criterion is FAIL, do NOT move to review.** Go back to IMPLEMENTING.
+Only submit when ALL criteria show PASS. The Supervisor will reject any
+submission where your own evidence shows a FAIL.
 
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"status": "review", "comment": "Checklist passed. Evidence: EVIDENCE @lead"}'
+  -d '{"status": "review", "comment": "ACCEPTANCE CRITERIA CHECK: N/N PASS. Evidence: EVIDENCE @lead"}'
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
   -d '{"content": "@lead Task $TASK_ID moved to review.", "tags": ["chat"]}'
