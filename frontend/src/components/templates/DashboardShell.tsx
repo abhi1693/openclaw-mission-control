@@ -58,7 +58,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== "openclaw_org_switch" || !event.newValue) return;
-      window.location.reload();
+      // 使用客户端路由刷新替代全页刷新，提升性能
+      router.refresh();
     };
 
     window.addEventListener("storage", handleStorage);
@@ -67,7 +68,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     if ("BroadcastChannel" in window) {
       channel = new BroadcastChannel("org-switch");
       channel.onmessage = () => {
-        window.location.reload();
+        // 使用客户端路由刷新替代全页刷新，提升性能
+        router.refresh();
       };
     }
 
@@ -75,7 +77,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       window.removeEventListener("storage", handleStorage);
       channel?.close();
     };
-  }, []);
+  }, [router]);
 
   const toggleSidebar = useCallback(
     () => setSidebarState((prev) => ({ open: !prev.open, path: pathname })),
@@ -110,8 +112,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <BrandMark />
           </div>
           <SignedIn>
-            <div className="hidden md:flex flex-1 items-center">
-              <div className="max-w-[220px]">
+            {/* 移动端使用更紧凑的 OrgSwitcher 样式 */}
+            <div className="flex flex-1 items-center md:block">
+              <div className="max-w-[140px] md:max-w-[220px]">
                 <OrgSwitcher />
               </div>
             </div>
