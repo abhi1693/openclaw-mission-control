@@ -435,7 +435,7 @@ If invalid, OpenClaw reports exact keys/paths and remediation.
 These fields should be set before using this in production-like workflows:
 
 1. `agents.defaults.model.primary`
-   Set a concrete model id, for example `openai-codex/gpt-5.2`.
+   Set a concrete model id, for example `openai/o3`.
 2. `agents.defaults.models`
    Replace the empty key (`""`) with your model id so per-model config is mapped correctly.
 3. `gateway.auth`
