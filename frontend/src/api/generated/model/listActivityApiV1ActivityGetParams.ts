@@ -6,6 +6,7 @@
  */
 
 export type ListActivityApiV1ActivityGetParams = {
+  agent_id?: string | null;
   /**
    * @minimum 1
    * @maximum 200

@@ -45,6 +45,7 @@ SESSION_DEP = Depends(get_session)
 ACTOR_DEP = Depends(require_user_or_agent)
 ORG_MEMBER_DEP = Depends(require_org_member)
 BOARD_ID_QUERY = Query(default=None)
+AGENT_ID_QUERY = Query(default=None)
 SINCE_QUERY = Query(default=None)
 _RUNTIME_TYPE_REFERENCES = (UUID,)
 
@@ -226,6 +227,7 @@ async def _fetch_task_comment_events(
     since: datetime,
     *,
     board_id: UUID | None = None,
+    agent_id: UUID | None = None,
 ) -> Sequence[tuple[ActivityEvent, Task, Board, Agent | None]]:
     statement = (
         select(ActivityEvent, Task, Board, Agent)
@@ -239,11 +241,14 @@ async def _fetch_task_comment_events(
     )
     if board_id is not None:
         statement = statement.where(col(Task.board_id) == board_id)
+    if agent_id is not None:
+        statement = statement.where(col(ActivityEvent.agent_id) == agent_id)
     return _coerce_task_comment_rows(list(await session.exec(statement)))
 
 
 @router.get("", response_model=DefaultLimitOffsetPage[ActivityEventRead])
 async def list_activity(
+    agent_id: UUID | None = AGENT_ID_QUERY,
     session: AsyncSession = SESSION_DEP,
     actor: ActorContext = ACTOR_DEP,
 ) -> LimitOffsetPage[ActivityEventRead]:
@@ -272,6 +277,8 @@ async def list_activity(
                     ),
                 ),
             )
+    if agent_id is not None:
+        statement = statement.where(col(ActivityEvent.agent_id) == agent_id)
     statement = statement.order_by(desc(col(ActivityEvent.created_at)))
 
     def _transform(items: Sequence[Any]) -> Sequence[Any]:
@@ -299,6 +306,7 @@ async def list_activity(
 )
 async def list_task_comment_feed(
     board_id: UUID | None = BOARD_ID_QUERY,
+    agent_id: UUID | None = AGENT_ID_QUERY,
     session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_MEMBER_DEP,
 ) -> LimitOffsetPage[ActivityTaskCommentFeedItemRead]:
@@ -312,6 +320,8 @@ async def list_task_comment_feed(
         .where(func.length(func.trim(col(ActivityEvent.message))) > 0)
         .order_by(desc(col(ActivityEvent.created_at)))
     )
+    if agent_id is not None:
+        statement = statement.where(col(ActivityEvent.agent_id) == agent_id)
     board_ids = await list_accessible_board_ids(session, member=ctx.member, write=False)
     if board_id is not None:
         if board_id not in set(board_ids):
@@ -333,6 +343,7 @@ async def list_task_comment_feed(
 async def stream_task_comment_feed(
     request: Request,
     board_id: UUID | None = BOARD_ID_QUERY,
+    agent_id: UUID | None = AGENT_ID_QUERY,
     since: str | None = SINCE_QUERY,
     db_session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_MEMBER_DEP,
@@ -361,9 +372,14 @@ async def stream_task_comment_feed(
                         stream_session,
                         last_seen,
                         board_id=board_id,
+                        agent_id=agent_id,
                     )
                 elif allowed_ids:
-                    rows = await _fetch_task_comment_events(stream_session, last_seen)
+                    rows = await _fetch_task_comment_events(
+                        stream_session,
+                        last_seen,
+                        agent_id=agent_id,
+                    )
                     rows = [row for row in rows if row[1].board_id in allowed_ids]
                 else:
                     rows = []
