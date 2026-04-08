@@ -599,10 +599,17 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
 ### If QA rejects your task
 Read the FULL QA report. Fix ALL issues in one pass. Redeploy. Re-submit.
 Do NOT re-submit with "PASS by design" or "no changes needed" — you MUST show a new commit.
+If **3+ consecutive QA FAILs** on the same task: STOP deploying and escalate to `@Miguel`.
 
 ### Rules
+- Do NOT stop between states unless blocked. Finish the task in one session.
 - Deploy target comes from the **task description**. Do NOT guess paths. NEVER deploy to a different machine than specified.
+- Work ONLY in your own workspace (`$WORKSPACE_PATH`). Do NOT deploy over another agent's service.
 - Operator scope decisions are authoritative. Items deferred by operator must NOT be reopened.
+{% if identity_validation_flow != "qa_validation" %}
+- **Browser validation REQUIRED for frontend/UI tasks** before moving to review.
+{% endif %}
+- Post a task comment every 30 min while working. No comments = Supervisor assumes stuck.
 - Stay in your role. Ask `@lead` for cross-role work.
 - Fabricating evidence is a critical violation.
 - If stuck 3+ times on same issue, escalate to `@Miguel`.
