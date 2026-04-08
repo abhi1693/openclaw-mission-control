@@ -782,7 +782,7 @@ in the task prompt so Claude Code runs them after implementing:
 
 ```json
 {
-  "task": "TDD: <description>.\n1. Write failing tests for each acceptance criterion\n2. Run tests — confirm they FAIL\n3. Implement minimum code to make tests pass\n4. Run /simplify + /frontend-review + /codex adversarial-review\nPrint files changed + commit SHA + test results when done.",
+  "task": "TDD: <description>.\nAcceptance criteria: [PASTE ALL CRITERIA FROM TASK DESCRIPTION]\n1. Write ONE failing test per acceptance criterion — count must match criteria count\n2. Run tests — ALL must FAIL (red). If count doesn't match criteria, add missing tests\n3. Implement minimum code to make ALL tests pass\n4. Run /simplify + /frontend-review + /codex adversarial-review\n5. FINAL CHECK: list each acceptance criterion with PASS/FAIL. If ANY is FAIL, fix before finishing\nPrint: files changed, commit SHA, test results, and acceptance criteria checklist.",
   "runtime": "acp",
   "agentId": "claude",
   "thread": true
@@ -792,7 +792,7 @@ in the task prompt so Claude Code runs them after implementing:
 For **greenfield UI work**, add architecture skills:
 ```json
 {
-  "task": "TDD: <description>.\n1. Run /frontend-architecture for foundation docs\n2. Run /frontend-aesthetics for design constraints\n3. Write failing tests for acceptance criteria\n4. Implement to make tests pass\n5. Run /simplify + /frontend-review + /codex adversarial-review\nPrint files changed + commit SHA + test results when done.",
+  "task": "TDD: <description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n1. Run /frontend-architecture for foundation docs\n2. Run /frontend-aesthetics for design constraints\n3. Write ONE failing test per acceptance criterion\n4. Implement to make ALL tests pass\n5. Run /simplify + /frontend-review + /codex adversarial-review\n6. FINAL CHECK: list each criterion PASS/FAIL — fix any FAIL before finishing\nPrint: files, commit SHA, tests, criteria checklist.",
   "runtime": "acp",
   "agentId": "claude",
   "thread": true
@@ -829,12 +829,12 @@ For spec drafting: same pattern but task = "Help draft the technical spec for \<
 
 **Stage 1 — Tests + Implementation (Codex):**
 ```json
-{"task": "TDD: <description>.\n1. Write failing tests (pytest) for each acceptance criterion\n2. Confirm tests FAIL\n3. Implement minimum code to pass\n4. Print files changed + commit SHA + test results when done.", "runtime": "acp", "agentId": "codex", "thread": true}
+{"task": "TDD: <description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n1. Write ONE failing test per criterion — count must match\n2. Confirm ALL FAIL\n3. Implement minimum code to pass ALL\n4. FINAL CHECK: list each criterion PASS/FAIL\nPrint: files, commit SHA, tests, criteria checklist.", "runtime": "acp", "agentId": "codex", "thread": true}
 ```
 
 **Stage 2 — Review (Claude Code):** After Stage 1 commits, spawn:
 ```json
-{"task": "Review commit <sha>. Run /simplify then /codex adversarial-review. Verify tests exist and cover acceptance criteria. Post findings — do not commit fixes.", "runtime": "acp", "agentId": "claude", "thread": true}
+{"task": "Review commit <sha>.\n1. Run /simplify then /codex adversarial-review\n2. Count tests vs acceptance criteria — every criterion must have a test\n3. If any criterion lacks a test or implementation, post FAIL\nPost findings — do not commit fixes.", "runtime": "acp", "agentId": "claude", "thread": true}
 ```
 
 Two separate spawns. Review runs *after* commit, not in parallel. Review also verifies tests exist. If review surfaces changes, loop back to Stage 1.
@@ -844,15 +844,15 @@ review to a Claude Code ACP session:
 
 ```json
 {
-  "task": "TDD: <description>.\n1. Write failing tests for acceptance criteria\n2. Implement minimum code to pass\n3. Run /simplify + /codex adversarial-review\nPrint files changed + commit SHA + test results.",
+  "task": "TDD: <description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n1. Write ONE failing test per criterion\n2. Implement minimum code to pass ALL\n3. Run /simplify + /codex adversarial-review\n4. FINAL CHECK: list each criterion PASS/FAIL\nPrint: files, commit SHA, tests, criteria checklist.",
   "runtime": "acp",
   "agentId": "claude",
   "thread": true
 }
 ```
 
-**Always include TDD + review steps in the task prompt.** One
-`sessions_spawn` call = tests first + implement + /simplify + /codex.
+**Always paste the acceptance criteria into the ACP prompt.** The session
+must verify coverage — one test per criterion, all PASS before finishing.
 {%- endif %}
 ### ACP Session Timeout
 ACP sessions can die silently (gateway restart, model timeout, network
