@@ -88,8 +88,9 @@ export function DataTable<TData>({
     (table.getVisibleLeafColumns().length || 1) + (hasRowActions ? 1 : 0);
 
   return (
-    <div className="overflow-x-auto">
-      <table className={tableClassName}>
+    <div className="overflow-x-auto -mx-4 px-4 md:overflow-visible md:mx-0 md:px-0">
+      <div className="min-w-full md:table">
+        <table className={tableClassName}>
         <thead
           className={
             headerClassName ??
@@ -214,6 +215,7 @@ export function DataTable<TData>({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
