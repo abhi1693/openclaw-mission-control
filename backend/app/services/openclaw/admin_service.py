@@ -14,7 +14,7 @@ from app.core.logging import TRACE_LEVEL
 from app.core.time import utcnow
 from app.db import crud
 from app.models.activity_events import ActivityEvent
-from app.models.agents import Agent
+from app.models.agents import DEFAULT_APPROVAL_POLICY, Agent
 from app.models.approvals import Approval
 from app.models.board_webhooks import BoardWebhook
 from app.models.gateways import Gateway
@@ -127,6 +127,7 @@ class GatewayAdminLifecycleService(OpenClawDBService):
                 openclaw_session_id=session_key,
                 heartbeat_config=DEFAULT_HEARTBEAT_CONFIG.copy(),
                 identity_profile=identity_profile,
+                approval_policy=DEFAULT_APPROVAL_POLICY.copy(),
             )
             self.session.add(agent)
             changed = True
@@ -153,6 +154,9 @@ class GatewayAdminLifecycleService(OpenClawDBService):
             changed = True
         if not agent.status:
             agent.status = "provisioning"
+            changed = True
+        if agent.approval_policy is None:
+            agent.approval_policy = DEFAULT_APPROVAL_POLICY.copy()
             changed = True
         if changed:
             agent.updated_at = utcnow()

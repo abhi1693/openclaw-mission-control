@@ -39,6 +39,7 @@ from app.core.rate_limit_backend import RateLimitBackend
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import init_db
 from app.schemas.health import HealthStatusResponse
+from app.services.openclaw.gateway_listener_manager import gateway_listener_manager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -444,10 +445,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("app.lifecycle.rate_limit backend=redis")
     else:
         logger.info("app.lifecycle.rate_limit backend=memory")
+    await gateway_listener_manager.start_all()
     logger.info("app.lifecycle.started")
     try:
         yield
     finally:
+        await gateway_listener_manager.stop_all()
         logger.info("app.lifecycle.stopped")
 
 

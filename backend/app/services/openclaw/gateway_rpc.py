@@ -574,3 +574,22 @@ async def ensure_session(
     if label:
         params["label"] = label
     return await openclaw_call("sessions.patch", params, config=config)
+
+
+async def resolve_approval(
+    approval_id: str,
+    approved: bool,
+    config: GatewayConfig,
+) -> object:
+    """Resolve an approval request on the gateway.
+
+    Args:
+        approval_id: The approval request ID to resolve.
+        approved: Whether to approve (True) or reject (False) the request.
+        config: Gateway connection configuration.
+    """
+    params: dict[str, Any] = {
+        "id": approval_id,
+        "decision": "allow-once" if approved else "deny",
+    }
+    return await openclaw_call("exec.approval.resolve", params, config=config)
