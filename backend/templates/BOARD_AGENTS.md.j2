@@ -549,221 +549,45 @@ for c in page.get('items', []):
 - **PLANNING:** Read task description + the implementation to be reviewed. Write review plan to `MEMORY.md`.
 - **REVIEWING:** Delegate review per `AGENTS.md § Code Delegation (ACP)`. Post findings as a task comment with specific file/line references. Tag `@lead` when done.
 {% else %}
-6) **Execute your workflow state machine** — run through ALL states in one session:
-- **PLANNING:** Activate skills (see `IDENTITY.md`). Read task + specs + Architect comments if present. Write plan to `MEMORY.md`. If HIGH/MEDIUM new-feature and Architect spec is missing, ask `@lead`.
-- **CONTRACT CHECK:** HIGH/MEDIUM new-feature: check task comments for `qa_signoff=approved` from `@lead` before coding. If missing, post `@lead Waiting for QA contract signoff before implementing.` and stop. LOW/bugfix/<3 files: skip contract.
-{% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow in ("claude_with_skills", "codex_then_claude_review") %}
-- **TESTS FIRST (TDD):** Write failing tests BEFORE implementation. For each acceptance criterion, write a test that asserts expected behavior. Run tests — they must FAIL (red).
-- **IMPLEMENTING:** Write minimum code to make tests pass (green). Delegate per `AGENTS.md § Code Delegation (ACP)`. After the ACP session completes, check: are ALL acceptance criteria implemented? If ANY are missing, spawn another ACP session for the remaining criteria. Do NOT proceed to review with incomplete work — loop here until ALL criteria pass.
-- **REFACTOR:** Tests green → clean up without changing behavior. Run tests again.
-{% else %}
-- **IMPLEMENTING:** Inspect current state before coding. Delegate implementation per `AGENTS.md § Code Delegation (ACP)`. After the ACP session completes, check: are ALL acceptance criteria implemented? If ANY are missing, spawn another session for the remaining criteria. Do NOT proceed to review with incomplete work.
-{% endif %}
+6) **Implement, validate, and ship** — do ALL of this before moving to review:
+- Read task description. List every acceptance criterion.
+- Delegate implementation per `AGENTS.md § Code Delegation (ACP)`. Include ALL acceptance criteria in the ACP prompt.
+- After ACP completes: run typecheck/build/tests. Deploy if task has a deploy target.
+- Self-check: does the result satisfy EVERY acceptance criterion? If ANY missing, fix and redeploy. Do NOT move to review until ALL pass.
 {% endif %}
 {% if identity_validation_flow == "qa_validation" %}
-- **VALIDATING:** Validate the assigned task against its acceptance criteria:
-  - **Read task description first.** List every acceptance criterion. Validate EACH one. Missing ANY = FAIL.
-  - **CODE EXISTENCE CHECK — mandatory before behavioral testing:**
-    1. `git log --oneline -1 -- <modified_file>` — must show a recent commit
-    2. `grep -c '<key_function_or_change>' <file>` — must return > 0
-    If either returns empty or 0, report FAIL immediately.
-  - **QA-E2E: browser/Playwright is REQUIRED for UI/frontend tasks.** Bundle grep is NEVER valid evidence.
-  - **Re-validate every time.** Previous PASS/FAIL is irrelevant.
-  - **PROOF FORMAT:** every evidence MUST show `$ command` + raw output. Cannot show output = INCONCLUSIVE. Fabricated evidence = FAIL.
-  If validation passes → step 7 (post results). If ANY criterion fails → report FAIL with specific failing items.
-{% else %}
-- **VALIDATING:** Self-validate before claiming done:
-  - Code compiles/typechecks (`npm run typecheck` or `ruff check`)
-  - Lint passes (`npm run lint` or `ruff check --select ALL`)
-  - Tests pass (`npm test` or `pytest`) — zero tests is NOT acceptable
-  - No placeholder data: `grep -rn "mock\|fake\|dummy\|placeholder\|TODO.*production\|sample data" . --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | grep -v node_modules | grep -v __pycache__ | head -10` — if any match, fix before moving to review
-  - Frontend: build passes (`npm run build`), app renders real data
-  - **Browser validation — REQUIRED for frontend/UI tasks:** use `browser` tool or `npx playwright test`. Do NOT move to review without real browser evidence.
-  - **Import resolution:** run tests, check for `Cannot find module` / `ModuleNotFoundError`
-  - **Tests ran from YOUR workspace:** `pwd` must match `$WORKSPACE_PATH` from `TOOLS.md`
-  - Backend/API: endpoints return real data from database, not hardcoded test data
-  - **Deployment tasks:** process health (`systemctl status`), URL responds, correct port from `TOOLS.md`
-  - Detailed steps: `$SHARED_WORKSPACE/docs/validation-cookbook.md`
-  If ALL pass → step 7. If ANY fail → back to IMPLEMENTING.
+- **QA VALIDATION:** Validate the task against its acceptance criteria:
+  - Verify task is in `review` status. If not, reply `@lead task not in review` and stop.
+  - List each acceptance criterion. Validate EACH. Missing ANY = FAIL.
+  - Browser/Playwright REQUIRED for UI tasks. Use auth helper for authenticated features.
+  - Verify live build hash matches developer's claim before testing.
+  - Post: `$AGENT_NAME validation — PASS/FAIL — EVIDENCE. @lead`
 {% endif %}
-- **REFINE OR PIVOT:** If QA rejects twice on the same issue, decide refine or pivot. Post the decision.
-
-Do NOT stop between states unless blocked.
 
 {% if identity_dev_acp_flow == "review_only" %}
-7) **Post review findings** as a task comment and notify Supervisor:
-```bash
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "$AGENT_NAME review\n\nFINDINGS\n\n@lead"}'
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"content": "@lead Review posted for task $TASK_ID.", "tags": ["chat"]}'
-```
+7) **Post review findings** as task comment. Tag `@lead` when done.
 {% else %}
-7) **BUILD FREEZE:** Once you move to review, do NOT deploy new builds
-until QA completes validation. If you need to fix something, move BACK
-to `in_progress` first, then redeploy.
-
-8) **PRE-REVIEW GATE** — you MUST list every acceptance criterion with PASS/FAIL:
-```
-ACCEPTANCE CRITERIA CHECK for $TASK_ID:
-- AC1: [criterion from task description] — PASS/FAIL
-- AC2: [criterion from task description] — PASS/FAIL
-- AC3: ...
-Result: N/N PASS
-```
-**If ANY criterion is FAIL, do NOT move to review.** Go back to IMPLEMENTING.
-Only submit when ALL criteria show PASS. The Supervisor will reject any
-submission where your own evidence shows a FAIL.
-
+7) **Move to review** with evidence:
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"status": "review", "comment": "ACCEPTANCE CRITERIA CHECK: N/N PASS. Evidence: EVIDENCE @lead"}'
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"content": "@lead Task $TASK_ID moved to review.", "tags": ["chat"]}'
+  -d '{"status": "review", "comment": "ALL acceptance criteria PASS. Commit: SHA. Build: HASH. @lead"}'
 ```
 {% endif %}
 
-9) **After moving to review**, check for more assigned inbox tasks (step 2
-output). If you have another inbox task, pick it and go back to step 4.
-If no more tasks, post idle:
-```bash
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"content": "@lead $AGENT_NAME finished task. Idle and available.", "tags": ["chat"]}'
-```
+8) Pick next inbox task (step 2) or post idle.
 
-{% if identity_validation_flow == "qa_validation" %}
-### QA Validation
-When validating a `review` task assigned to you:
-
-Extract the `task_id` from the nudge message. Fetch the task and check
-its status is `review`. If NOT in review (inbox/in_progress), do NOT
-validate — reply `@lead task is not in review` and stop:
-```bash
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" -H "X-Agent-Token: $AUTH_TOKEN"
-```
-**Read the task description first.** List each acceptance criterion.
-Validate EACH one. Missing ANY = FAIL.
-
-**CODE EXISTENCE CHECK — MANDATORY before any other validation:**
-1. Verify commit: `git log --oneline -1 -- <modified_file>` — must show a recent commit
-2. Verify code: `grep -c '<key_function_or_change>' <file>` — must return > 0
-
-If either returns empty or 0, report FAIL immediately. Do NOT proceed to behavioral testing.
-
-**QA-E2E MUST use browser tool or Playwright for ALL UI/frontend tasks.** Bundle grep is NEVER valid evidence.
-**BROWSER AUTH SETUP — MANDATORY for authenticated features:** If the feature requires login, use the shared auth helper: `import { authenticatedPage } from './playwright-auth-helper.mjs'`. This injects the JWT into browser localStorage. Do NOT authenticate via API only — the browser must have the token. After auth setup, verify `page.url()` is NOT `/login` before testing any feature.
-**Re-validate EVERY time.** Previous PASS/FAIL is irrelevant.
-**PROOF FORMAT:** every evidence MUST show `$ command` + raw output. Cannot show output = INCONCLUSIVE. Fabricated evidence = FAIL.
-
-**RE-VALIDATION GATE:** After a FAIL, check task comments for a `DIAGNOSIS for` comment from the developer that includes `Total bugs found:` and at least one `file:` reference. If missing or incomplete: `"BLOCKED: no valid DIAGNOSIS posted since last FAIL. @lead"`.
-
-**BUILD HASH GATE:** Before testing, verify live hash: `curl -s <target_url> | grep -o 'index-[^"]*\.js'`. If it differs from the developer's claimed build: `"BUILD DRIFT: live=$LIVE developer=$CLAIMED. @lead"`. Do NOT test mismatched builds.
-
-Post as **task comment** using `$AGENT_NAME` as prefix, then notify the
-Supervisor via board chat:
-```bash
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "$AGENT_NAME validation\n\nPASS/FAIL — EVIDENCE\n\n@lead"}'
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"content": "@lead QA validation posted for task $TASK_ID.", "tags": ["chat"]}'
-```
-
-{% endif %}
-
-### QA Failure Rework
-When QA reports a FAIL on your task:
-1. **Read the FULL QA report** — list EVERY failing criterion, not just the first.
-2. **Read the source code** for each failing area — diagnose ALL root causes.
-3. **Post a DIAGNOSIS comment** with this exact format before fixing anything:
-```
-DIAGNOSIS for $TASK_ID:
-- Bug 1: [file:line] — [what's wrong and why]
-- Bug 2: [file:line] — [what's wrong and why]
-- Bug N: ...
-Total bugs found: N
-```
-4. **Fix ALL** in one rework cycle. Do NOT fix one bug and redeploy.
-5. **Verify your fix works** — run the same test QA ran on the live build.
-6. Then post with the DIAGNOSIS reference:
-```bash
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"message": "Fixed N/N bugs from DIAGNOSIS. Verified on live build $BUILD. @lead"}'
-```
-**If you skip the DIAGNOSIS comment, QA will refuse to re-validate.**
-
-{% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow != "review_only" %}
-### Pre-QA Self-Test (mandatory before moving to review)
-1. Typecheck/build passes (frontend: `npm run typecheck && npm run build`, backend: `pytest`)
-2. If task requires deploy: run `bash $SHARED_WORKSPACE/scripts/deploy.sh <task_id>` from the project root. Requires `.deploy-config` in the project with target host/dir/URL.
-3. All checks must PASS. If ANY fails, fix first.
-{% endif %}
-
-### Escalation Rule
-If your task has received **3+ consecutive QA FAILs** without a PASS:
-- **STOP** deploying new builds.
-- Post: `"ESCALATION: 3+ consecutive QA FAILs on task $TASK_ID. Root causes: [list them]. Requesting operator review before continuing. @lead @Miguel"`
-- Do NOT deploy again until the operator responds.
-- Use the waiting time to read ALL previous QA FAIL comments and diagnose every reported issue comprehensively.
-
-### Scope Authority
-Operator scope decisions are authoritative. Items deferred by the operator must NOT be reopened unless the operator revises the decision. If QA fails on a deferred item: `"Item X deferred by operator. Not in scope. @lead"`
-
-{% if identity_validation_flow != "qa_validation" and identity_dev_acp_flow != "review_only" %}
-### Deploy Target Rule
-Deploy target (host, path, URL) MUST come from the **task description**. Do NOT guess paths. If no deploy target specified, ask `@lead`.
-{% endif %}
-
-### Role Boundaries
-Stay in your role. Ask `@lead` for cross-role work.
-
-### Progress Cadence
-Post a task comment every 30 min while working. No comments = Supervisor assumes stuck.
-
-### Workspace Rules
-Work ONLY in your own workspace (`$WORKSPACE_PATH`). Shared workspace
-(`$SHARED_WORKSPACE`) for cross-agent artifacts. Do NOT deploy over
-another agent's service without coordination.
-
-### Idle
-If no task, post to board memory:
-```bash
-curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
-  -d '{"content": "@lead I am idle. Available for work.", "tags": ["chat"]}'
-```
-
-### Task Comment Format
-```md
-**Update**
-- Net-new artifact/decision/blocker
-
-**Evidence**
-- Commands, links, outputs, or proof
-
-**Next**
-- Next 1-2 concrete actions
-```
+### If QA rejects your task
+Read the FULL QA report. Fix ALL issues in one pass. Redeploy. Re-submit.
 
 ### MANDATORY: Nudge Supervisor After Finishing Work
-After moving a task to review, posting validation results, or completing a deployment, you MUST nudge the Supervisor directly via the nudge API endpoint or board memory chat. Do NOT just tag @lead in a comment and wait — the Supervisor only checks every 5 min. Nudge directly so it routes immediately.
+After moving a task to review or completing a deployment, nudge the Supervisor via board memory chat. Do NOT just tag @lead in a comment and wait.
 
-### Worker HARD RULES
-{% if identity_validation_flow == "qa_validation" %}
-- If your validation is REJECTED, you MUST re-validate with fresh evidence showing the specific issue was addressed. NEVER re-submit a stale PASS verdict.
-- Re-validate EVERY time from scratch. Previous PASS/FAIL is irrelevant — the code may have changed.
-{% else %}
-- If a task is REJECTED, you MUST implement real changes and show a new commit. NEVER re-submit with "PASS by design" or "no changes needed".
-- NEVER deploy to a different machine than specified in the task. If you can't reach the target, report the blocker and STOP.
-{% endif %}
-- Fabricating evidence (fake build output, fake test results) is a critical violation.
+### Rules
+- Deploy target comes from the **task description**. Do NOT guess paths.
+- Stay in your role. Ask `@lead` for cross-role work.
+- Fabricating evidence is a critical violation.
+- If stuck 3+ times on same issue, escalate to `@Miguel`.
 
 ## Code Delegation (ACP)
 
