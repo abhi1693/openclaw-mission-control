@@ -3,6 +3,82 @@ Review the tasks waiting for approval, use Chome MCP if necessary, the expected 
 
 Investigate why the agents aren't nudging each other as instructed
 
+## 2026-04-07 — System Restore + Post-Mortem + Process Guardrails + Phase 1 Complete
+
+### Phase 1 Complete — 97/97 tasks done
+- Phase 1C (Org Management UI) and Phase 1D (Profile + Board CRUD) approved and closed
+- Phase 1 umbrella task closed
+- Backend tasks (PATCH /auth/me + Org API extensions) approved and closed
+- 5 phantom fix tasks cancelled (symptoms of rogue deployments)
+
+### Auth Rehydration Fix
+- Root cause: `useAuth.ts` used static `getStoredToken()` — not reactive to localStorage changes after OTP login
+- Fix: `useSyncExternalStore` + `token-changed` custom event in `setStoredToken`/`clearStoredToken`
+- Validated via Chrome MCP: cleared localStorage → real OTP login flow → landed on dashboard, NOT /login
+- Build `index-CCko4tQP.js` (commit `a24c77e`) deployed and verified
+
+### QA-E2E Test Methodology Bug
+- QA-E2E authenticated via API calls (curl for OTP) but never injected JWT into Playwright browser localStorage
+- Browser had no token → app redirected to /login → 68+ false FAILs over 6 days
+- Fix: `playwright-auth-helper.mjs` shared helper + template rule mandating browser auth setup
+- Template: "BROWSER AUTH SETUP — MANDATORY for authenticated features"
+
+### Rogue Deployment Root Cause Found
+- PF was deploying to `~/taskflow-dashboard/dist/` (wrong) instead of `~/taskflow-dashboard/` (root)
+- The `serve` process serves from root — deploying to dist/ created a parallel build
+- Fix: generic `deploy.sh` script reads `.deploy-config` per project, template "Deploy Target Rule"
+
+### Process Guardrails (commits e2da873, 399aaca, 6da7911, 0d89786, 944e36f, 0675173)
+- QA Failure Rework: structured DIAGNOSIS comment required before fixing (file:line, total bugs)
+- RE-VALIDATION GATE: QA refuses re-validation without DIAGNOSIS comment
+- BUILD HASH GATE: QA verifies live hash matches developer's claim
+- Pre-QA Self-Test: typecheck+build+verify for PF/PB/DevOps (not QA/Architect)
+- Escalation Rule: 3+ consecutive QA FAILs → stop and escalate to operator
+- Supervisor Comment Discipline: max 3/task/hour, skip pure acks
+- Supervisor Guard Rails: verify bugs in committed source before creating fix tasks
+- Frozen Criteria: new issues outside scope → new task, not scope expansion
+- Deploy Target Rule: read from task description, don't guess paths
+
+### TDD Workflow (commits 3c12f8d, 4a77b06, f530001)
+- PF and PB now follow red-green-refactor: tests BEFORE implementation
+- ACP prompts start with "TDD:" — write failing tests, implement to pass, then review
+- Scoped to PF (claude_with_skills) and PB (codex_then_claude_review) only
+- QA, Architect, DevOps excluded — TDD impractical for validation/review/infra work
+
+### Domain-Optimized Model Fallback Chains
+- Benchmarked 6 Ollama cloud models on domain-specific tasks (frontend, backend, QA, architecture, DevOps, coordination)
+- Each agent's fallback chain ranked by live test performance:
+  - PF: gpt-5.4 → minimax/m2.7 → gemma4:31b → qwen3.5 (React/TS)
+  - PB: gpt-5.4 → kimi-k2.5 → glm-5.1 → qwen3.5 (Python/FastAPI)
+  - Architect: gpt-5.4 → kimi-k2.5 → minimax/m2.7 → qwen3.5 (deep analysis)
+  - QA-E2E: gpt-5.4 → qwen3.5 → minimax/m2.7 → glm-5.1 (Playwright)
+  - QA-Unit: gpt-5.4 → glm-5.1 → kimi-k2.5 → qwen3.5 (pytest)
+  - DevOps: gpt-5.4 → qwen3.5 → kimi-k2.5 → glm-5.1 (bash/deploy)
+  - Supervisor: gpt-5.4 → minimax/m2.7 → gemma4:31b → qwen3.5 (coordination)
+- All minimax uses changed to `minimax/minimax-m2.7` (direct API, not Ollama cloud)
+- No anthropic in any fallback chain
+- Heartbeat model: qwen3.5:cloud (fastest, most consistent for tick tasks)
+
+### Redis-Memory Plugin
+- Disabled entirely (`enabled: false`, memory slot cleared)
+- Was poisoning agent sessions with stale memories from failed fix attempts
+- Agents use workspace MEMORY.md for structured persistent state instead
+- Plugin doesn't support per-agent disable — global only
+
+### Feature Audit (TaskFlow Dashboard vs WhatsApp bot)
+- Dashboard is primarily view-only; all task management done via WhatsApp/NanoClaw
+- User command frequency: assignment (~101), lookup (~69), deadlines (~45), capture (~44), notes (~19)
+- Dashboard missing: 6-column GTD board (next_action/waiting), inbox triage, search/filter by person, project hierarchy, TaskFlow-native notes
+- Codex corrected: dashboard DOES have task editing, drag-and-drop, approvals (I was wrong)
+- Phase 2 priorities: 6-column board, inbox triage, search+filters, project hierarchy, notes
+
+### Infrastructure
+- OpenClaw upgraded to 2026.4.5 — 28 new RPC methods, heartbeat auto-restart on config.patch
+- `bootstrapMaxChars` correctly set at `agents.defaults.bootstrapMaxChars` (not top-level)
+- `board-stop.sh`/`board-start.sh` scripts for operator freeze (heartbeat only, not full freeze)
+- `deploy.sh` + `deploy-lock.sh` for deployment pipeline
+- `qa-smoke-test.sh` for pre-submission validation
+
 ## 2026-04-07 — System Restore + Post-Mortem + Process Guardrails
 
 ### Dashboard Restore
@@ -345,4 +421,183 @@ All 6 models got it right this time. Here's the real-world comparison:
   The template rules are the fastest win — they address the deploy→fail loop, overnight autonomy, and supervisor noise directly. Want me to implement them in BOARD_AGENTS.md.j2 now?         
 
 
+
+ Why PF never finishes — 4 root causes                                                                                                                                                                                           
+                                       
+  1. PF fixes one symptom at a time (iterative symptom-chasing)                                                                                                                                                                   
+                                       
+  Codex traced Phase 1C's sequence: org switcher → cache → testids → stale bundle → TEST_MODE → settings testids → name attrs. Seven deploys for what should have been one diagnosis pass. PF never reads the FULL QA report and  
+  diagnoses ALL issues before deploying. Each deploy fixes the first thing QA mentioned.
+                                                                                                                                                                                                                                  
+  2. PF's fixes sometimes don't work or cause regressions                                                                                                                                                                         
+  
+  QA explicitly called index-CmlBnMyV.js a regression. PF's auth-routing "fix" still left authenticated users on /login. PF then blamed QA for being "unauthenticated" — QA contradicted with authenticated evidence. PF is not   
+  always verifying its own fix works before deploying.
+                                                                                                                                                                                                                                  
+  3. Build drift — PF deploys to the wrong place or QA tests the wrong build                                                                                                                                                      
+  
+  The deployment target on .63 is not a git repo. PF deployed to the wrong directory path (DevOps had to fix it). QA repeatedly found a different live hash than what PF claimed. The operator's build was overwritten within     
+  hours.                               
+                                                                                                                                                                                                                                  
+  4. Scope keeps moving                                                                                                                                                                                                           
+  
+  Phase 1C reached PASS on index-nidwUDk3.js (4/4), but then new criteria appeared (dashboard query invalidation, WhatsApp integration) causing fresh FAILs. Phase 1D was narrowed 3 times by different authorities (operator,    
+  Supervisor, Architect) — each time changing what PF was targeting.
+                                                                                                                                                                                                                                  
+  Why QA always finds a bug                                                                                                                                                                                                       
+  
+  QA-E2E is actually doing its job correctly:                                                                                                                                                                                     
+  - Uses authenticated testing (OTP/JWT)
+  - Tests the live deployed build, not just what PF claims                                                                                                                                                                        
+  - Reports specific failing criteria with evidence       
+  - The FAILs are REAL — they're finding genuine issues                                                                                                                                                                           
+                                                       
+  The problem isn't QA finding too many bugs. It's that PF submits before verifying and the environment is unstable (build drift, wrong deploy path, scope changes).                                                              
+                                                                                                                                                                                                                                  
+  The "STOP ALL WORK" was ignored                                                                                                                                                                                                 
+                                                                                                                                                                                                                                  
+  Agents acknowledged the STOP at ~10:55 UTC but resumed deploying new builds within hours. Supervisor kept routing after STOP. The template rule is advisory — there's no enforcement mechanism in the gateway to actually freeze
+   an agent.                           
+                                                                                                                                                                                                                                  
+  What would actually close these tasks                                                                                                                                                                                           
+  
+  Codex's recommendation (which I agree with):                                                                                                                                                                                    
+                                       
+  1. Lock the build: Deploy ONE build, verify QA can reach it at the correct URL, refuse to redeploy until QA PASSes or explicitly identifies all bugs                                                                            
+  2. Freeze the acceptance criteria: No new requirements. Any new issue becomes a new task.
+  3. PF must reproduce the QA flow: Before submitting, PF runs the EXACT same authenticated test QA will run, on the EXACT live build, and posts that evidence                                                                    
+  4. STOP must be enforced: Use set-heartbeats {enabled: false} to actually freeze agents, not just post a comment they can ignore   
+
+
   Use codex to review and validate your assumptions and implementation 
+
+  ┌─────────────────────────────────────────────────┬──────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                       Gap                       │  Status  │                                                            Why acceptable for now                                                            │
+  ├─────────────────────────────────────────────────┼──────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ board-stop.sh only stops heartbeats, not nudges │ Known    │ Full freeze needs MC API gate — future work. Heartbeat stop prevents 90% of autonomous activity.                                             │
+  ├─────────────────────────────────────────────────┼──────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Deploy Target Rule is advisory                  │ Known    │ BUILD HASH GATE at QA level provides enforcement — QA refuses to test mismatched builds                                                      │
+  ├─────────────────────────────────────────────────┼──────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ DIAGNOSIS format not machine-checkable          │ Accepted │ Human-readable is sufficient. Machine enforcement would need MC backend schema changes                                                       │
+  ├─────────────────────────────────────────────────┼──────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ No deploy lock acquisition in template          │ Known    │ Lock script exists on .63 but template doesn't mandate calling it. Deploy target in task description + QA hash gate is the enforcement layer │
+  └─────────────────────────────────────────────────┴──────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+claude --resume 5d1faf84-b059-49c3-bfcc-49416c1d4a95
+
+Features used via WhatsApp (NanoClaw/TaskFlow skill) vs Dashboard UI                                                                                                                                                            
+  
+  What users DO via WhatsApp (from real conversations):                                                                                                                                                                           
+                                                                                                                                                                                                                                
+  ┌─────────────────────┬─────────────────────────────────────────┬────────────────────────────────┬──────────────────────────────────────────────────────────────┐                                                               
+  │       Command       │                 Example                 │            API Used            │                        Dashboard UI?                         │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ View project        │ P18, P2, p11                            │ GET tasks + filter             │ Partial — board view exists, no project drill-down           │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Add subtask         │ P11 adicionar tarefa ...                │ POST tasks                     │ No — only "New Board" button, no task creation inside boards │                                                               
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Assign task         │ P18.3 atribuir para Beatriz             │ PATCH task                     │ No — no assignee picker in UI                                │                                                               
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Set deadline        │ prazo 07/04/26                          │ PATCH task                     │ No — no date picker in UI                                    │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Add note            │ P11.17 adicionar nota ...               │ POST comments                  │ No — no comment input in UI                                  │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ View person's tasks │ Tarefas Mauro, Atividades de Mariany    │ GET tasks filtered by assignee │ No — People panel shows names but no task filter             │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Process inbox       │ processar inbox, Inbox                  │ GET tasks?status=inbox         │ Partial — Kanban has Inbox column                            │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Change status       │ tirar de inbox e colocar como atividade │ PATCH task status              │ No — no drag-and-drop or status change                       │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Reassign            │ Reatribuir T-005 para Rafael            │ PATCH task assignee            │ No                                                           │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Approve/review      │ todas as atividades foram revisadas     │ PATCH task status to done      │ No — no approval flow in UI                                  │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ View overdue        │ quais tarefas estão sem prazo           │ GET tasks/overdue              │ Partial — overdue table exists on dashboard                  │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ View by status      │ tarefas do Mauro em revisão             │ GET tasks filtered             │ No — no combined filter (person + status)                    │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Cross-board         │ sec-t-004 prazo 30/04/26                │ PATCH across boards            │ No                                                           │                                                             
+  ├─────────────────────┼─────────────────────────────────────────┼────────────────────────────────┼──────────────────────────────────────────────────────────────┤                                                               
+  │ Standup report      │ Automated [TF-STANDUP]                  │ GET stats + report             │ Partial — stats cards exist but no standup view              │                                                             
+  └─────────────────────┴─────────────────────────────────────────┴────────────────────────────────┴──────────────────────────────────────────────────────────────┘                                                               
+                                                                                                                                                                                                                                
+  Summary of gaps                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                
+  The dashboard is VIEW-ONLY. It displays boards, tasks, stats, and overdue items, but users cannot:                                                                                                                              
+  
+  1. Create tasks inside a board (only "New Board")                                                                                                                                                                               
+  2. Edit tasks — no assignee, deadline, status, or priority changes                                                                                                                                                            
+  3. Add comments/notes to tasks                                                                                                                                                                                                  
+  4. Filter by person — "Show me Mauro's tasks"                                                                                                                                                                                 
+  5. Filter by person + status — "Mauro's tasks in review"                                                                                                                                                                        
+  6. Drag-and-drop tasks between columns                                                                                                                                                                                          
+  7. Approve/reject tasks                                                                                                                                                                                                         
+  8. View project hierarchy — drill into P18 → see subtasks P18.1, P18.2, P18.3                                                                                                                                                   
+  9. Process inbox — bulk review/assign inbox items                                                                                                                                                                               
+  10. Generate standup/digest reports                                                                                                                                                                                           
+                                                                                                                                                                                                                                  
+  The WhatsApp bot via NanoClaw is the primary interface — users do ALL their work there. The dashboard is only used for high-level monitoring (28 boards, 298 tasks, overdue chart).                                             
+
+
+  Corrected Feature Audit (Codex-validated)                                                                                                                                                                                       
+                                                                                                                                                                                                                                
+  My claims that were WRONG                                                                                                                                                                                                       
+                                                                                                                                                                                                                                
+  ┌───────────────────────────────────────┬───────────────────────────────────────────────────────────────────┬─────────────────────────────┐                                                                                     
+  │               My claim                │                         Codex correction                          │          Evidence           │                                                                                     
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────┼─────────────────────────────┤                                                                                     
+  │ "No task creation inside boards"      │ Wrong — exists as "new task to inbox" flow                        │ page.tsx:1980               │                                                                                     
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────┼─────────────────────────────┤                                                                                     
+  │ "No assignee/deadline/status editing" │ Wrong — all exist in the board detail UI                          │ page.tsx:2679, 4140         │                                                                                     
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────┼─────────────────────────────┤                                                                                     
+  │ "No drag-and-drop"                    │ Wrong — already implemented                                       │ TaskBoard.tsx:305           │                                                                                     
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────┼─────────────────────────────┤                                                                                     
+  │ "No approval flow"                    │ Wrong — BoardApprovalsPanel.tsx exists                            │ BoardApprovalsPanel.tsx:444 │                                                                                     
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────┼─────────────────────────────┤                                                                                     
+  │ "No comments"                         │ Partially wrong — comments exist, but TaskFlow-native notes don't │ page.tsx:2598               │                                                                                     
+  └───────────────────────────────────────┴───────────────────────────────────────────────────────────────────┴─────────────────────────────┘                                                                                     
+                                                                                                                                                                                                                                  
+  What's ACTUALLY missing (validated by conversations + code)                                                                                                                                                                     
+                                                                                                                                                                                                                                  
+  ┌──────────┬─────────────────────────────────────────────────┬──────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────┐                      
+  │ Priority │                     Feature                     │          User frequency          │                                             Why it matters                                             │                      
+  ├──────────┼─────────────────────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤                      
+  │ #1       │ 6-column TaskFlow board (next_action + waiting) │ Every session                    │ Dashboard has 4 columns, TaskFlow uses 6. Users constantly reference "próximas ações" and "aguardando" │                      
+  ├──────────┼─────────────────────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤                      
+  │ #2       │ Inbox triage UI                                 │ ~44 captures + ~11 status moves  │ Users process inbox via WhatsApp with batch assign/deadline/action. No web equivalent                  │                      
+  ├──────────┼─────────────────────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤                      
+  │ #3       │ Search + filter by person/status/ID             │ ~69 lookups + ~15 person filters │ "Tarefas do Mauro em revisão", "P18.3", "quais tarefas sem prazo" — most frequent command category     │                      
+  ├──────────┼─────────────────────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤                      
+  │ #4       │ Project/subtask hierarchy                       │ ~44 creates + ~7 hierarchy ops   │ Users drill into P18→P18.1, P18.2, P18.3. Dashboard is flat                                            │                      
+  ├──────────┼─────────────────────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤                      
+  │ #5       │ TaskFlow-native notes                           │ ~19 note adds                    │ "adicionar nota..." is distinct from comments — notes are structured, editable, numbered               │                    
+  └──────────┴─────────────────────────────────────────────────┴──────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────┘                      
+                                                                                                                                                                                                                                
+  What I missed entirely                                                                                                                                                                                                          
+                                                                                                                                                                                                                                
+  - next_action and waiting columns — the web board only has inbox/in_progress/review/done. TaskFlow has 6 GTD columns. This is the biggest UX gap.                                                                               
+  - People registration — users register new team members via WhatsApp (cadastrar Rafael, telefone...). No web UI for this.
+  - Recurring tasks — users create recurring tasks via WhatsApp. No web support.                                                                                                                                                  
+  - Cross-board operations — users reference tasks from other boards (sec-t-004, sec-p24.1). Dashboard is single-board.                                                                                                           
+                                                                                                                                                                                                                                  
+  Usage frequency from real conversations                                                                                                                                                                                         
+                                                                                                                                                                                                                                  
+  Assignment/reassign:  ~101 commands                                                                                                                                                                                           
+  Lookup/query:         ~69 commands                                                                                                                                                                                              
+  Deadline changes:     ~45 commands
+  Capture/create:       ~44 commands                                                                                                                                                                                              
+  Notes:                ~19 commands                                                                                                                                                                                              
+  Person filters:       ~15 commands
+  Status moves:         ~11 commands                                                                                                                                                                                              
+  Hierarchy/people:     ~7 commands                                                                                                                                                                                             
+  Approvals:            ~2 commands                                                                                                                                                                                               
+  
+  The dashboard already has the low-frequency features (approvals, drag-and-drop) but is missing the high-frequency ones (search, filters, inbox triage, 6-column board).                                                         
+                                                                                                                                                                                                                                                                                                                                                            
+                                                                                                                                                                                 
+                                                                                                                                                                                 Does the embenddings skill do the same work as https://github.com/redis-developer/openclaw-redis-agent-memory           
+In resume what the Openclaw memory plugin does: auto-captures conversation summaries → stores in redis → auto-injects as <relevant-memories> on each tick based on semantic search.                                                                                                                                                                                 
+
+
+
+Try again the test againt the Gemma4, maybe the same case, outputs to a thinking field, not response
