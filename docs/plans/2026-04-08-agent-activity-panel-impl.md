@@ -2,115 +2,38 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a collapsible right panel to the MC Dashboard showing real-time agent activity (thinking, tool calls, output) via SSE from the OpenClaw gateway.
+**Goal:** Add a right-side dashboard panel that shows live board-agent activity from the gateway without breaking auth, board scoping, or multi-board dashboard behavior.
 
-**Architecture:** MC backend subscribes to gateway WebSocket events (`sessions.subscribe`), classifies them, and fans out as SSE to browser clients. React panel renders a Claude Code-style terminal per agent.
+**Architecture:** Mission Control keeps a long-lived gateway WebSocket per gateway and manages `sessions.subscribe` / `sessions.unsubscribe` over that persistent connection. The backend exposes a board-scoped SSE endpoint guarded by existing board-read dependencies. The frontend consumes that SSE stream via authenticated `fetch` streaming, not native `EventSource`, so local-auth and Clerk bearer-token flows continue to work.
 
-**Tech Stack:** Python/FastAPI + sse-starlette (backend), React/Next.js + native EventSource (frontend), OpenClaw gateway WebSocket RPC.
+**Tech Stack:** Python/FastAPI + `sse-starlette` + `websockets` (backend), React/Next.js + fetch streaming + `TextDecoder` (frontend), generated API client via `make api-gen`.
 
----
-
-### Task 1: Gateway RPC — subscribe/unsubscribe helpers
-
-**Files:**
-- Modify: `backend/app/services/openclaw/gateway_rpc.py`
-- Test: `backend/tests/test_gateway_rpc_subscribe.py`
-
-**Step 1: Write the failing test**
-
-```python
-# backend/tests/test_gateway_rpc_subscribe.py
-import pytest
-from unittest.mock import AsyncMock, patch
-from app.services.openclaw.gateway_rpc import subscribe_session, unsubscribe_session, GatewayConfig
-
-TEST_CONFIG = GatewayConfig(url="ws://localhost:18789", token="test", disable_device_pairing=True)
-
-@pytest.mark.asyncio
-async def test_subscribe_session_calls_gateway():
-    with patch("app.services.openclaw.gateway_rpc.openclaw_call", new_callable=AsyncMock) as mock_call:
-        mock_call.return_value = {"ok": True}
-        result = await subscribe_session("agent:main:main", config=TEST_CONFIG)
-        mock_call.assert_called_once_with(
-            "sessions.subscribe",
-            {"sessionKey": "agent:main:main"},
-            config=TEST_CONFIG,
-        )
-        assert result == {"ok": True}
-
-@pytest.mark.asyncio
-async def test_unsubscribe_session_calls_gateway():
-    with patch("app.services.openclaw.gateway_rpc.openclaw_call", new_callable=AsyncMock) as mock_call:
-        mock_call.return_value = {"ok": True}
-        result = await unsubscribe_session("agent:main:main", config=TEST_CONFIG)
-        mock_call.assert_called_once_with(
-            "sessions.unsubscribe",
-            {"sessionKey": "agent:main:main"},
-            config=TEST_CONFIG,
-        )
-```
-
-**Step 2: Run test to verify it fails**
-
-Run: `cd backend && python -m pytest tests/test_gateway_rpc_subscribe.py -v`
-Expected: FAIL with `ImportError: cannot import name 'subscribe_session'`
-
-**Step 3: Write minimal implementation**
-
-Add to `backend/app/services/openclaw/gateway_rpc.py` after the existing `get_memory_status` function:
-
-```python
-async def subscribe_session(
-    session_key: str,
-    *,
-    config: GatewayConfig,
-) -> object:
-    """Subscribe to real-time events for a session."""
-    return await openclaw_call(
-        "sessions.subscribe", {"sessionKey": session_key}, config=config
-    )
-
-
-async def unsubscribe_session(
-    session_key: str,
-    *,
-    config: GatewayConfig,
-) -> object:
-    """Unsubscribe from session events."""
-    return await openclaw_call(
-        "sessions.unsubscribe", {"sessionKey": session_key}, config=config
-    )
-```
-
-**Step 4: Run test to verify it passes**
-
-Run: `cd backend && python -m pytest tests/test_gateway_rpc_subscribe.py -v`
-Expected: 2 passed
-
-**Step 5: Commit**
-
-```bash
-git add backend/app/services/openclaw/gateway_rpc.py backend/tests/test_gateway_rpc_subscribe.py
-git commit -m "feat(rpc): add subscribe/unsubscribe session helpers"
-```
+**Codebase notes:**
+- The dashboard page is org-wide, not board-scoped. Do **not** silently bind the panel to `boards[0]`; expose an explicit board selector in the panel UI.
+- Existing board-scoped stream routes use `/boards/{board_id}/...` plus `get_board_for_actor_read` / `require_user_or_agent` access checks. Follow that pattern.
+- Local auth is header-based (`Authorization: Bearer ...`) in `frontend/src/api/mutator.ts` and `backend/app/core/auth.py`. Native `EventSource` cannot send that header, so it is not acceptable here.
+- `backend/app/services/openclaw/gateway_rpc.py` currently uses one-shot `openclaw_call(...)` connections. Real-time activity requires a persistent WebSocket reader loop, not a fire-and-forget subscribe RPC.
+- `backend/app/main.py` already owns app lifespan. Wire activity-service startup/shutdown there so background gateway tasks are cleaned up correctly.
+- Keep MVP scoped to agent identity, model, tool calls, tool output, and timestamps. Do **not** invent `task_id` / `task_title` fields unless a reliable source exists in committed code.
 
 ---
 
-### Task 2: AgentActivityBroker — gateway event stream
+### Task 1: Backend model + event classification
 
 **Files:**
 - Create: `backend/app/services/openclaw/activity_stream.py`
 - Test: `backend/tests/test_activity_stream.py`
 
-**Step 1: Write the failing test**
+**Step 1: Write the failing tests**
 
 ```python
 # backend/tests/test_activity_stream.py
-import pytest
-import asyncio
-from app.services.openclaw.activity_stream import AgentActivityBroker, AgentEvent
+from __future__ import annotations
 
-def test_classify_thinking_event():
+from app.services.openclaw.activity_stream import AgentEvent
+
+
+def test_classify_assistant_text_event() -> None:
     raw = {
         "type": "event",
         "event": "session.message",
@@ -118,19 +41,26 @@ def test_classify_thinking_event():
             "sessionKey": "agent:mc-123:main",
             "message": {
                 "role": "assistant",
-                "content": [{"type": "text", "text": "Let me check the task status..."}],
+                "content": [{"type": "text", "text": "Checking logs now"}],
             },
             "model": "gpt-5.4",
-            "usage": {"input": 100, "output": 50, "cost": {"total": 0.01}},
+            "usage": {"input": 10, "output": 5, "cost": {"total": 0.02}},
         },
     }
-    event = AgentEvent.from_gateway_event(raw)
+
+    event = AgentEvent.from_gateway_event(raw, agent_name="Planner")
+
+    assert event is not None
     assert event.type == "thinking"
     assert event.agent_id == "mc-123"
-    assert event.content == "Let me check the task status..."
+    assert event.agent_name == "Planner"
+    assert event.content == "Checking logs now"
     assert event.model == "gpt-5.4"
+    assert event.session_tokens == 15
+    assert event.session_cost == 0.02
 
-def test_classify_tool_call_event():
+
+def test_classify_tool_call_event() -> None:
     raw = {
         "type": "event",
         "event": "session.message",
@@ -138,169 +68,117 @@ def test_classify_tool_call_event():
             "sessionKey": "agent:mc-123:main",
             "message": {
                 "role": "assistant",
-                "content": [{"type": "toolCall", "name": "exec", "arguments": {"command": "curl -s http://localhost:8000/health"}}],
+                "content": [
+                    {
+                        "type": "toolCall",
+                        "name": "exec_command",
+                        "arguments": {"cmd": "curl -s http://localhost:8000/health"},
+                    }
+                ],
             },
-            "model": "gpt-5.4",
         },
     }
-    event = AgentEvent.from_gateway_event(raw)
-    assert event.type == "tool_call"
-    assert event.tool_name == "exec"
-    assert "curl" in event.tool_args
 
-def test_classify_tool_result_event():
+    event = AgentEvent.from_gateway_event(raw, agent_name="Planner")
+
+    assert event is not None
+    assert event.type == "tool_call"
+    assert event.tool_name == "exec_command"
+    assert "curl" in (event.tool_args or "")
+
+
+def test_classify_tool_result_event() -> None:
     raw = {
         "type": "event",
         "event": "session.tool",
         "payload": {
             "sessionKey": "agent:mc-123:main",
-            "toolName": "exec",
+            "toolName": "exec_command",
             "content": [{"type": "text", "text": '{"ok": true}'}],
             "exitCode": 0,
-            "durationMs": 150,
+            "durationMs": 120,
         },
     }
-    event = AgentEvent.from_gateway_event(raw)
-    assert event.type == "tool_result"
-    assert event.exit_code == 0
-    assert event.output == '{"ok": true}'
-    assert event.duration_ms == 150
 
-def test_truncates_long_output():
+    event = AgentEvent.from_gateway_event(raw, agent_name="Planner")
+
+    assert event is not None
+    assert event.type == "tool_result"
+    assert event.output == '{"ok": true}'
+    assert event.exit_code == 0
+    assert event.duration_ms == 120
+
+
+def test_ignore_non_assistant_message() -> None:
     raw = {
         "type": "event",
-        "event": "session.tool",
+        "event": "session.message",
         "payload": {
             "sessionKey": "agent:mc-123:main",
-            "toolName": "exec",
-            "content": [{"type": "text", "text": "x" * 1000}],
-            "exitCode": 0,
+            "message": {"role": "user", "content": [{"type": "text", "text": "hi"}]},
         },
     }
-    event = AgentEvent.from_gateway_event(raw)
-    assert len(event.output) <= 300
+
+    assert AgentEvent.from_gateway_event(raw, agent_name="Planner") is None
 ```
 
 **Step 2: Run test to verify it fails**
 
 Run: `cd backend && python -m pytest tests/test_activity_stream.py -v`
-Expected: FAIL with `ImportError`
+Expected: FAIL with `ModuleNotFoundError` or missing `AgentEvent`
 
 **Step 3: Write minimal implementation**
 
-```python
-# backend/app/services/openclaw/activity_stream.py
-"""Real-time agent activity stream from the OpenClaw gateway."""
+Create `backend/app/services/openclaw/activity_stream.py` with:
 
+```python
 from __future__ import annotations
 
-import asyncio
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
-
-from app.core.logging import get_logger
-
-logger = get_logger(__name__)
 
 MAX_CONTENT_CHARS = 500
 MAX_ARGS_CHARS = 200
 MAX_OUTPUT_CHARS = 300
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentEvent:
-    type: str  # "thinking" | "tool_call" | "tool_result" | "status"
+    type: str
     agent_id: str
+    agent_name: str
     timestamp: str
-    model: str = ""
+    model: str | None = None
     content: str | None = None
     tool_name: str | None = None
     tool_args: str | None = None
     exit_code: int | None = None
     output: str | None = None
     duration_ms: int | None = None
-    session_tokens: int = 0
-    session_cost: float = 0.0
+    session_tokens: int | None = None
+    session_cost: float | None = None
 
     @classmethod
-    def from_gateway_event(cls, raw: dict[str, Any]) -> AgentEvent | None:
-        event_type = raw.get("event", "")
-        payload = raw.get("payload", {})
-        session_key = payload.get("sessionKey", "")
-
-        # Extract agent_id from session key: "agent:mc-123:main" -> "mc-123"
-        parts = session_key.split(":")
-        agent_id = parts[1] if len(parts) >= 2 else ""
-
-        ts = datetime.now(timezone.utc).isoformat()
-        model = payload.get("model", "")
-        usage = payload.get("usage", {})
-        tokens = usage.get("output", 0) + usage.get("input", 0)
-        cost = usage.get("cost", {}).get("total", 0.0) if isinstance(usage.get("cost"), dict) else 0.0
-
-        if event_type == "session.message":
-            message = payload.get("message", {})
-            role = message.get("role", "")
-            content_list = message.get("content", [])
-
-            if role != "assistant" or not isinstance(content_list, list):
-                return None
-
-            for block in content_list:
-                block_type = block.get("type", "")
-                if block_type == "text":
-                    return cls(
-                        type="thinking",
-                        agent_id=agent_id,
-                        timestamp=ts,
-                        model=model,
-                        content=block.get("text", "")[:MAX_CONTENT_CHARS],
-                        session_tokens=tokens,
-                        session_cost=cost,
-                    )
-                elif block_type == "toolCall":
-                    args = block.get("arguments", {})
-                    args_str = json.dumps(args)[:MAX_ARGS_CHARS] if isinstance(args, dict) else str(args)[:MAX_ARGS_CHARS]
-                    return cls(
-                        type="tool_call",
-                        agent_id=agent_id,
-                        timestamp=ts,
-                        model=model,
-                        tool_name=block.get("name", ""),
-                        tool_args=args_str,
-                        session_tokens=tokens,
-                        session_cost=cost,
-                    )
-
-        elif event_type == "session.tool":
-            content_list = payload.get("content", [])
-            output = ""
-            for block in content_list if isinstance(content_list, list) else []:
-                if block.get("type") == "text":
-                    output = block.get("text", "")
-                    break
-            return cls(
-                type="tool_result",
-                agent_id=agent_id,
-                timestamp=ts,
-                tool_name=payload.get("toolName", ""),
-                exit_code=payload.get("exitCode"),
-                output=output[:MAX_OUTPUT_CHARS],
-                duration_ms=payload.get("durationMs"),
-            )
-
-        return None
+    def from_gateway_event(
+        cls,
+        raw: dict[str, Any],
+        *,
+        agent_name: str,
+    ) -> AgentEvent | None:
+        ...
 
     def to_dict(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"type": self.type, "agent_id": self.agent_id, "timestamp": self.timestamp}
-        for key in ("model", "content", "tool_name", "tool_args", "exit_code", "output", "duration_ms", "session_tokens", "session_cost"):
-            val = getattr(self, key)
-            if val is not None and val != "" and val != 0 and val != 0.0:
-                d[key] = val
-        return d
+        ...
 ```
+
+Implementation requirements:
+- Parse `agent_id` from `sessionKey` values like `agent:mc-<uuid>:main`.
+- Only classify assistant `session.message` events.
+- Support `text` -> `thinking`, `toolCall` -> `tool_call`, and `session.tool` -> `tool_result`.
+- Truncate text, args, and output using the constants above.
+- Serialize only non-empty optional fields from `to_dict()`.
 
 **Step 4: Run test to verify it passes**
 
@@ -311,119 +189,407 @@ Expected: 4 passed
 
 ```bash
 git add backend/app/services/openclaw/activity_stream.py backend/tests/test_activity_stream.py
-git commit -m "feat(activity): AgentEvent classifier for gateway events"
+git commit -m "feat(activity): add agent event classifier"
 ```
 
 ---
 
-### Task 3: SSE endpoint
+### Task 2: Backend gateway connection manager
+
+**Files:**
+- Modify: `backend/app/services/openclaw/activity_stream.py`
+- Test: `backend/tests/test_activity_stream_connection.py`
+
+**Step 1: Write the failing tests**
+
+```python
+# backend/tests/test_activity_stream_connection.py
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from app.services.openclaw.activity_stream import GatewayActivityConnection
+
+
+class FakeSocket:
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+        self.recv_queue: asyncio.Queue[dict] = asyncio.Queue()
+        self.closed = False
+
+    async def send_json(self, payload: dict) -> None:
+        self.sent.append(payload)
+
+    async def recv_json(self) -> dict:
+        return await self.recv_queue.get()
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_connection_sends_subscribe_for_new_session_keys() -> None:
+    socket = FakeSocket()
+    conn = GatewayActivityConnection(
+        gateway_id="gw-1",
+        connect=lambda: socket,
+        publish=lambda board_id, event: None,
+    )
+
+    await conn.update_subscriptions({"agent:mc-1:main", "agent:mc-2:main"})
+
+    assert socket.sent[0]["method"] == "sessions.subscribe"
+    assert socket.sent[0]["params"]["sessionKey"] == "agent:mc-1:main"
+    assert socket.sent[1]["params"]["sessionKey"] == "agent:mc-2:main"
+
+
+@pytest.mark.asyncio
+async def test_connection_sends_unsubscribe_for_removed_session_keys() -> None:
+    socket = FakeSocket()
+    conn = GatewayActivityConnection(
+        gateway_id="gw-1",
+        connect=lambda: socket,
+        publish=lambda board_id, event: None,
+    )
+
+    await conn.update_subscriptions({"agent:mc-1:main", "agent:mc-2:main"})
+    socket.sent.clear()
+
+    await conn.update_subscriptions({"agent:mc-2:main"})
+
+    assert socket.sent == [
+        {"method": "sessions.unsubscribe", "params": {"sessionKey": "agent:mc-1:main"}}
+    ]
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `cd backend && python -m pytest tests/test_activity_stream_connection.py -v`
+Expected: FAIL with missing `GatewayActivityConnection`
+
+**Step 3: Implement persistent connection management**
+
+Extend `backend/app/services/openclaw/activity_stream.py` with:
+
+```python
+class GatewayActivityConnection:
+    def __init__(self, gateway_id: str, *, connect, publish) -> None:
+        self.gateway_id = gateway_id
+        self._connect = connect
+        self._publish = publish
+        self._socket = None
+        self._desired_session_keys: set[str] = set()
+        self._subscribed_session_keys: set[str] = set()
+        self._reader_task: asyncio.Task[None] | None = None
+
+    async def ensure_started(self) -> None:
+        ...
+
+    async def update_subscriptions(self, session_keys: set[str]) -> None:
+        ...
+
+    async def aclose(self) -> None:
+        ...
+```
+
+Implementation requirements:
+- Keep one live socket per gateway.
+- Send `sessions.subscribe` only for newly-added session keys.
+- Send `sessions.unsubscribe` only for removed session keys.
+- Start a background reader loop once per connection.
+- Reader loop must reconnect with bounded exponential backoff and re-subscribe after reconnect.
+- Connection code must not rely on one-shot `openclaw_call(...)`.
+
+Pragmatic note:
+- If `gateway_rpc.py` needs a small public helper for authenticated persistent connects, add it there.
+- Do **not** add dead wrapper functions that just call `openclaw_call("sessions.subscribe", ...)`.
+
+**Step 4: Run test to verify it passes**
+
+Run: `cd backend && python -m pytest tests/test_activity_stream_connection.py -v`
+Expected: 2 passed
+
+**Step 5: Commit**
+
+```bash
+git add backend/app/services/openclaw/activity_stream.py backend/tests/test_activity_stream_connection.py
+git commit -m "feat(activity): add persistent gateway activity connection"
+```
+
+---
+
+### Task 3: Backend broker + board metadata
+
+**Files:**
+- Modify: `backend/app/services/openclaw/activity_stream.py`
+- Test: `backend/tests/test_activity_stream_broker.py`
+
+**Step 1: Write the failing tests**
+
+```python
+# backend/tests/test_activity_stream_broker.py
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from app.services.openclaw.activity_stream import AgentActivityBroker, AgentEvent
+
+
+@pytest.mark.asyncio
+async def test_broker_fans_out_only_to_matching_board() -> None:
+    broker = AgentActivityBroker()
+    q1 = broker.subscribe("board-1")
+    q2 = broker.subscribe("board-2")
+
+    event = AgentEvent(
+        type="thinking",
+        agent_id="mc-1",
+        agent_name="Planner",
+        timestamp="2026-04-08T00:00:00+00:00",
+        content="hello",
+    )
+
+    await broker.publish("board-1", event)
+
+    assert (await q1.get()).content == "hello"
+    assert q2.empty()
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `cd backend && python -m pytest tests/test_activity_stream_broker.py -v`
+Expected: FAIL with missing `AgentActivityBroker`
+
+**Step 3: Implement broker and board registration**
+
+In `backend/app/services/openclaw/activity_stream.py`, add:
+
+```python
+class AgentActivityBroker:
+    def __init__(self) -> None:
+        self._subscribers: dict[str, list[asyncio.Queue[AgentEvent]]] = {}
+        self._gateway_connections: dict[str, GatewayActivityConnection] = {}
+        self._board_ref_counts: dict[str, int] = {}
+
+    def subscribe(self, board_id: str) -> asyncio.Queue[AgentEvent]:
+        ...
+
+    def unsubscribe(self, board_id: str, queue: asyncio.Queue[AgentEvent]) -> None:
+        ...
+
+    async def publish(self, board_id: str, event: AgentEvent) -> None:
+        ...
+```
+
+Add one more service class in the same file:
+
+```python
+class AgentActivityService:
+    async def attach_board(self, *, board, session) -> None:
+        ...
+
+    async def detach_board(self, *, board_id: str) -> None:
+        ...
+
+    async def shutdown(self) -> None:
+        ...
+```
+
+Implementation requirements:
+- Resolve board agents from the DB using `Agent.board_id == board.id` and non-empty `Agent.openclaw_session_id`.
+- Map each session key to `(board_id, agent_name)` so incoming gateway events can be enriched before publish.
+- Create one `GatewayActivityConnection` per gateway, not per browser tab.
+- Track board ref-counts so disconnecting one browser tab does not tear down another tab’s subscription.
+- Drop per-agent `task_id` / `task_title` enrichment from MVP.
+
+**Step 4: Run test to verify it passes**
+
+Run: `cd backend && python -m pytest tests/test_activity_stream_broker.py -v`
+Expected: 1 passed
+
+**Step 5: Commit**
+
+```bash
+git add backend/app/services/openclaw/activity_stream.py backend/tests/test_activity_stream_broker.py
+git commit -m "feat(activity): add board-scoped activity broker"
+```
+
+---
+
+### Task 4: Backend API route with real auth and lifecycle wiring
 
 **Files:**
 - Create: `backend/app/api/agent_activity.py`
-- Modify: `backend/app/main.py` (register router)
+- Modify: `backend/app/main.py`
+- Test: `backend/tests/test_agent_activity_api.py`
 
-**Step 1: Write the endpoint**
+**Step 1: Write the failing API tests**
 
 ```python
-# backend/app/api/agent_activity.py
-"""SSE stream of real-time agent activity."""
+# backend/tests/test_agent_activity_api.py
+from __future__ import annotations
 
+import pytest
+from httpx import ASGITransport, AsyncClient
+from fastapi import FastAPI
+
+from app.main import app
+
+
+@pytest.mark.asyncio
+async def test_stream_requires_auth() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/api/v1/boards/00000000-0000-0000-0000-000000000000/agent-activity/stream")
+    assert response.status_code == 401
+```
+
+Add a second test that uses a real local-auth header plus a patched activity service so the response returns an initial `connected` event with HTTP 200.
+
+**Step 2: Run test to verify it fails**
+
+Run: `cd backend && python -m pytest tests/test_agent_activity_api.py -v`
+Expected: FAIL because route does not exist
+
+**Step 3: Implement the board-scoped stream route**
+
+Create `backend/app/api/agent_activity.py`:
+
+```python
 from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.core.logging import get_logger
-from app.db.session import get_session
-from app.services.openclaw.activity_stream import AgentEvent
-from app.services.openclaw.gateway_rpc import (
-    GatewayConfig,
-    openclaw_call,
-    subscribe_session,
-    unsubscribe_session,
-)
+from app.api.deps import ActorContext, get_board_for_actor_read, require_user_or_agent
+from app.models.boards import Board
+from app.services.openclaw.activity_stream import activity_service
 
-logger = get_logger(__name__)
-router = APIRouter(prefix="/agents/activity", tags=["agent-activity"])
+router = APIRouter(prefix="/boards/{board_id}/agent-activity", tags=["agent-activity"])
 
 
 @router.get("/stream")
-async def stream_activity(
+async def stream_agent_activity(
     request: Request,
-    board_id: str = Query(...),
-):
-    """SSE stream of agent activity for a board.
-
-    Subscribes to gateway session events and forwards classified events.
-    Connection stays open until the client disconnects.
-    """
-
-    async def event_generator():
-        # For MVP: poll session files instead of WebSocket subscription
-        # TODO: Replace with persistent WebSocket + sessions.subscribe
-        yield {
-            "event": "connected",
-            "data": json.dumps({"board_id": board_id, "status": "connected"}),
-        }
-
-        while True:
-            if await request.is_disconnected():
-                break
-            await asyncio.sleep(2)
-            yield {
-                "event": "heartbeat",
-                "data": json.dumps({"ts": "now"}),
-            }
-
-    return EventSourceResponse(event_generator())
+    board: Board = Depends(get_board_for_actor_read),
+    _actor: ActorContext = Depends(require_user_or_agent),
+) -> EventSourceResponse:
+    ...
 ```
 
-**Step 2: Register router in main.py**
+Implementation requirements:
+- Scope the route to `/api/v1/boards/{board_id}/agent-activity/stream`.
+- Use existing board-read dependencies.
+- On connect: `await activity_service.attach_board(board=board, session=...)`.
+- Subscribe the SSE client queue after the board is attached.
+- Emit an initial `connected` event, then `agent_event` events, and a keepalive heartbeat when idle.
+- On disconnect: unsubscribe the client queue and decrement board ref-counts.
 
-Add to `backend/app/main.py` imports:
-```python
-from app.api.agent_activity import router as agent_activity_router
-```
+Update `backend/app/main.py`:
+- Import and register the new router.
+- In `lifespan(...)`, call `await activity_service.shutdown()` in the `finally:` block.
 
-Add to router registration:
-```python
-app.include_router(agent_activity_router, prefix="/api/v1")
-```
+**Step 4: Run test to verify it passes**
 
-**Step 3: Test manually**
+Run: `cd backend && python -m pytest tests/test_agent_activity_api.py -v`
+Expected: passing auth coverage for unauthorized and authorized cases
 
-Run: `cd backend && uv run uvicorn app.main:app --port 8001`
-Then: `curl -N http://localhost:8001/api/v1/agents/activity/stream?board_id=test`
-Expected: SSE events streaming every 2 seconds
-
-**Step 4: Commit**
+**Step 5: Commit**
 
 ```bash
-git add backend/app/api/agent_activity.py backend/app/main.py
-git commit -m "feat(api): SSE endpoint for agent activity stream"
+git add backend/app/api/agent_activity.py backend/app/main.py backend/tests/test_agent_activity_api.py
+git commit -m "feat(api): add authorized board activity stream"
 ```
 
 ---
 
-### Task 4: Frontend — useAgentActivityStream hook
+### Task 5: Regenerate frontend API client
 
 **Files:**
+- Modify: `frontend/src/api/generated/**` (via generator only)
+
+**Step 1: Regenerate the client**
+
+Run:
+
+```bash
+make api-gen
+```
+
+Expected:
+- New generated endpoint for `/api/v1/boards/{board_id}/agent-activity/stream`
+- No manual edits inside `frontend/src/api/generated/`
+
+**Step 2: Verify generated artifacts changed**
+
+Run: `git status --short frontend/src/api/generated`
+Expected: generated files updated for the new route
+
+**Step 3: Commit**
+
+```bash
+git add frontend/src/api/generated
+git commit -m "chore(api): regenerate client for agent activity stream"
+```
+
+---
+
+### Task 6: Frontend authenticated stream transport
+
+**Files:**
+- Create: `frontend/src/lib/sse.ts`
 - Create: `frontend/src/hooks/useAgentActivityStream.ts`
+- Test: `frontend/src/hooks/useAgentActivityStream.test.ts`
 
-**Step 1: Write the hook**
+**Step 1: Write the failing frontend tests**
 
-```typescript
-// frontend/src/hooks/useAgentActivityStream.ts
-import { useCallback, useEffect, useRef, useState } from "react";
+Add a hook test that:
+- Mocks the generated stream API call or `customFetch`
+- Returns a `ReadableStream` with two SSE frames:
+  - `event: connected`
+  - `event: agent_event`
+- Verifies the hook reports `connected: true` and stores one event
 
-export interface AgentEvent {
-  type: "thinking" | "tool_call" | "tool_result" | "status";
+**Step 2: Run test to verify it fails**
+
+Run: `cd frontend && npm run test -- useAgentActivityStream`
+Expected: FAIL with missing hook/parser
+
+**Step 3: Implement authenticated fetch-based SSE parsing**
+
+Create `frontend/src/lib/sse.ts`:
+
+```ts
+export type SseMessage = {
+  event: string;
+  data: string;
+};
+
+export async function* parseSseStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<SseMessage> {
+  ...
+}
+```
+
+Create `frontend/src/hooks/useAgentActivityStream.ts`:
+
+```ts
+import { useEffect, useRef, useState } from "react";
+
+export type AgentEvent = {
+  type: "thinking" | "tool_call" | "tool_result";
   agent_id: string;
-  agent_name?: string;
+  agent_name: string;
   timestamp: string;
   model?: string;
   content?: string;
@@ -432,456 +598,188 @@ export interface AgentEvent {
   exit_code?: number;
   output?: string;
   duration_ms?: number;
-  task_id?: string;
-  task_title?: string;
   session_tokens?: number;
   session_cost?: number;
-}
+};
 
-interface AgentState {
-  name: string;
-  status: "online" | "offline" | "error";
-  model: string;
-  task_id: string | null;
-  task_title: string | null;
-  events: AgentEvent[];
-  turns: number;
-  tokens: number;
-  cost: number;
-  last_event_at: string;
-}
-
-export interface AgentActivityState {
-  connected: boolean;
-  agents: Record<string, AgentState>;
-}
-
-const MAX_EVENTS_PER_AGENT = 200;
-
-export function useAgentActivityStream(boardId: string | null): AgentActivityState {
-  const [state, setState] = useState<AgentActivityState>({ connected: false, agents: {} });
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const retriesRef = useRef(0);
-
-  const connect = useCallback(() => {
-    if (!boardId) return;
-
-    const url = `/api/v1/agents/activity/stream?board_id=${boardId}`;
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setState((s) => ({ ...s, connected: true }));
-      retriesRef.current = 0;
-    });
-
-    es.addEventListener("agent_event", (e) => {
-      const event: AgentEvent = JSON.parse(e.data);
-      setState((s) => {
-        const agent = s.agents[event.agent_id] ?? {
-          name: event.agent_name ?? event.agent_id,
-          status: "online" as const,
-          model: event.model ?? "",
-          task_id: event.task_id ?? null,
-          task_title: event.task_title ?? null,
-          events: [],
-          turns: 0,
-          tokens: 0,
-          cost: 0,
-          last_event_at: event.timestamp,
-        };
-
-        const events = [...agent.events, event].slice(-MAX_EVENTS_PER_AGENT);
-        return {
-          ...s,
-          agents: {
-            ...s.agents,
-            [event.agent_id]: {
-              ...agent,
-              events,
-              model: event.model ?? agent.model,
-              task_id: event.task_id ?? agent.task_id,
-              task_title: event.task_title ?? agent.task_title,
-              turns: agent.turns + (event.type === "thinking" ? 1 : 0),
-              tokens: agent.tokens + (event.session_tokens ?? 0),
-              cost: agent.cost + (event.session_cost ?? 0),
-              last_event_at: event.timestamp,
-              status: "online",
-            },
-          },
-        };
-      });
-    });
-
-    es.onerror = () => {
-      es.close();
-      setState((s) => ({ ...s, connected: false }));
-      const delay = Math.min(1000 * 2 ** retriesRef.current, 30000);
-      retriesRef.current += 1;
-      reconnectTimeoutRef.current = setTimeout(connect, delay);
-    };
-  }, [boardId]);
-
-  useEffect(() => {
-    connect();
-    return () => {
-      eventSourceRef.current?.close();
-      clearTimeout(reconnectTimeoutRef.current);
-    };
-  }, [connect]);
-
-  return state;
+export function useAgentActivityStream(boardId: string | null) {
+  ...
 }
 ```
 
-**Step 2: Commit**
+Implementation requirements:
+- Use authenticated `fetch` / generated raw client, not `new EventSource(...)`.
+- Pass an `AbortController.signal` so cleanup closes the stream immediately.
+- Reconnect with bounded exponential backoff.
+- Reset connection state on board change.
+- Buffer at most 200 events per agent.
+- Keep only fields that the backend actually emits.
+
+**Step 4: Run test to verify it passes**
+
+Run: `cd frontend && npm run test -- useAgentActivityStream`
+Expected: PASS
+
+**Step 5: Commit**
 
 ```bash
-git add frontend/src/hooks/useAgentActivityStream.ts
-git commit -m "feat(hooks): useAgentActivityStream SSE hook"
+git add frontend/src/lib/sse.ts frontend/src/hooks/useAgentActivityStream.ts frontend/src/hooks/useAgentActivityStream.test.ts
+git commit -m "feat(frontend): add authenticated agent activity stream hook"
 ```
 
 ---
 
-### Task 5: Frontend — StreamEvent component
+### Task 7: Frontend panel components
 
 **Files:**
 - Create: `frontend/src/components/agents/StreamEvent.tsx`
-
-**Step 1: Write the component**
-
-```tsx
-// frontend/src/components/agents/StreamEvent.tsx
-"use client";
-
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Terminal, Brain, CheckCircle, XCircle, Clock } from "lucide-react";
-import type { AgentEvent } from "@/hooks/useAgentActivityStream";
-import { cn } from "@/lib/utils";
-
-export function StreamEvent({ event }: { event: AgentEvent }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (event.type === "thinking") {
-    return (
-      <div className="px-3 py-1 text-sm">
-        <span className="text-blue-400 italic">{event.content}</span>
-      </div>
-    );
-  }
-
-  if (event.type === "tool_call") {
-    return (
-      <div className="px-3 py-1">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1.5 text-sm font-mono text-slate-300 hover:text-white w-full text-left"
-        >
-          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          <Terminal className="h-3 w-3 text-blue-400" />
-          <span className="text-blue-400 font-semibold">{event.tool_name}</span>
-          <span className="text-slate-500 truncate">{event.tool_args}</span>
-        </button>
-      </div>
-    );
-  }
-
-  if (event.type === "tool_result") {
-    const isSuccess = event.exit_code === 0 || event.exit_code === null;
-    return (
-      <div className="pl-8 pr-3 py-0.5">
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          {isSuccess ? (
-            <CheckCircle className="h-3 w-3 text-green-500" />
-          ) : (
-            <XCircle className="h-3 w-3 text-red-500" />
-          )}
-          {event.duration_ms && (
-            <>
-              <Clock className="h-3 w-3" />
-              <span>{event.duration_ms}ms</span>
-            </>
-          )}
-        </div>
-        {event.output && (
-          <pre className="mt-0.5 text-xs text-slate-400 font-mono whitespace-pre-wrap overflow-hidden max-h-16">
-            {event.output}
-          </pre>
-        )}
-      </div>
-    );
-  }
-
-  if (event.type === "status") {
-    return (
-      <div className="px-3 py-0.5 text-xs text-slate-600">
-        ● {event.content ?? event.status}
-      </div>
-    );
-  }
-
-  return null;
-}
-```
-
-**Step 2: Commit**
-
-```bash
-git add frontend/src/components/agents/StreamEvent.tsx
-git commit -m "feat(ui): StreamEvent component for activity feed"
-```
-
----
-
-### Task 6: Frontend — AgentStream component
-
-**Files:**
 - Create: `frontend/src/components/agents/AgentStream.tsx`
+- Create: `frontend/src/components/agents/AgentActivityPanel.tsx`
+- Test: `frontend/src/components/agents/AgentActivityPanel.test.tsx`
 
-**Step 1: Write the component**
+**Step 1: Write the failing component test**
 
-```tsx
-// frontend/src/components/agents/AgentStream.tsx
-"use client";
+Add a render test for `AgentActivityPanel` that:
+- Receives two boards
+- Renders a board selector
+- Shows an explicit empty state before a board is chosen or when no events exist
 
-import { useEffect, useRef } from "react";
-import { Bot } from "lucide-react";
-import type { AgentEvent } from "@/hooks/useAgentActivityStream";
-import { StreamEvent } from "./StreamEvent";
-import { cn } from "@/lib/utils";
+**Step 2: Run test to verify it fails**
 
-interface AgentStreamProps {
-  agentId: string;
-  name: string;
-  status: "online" | "offline" | "error";
-  model: string;
-  taskTitle: string | null;
-  events: AgentEvent[];
-  turns: number;
-  tokens: number;
-  cost: number;
-  lastEventAt: string;
-}
+Run: `cd frontend && npm run test -- AgentActivityPanel`
+Expected: FAIL with missing component
 
-export function AgentStream({ agentId, name, status, model, taskTitle, events, turns, tokens, cost, lastEventAt }: AgentStreamProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const autoScrollRef = useRef(true);
+**Step 3: Implement the UI**
 
-  useEffect(() => {
-    if (autoScrollRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [events.length]);
+`StreamEvent.tsx`
+- Render `thinking`, `tool_call`, and `tool_result`
+- Keep expand/collapse only where it actually changes output
+- Use stable visual status colors, but preserve existing dashboard look and feel
 
-  const handleScroll = () => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    autoScrollRef.current = scrollHeight - scrollTop - clientHeight < 50;
-  };
+`AgentStream.tsx`
+- Render agent header, model label, event feed, and footer counters
+- Auto-scroll only while the user is already near the bottom
 
-  const statusColor = status === "online" ? "bg-green-500" : status === "error" ? "bg-red-500" : "bg-slate-500";
+`AgentActivityPanel.tsx`
+- Accept `boards: { id: string; name: string }[]`
+- Persist `open` and `selectedBoardId` in `localStorage`
+- Render a board selector in the header
+- Call `useAgentActivityStream(selectedBoardId)`
+- Show explicit states:
+  - no boards configured
+  - board not selected
+  - connecting
+  - connected with zero activity
 
-  return (
-    <div className="flex flex-col border-b border-slate-800 last:border-0">
-      <div className="flex items-center gap-2 px-3 py-2 bg-slate-900/50 border-b border-slate-800 sticky top-0 z-10">
-        <Bot className="h-4 w-4 text-slate-400" />
-        <span className="font-semibold text-sm text-slate-200">{name}</span>
-        <div className={cn("h-2 w-2 rounded-full", statusColor)} />
-        <span className="text-xs text-slate-500 ml-auto">{model}</span>
-      </div>
+Do **not** hardcode the first board as hidden state. If you choose a default, make it visible in the selector and persist it.
 
-      {taskTitle && (
-        <div className="px-3 py-1 text-xs text-slate-500 bg-slate-900/30">
-          Task: {taskTitle}
-        </div>
-      )}
+**Step 4: Run test to verify it passes**
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto max-h-64 bg-slate-950">
-        {events.length === 0 ? (
-          <div className="px-3 py-4 text-xs text-slate-600 text-center">Waiting for activity...</div>
-        ) : (
-          events.map((event, i) => <StreamEvent key={i} event={event} />)
-        )}
-      </div>
+Run: `cd frontend && npm run test -- AgentActivityPanel`
+Expected: PASS
 
-      <div className="flex items-center gap-3 px-3 py-1 text-xs text-slate-600 bg-slate-900/30 border-t border-slate-800">
-        <span>{turns} turns</span>
-        <span>{tokens.toLocaleString()} tok</span>
-        <span>${cost.toFixed(2)}</span>
-      </div>
-    </div>
-  );
-}
-```
-
-**Step 2: Commit**
+**Step 5: Commit**
 
 ```bash
-git add frontend/src/components/agents/AgentStream.tsx
-git commit -m "feat(ui): AgentStream component with auto-scroll"
+git add frontend/src/components/agents/StreamEvent.tsx frontend/src/components/agents/AgentStream.tsx frontend/src/components/agents/AgentActivityPanel.tsx frontend/src/components/agents/AgentActivityPanel.test.tsx
+git commit -m "feat(ui): add agent activity panel components"
 ```
 
 ---
 
-### Task 7: Frontend — AgentActivityPanel + Dashboard integration
+### Task 8: Dashboard integration
 
 **Files:**
-- Create: `frontend/src/components/agents/AgentActivityPanel.tsx`
 - Modify: `frontend/src/app/dashboard/page.tsx`
 
-**Step 1: Write the panel**
+**Step 1: Add the panel to the dashboard**
+
+Implementation requirements:
+- Import `AgentActivityPanel`
+- Derive `boardOptions` from the existing `boards` memo:
 
 ```tsx
-// frontend/src/components/agents/AgentActivityPanel.tsx
-"use client";
-
-import { useState } from "react";
-import { PanelRightClose, PanelRightOpen, Radio } from "lucide-react";
-import { useAgentActivityStream } from "@/hooks/useAgentActivityStream";
-import { AgentStream } from "./AgentStream";
-import { cn } from "@/lib/utils";
-
-interface AgentActivityPanelProps {
-  boardId: string | null;
-}
-
-export function AgentActivityPanel({ boardId }: AgentActivityPanelProps) {
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("agent-activity-open") === "true";
-  });
-  const [activeTab, setActiveTab] = useState<string>("all");
-  const { connected, agents } = useAgentActivityStream(open ? boardId : null);
-
-  const toggleOpen = () => {
-    const next = !open;
-    setOpen(next);
-    localStorage.setItem("agent-activity-open", String(next));
-  };
-
-  const agentIds = Object.keys(agents);
-  const filteredAgents = activeTab === "all" ? agentIds : [activeTab];
-
-  return (
-    <>
-      {/* Toggle button — always visible */}
-      <button
-        onClick={toggleOpen}
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-50 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-l-lg shadow-lg"
-        title={open ? "Close Activity Panel" : "Open Activity Panel"}
-      >
-        {open ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-      </button>
-
-      {/* Panel */}
-      <div
-        className={cn(
-          "fixed right-0 top-0 h-full bg-slate-950 border-l border-slate-800 shadow-2xl z-40 transition-all duration-300 flex flex-col",
-          open ? "w-[420px]" : "w-0 overflow-hidden"
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 bg-slate-900">
-          <Radio className={cn("h-4 w-4", connected ? "text-green-500" : "text-red-500")} />
-          <span className="font-semibold text-sm text-slate-200">Agent Activity</span>
-          <span className="text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">{agentIds.length}</span>
-          {!connected && <span className="text-xs text-yellow-500 ml-auto">Reconnecting...</span>}
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 px-2 py-1.5 border-b border-slate-800 overflow-x-auto bg-slate-900/50">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={cn("px-2 py-1 text-xs rounded", activeTab === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white")}
-          >
-            All
-          </button>
-          {agentIds.map((id) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={cn("px-2 py-1 text-xs rounded whitespace-nowrap", activeTab === id ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white")}
-            >
-              {agents[id].name}
-            </button>
-          ))}
-        </div>
-
-        {/* Streams */}
-        <div className="flex-1 overflow-y-auto">
-          {filteredAgents.map((id) => {
-            const a = agents[id];
-            if (!a) return null;
-            return (
-              <AgentStream
-                key={id}
-                agentId={id}
-                name={a.name}
-                status={a.status}
-                model={a.model}
-                taskTitle={a.task_title}
-                events={a.events}
-                turns={a.turns}
-                tokens={a.tokens}
-                cost={a.cost}
-                lastEventAt={a.last_event_at}
-              />
-            );
-          })}
-        </div>
-      </div>
-    </>
-  );
-}
+const boardOptions = boards.map((board) => ({ id: board.id, name: board.name }));
 ```
 
-**Step 2: Integrate into Dashboard**
-
-In `frontend/src/app/dashboard/page.tsx`, add the panel import and render it alongside existing content:
+- Render:
 
 ```tsx
-import { AgentActivityPanel } from "@/components/agents/AgentActivityPanel";
-
-// Inside the component return, after the main content:
-<AgentActivityPanel boardId={selectedBoardId} />
+<AgentActivityPanel boards={boardOptions} />
 ```
+
+- Keep the panel outside the main content container so it can overlay without disturbing the existing dashboard cards
+
+**Step 2: Run typecheck/build**
+
+Run: `cd frontend && npm run build`
+Expected: build succeeds with no type errors
 
 **Step 3: Commit**
 
 ```bash
-git add frontend/src/components/agents/AgentActivityPanel.tsx frontend/src/app/dashboard/page.tsx
-git commit -m "feat(ui): AgentActivityPanel with Dashboard integration"
+git add frontend/src/app/dashboard/page.tsx
+git commit -m "feat(dashboard): integrate agent activity panel"
 ```
 
 ---
 
-### Task 8: Deploy and verify
+### Task 9: End-to-end verification
 
-**Step 1: Deploy backend to .64**
+**Step 1: Run backend tests**
 
 ```bash
-scp backend/app/api/agent_activity.py root@192.168.2.64:/home/mcontrol/openclaw-mission-control/backend/app/api/
-scp backend/app/services/openclaw/activity_stream.py root@192.168.2.64:/home/mcontrol/openclaw-mission-control/backend/app/services/openclaw/
-scp backend/app/services/openclaw/gateway_rpc.py root@192.168.2.64:/home/mcontrol/openclaw-mission-control/backend/app/services/openclaw/
-# Update main.py to register the router
-ssh root@192.168.2.64 "cd /home/mcontrol/openclaw-mission-control/backend && find . -name __pycache__ -type d -exec rm -rf {} + && pkill -f uvicorn; sleep 2; nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &"
+cd backend && python -m pytest \
+  tests/test_activity_stream.py \
+  tests/test_activity_stream_connection.py \
+  tests/test_activity_stream_broker.py \
+  tests/test_agent_activity_api.py -v
 ```
 
-Verify: `curl -N http://192.168.2.64:8000/api/v1/agents/activity/stream?board_id=test`
+Expected: all pass
 
-**Step 2: Deploy frontend**
+**Step 2: Run frontend targeted tests**
 
-Build and deploy using the deploy script:
+```bash
+cd frontend && npm run test -- useAgentActivityStream AgentActivityPanel
+```
+
+Expected: all pass
+
+**Step 3: Run frontend build**
+
 ```bash
 cd frontend && npm run build
-bash $SHARED_WORKSPACE/scripts/deploy.sh agent-activity-panel
 ```
 
-Verify: open http://192.168.2.63:3000, click the panel toggle on the right edge.
+Expected: build succeeds
 
-**Step 3: Commit**
+**Step 4: Manual local-auth smoke test**
+
+1. Start backend: `cd backend && uv run uvicorn app.main:app --port 8001`
+2. Start frontend: `cd frontend && npm run dev`
+3. Log in through local auth
+4. Open `/dashboard`
+5. Open the panel, select a board, confirm the request succeeds instead of 401
+6. Trigger a real board-agent action that produces a `session.message` or `session.tool` event
+7. Confirm the panel shows that event within a few seconds
+
+**Step 5: Manual disconnect/reconnect smoke test**
+
+1. With the panel open, stop or block the gateway connection temporarily
+2. Confirm the panel shows reconnecting state
+3. Restore the gateway
+4. Confirm new events resume without reloading the page
+
+**Step 6: Final commit**
 
 ```bash
-git commit -m "feat: deploy agent activity panel to production"
+git status
 ```
+
+Expected: clean working tree
+
+Do not claim completion until:
+- a real authenticated board stream works
+- gateway reconnect logic has been exercised once
+- the dashboard panel scope is visibly board-specific

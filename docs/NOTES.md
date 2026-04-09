@@ -598,6 +598,214 @@ Features used via WhatsApp (NanoClaw/TaskFlow skill) vs Dashboard UI
                                                                                                                                                                                  Does the embenddings skill do the same work as https://github.com/redis-developer/openclaw-redis-agent-memory           
 In resume what the Openclaw memory plugin does: auto-captures conversation summaries → stores in redis → auto-injects as <relevant-memories> on each tick based on semantic search.                                                                                                                                                                                 
 
+⏺ Agents are ticking again. Gateway Agent (4m), PB (8m), Architect (13m), PF (17m), Supervisor (18m), DevOps (18m) — all active recently. The set-heartbeats {enabled: false} didn't stick. The gateway likely re-enabled them on
+  a config reload or internal timer reset.                                                                                                                                                                                        
+                                                                                                                                                                                                                                  
+  The board-stop.sh approach is unreliable. To truly stop them, you'd need to either:                                                                                                                                             
+  1. Pause the board via the MC API (/boards/{id}/pause)                                                                                                                                                                          
+  2. Or restart the gateway with heartbeats disabled in openclaw.json                                                                                                                                                             
+                                                                                                                                                                                                                                
+  Want me to try the board pause API?                                                                                                                                                                                             
+                                         
+
+⏺ Let me break each feature into what MC needs to do to use it.                                                                                                                                                                   
+                                                                                                                                                                                                                                
+  1. Memory/Wiki — replace redis-memory                                                                                                                                                                                           
+   
+  What it is: Structured memory with claims/evidence fields, staleness detection, contradiction clustering, freshness-weighted search. Unlike redis-memory (semantic search on conversation dumps), wiki memory stores verified   
+  facts with expiry dates.                                                                                                                                                                                                      
+                                                                                                                                                                                                                                  
+  How to enable:                                                                                                                                                                                                                
+  openclaw config set plugins.slots.memory memory-wiki
+  openclaw config set plugins.entries.memory-wiki.enabled true                                                                                                                                                                    
+                                                              
+  MC integration: No MC code changes needed — it's a gateway plugin. But MC could add a new RPC helper to query wiki memory:                                                                                                      
+                                                                                                                                                                                                                                  
+  # gateway_rpc.py — new helper                                                                                                                                                                                                   
+  async def get_wiki_claims(agent_id: str, *, config: GatewayConfig) -> object:                                                                                                                                                   
+      return await openclaw_call("doctor.memory.status", {"agentId": agent_id}, config=config)                                                                                                                                    
+                                                                                                                                                                                                                                  
+  Evaluation needed: Test if wiki memory solves the stale memory problem before enabling fleet-wide. The key question is whether agents produce good claims/evidence or noise.                                                    
+                                                                                                                                                                                                                                  
+  2. Heartbeat prompt controls — reduce template bloat                                                                                                                                                                            
+                                                                                                                                                                                                                                
+  What it is: Suppress heartbeat instructions from being injected every turn while keeping heartbeat runtime active.                                                                                                              
+  
+  How to enable:                                                                                                                                                                                                                  
+  openclaw config set agents.defaults.heartbeat.promptGuidance false                                                                                                                                                            
+                                                                                                                                                                                                                                  
+  What changes: Currently HEARTBEAT.md (~2.3K chars) is injected into every heartbeat tick. With promptGuidance: false, the heartbeat still ticks but doesn't inject the HEARTBEAT.md content. The agent gets AGENTS.md (operating
+   rules) but not the per-tick checklist.                                                                                                                                                                                         
+  
+  MC impact: If we disable prompt guidance, the HEARTBEAT.md template becomes unused. The agent would need the checklist in AGENTS.md instead (already mostly there — "Worker Execution Loop" section). This saves ~2.3K chars per
+   tick, freeing context for task content.                                                                                                                                                                                      
+                                                                                                                                                                                                                                  
+  Tradeoff: Agents lose the per-tick setup vars ($BASE_URL, $AUTH_TOKEN, etc.) unless we move them to AGENTS.md.                                                                                                                  
+  
+  3. systemPromptOverride — controlled prompt experiments                                                                                                                                                                         
+                                                                                                                                                                                                                                
+  What it is: Inject a system prompt override via gateway config instead of workspace files.                                                                                                                                      
+  
+  How to use:                                                                                                                                                                                                                     
+  openclaw config set agents.defaults.systemPromptOverride "You are a task management agent. Follow AGENTS.md strictly."                                                                                                        
+                                                                                                                        
+  Or per-agent:                                                                                                                                                                                                                   
+  openclaw config set agents.list[1].systemPromptOverride "Custom PF instructions..."                                                                                                                                             
+                                                                                                                                                                                                                                  
+  MC impact: MC could use this for A/B testing template changes — set override for one agent, compare behavior with others. No code changes needed, just config.patch RPC.                                                        
+                                                                                                                                                                                                                                  
+  4. Webhooks plugin — external triggers                                                                                                                                                                                          
+                                                                                                                                                                                                                                  
+  What it is: HTTP endpoints that create/drive TaskFlows via shared-secret auth.                                                                                                                                                  
+  
+  How to enable:                                                                                                                                                                                                                  
+  openclaw config set plugins.entries.webhooks.enabled true                                                                                                                                                                     
+  openclaw config set plugins.entries.webhooks.config.routes '[{"path":"/deploy","secret":"..."}]'
+                                                                                                  
+  MC integration: MC backend could call the webhook to trigger agent work:                                                                                                                                                        
+  # After a deploy completes, trigger QA validation                                                                                                                                                                               
+  async def trigger_qa_webhook(build_hash: str, task_id: str):                                                                                                                                                                    
+      await httpx.post("http://192.168.2.60:18789/webhooks/deploy",                                                                                                                                                               
+          json={"build": build_hash, "task": task_id},                                                                                                                                                                            
+          headers={"X-Webhook-Secret": "..."})                                                                                                                                                                                    
+                                                                                                                                                                                                                                  
+  MC code needed: New webhook trigger service + API endpoint for operator to configure webhook routes.                                                                                                                            
+                                                                                                                                                                                                                                  
+  5. Session branch/restore — recovery                                                                                                                                                                                            
+                                                                                                                                                                                                                                  
+  What it is: Persisted compaction checkpoints. Operators can inspect and restore pre-compaction state.                                                                                                                           
+                                                                                                                                                                                                                                
+  How to use: Available in Control UI (openclaw dashboard). No MC code needed — it's an operator tool.                                                                                                                            
+  
+  MC integration (optional): Could add a "Restore session" button to MC's agent management UI that calls the sessions.restore RPC.                                                                                                
+                                                                                                                                                                                                                                
+  6. Compaction provider — custom summarization                                                                                                                                                                                   
+                                                                                                                                                                                                                                
+  What it is: Replace built-in LLM compaction with a custom pipeline.                                                                                                                                                             
+  
+  How to configure:                                                                                                                                                                                                               
+  openclaw config set agents.defaults.compaction.provider "custom-compactor"                                                                                                                                                    
+                                                                            
+  MC integration: MC could configure per-agent compaction models (e.g., fast model for Supervisor, thorough model for Architect). Uses config.patch RPC — no new MC code needed.                                                  
+                                                                                                                                                                                                                                  
+  7. Model fallback 404 fix — automatic after upgrade                                                                                                                                                                             
+                                                                                                                                                                                                                                  
+  No MC changes needed. After upgrading to 2026.4.8, HTTP 404 from model providers triggers the fallback chain instead of stopping. This improves resilience for our Ollama cloud models.                                         
+                                                                                                                                                                                                                                
+  ---                                                                                                                                                                                                                             
+  Implementation priority                                                                                                                                                                                                       
+                         
+  ┌──────────┬──────────────────────────────┬─────────────────────┬──────────────────────────────────────┐
+  │ Priority │           Feature            │       Effort        │                Impact                │                                                                                                                        
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤
+  │ 1        │ Upgrade to 2026.4.8          │ openclaw update run │ Gets all fixes + new features        │                                                                                                                        
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                      
+  │ 2        │ Heartbeat prompt controls    │ 1 config line       │ Frees ~2.3K chars per tick           │                                                                                                                        
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                        
+  │ 3        │ Memory/Wiki evaluation       │ Enable + test       │ Could solve stale memory permanently │                                                                                                                        
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                        
+  │ 4        │ Model fallback 404           │ Automatic           │ Better resilience                    │                                                                                                                      
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                        
+  │ 5        │ Webhooks for deploy triggers │ New MC service      │ Automated QA after deploys           │                                                                                                                      
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                        
+  │ 6        │ systemPromptOverride         │ Config only         │ A/B testing templates                │                                                                                                                      
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                        
+  │ 7        │ Session branch/restore       │ Control UI          │ Operator recovery tool               │                                                                                                                      
+  ├──────────┼──────────────────────────────┼─────────────────────┼──────────────────────────────────────┤                                                                                                                        
+  │ 8        │ Compaction provider          │ Config only         │ Per-agent compaction tuning          │                                                                                                                      
+  └──────────┴──────────────────────────────┴─────────────────────┴──────────────────────────────────────┘                                                                                                                        
+                                                                                                                                                                                                                                
+  Items 1-4 are config-only (no MC code). Items 5+ need MC development.                                                                                                                                                           
+  
+  Want me to upgrade and configure?   
 
 
 Try again the test againt the Gemma4, maybe the same case, outputs to a thinking field, not response
+
+ Programmer-Frontend Agent Analysis (2026-04-08)
+
+  What the agent is working on
+
+  Two tasks, both currently blocked:
+  - Phase 2D: Project/subtask hierarchy view (9f32504c)
+  - Phase 2E: TaskFlow-native notes on tasks (56f4737a)
+
+  Deploy target: nanoclaw@192.168.2.63 / verify URL: http://192.168.2.63:3000/
+
+  ---
+  Root Cause: HTTP 404 on verify endpoint
+
+  http://192.168.2.63:3000/ is returning 404 for both tasks. This is a shared infrastructure blocker — the target
+  service/routing on that host is down or misconfigured. The agent confirmed this with curl, documented it on the board,
+  and is correctly waiting.
+
+  The supervisor already acknowledged this and classified it as a DevOps routing issue (not a code issue). The agent's
+  response:
+  ▎ "Holding both tasks on the shared live blocker. Will wait for target routing/service recovery or contradictory evidence
+   before retrying live browser validation."
+
+  ---
+  The frequent resets are normal
+
+  The session resets every ~20–80 minutes throughout the day — this is the openclaw control framework intentionally
+  trimming context bloat. Not a failure signal.
+
+  ---
+  Is the agent actually failing?
+
+  No — the agent is behaving correctly. It:
+  1. Detected the 404 blocker independently
+  2. Escalated to the supervisor (@lead)
+  3. Is holding both tasks, not looping or spinning
+  4. Awaiting DevOps intervention on the server at 192.168.2.63
+
+  The real problem is infrastructure: the frontend deployment target (192.168.2.63:3000) is not serving, so the agent
+  cannot verify any work it does. Until that service is up, both tasks are stuck in in_progress limbo.
+
+  Action needed: Check why the service on 192.168.2.63:3000 is returning 404 — it may be down, misconfigured, or the deploy
+   path changed.
+
+     ┌─────────────────────┬───────────────────────────────────────────────────┬─────────────────────────────────────────────────┬────────────────────────────────────┐                                                              
+  │       Source        │                   What it shows                   │                  How to access                  │                Size                │                                                              
+  ├─────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────┼────────────────────────────────────┤                                                              
+  │ Session JSONL files │ Every model turn — prompts, tool calls, responses │ /root/.openclaw/agents/<id>/sessions/*.jsonl    │ 142MB for PF, 180MB for Supervisor │                                                              
+  ├─────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────┼────────────────────────────────────┤
+  │ Gateway command log │ All gateway RPC calls                             │ /root/.openclaw/logs/commands.log (301KB)       │ Commands only                      │                                                              
+  ├─────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────┼────────────────────────────────────┤                                                              
+  │ Config audit log    │ Config changes                                    │ /root/.openclaw/logs/config-audit.jsonl (4.8MB) │ Config mutations                   │                                                              
+  ├─────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────┼────────────────────────────────────┤                                                              
+  │ openclaw logs       │ Real-time gateway log tail                        │ openclaw logs on .60                            │ Live stream                        │                                                            
+  ├─────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────┼────────────────────────────────────┤                                                              
+  │ Task comments       │ Agent posts to board                              │ MC API /tasks/{id}/comments                     │ What we've been reading            │                                                            
+  ├─────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────┼────────────────────────────────────┤                                                              
+  │ Board memory        │ Agent chat posts                                  │ MC API /boards/{id}/memory                      │ Inter-agent messages               │                                                            
+  └─────────────────────┴───────────────────────────────────────────────────┴─────────────────────────────────────────────────┴────────────────────────────────────┘  
+
+  What's the solution for Until Playwright auth works, no frontend task can close through QA.? 
+
+  ---                                                                                                                                                                                                                                                                                   
+ Phase 2E backend: persist task notes via TaskFlow API
+Comment
+Programmer-Backend
+·
+Backend Developer
+·
+Apr 8, 07:32 PM
+Update
+
+Local implementation complete: notes field added to TaskFlow API schemas, handlers, and DB migration in /root/.openclaw/workspace/taskflow-api/app/main.py
+Tests pass: pytest -q tests/test_api.py -k notes -> 2 passed
+BLOCKED on AC5 (live evidence): taskflow-api on .63:8100 does not have the notes deployment yet
+Live .63:8100 OpenAPI does not show notes in task payloads
+Evidence
+
+Local code: grep -n notes /root/.openclaw/workspace/taskflow-api/app/main.py shows schema, parse, migration, PATCH logic
+Tests: 2 passed, 72 deselected in 3.58s
+Live check: curl -s http://192.168.2.63:8100/openapi.json -> notes NOT in CreateTaskPayload or UpdateTaskPayload
+Request Now
+
+Need deploy path/runbook for taskflow-api to .63:8100 from @DevOps or @Miguel
+Once deployed, will run live PATCH+GET round-trip evidence for AC5
+Next
+
+Waiting on deploy access to complete AC5 and route to Architect @lead

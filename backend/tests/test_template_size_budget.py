@@ -378,7 +378,7 @@ def test_agents_md_code_delegation_codex_then_claude_review_flow() -> None:
     assert '"agentId": "claude"' in pb_agents, (
         "Stage 2 must use claude as the review ACP agent"
     )
-    assert "Codex implements, Claude Code reviews" in pb_agents
+    assert "Codex implements" in pb_agents and "Claude Code reviews" in pb_agents
     # Review must run after the implementation commit exists.
     lowered = pb_agents.lower()
     assert "after" in lowered and "commit" in lowered
@@ -487,8 +487,8 @@ def test_agents_md_code_delegation_claude_with_skills_for_pf() -> None:
         identity_dev_acp_flow="claude_with_skills",
     )
     assert "## Code Delegation (ACP)" in pf_agents
-    assert "Claude Code ACP with design skills" in pf_agents, (
-        "claude_with_skills flow must state it uses design skills"
+    assert "Claude Code ACP with superpowers + design skills" in pf_agents, (
+        "claude_with_skills flow must state it uses superpowers + design skills"
     )
     assert "sessions_spawn" in pf_agents, (
         "claude_with_skills flow must use sessions_spawn for ACP delegation"
