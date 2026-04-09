@@ -45,5 +45,15 @@ class Board(TenantScoped, table=True):
     block_status_changes_with_pending_approval: bool = Field(default=False)
     only_lead_can_change_status: bool = Field(default=False)
     max_agents: int = Field(default=1)
+
+    # Auto heartbeat governor policy (board-scoped).
+    auto_heartbeat_governor_enabled: bool = Field(default=True)
+    auto_heartbeat_governor_ladder: list[str] = Field(
+        default_factory=lambda: ["10m", "30m", "1h", "3h", "6h"],
+        sa_column=Column(JSON),
+    )
+    auto_heartbeat_governor_lead_cap_every: str = Field(default="1h")
+    auto_heartbeat_governor_activity_trigger_type: str = Field(default="B")
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
