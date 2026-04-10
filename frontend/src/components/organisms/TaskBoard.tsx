@@ -13,7 +13,7 @@ import { TaskCard } from "@/components/molecules/TaskCard";
 import { parseApiDatetime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 
-type TaskStatus = "inbox" | "in_progress" | "review" | "done";
+type TaskStatus = "inbox" | "in_progress" | "review" | "done" | "cancelled";
 
 type Task = {
   id: string;
@@ -36,6 +36,7 @@ type TaskBoardProps = {
   onTaskSelect?: (task: Task) => void;
   onTaskMove?: (taskId: string, status: TaskStatus) => void | Promise<void>;
   readOnly?: boolean;
+  showCancelledColumn?: boolean;
 };
 
 type ReviewBucket = "all" | "approval_needed" | "waiting_lead" | "blocked";
@@ -80,6 +81,14 @@ const columns: Array<{
     text: "group-hover:text-green-600 text-slate-500",
     badge: "bg-emerald-100 text-emerald-700",
   },
+  {
+    title: "Cancelled",
+    status: "cancelled",
+    dot: "bg-slate-300",
+    accent: "hover:border-slate-300 hover:bg-slate-50",
+    text: "group-hover:text-slate-600 text-slate-500",
+    badge: "bg-slate-100 text-slate-500",
+  },
 ];
 
 /**
@@ -96,7 +105,7 @@ const resolveDueState = (
   const date = parseApiDatetime(task.due_at);
   if (!date) return { due: undefined, isOverdue: false };
 
-  const dueLabel = date.toLocaleDateString(undefined, {
+  const dueLabel = date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
@@ -128,6 +137,7 @@ export const TaskBoard = memo(function TaskBoard({
   onTaskSelect,
   onTaskMove,
   readOnly = false,
+  showCancelledColumn = false,
 }: TaskBoardProps) {
   const boardRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -139,6 +149,7 @@ export const TaskBoard = memo(function TaskBoard({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [activeColumn, setActiveColumn] = useState<TaskStatus | null>(null);
   const [reviewBucket, setReviewBucket] = useState<ReviewBucket>("all");
+  const showCancelled = showCancelledColumn;
 
   const setCardRef = useCallback(
     (taskId: string) => (node: HTMLDivElement | null) => {
@@ -291,16 +302,19 @@ export const TaskBoard = memo(function TaskBoard({
       in_progress: [],
       review: [],
       done: [],
+      cancelled: [],
     };
     for (const column of columns) {
       buckets[column.status] = [];
     }
     tasks.forEach((task) => {
+      // Hide cancelled tasks unless toggle is enabled
+      if (task.status === "cancelled" && !showCancelled) return;
       const bucket = buckets[task.status] ?? buckets.inbox;
       bucket.push(task);
     });
     return buckets;
-  }, [tasks]);
+  }, [tasks, showCancelled]);
 
   // Keep drag/drop state and payload handling centralized for column move interactions.
   const handleDragStart =
@@ -364,13 +378,11 @@ export const TaskBoard = memo(function TaskBoard({
       ref={boardRef}
       data-testid="task-board"
       className={cn(
-        // Mobile-first: stack columns vertically to avoid horizontal scrolling.
         "grid grid-cols-1 gap-4 overflow-x-hidden pb-6",
-        // Desktop/tablet: switch back to horizontally scrollable kanban columns.
-        "sm:grid-flow-col sm:auto-cols-[minmax(260px,320px)] sm:grid-cols-none sm:overflow-x-auto",
+        "sm:grid-flow-col sm:auto-cols-[minmax(260px,320px)] sm:grid-cols-none sm:overflow-x-auto sm:overflow-y-auto sm:max-h-[calc(100vh-220px)]",
       )}
     >
-      {columns.map((column) => {
+      {columns.filter((c) => showCancelled || c.status !== "cancelled").map((column) => {
         const columnTasks = grouped[column.status] ?? [];
         // Derive review tab counts and the active subset from one canonical task list.
         const reviewCounts =

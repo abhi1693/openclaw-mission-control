@@ -2,6 +2,22 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-04-09
+
+### Added
+- **Cancelled column on Kanban board**: Added `cancelled` status column to TaskBoard with show/hide toggle in board settings (Edit board > Rules > Show cancelled column). Persisted via localStorage per board.
+- **Board settings: Show cancelled column toggle**: New toggle in board configuration page (Rules section) controls cancelled column visibility on the Kanban board.
+- **Viewport-constrained Kanban grid**: Added `max-h-[calc(100vh-220px)]` with `overflow-y-auto` so horizontal scrollbar stays at the bottom of the viewport instead of at the bottom of the tallest column.
+
+### Changed
+- **Agent model fallback chains**: Updated all agent fallback chains based on real-template heartbeat comparison test (6 models x 6 agents with Jinja2-rendered prompts). qwen3.5 best all-rounder, m2.1 best speed. gpt-5.4 primary for all agents.
+- **Supervisor model**: Reverted to gpt-5.4 primary with m2.1 as first fallback (was briefly m2.7 primary). m2.1 scored 7/7 on Supervisor heartbeat at 15s.
+- **MiniMax direct API**: Fallback chains now use `minimax/minimax-m2.1` and `minimax/minimax-m2.7` via direct MiniMax API instead of Ollama cloud proxy for faster response.
+- **Default model**: Changed defaults primary from claude-sonnet-4-6 to openai-codex/gpt-5.4.
+
+### Fixed
+- **Kanban column gap bug**: Fixed phantom 260px gap between Agents panel and Inbox column caused by "Show cancelled tasks" checkbox being rendered inside the CSS grid container. Moved toggle to board settings page.
+
 ## 2026-04-03
 
 ### Added

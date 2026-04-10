@@ -909,6 +909,21 @@ export default function BoardDetailPage() {
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [deleteTaskError, setDeleteTaskError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const [showCancelledColumn, setShowCancelledColumn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem(`board:${boardId}:showCancelled`) === "true"; } catch { return false; }
+  });
+  // Sync showCancelledColumn with localStorage changes (from board edit page)
+  useEffect(() => {
+    const handler = () => {
+      try {
+        setShowCancelledColumn(localStorage.getItem(`board:${boardId}:showCancelled`) === "true");
+      } catch {}
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, [boardId]);
+
   const [isLiveFeedOpen, setIsLiveFeedOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const isLiveFeedOpenRef = useRef(false);
@@ -2794,6 +2809,65 @@ export default function BoardDetailPage() {
     }
   };
 
+  const handleCancelTask = async () => {
+    if (!selectedTask || !boardId || !isSignedIn) return;
+    if (!window.confirm("Cancel task? This can be undone.")) return;
+    setIsSavingTask(true);
+    setSaveTaskError(null);
+    try {
+      const result = await updateTaskApiV1BoardsBoardIdTasksTaskIdPatch(
+        boardId,
+        selectedTask.id,
+        { status: "cancelled" as any },
+      );
+      if (result.status !== 200) throw new Error("Unable to cancel task.");
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === selectedTask.id
+            ? { ...task, status: "cancelled" as TaskStatus }
+            : task,
+        ),
+      );
+      setSelectedTask((prev) => prev ? { ...prev, status: "cancelled" as TaskStatus } : null);
+      pushToast("Task cancelled.");
+    } catch (err) {
+      const message = formatActionError(err, "Something went wrong.");
+      setSaveTaskError(message);
+      pushToast(message);
+    } finally {
+      setIsSavingTask(false);
+    }
+  };
+
+  const handleReopenTask = async () => {
+    if (!selectedTask || !boardId || !isSignedIn) return;
+    setIsSavingTask(true);
+    setSaveTaskError(null);
+    try {
+      const result = await updateTaskApiV1BoardsBoardIdTasksTaskIdPatch(
+        boardId,
+        selectedTask.id,
+        { status: "inbox" as any },
+      );
+      if (result.status !== 200) throw new Error("Unable to reopen task.");
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === selectedTask.id
+            ? { ...task, status: "inbox" as TaskStatus }
+            : task,
+        ),
+      );
+      setSelectedTask((prev) => prev ? { ...prev, status: "inbox" as TaskStatus } : null);
+      pushToast("Task reopened.");
+    } catch (err) {
+      const message = formatActionError(err, "Something went wrong.");
+      setSaveTaskError(message);
+      pushToast(message);
+    } finally {
+      setIsSavingTask(false);
+    }
+  };
+
   const handleTaskMove = useCallback(
     async (taskId: string, status: TaskStatus) => {
       if (!isSignedIn || !boardId) return;
@@ -3542,6 +3616,7 @@ export default function BoardDetailPage() {
                       onTaskSelect={openComments}
                       onTaskMove={canWrite ? handleTaskMove : undefined}
                       readOnly={!canWrite}
+                      showCancelledColumn={showCancelledColumn}
                     />
                   ) : (
                     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -4404,6 +4479,25 @@ export default function BoardDetailPage() {
             ) : null}
           </div>
           <DialogFooter className="flex flex-wrap gap-2">
+            {selectedTask?.status !== "cancelled" ? (
+              <Button
+                variant="outline"
+                onClick={handleCancelTask}
+                disabled={!selectedTask || isSavingTask || !canWrite}
+                className="border-slate-300 text-slate-700 hover:border-slate-400 hover:text-slate-800"
+              >
+                Cancel task
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={handleReopenTask}
+                disabled={!selectedTask || isSavingTask || !canWrite}
+                className="border-emerald-300 text-emerald-700 hover:border-emerald-400 hover:text-emerald-800"
+              >
+                Reopen task
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => setIsDeleteDialogOpen(true)}

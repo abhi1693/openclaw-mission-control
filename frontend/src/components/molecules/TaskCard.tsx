@@ -2,7 +2,7 @@ import { CalendarClock, UserCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-type TaskStatus = "inbox" | "in_progress" | "review" | "done";
+type TaskStatus = "inbox" | "in_progress" | "review" | "done" | "cancelled";
 
 interface TaskCardProps {
   title: string;
@@ -72,6 +72,7 @@ export function TaskCard({
       className={cn(
         "group relative cursor-pointer rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md",
         isDragging && "opacity-60 shadow-none",
+        status === "cancelled" && "border-red-200 bg-slate-50 opacity-60",
         hasPendingApproval && "border-amber-200 bg-amber-50/40",
         isBlocked && "border-rose-200 bg-rose-50/50",
         needsLeadReview && "border-indigo-200 bg-indigo-50/30",
@@ -99,7 +100,7 @@ export function TaskCard({
       ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
-          <p className="text-sm font-medium text-slate-900 line-clamp-2 break-words">
+          <p className={cn("text-sm font-medium text-slate-900 line-clamp-2 break-words", status === "cancelled" && "line-through text-slate-500")}>
             {title}
           </p>
           {isBlocked ? (

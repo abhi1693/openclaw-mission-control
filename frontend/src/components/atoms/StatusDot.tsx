@@ -22,6 +22,7 @@ const TASK_STATUS_DOT_CLASS_BY_STATUS: Record<string, string> = {
   in_progress: "bg-purple-500",
   review: "bg-indigo-500",
   done: "bg-emerald-500",
+  cancelled: "bg-red-400",
 };
 
 const STATUS_DOT_CLASS_BY_VARIANT: Record<
