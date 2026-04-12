@@ -2260,12 +2260,18 @@ async def _lead_apply_status(
             ),
         )
     if target_status == "inbox":
-        update.task.assigned_agent_id = await _last_worker_who_moved_task_to_review(
-            session,
-            task_id=update.task.id,
-            board_id=update.board_id,
-            lead_agent_id=lead_agent.id,
-        )
+        # Respect an explicit assignment provided by the lead in this PATCH.
+        # Without an explicit assignee, fall back to routing the task to the
+        # last worker who moved it to review (the "changes requested" return
+        # path). This fallback was previously unconditional, which defeated
+        # any explicit lead attempt to route a failed task to a different dev.
+        if "assigned_agent_id" not in update.updates:
+            update.task.assigned_agent_id = await _last_worker_who_moved_task_to_review(
+                session,
+                task_id=update.task.id,
+                board_id=update.board_id,
+                lead_agent_id=lead_agent.id,
+            )
         update.task.in_progress_at = None
     update.task.status = target_status
 

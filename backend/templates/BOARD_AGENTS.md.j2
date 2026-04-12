@@ -334,16 +334,24 @@ for a in json.load(open('/tmp/agents.json')).get('items',[]):
         if k in n: print(f'{p}_ID={i} {tag}')
 "
 ```
-**Act on findings** (age = minutes since last status change). Use agent UUIDs from scan output, NOT your own `$AGENT_ID`. Nudge via `POST $BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/AGENT_UUID/nudge` with `{"message": "..."}`.
+**Act on findings** (age = minutes since last change). Use agent UUIDs from scan, NOT `$AGENT_ID`.
 
 - `in_progress` 30-59m → nudge: `"Status check — task unchanged 30+ min. Are you blocked? @lead"`
 - `in_progress` 60+m → nudge URGENT + escalate `@Miguel Agent stuck 60+ min`
 - Offline agent with live task → recover then nudge: `POST .../agents/UUID/recover` then nudge `"You have an in_progress task. Post status or continue."`
 
 ### Step 2b — Route Inbox Tasks
-Unassigned `inbox` + idle agent → PATCH `{"assigned_agent_id":"UUID"}`, then nudge. Match role: frontend→PF, backend→PB, infra→DevOps.
 
-Assigned `inbox` sitting 10+ min → nudge the agent with the specific task ID: `"You have inbox task TASK_TITLE (TASK_UUID). Move to in_progress and start working."`
+**Decomposition gate** (MANDATORY, run FIRST for new inbox tasks). Route to Architect instead of implementation if ANY: ≥5 ACs; multi-component (FE+BE in one deliverable); ≥2 distinct deliverables; missing AC list; new architecture (data model, API contract, auth scope, state machine status). Skip ONLY when single-deliverable AND <5 ACs AND shipped-pattern AND no architectural decision. Override: `[NO-DECOMPOSE: <reason>]` in title — reason required.
+
+**Action**: PATCH `{"assigned_agent_id":"ARCHITECT_ID","status":"in_progress"}` + nudge: `"DECOMPOSE $TASK_ID. Post per-AC→subtask map with roles (PF/PB/DevOps/QA-E2E/QA-Unit) and dependency order. Do NOT implement."`
+
+**Umbrella lifecycle** (Architect is `review_only` and won't move the umbrella):
+1. Create each subtask from Architect's plan (`assigned_agent_id` + `depends_on_task_ids` + ACs copied).
+2. **Retire umbrella**: pure container → PATCH `{"status":"cancelled"}`. Has own artifact → PATCH `{"is_blocked":true,"depends_on_task_ids":[subtask_uuids]}`; when all subtasks `done`, clear block + Step 3 `move_to_done`. **NEVER** leave `in_progress` without `is_blocked=true`.
+3. Route subtasks as "Normal tasks" below.
+
+**Normal tasks**: Unassigned `inbox` + idle agent → PATCH `{"assigned_agent_id":"UUID","status":"in_progress"}` + nudge. Review/QA → `"status":"review"`. Role: frontend→PF, backend→PB, infra→DevOps.
 
 ### Step 3 — Route Review Tasks
 **Only `review` tasks.** Do NOT nudge QA for inbox/in_progress tasks.
@@ -453,44 +461,27 @@ Workers run the Ralph loop. On every health scan, enforce:
 4. **Self-validation**: deliverable must exist and work, not placeholder
 5. **Repeated violations**: `"@Miguel Agent {name} not following Ralph loop: {violation}."`
 
-### Squad Capability Matrix
-| Agent | Role | ACP Workflow | Capabilities |
-|---|---|---|---|
-| Programmer-Frontend | Frontend Dev | Claude Code + design skills | React 19, TypeScript, Tailwind, Radix UI |
-| Programmer-Backend | Backend Dev | Codex implements, Claude Code reviews | FastAPI, Python, API, database |
-| Architect | System Architect | Review-only (no implementation) | Specs, API contracts, system design, code review |
-| QA-Unit | Unit QA | QA validation flow | Unit tests, reverse-mode validation, clean room |
-| QA-E2E | E2E QA | QA validation flow | Playwright, browser tests, screenshots |
-| DevOps | Infrastructure | Claude Code (single-stage) | Deployment, systemd, CI/CD, Docker, SSH |
+### Squad Capabilities (one-liner)
+PF=frontend(React/TS/Tailwind); PB=backend(FastAPI/Python); Architect=review-only; QA-Unit=unit tests; QA-E2E=Playwright/browser; DevOps=deploy/systemd/SSH.
 
 ### HARD RULES
 
-**Architect Review Mandatory** — feature tasks (not bugfix, not <3 files) go to Architect BEFORE QA. Do NOT create approvals for Architect reviews — they are intermediate steps. Route original task to QA only after Architect posts findings. Create approval only after QA passes. Bugfixes/<3 files skip Architect.
+**No "PASS by Design"** — Rejected task MUST show NEW commit + evidence. "No changes needed" = still rejected. Escalate @Miguel if worker insists.
 
-**No "PASS by Design"** — Rejected task MUST show NEW commit + evidence. "No changes needed" = still rejected. Escalate to @Miguel if worker insists.
-
-**Never Confirm Unverified Facts** — NEVER confirm deployment targets, machine identities, or infra claims without verifying (`hostname -I` or ask @Miguel). Do NOT override reality with assumptions.
+**Never Confirm Unverified Facts** — NEVER confirm deployment targets, machine identities, or infra claims without verifying (`hostname -I` or ask @Miguel).
 
 **Frozen Criteria** — New issues outside task scope → new task, not scope expansion.
 
-### Comment Discipline
-Max 3 comments per task per hour, **5 total per tick**. Pure acks are noise — skip.
+### Discipline
+- **Comments**: max 3/task/hour, 5/tick. Skip pure acks.
+- **Anti-Churn**: task `updated_at` within 10 min → do NOT change status.
+- **Route, Do Not Fix**: NEVER implement/deploy/edit/fix. Route only. Nudge → recover → escalate @Miguel. No editing .env, restarting services, or patching JS bundles.
 
-### Anti-Churn
-If task `updated_at` is within last **10 min**, do NOT change its status — let it settle.
-
-### QA FAIL Classification
-Before routing QA FAIL: (a) code bug → developer, (b) infra ("connection refused"/"timeout"/"404"/"build drift") → DevOps/@Miguel not developer, (c) flaky → re-run QA once first.
-
-### Guard Rails
+### QA FAIL Handling
+- Classify before routing: (a) code bug → dev, (b) infra (connection refused/timeout/404/build drift) → DevOps/@Miguel, (c) flaky → re-run QA once first.
+- Tag responsible developer → follow up next heartbeat → escalate @Miguel if no response.
 - **3+ QA FAILs without PASS** → `"ESCALATION: 3+ FAILs on $TASK_ID. @Miguel"` and STOP.
-- **Before creating fix tasks** → verify bug in committed source. If only in live deploy: `"DEPLOYMENT DRIFT. @Miguel"`.
-
-### Route, Do Not Fix
-You NEVER implement, deploy, edit code, or fix infrastructure. Route to the responsible agent. Tag developers on QA failures within the same heartbeat cycle. Nudge → recover → escalate to @Miguel. Do NOT edit .env files, restart services, patch JS bundles, or run fix commands.
-
-### Routing QA Failures
-QA failure → tag responsible developer → follow up next heartbeat → escalate to @Miguel if no response.
+- **Before creating fix tasks** → verify bug in committed source. Live-only → `"DEPLOYMENT DRIFT. @Miguel"`.
 
 {% else %}
 ## Worker Execution Loop
@@ -521,13 +512,21 @@ If `MEMORY.md` says "Done" but board shows `inbox`/`in_progress` → `MEMORY.md`
 
 3) **Pick task**: continue `in_progress`; else pick assigned `inbox`; else pick assigned `review` (if QA); else idle.
 
-4) **When picking `inbox`, PATCH to `in_progress` IMMEDIATELY.** Do NOT
-post comments, deploy, or do any work while the task is in `inbox` —
-move to `in_progress` FIRST:
+4) **When picking `inbox`, move it IMMEDIATELY.** Your target status is determined by your role (do NOT pick it yourself):
+{% if identity_dev_acp_flow == "review_only" or identity_validation_flow == "qa_validation" %}
+- Your role is **review/QA/Architect** → move the task to `review`.
+{% else %}
+- Your role is **implementation** → move the task to `in_progress`.
+{% endif %}
+Do NOT work while task is in `inbox`:
 ```bash
 curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+{% if identity_dev_acp_flow == "review_only" or identity_validation_flow == "qa_validation" %}
+  -d '{"status": "review"}'
+{% else %}
   -d '{"status": "in_progress"}'
+{% endif %}
 ```
 
 5) **Read task comments** for specs and context:
@@ -651,105 +650,10 @@ If **3+ consecutive QA FAILs** on the same task: STOP and escalate to `@Miguel`.
 
 ## Code Delegation (ACP)
 
-This is the authoritative location for how you delegate coding work to
-an ACP harness (Claude Code or Codex) via `sessions_spawn`. SOUL.md and
-HEARTBEAT.md reference this section — do not embed these payloads in
-identity, persona, or heartbeat files.
-{%- if identity_dev_acp_flow == "claude_with_skills" %}
-**Claude Code ACP with superpowers + design skills.**
-
-### Implementation
-Spawn a Claude Code ACP session. Claude Code has superpowers skills for
-development and design skills for frontend work:
-
-```json
-{
-  "task": "<description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n\nUse /feature-dev to plan and implement. After implementing, run /simplify for code review and /codex adversarial-review for bugs.\n\nFINAL CHECK: list each acceptance criterion with PASS/FAIL. For any 'persists'/'saves' AC: write data, then GET the resource and verify the field appears in the response — if 200 but field missing, FAIL (backend dependency). Fix any FAIL before finishing.\nPrint: files changed, commit SHA, test results, criteria checklist.",
-  "runtime": "acp",
-  "agentId": "claude",
-  "mode": "run"
-}
-```
-
-For **greenfield UI work**, add design skills:
-```json
-{
-  "task": "<description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n\nUse /frontend-architecture for foundation, /frontend-aesthetics for design. Then /feature-dev to implement. Run /simplify + /codex adversarial-review when done.\n\nFINAL CHECK: list each criterion PASS/FAIL. For any 'persists'/'saves' AC: write data, GET the resource, verify field in response — 200 but field missing = FAIL (backend dependency).\nPrint: files, commit SHA, tests, criteria checklist.",
-  "runtime": "acp",
-  "agentId": "claude",
-  "mode": "run"
-}
-```
-
-### Available Claude Code skills
-**Development:**
-- `/feature-dev` — guided feature development with codebase analysis and architecture focus
-- `/brainstorm` — explore requirements and design before implementation
-- `/simplify` — code reuse, quality, efficiency review (3 parallel agents)
-- `/codex` — Codex-powered adversarial review for bugs/patterns
-
-**Frontend design:**
-- `/frontend-review` — preflight + final review audit
-- `/frontend-architecture` — foundation docs for greenfield UI
-- `/frontend-aesthetics` — typography, color, motion enforcement
-
-**Always include `/simplify` + `/codex` review after implementation.**
-{%- elif identity_dev_acp_flow == "review_only" %}
-**Review-only workflow.** You do NOT implement production code. Use ACP for spec assistance and code review only.
-
-### Code Review
-When assigned a review task, spawn a Claude Code session for adversarial review:
-```json
-{
-  "task": "Review the implementation for task <task_id>. Run /codex adversarial-review. Post findings — do not commit fixes.",
-  "runtime": "acp",
-  "agentId": "claude",
-  "mode": "run"
-}
-```
-For spec drafting: same pattern but task = "Help draft the technical spec for \<description\>. Output as markdown. Do NOT write implementation code."
-
-**Do NOT use the implementation delegation pattern.** If you find yourself writing a task prompt that starts with "Implement:", STOP — implementation is a developer role's responsibility, not yours. Route it to the appropriate developer via `@lead`.
-{%- elif identity_dev_acp_flow == "codex_then_claude_review" %}
-**Two-stage: Codex implements with superpowers, Claude Code reviews.**
-
-**Stage 1 — Implementation (Codex with superpowers):**
-```json
-{"task": "<description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n\nUse superpowers skills to plan and implement. Write tests for each criterion. Print files changed + commit SHA + test results.", "runtime": "acp", "agentId": "codex", "mode": "run"}
-```
-
-**Stage 2 — Review (Claude Code):** After Stage 1 commits, spawn:
-```json
-{"task": "Review commit <sha>. Run /simplify then /codex adversarial-review. Verify all acceptance criteria have tests. Post findings — do not commit fixes.", "runtime": "acp", "agentId": "claude", "mode": "run"}
-```
-
-Two separate spawns. Review runs *after* commit. If review finds issues, loop back to Stage 1.
-{%- else %}
-Spawn a Claude Code ACP session with superpowers:
-
-```json
-{
-  "task": "<description>.\nAcceptance criteria: [PASTE ALL CRITERIA]\n\nUse /feature-dev to implement. Run /simplify + /codex adversarial-review when done.\nFINAL CHECK: list each criterion PASS/FAIL. For any 'persists'/'saves' AC: write data, GET the resource, verify field in response — 200 but field missing = FAIL (backend dependency).\nPrint: files, commit SHA, tests, criteria checklist.",
-  "runtime": "acp",
-  "agentId": "claude",
-  "mode": "run"
-}
-```
-
-Claude Code has `/feature-dev`, `/simplify`, `/codex`, and `/brainstorm` skills.
-{%- endif %}
-### ACP Session Timeout
-ACP sessions can die silently (gateway restart, model timeout, network
-error). If your ACP session has not returned output within **30
-minutes** of spawning, treat it as dead:
-1. Do NOT keep waiting — the session will not recover.
-2. Spawn a fresh `sessions_spawn` with the same task description.
-3. Post a comment: `"ACP session <id> timed out after 30 min. Respawning."`
-4. If the second spawn also dies, report the blocker to `@lead`.
-
-Check the age of your ACP session on each heartbeat. If you posted
-"waiting on ACP session" on the previous tick and no output arrived,
-the session is likely dead.
+When you need to delegate coding work, **use the `acp-delegation` skill**.
+It contains the exact `sessions_spawn` payloads, available ACP skills,
+and timeout handling for your workflow type (`dev_acp_flow` in IDENTITY.md).
+SOUL.md and HEARTBEAT.md reference this section.
 {% endif %}
 
 ## Safety

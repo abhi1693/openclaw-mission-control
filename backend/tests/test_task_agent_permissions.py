@@ -679,6 +679,166 @@ async def test_lead_moves_review_task_to_inbox_and_reassigns_last_worker_with_re
 
 
 @pytest.mark.asyncio
+async def test_lead_moves_review_task_to_inbox_with_explicit_assignment_wins_over_last_worker_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: when a lead PATCHes a review task to inbox WITH an explicit
+    assigned_agent_id, that explicit assignment must win over the last-worker
+    fallback routing. Previously the fallback was unconditional and overrode
+    the lead's routing intent, causing a thrashing loop when the lead tried to
+    redirect a failed review to a different developer.
+    """
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            reviewer_id = uuid4()       # worker who originally moved to review
+            target_dev_id = uuid4()     # the explicit rework target
+            lead_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=reviewer_id,
+                    name="reviewer",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    openclaw_session_id="reviewer-session",
+                ),
+            )
+            session.add(
+                Agent(
+                    id=target_dev_id,
+                    name="target-dev",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    openclaw_session_id="target-dev-session",
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id,
+                    name="Lead Agent",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
+                    openclaw_session_id="lead-session",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="assigned task",
+                    description="ready",
+                    status="in_progress",
+                    assigned_agent_id=reviewer_id,
+                    in_progress_at=utcnow(),
+                ),
+            )
+            await session.commit()
+
+            sent: list[dict[str, str]] = []
+
+            class _FakeDispatch:
+                def __init__(self, _session: AsyncSession) -> None:
+                    pass
+
+                async def optional_gateway_config_for_board(self, _board: Board) -> object:
+                    return object()
+
+            async def _fake_send_agent_task_message(
+                *,
+                dispatch: Any,
+                session_key: str,
+                config: Any,
+                agent_name: str,
+                message: str,
+            ) -> None:
+                _ = dispatch, config
+                sent.append(
+                    {
+                        "session_key": session_key,
+                        "agent_name": agent_name,
+                        "message": message,
+                    },
+                )
+                return None
+
+            monkeypatch.setattr(tasks_api, "GatewayDispatchService", _FakeDispatch)
+            monkeypatch.setattr(
+                tasks_api, "_send_agent_task_message", _fake_send_agent_task_message
+            )
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            reviewer = (
+                await session.exec(select(Agent).where(col(Agent.id) == reviewer_id))
+            ).first()
+            assert reviewer is not None
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
+            assert lead is not None
+
+            # The original reviewer moves the task to review
+            moved_to_review = await tasks_api.update_task(
+                payload=TaskUpdate(status="review", comment="Ready for review."),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=reviewer),
+            )
+            assert moved_to_review.status == "review"
+            assert moved_to_review.assigned_agent_id == lead_id
+
+            # Lead moves it back to inbox, explicitly routing to a DIFFERENT agent
+            # than the original reviewer (simulating QA FAIL routing to a dev who
+            # should own the rework).
+            review_task = (
+                await session.exec(select(Task).where(col(Task.id) == task_id))
+            ).first()
+            assert review_task is not None
+            reverted = await tasks_api.update_task(
+                payload=TaskUpdate(
+                    status="inbox",
+                    assigned_agent_id=target_dev_id,
+                ),
+                task=review_task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=lead),
+            )
+
+            assert reverted.status == "inbox"
+            # The lead's explicit assignment must win over the last-worker fallback.
+            assert reverted.assigned_agent_id == target_dev_id
+            assert reverted.assigned_agent_id != reviewer_id
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_non_lead_agent_comment_in_review_without_status_does_not_reassign() -> None:
     engine = await _make_engine()
     try:
