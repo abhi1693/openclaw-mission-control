@@ -64,6 +64,14 @@ const columns: Array<{
     badge: "bg-slate-100 text-slate-600",
   },
   {
+    title: "Rework",
+    status: "rework",
+    dot: "bg-amber-500",
+    accent: "hover:border-amber-400 hover:bg-amber-50",
+    text: "group-hover:text-amber-700 text-slate-500",
+    badge: "bg-amber-100 text-amber-800",
+  },
+  {
     title: "In Progress",
     status: "in_progress",
     dot: "bg-purple-500",
@@ -78,14 +86,6 @@ const columns: Array<{
     accent: "hover:border-indigo-400 hover:bg-indigo-50",
     text: "group-hover:text-indigo-600 text-slate-500",
     badge: "bg-indigo-100 text-indigo-700",
-  },
-  {
-    title: "Rework",
-    status: "rework",
-    dot: "bg-amber-500",
-    accent: "hover:border-amber-400 hover:bg-amber-50",
-    text: "group-hover:text-amber-700 text-slate-500",
-    badge: "bg-amber-100 text-amber-800",
   },
   {
     title: "Done",
@@ -313,9 +313,9 @@ export const TaskBoard = memo(function TaskBoard({
   const grouped = useMemo(() => {
     const buckets: Record<TaskStatus, Task[]> = {
       inbox: [],
+      rework: [],
       in_progress: [],
       review: [],
-      rework: [],
       done: [],
       cancelled: [],
     };
