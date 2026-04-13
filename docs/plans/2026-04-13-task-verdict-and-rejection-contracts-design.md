@@ -1,6 +1,7 @@
 # First-class verdicts + rejection-resolution contracts
 
-**Status:** DRAFT — merged design spec, not yet approved for implementation
+**Status:** REJECTED — do not implement as written. See rejection note below.
+**Original status:** DRAFT — merged design spec, not yet approved for implementation
 **Authors:** operator (Claude) + prior session (Claude Opus 4.6 + Codex gpt-5.4 high)
 **Date:** 2026-04-13
 **Supersedes:**
@@ -15,6 +16,72 @@ Both prior designs converged on the same anti-patterns and the same layered-enfo
 - `350ae7d` — explicit-assignment fix for rework routing (already shipped)
 
 **Related incidents:** Dev-Squad board session 2026-04-12 → 2026-04-13 (task churn on `633fb35e`, `33d552a1`, `d51a3a62`)
+
+---
+
+## REJECTION NOTE (added 2026-04-13 after three-subagent validation review)
+
+This merged spec was submitted to three independent subagents for validation on 2026-04-13. All three returned negative verdicts. Summary:
+
+| Subagent | Angle | Verdict |
+|---|---|---|
+| #1 — Implementation feasibility (read real codebase) | Does the spec work against actual code? | **RED — critical blockers** |
+| #2 — Internal consistency | Does the spec contradict itself? | **NEEDS REVISION — 6 concrete gaps** |
+| #3 — Adversarial critique | Is this still a workaround after merging? | **REJECT — 13 concerns, still a workaround** |
+
+### Critical blockers that invalidate the spec as written
+
+1. **`reviewer_role` derivation is structurally broken.** The spec assumes `Agent.identity_profile["role"]` exists and is populated at runtime. Codebase grep confirms this field is NEVER set by any runtime code — it appears only in a docstring example in `board_onboarding.py`. A verdict create call would fail with `KeyError` or return `None` on first execution. Fixing this requires adding a real `Agent.role` enum column or runtime validation on the JSONB field (separate migration, +1–1.5 days).
+
+2. **Operator override path is structurally broken.** The spec claims `POST /approvals/{id}/unblock` is the operator escape hatch. In reality, that endpoint only operates on EXISTING approval rows and only resets the rejection-loop counter. The new `_ensure_verdict_backed_approval_for_move_to_done` guard fires at `create_approval` time BEFORE any approval row exists — the operator has no `approval_id` to unblock. The spec inherits this confusion from the rejection-loop layer (where unblock works because an approval row exists) and silently assumes the same pattern applies to create-time gates. It does not.
+
+3. **Four structural bypasses an LLM agent would find in one heartbeat:**
+   - **First-submission race**: §4.1 step 2 says "if no prior rejection, proceed." An agent self-posts a `dev` role PASS verdict the moment they commit, racing any reviewer rejection. One-POST bypass.
+   - **Self-supersession chain**: nothing forbids a fake `fail` verdict followed by a self-`pass` that supersedes it. The "last rejection" query returns the agent's own fake fail. Match trivially passes. No check that reject verdicts come from a different reviewer than pass verdicts.
+   - **`failure_class="other"` + `required_proof_type="static_only"`**: satisfies the contract with a grep. §12 acknowledges this and offloads "choosing the right proof type" to reviewer discipline — the exact thing the spec was supposed to mechanize.
+   - **Hand-written `proof_output`**: §5.4 defers JSON-schema parsing to v2. §12 concedes "the worker can still hand-write a plausible-looking JSON blob." §10 Q10 punts to re-review, which is template prose only.
+
+### Internal contradictions
+
+4. **§4.3 step 9 contradicts §8 Test 6** on role coverage: step says OR across `{qa_e2e, qa_unit, architect}`, test expects AND of specific roles. Unresolved because §10 Q2 (AC identifier parsing) is unsolved.
+
+5. **Anti-patterns 2 and 3 are only paper fixes at v1.** §1 and §2 claim all four are addressed. §5.4 + §8 Test 2 admit anti-pattern 2 (clean-session laundering) is "documented for operator review, not blocked." §8 Test 3 admits "at v1, the API accepts the invalid AC key." **Real blocks: 2 of 4. Auditability only: 2 of 4.** The framing overstates the fix.
+
+6. **Template budget trim is unspecified.** §6.3 claims ~500-byte trim of "obsolete free-text PASS/FAIL guidance" without identifying which lines get removed. Risk of removing the `5cbd8ad` re-review prose, which is the template-layer backstop the spec relies on per §12.
+
+7. **Enum merger is ambiguous.** §3.1 declares `methodology` matching `required_proof_type` but §4.1 types `methodology: str | None` without `Literal`. They are NOT the same enum at the schema layer — two fields with documented shared values but different validation. §10 Q3 admits the question is unresolved.
+
+8. **Conditional nullable fields enforced only at Pydantic layer, not DB.** Any future migration, test fixture, direct SQL insert, or admin endpoint can create rows that violate the "required when verdict==fail" invariants. The schema fragility is real and the spec does not acknowledge it.
+
+### Scope and timeline
+
+9. **Scope estimate is ~2x low on probes.** The spec claims ~400 LOC for 4 probes at 100 LOC each. §5.2 requires each probe file to implement a 3-probe coverage set (interaction + source-of-truth + reload). Realistic is 150–250 LOC per class. Probes alone are 800–1200 LOC.
+
+10. **Realistic timeline: 7–10 focused days, not 1.5–2.** Factoring in:
+    - `Agent.role` column migration: +1–1.5 days
+    - Operator override fix: +0.5 day
+    - DB-level check constraints: +0.5 day
+    - Multi-cycle supersession tests: +0.5 day
+    - Template sync staging: +0.5 day
+    - 4 Playwright probes with real debugging: +2–3 days (not 1)
+
+### The deeper finding (subagent #3)
+
+> "The merged spec correctly identifies the anti-patterns and correctly diagnoses that prose-based evidence is the root primitive, but the enforcement mechanism it ships at v1 has at least four structural bypasses that an LLM agent under heartbeat pressure will find within days. An agent that can fake `proof_output` as free text, pick its own `failure_class`, and self-supersede cannot be stopped by this spec's mechanism. The spec still cannot verify a test was actually run. That is the problem the spec claims to solve, and it does not."
+
+### Root-cause fix (deferred to a future spec)
+
+The three paths that would actually work:
+
+- **Path A — signed probe-runner service.** A standalone probe-runner binary that signs its output. The backend trusts only output signed by the runner, and `proof_output` must include a valid signature. Closes the hand-written bypass. Aligns with the existing gateway plugin model. 1–2 weeks of focused work.
+
+- **Path B — out-of-band verdict production.** CI/probe infrastructure produces verdicts via webhooks; agents never mint their own. Clean separation of concerns. Requires building CI integration. 2–3 weeks.
+
+- **Path C — accept human-in-the-loop as the real gate.** The existing enforcement layers (`d6174c4` rejection counter + `5cbd8ad` template prose + operator first-hand verification via Chrome DevTools MCP) are already doing the work. In the 2026-04-12 → 2026-04-13 session that motivated this spec, every anti-pattern was caught by operator-level validation, not by any automated layer. Stop trying to mechanize reviewer honesty; tighten operator attention instead. Zero backend code. This is the current state.
+
+**Decision:** Accept Path C for now. Implementation of this spec is deferred indefinitely. The existing three-layer enforcement plus operator gate handles every observed anti-pattern, and the three-subagent review confirms that no mechanical layer short of Path A or Path B can close the "agents mint plausible prose" primitive. The spec remains on disk as historical record of what was considered and why it was rejected.
+
+**Lesson learned:** Each successive attempt in this session was an incremental improvement over the last but still a workaround: Option A+B (regex theater on qa_evidence) → fresh-comment DB gate (syntactic hurdle) → TaskVerdict typed rows (storage improvement, still prose-gameable) → merged spec with failure classes + probes (comprehensive but still has 4 structural bypasses). The adversarial reviewer correctly identified that mechanical evidence-quality enforcement at the FastAPI layer is categorically not solvable without either (a) a trusted external signer or (b) removing agents from the verdict-production path entirely. Neither is in scope for tonight's work.
 
 ---
 
