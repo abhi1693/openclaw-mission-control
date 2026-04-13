@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -188,6 +188,98 @@ async def _ensure_no_pending_approval_conflicts(
             status_code=status.HTTP_409_CONFLICT,
             detail=_pending_conflict_detail(conflicts),
         )
+
+
+REJECTION_LOOP_THRESHOLD = 3
+REJECTION_LOOP_WINDOW_HOURS = 24
+
+
+async def _ensure_no_rejection_loop(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Sequence[UUID],
+) -> None:
+    """Block re-submission after 3 consecutive rejections within 24h.
+
+    Forces escalation to a human operator instead of letting workers
+    cycle the same broken code through approval indefinitely. Operator
+    unblock channels (any one lifts the block):
+    - Any prior rejected approval payload (reason/qa_evidence) contains
+      ``@Miguel`` or ``operator approved``
+    - Any task.comment ActivityEvent posted AFTER the most recent
+      rejection contains ``@Miguel`` or ``operator approved``
+
+    The second channel is the natural workflow: operator posts a task
+    comment unblocking the worker, worker re-submits.
+    """
+    from app.models.activity_events import ActivityEvent  # local import: avoid circular
+
+    normalized = list({*task_ids})
+    if not normalized:
+        return
+    cutoff = utcnow().replace(tzinfo=None)
+    window_start = cutoff - timedelta(hours=REJECTION_LOOP_WINDOW_HOURS)
+    stmt = (
+        select(Approval)
+        .where(
+            Approval.board_id == board_id,
+            col(Approval.task_id).in_(normalized),
+            Approval.created_at >= window_start,
+        )
+        .order_by(col(Approval.created_at).asc())
+    )
+    result = await session.exec(stmt)
+    history = list(result.all())
+    if not history:
+        return
+    # Count consecutive trailing rejections, stopping at any approved record.
+    consecutive_rejections = 0
+    operator_unblocked = False
+    most_recent_rejection_at: datetime | None = None
+    for approval in reversed(history):
+        if approval.status == "approved":
+            break
+        if approval.status == "rejected":
+            consecutive_rejections += 1
+            if most_recent_rejection_at is None:
+                most_recent_rejection_at = approval.resolved_at or approval.created_at
+            payload = approval.payload or {}
+            comment_text = " ".join(
+                str(payload.get(k, "")) for k in ("reason", "qa_evidence", "comment")
+            ).lower()
+            if "@miguel" in comment_text or "operator approved" in comment_text:
+                operator_unblocked = True
+                break
+    if operator_unblocked:
+        return
+    if consecutive_rejections < REJECTION_LOOP_THRESHOLD:
+        return
+    # Check task comments posted after the most recent rejection for operator
+    # unblock signals. This is the natural workflow path.
+    if most_recent_rejection_at is not None:
+        comment_stmt = (
+            select(ActivityEvent)
+            .where(col(ActivityEvent.task_id).in_(normalized))
+            .where(col(ActivityEvent.event_type) == "task.comment")
+            .where(col(ActivityEvent.created_at) >= most_recent_rejection_at)
+        )
+        comment_result = await session.exec(comment_stmt)
+        for event in comment_result.all():
+            message = (event.message or "").lower()
+            if "@miguel" in message or "operator approved" in message:
+                return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"Rejection loop detected: task has been rejected "
+            f"{consecutive_rejections} consecutive times in the last "
+            f"{REJECTION_LOOP_WINDOW_HOURS}h. Escalation required — operator "
+            f"(@Miguel) must post a task comment containing @Miguel or "
+            f"'operator approved' before re-submitting. Repeatedly cycling "
+            f"the same code through approval is forbidden by board hard rules."
+        ),
+    )
 
 
 def _approval_resolution_message(
@@ -408,6 +500,11 @@ async def create_approval(
             board_id=board.id,
             task_ids=task_ids,
         )
+        await _ensure_no_rejection_loop(
+            session,
+            board_id=board.id,
+            task_ids=task_ids,
+        )
     approval = Approval(
         board_id=board.id,
         task_id=task_id,
@@ -478,6 +575,11 @@ async def update_approval(
                 board_id=board.id,
                 task_ids=approval_task_ids or [],
                 exclude_approval_id=approval.id,
+            )
+            await _ensure_no_rejection_loop(
+                session,
+                board_id=board.id,
+                task_ids=approval_task_ids or [],
             )
         approval.status = target_status
         if approval.status != "pending":
