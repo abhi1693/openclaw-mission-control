@@ -58,6 +58,11 @@ DEFAULT_INSTALLER_SKILL_PACKS = (
         "ai-marketing-skills",
         "Marketing frameworks that AI actually executes. Use for Claude Code, OpenClaw, etc.",
     ),
+    (
+        "MiniMax-AI/cli",
+        "mmx-cli",
+        "Generate text, images, video, speech, and music via MiniMax AI platform.",
+    ),
 )
 ADMIN_ROLES = {"owner", "admin"}
 ROLE_RANK = {"member": 0, "admin": 1, "owner": 2}
