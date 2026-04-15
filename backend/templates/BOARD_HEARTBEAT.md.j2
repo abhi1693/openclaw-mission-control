@@ -1,61 +1,61 @@
 {% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
 {% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
-{% set role_tag = "agent-main" if is_main else ("agent-lead" if is_lead else "agent-worker") %}
+{% set role_text = ((identity_role | default("")) ~ " " ~ (agent_name | default(""))) | lower %}
+{% set is_architect = "architect" in role_text %}
+{% set is_devops = "devops" in role_text %}
+{% set is_qa = "qa" in role_text %}
+{% set is_qa_e2e = "qa-e2e" in role_text or "e2e" in role_text %}
 {% if is_main %}
 # HEARTBEAT.md
 
-Main agent heartbeat. Scope, communication rules, mission-control API,
-outreach protocol, API discovery, and memory consolidation playbook all
-live in `AGENTS.md` — this file is only the per-tick checklist.
+Main agent heartbeat. Scope, communication rules, Mission Control API,
+and consolidation playbooks live in `AGENTS.md` — this file is only the
+per-tick checklist.
+
+## Required Runtime
+- `BASE_URL`
+- `AUTH_TOKEN`
+- `AGENT_ID`
+- `AGENT_NAME`
+
+Read these from `TOOLS.md` or the environment. If any are missing, stop
+and request reprovisioning.
 
 ## This Heartbeat
-1. **Check in.** `POST $BASE_URL/api/v1/agent/heartbeat` with header `X-Agent-Token: $AUTH_TOKEN`. If this fails (5xx or network), stop — do not write memory updates until the next successful check-in.
-2. **Handle pending `LEAD REQUEST: ASK USER`** per `AGENTS.md § User outreach requests` if any arrived since the last tick.
-3. **Return `HEARTBEAT_OK`** only when all three are true:
-   - Check-in succeeded (step 1 returned 2xx).
-   - Any pending high-priority gateway-main duty was handled.
-   - No outage rule was violated.
-   Do **not** return `HEARTBEAT_OK` if check-in failed.
+1. **Check in.** `POST $BASE_URL/api/v1/agent/heartbeat` with header `X-Agent-Token: $AUTH_TOKEN`. If this fails (5xx or network), stop. Do not write memory updates until the next successful check-in.
+2. **Handle pending `LEAD REQUEST: ASK USER`** per `AGENTS.md § User outreach requests`.
+3. **Return `HEARTBEAT_OK`** only when:
+   - check-in succeeded
+   - any pending high-priority gateway-main duty was handled
+   - no outage rule was violated
 
-On the first cycle after wake/bootstrap, run the check-in immediately. Do
-not claim or move board tasks unless explicitly instructed (see
-`AGENTS.md § Scope`).
-
-Do not perform memory maintenance every heartbeat — only when explicitly
-instructed, idle for more than 1 hour, or when there is clear net-new
-durable information to preserve. The full consolidation playbook is in
-`AGENTS.md § Consolidation`.
-{% else %}
+On the first cycle after wake/bootstrap, run the check-in immediately.
+Do not claim or move board tasks unless `AGENTS.md` explicitly tells you
+to do so.
+{% elif is_lead %}
 # HEARTBEAT.md
 
-{% if is_lead %}
 Board lead heartbeat. Operating rules, health scan, routing, and
-synthesis playbook all live in `AGENTS.md § Lead Board Playbook` —
-this file is only the per-tick checklist.
-{% else %}
-Worker heartbeat. Execution loop, QA validation flow, pre-review
-checklist, and idle pattern all live in `AGENTS.md § Worker Execution
-Loop` — this file is only the per-tick checklist.
-{% endif %}
+synthesis all live in `AGENTS.md § Lead Board Playbook` — this file is
+only the per-tick checklist.
 
-## Setup (run first)
-```bash
-export BASE_URL="{{ base_url }}"
-export AUTH_TOKEN="{{ auth_token }}"
-export BOARD_ID="{{ board_id }}"
-export AGENT_ID="{{ agent_id }}"
-export AGENT_NAME="{{ agent_name }}"
-{% if shared_workspace is defined and shared_workspace %}export SHARED_WORKSPACE="{{ shared_workspace }}"
-{% endif %}{% if user_timezone is defined and user_timezone %}export BOARD_TIMEZONE="{{ user_timezone }}"
-{% endif %}```
+## Required Runtime
+- `BASE_URL`
+- `AUTH_TOKEN`
+- `BOARD_ID`
+- `AGENT_ID`
+- `AGENT_NAME`
+- `BOARD_TIMEZONE` when present
+
+Read these from `TOOLS.md` or the environment. If any required value is
+missing, stop and request reprovisioning.
 
 ## Rules
-- **Board API is source of truth.** Do NOT rely on memory for task status. Check the API before posting idle, waiting, or blocked.
-- Post only to task comments, never board chat (unless routing/coordinating).
-- Use `$BOARD_TIMEZONE` for date displays, not UTC.
-- Do not assume exec is blocked from an earlier session. Try the command first.
+- **Board API is source of truth.** Do not rely on memory for current task state.
+- Post to task comments for task work; use board chat only for real routing or coordination.
+- Use `$BOARD_TIMEZONE` for date displays when it exists.
+- If heartbeat pre-flight fails, stop. Do not write task or memory updates.
 
-{% if is_lead %}
 ## This Heartbeat
 1. **Check in.**
 ```bash
@@ -64,24 +64,44 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TO
 If this fails (5xx/network), stop. Do not continue.
 
 2. **Run the Lead Board Playbook** per `AGENTS.md § Lead Board Playbook`:
-   - **Step 2 — Health Scan:** fetch `/tasks` + `/agents`, list stuck `in_progress`/`review`/`inbox` items by age, nudge/recover per the playbook's thresholds (30-59m nudge, 60+m URGENT+escalate, offline → recover then nudge).
-   - **Step 2b — Route Inbox:** assign unassigned `inbox` to idle matching agents (frontend→PF, backend→PB, infra→DevOps), always nudge after assigning. Nudge assigned `inbox` sitting 10+ min.
-   - **Step 3 — Route Review:** for each `review` task, fetch comments (3a) and approvals (3b), then act per 3c's decision tree (APPROVED→done; PENDING→wait; no review→route to Architect then QA; FAIL/PARTIAL→reject approval + move to inbox + nudge dev; PASS→create approval request + notify).
-   - **Step 4 — Dependency Check:** if any `in_progress` shows `BLOCKED` or has unfinished deps, nudge the agent to stop and wait.
-   - **Step 5 — Synthesis:** if ALL tasks `done`, check `MEMORY.md` for `synthesis_done:$BOARD_ID`. If not found, run the synthesis protocol.
+   - health scan and stuck-work handling
+   - inbox routing and post-assignment nudges
+   - review routing and gate enforcement
+   - dependency/blocker handling
+   - synthesis when the board is complete
 
-   **The full curl commands, Python health-scan script, and decision tree are in `AGENTS.md § Lead Board Playbook`.** Read them before executing.
+3. **Board Rule Snapshot**
+`require_approval_for_done={{ board_rule_require_approval_for_done | default(false) }}` `block_status_with_pending_approval={{ board_rule_block_status_changes_with_pending_approval | default(false) }}` `only_lead_can_change_status={{ board_rule_only_lead_can_change_status | default(false) }}`
 
-3. **HEARTBEAT_OK Gate.** Return `HEARTBEAT_OK` only when ALL true:
-   1) Check-in succeeded.
-   2) Health scan ran and findings were acted on.
-   3) Review tasks routed/approved/done.
-   4) No blocked agents left unaddressed.
-   5) Synthesis done if all tasks complete.
-
-## Board Rules
-`require_approval_for_done={{ board_rule_require_approval_for_done }}` `block_status_with_pending_approval={{ board_rule_block_status_changes_with_pending_approval }}` `only_lead_can_change_status={{ board_rule_only_lead_can_change_status }}`
+4. **HEARTBEAT_OK Gate.** Return `HEARTBEAT_OK` only when all are true:
+   - check-in succeeded
+   - health scan ran and findings were acted on
+   - no blocked/review work was left unattended
+   - synthesis ran if the board is fully complete
 {% else %}
+# HEARTBEAT.md
+
+Worker heartbeat. Execution loop, validation rules, and idle pattern
+live in `AGENTS.md § Worker Execution Loop` — this file is only the
+per-tick checklist.
+
+## Required Runtime
+- `BASE_URL`
+- `AUTH_TOKEN`
+- `BOARD_ID`
+- `AGENT_ID`
+- `AGENT_NAME`
+- `BOARD_TIMEZONE` when present
+
+Read these from `TOOLS.md` or the environment. If any required value is
+missing, stop and request reprovisioning.
+
+## Rules
+- **Board API is source of truth.** Do not rely on memory for task status.
+- Post only high-signal task comments. Never use chat as a keepalive channel.
+- Use `$BOARD_TIMEZONE` for date displays when it exists.
+- If heartbeat pre-flight fails, stop. Do not write task or memory updates.
+
 ## This Heartbeat
 1. **Check in.**
 ```bash
@@ -90,16 +110,74 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TO
 If this fails (5xx/network), stop. Do not continue.
 
 2. **Run your Worker Execution Loop** per `AGENTS.md § Worker Execution Loop`:
-   - Fetch your assigned tasks (step 2). Pick one (step 3): continue `in_progress` > assigned `inbox` > assigned `review` (QA only) > idle.
-   - If picking `inbox`, PATCH to `in_progress` IMMEDIATELY (step 4) — no comments or deploys while task is still `inbox`.
-   - Read task comments for specs (step 5). If blocked or no spec, post the exact blocker comment and stop.
-   - Execute the workflow state machine (step 6): PLANNING → CONTRACT CHECK → IMPLEMENTING (delegate per `AGENTS.md § Code Delegation (ACP)`) → VALIDATING → REFINE OR PIVOT.
-   - BUILD FREEZE after moving to review (step 7). PRE-REVIEW CHECKLIST (step 8). Notify Supervisor (step 9).
+   - continue one active `in_progress` task if present
+   - otherwise continue one assigned `rework` task or pick one assigned `inbox` task and move it to `in_progress` immediately
+   - refresh task comments/spec before execution
+   - execute, validate, and post only net-new evidence
+   - move to `review` only when the artifact and evidence are ready
+   - when your work leaves the active worker lane, post one concise handoff comment and tag `@lead`
 
-   **The full curl commands, validation cookbook references, and QA flow are in `AGENTS.md § Worker Execution Loop`.** Read them before executing.
+## Inbox Pickup Gate
 
-3. **If you are QA validating a review task**, follow `AGENTS.md § Worker Execution Loop § QA Validation`: code-existence check is mandatory before behavioral testing, QA-E2E MUST use browser/Playwright for UI tasks, $AGENT_NAME-prefixed comment + Supervisor notification.
+Before self-picking any unassigned `Inbox` task, confirm all of the following:
 
-4. **HEARTBEAT_OK** when check-in succeeded AND you either: completed work, reported a blocker, or are idle with no tasks.
+1. the task is fully within your role scope,
+2. it is unambiguous enough to execute directly,
+3. it requires no cross-role input, approval, handoff, or dependency work before execution,
+4. it has `4` acceptance criteria or fewer.
+
+If any check fails:
+- do not self-pick it,
+- leave it for `Supervisor` decomposition or routing.
+
+Acceptance-criteria count is a routing heuristic only; it does not permit ignoring cross-role complexity, ambiguity, dependencies, or decomposition needs.
+
+If the task passes the gate, self-pick it atomically:
+1. assign it to yourself,
+2. move it to `in_progress`,
+3. start work.
+
+Do not begin work on an `Inbox` task before ownership and status are updated.
+
+## Rework Pickup Gate
+
+When checking `rework`:
+
+1. continue any `rework` task already assigned to you,
+2. do not claim a `rework` task already assigned by `Supervisor`,
+3. only self-pick an unassigned `rework` task if the required rework is fully within your role scope and does not require decomposition, cross-role coordination, approval, or unresolved dependency work.
+
+If the task fails that gate, leave it for `Supervisor` routing.
+
+If the task passes the gate, claim it atomically:
+1. assign it to yourself,
+2. move it to `in_progress`,
+3. start work.
+
+{% if is_architect %}
+3. **Architect lane.**
+   - For review tasks, stay in review mode.
+   - Give verdict and findings from the prompt or diff evidence first.
+   - do not drift into implementation or verification theater during heartbeat work.
+{% elif is_devops %}
+3. **DevOps lane.**
+   - Treat source, artifact, service, and live behavior as separate checks.
+   - Do not report deploy success from source changes or service restarts alone.
+{% elif is_qa %}
+3. **QA lane.**
+   - Do not return PASS from source inspection alone.
+{% if is_qa_e2e %}
+   - For UI validation, use real browser evidence when the task requires behavioral proof.
+{% else %}
+   - Confirm the implementation exists before behavioral validation or signoff.
 {% endif %}
+{% else %}
+3. **When blocked or idle.**
+   - Post one precise blocker or handoff comment, or one concrete assist update if there is no active task.
+{% endif %}
+
+4. **HEARTBEAT_OK** only when check-in succeeded and this tick produced one of:
+   - completed work with evidence
+   - a precise blocker report
+   - a concrete assist or idle outcome
 {% endif %}

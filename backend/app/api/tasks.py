@@ -70,7 +70,6 @@ from app.services.tags import (
 )
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
-    blocked_by_for_task,
     dependency_ids_by_task_id,
     dependency_status_by_id,
     dependent_task_ids,
@@ -90,7 +89,7 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/boards/{board_id}/tasks", tags=["tasks"])
 
-ALLOWED_STATUSES = {"inbox", "in_progress", "review", "rework", "done"}
+ALLOWED_STATUSES = {"inbox", "in_progress", "review", "rework", "done", "cancelled"}
 TASK_EVENT_TYPES = {
     "task.created",
     "task.updated",
@@ -178,6 +177,52 @@ def _pending_approval_blocks_status_change_error() -> HTTPException:
             "blocked_by_task_ids": [],
         },
     )
+
+
+def _operator_only_cancel_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Only operators can cancel or reopen cancelled tasks.",
+    )
+
+
+def _status_clears_blockers(status_value: str) -> bool:
+    return status_value in {"done", "cancelled"}
+
+
+async def _reject_pending_move_to_done_approvals_for_task(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+) -> None:
+    linked_rows = list(
+        await session.exec(
+            select(Approval)
+            .join(ApprovalTaskLink, col(ApprovalTaskLink.approval_id) == col(Approval.id))
+            .where(col(Approval.board_id) == board_id)
+            .where(col(Approval.status) == "pending")
+            .where(col(Approval.action_type) == "move_to_done")
+            .where(col(ApprovalTaskLink.task_id) == task_id),
+        ),
+    )
+    direct_rows = list(
+        await session.exec(
+            select(Approval)
+            .where(col(Approval.board_id) == board_id)
+            .where(col(Approval.status) == "pending")
+            .where(col(Approval.action_type) == "move_to_done")
+            .where(col(Approval.task_id) == task_id),
+        ),
+    )
+    approvals_by_id = {approval.id: approval for approval in [*linked_rows, *direct_rows]}
+    if not approvals_by_id:
+        return
+    resolved_at = utcnow()
+    for approval in approvals_by_id.values():
+        approval.status = "rejected"
+        approval.resolved_at = resolved_at
+        session.add(approval)
 
 
 async def _task_has_approved_linked_approval(
@@ -461,21 +506,17 @@ async def _reconcile_dependents_for_dependency_toggle(
     dependency_task: Task,
     previous_status: str,
     actor_agent_id: UUID | None,
-) -> list[Task]:
+) -> None:
     """Apply dependency side-effects when a dependency task toggles done/undone.
 
     The UI models dependencies as a DAG: when a dependency is reopened, dependents that were
     previously marked done may need to be reopened or flagged. This helper keeps dependent state
     consistent with the dependency graph without duplicating logic across endpoints.
-
-    Returns a list of dependent tasks that are now fully unblocked (all their
-    dependencies are done) and have an assigned agent — callers should notify
-    those assignees after commit.
     """
 
     done_toggled = (previous_status == "done") != (dependency_task.status == "done")
     if not done_toggled:
-        return []
+        return
 
     dependent_ids = await dependent_task_ids(
         session,
@@ -483,7 +524,7 @@ async def _reconcile_dependents_for_dependency_toggle(
         dependency_task_id=dependency_task.id,
     )
     if not dependent_ids:
-        return []
+        return
 
     dependents = list(
         await session.exec(
@@ -538,21 +579,6 @@ async def _reconcile_dependents_for_dependency_toggle(
                 board_id=dependent.board_id,
             )
 
-    # Collect dependents that are now fully unblocked (all deps done) and assigned.
-    newly_unblocked: list[Task] = []
-    if not reopened:
-        for dependent in dependents:
-            if dependent.status == "done" or dependent.assigned_agent_id is None:
-                continue
-            remaining = await blocked_by_for_task(
-                session,
-                board_id=board_id,
-                task_id=dependent.id,
-            )
-            if not remaining:
-                newly_unblocked.append(dependent)
-    return newly_unblocked
-
 
 async def _fetch_task_events(
     session: AsyncSession,
@@ -592,7 +618,7 @@ async def _send_lead_task_message(
         config=config,
         agent_name="Lead Agent",
         message=message,
-        deliver=True,
+        deliver=False,
     )
 
 
@@ -609,7 +635,7 @@ async def _send_agent_task_message(
         config=config,
         agent_name=agent_name,
         message=message,
-        deliver=True,
+        deliver=False,
     )
 
 
@@ -952,56 +978,6 @@ async def _notify_lead_on_task_unassigned(
             board_id=board.id,
         )
         await session.commit()
-
-
-async def _notify_agents_on_dependency_unblocked(
-    *,
-    session: AsyncSession,
-    board: Board,
-    completed_task: Task,
-    unblocked_tasks: list[Task],
-) -> None:
-    """Notify assignees of tasks that became unblocked when a dependency completed."""
-    if not unblocked_tasks:
-        return
-    dispatch = GatewayDispatchService(session)
-    config = await dispatch.optional_gateway_config_for_board(board)
-    if config is None:
-        return
-    for task in unblocked_tasks:
-        if not task.assigned_agent_id:
-            continue
-        agent = await session.get(Agent, task.assigned_agent_id)
-        if not agent or not agent.openclaw_session_id:
-            continue
-        message = (
-            f"DEPENDENCY UNBLOCKED\n"
-            f"Board: {board.name}\n"
-            f"Task: {task.title}\n"
-            f"Task ID: {task.id}\n"
-            f"Status: {task.status}\n\n"
-            f"Blocking dependency completed: {completed_task.title}\n"
-            f"All dependencies are now resolved. You can proceed with this task.\n\n"
-            f"Take action: move the task to in_progress and begin work."
-        )
-        error = await _send_agent_task_message(
-            dispatch=dispatch,
-            session_key=agent.openclaw_session_id,
-            config=config,
-            agent_name=agent.name,
-            message=message,
-        )
-        if error is None:
-            record_activity(
-                session,
-                event_type="task.dependency_unblocked",
-                message=f"Agent {agent.name} notified: dependency {completed_task.title} completed.",
-                agent_id=agent.id,
-                task_id=task.id,
-                board_id=board.id,
-            )
-    # Batch commit all activity records after all notifications are sent.
-    await session.commit()
 
 
 def _status_values(status_filter: str | None) -> list[str]:
@@ -1350,7 +1326,7 @@ async def _task_read_page(
             dependency_ids=dep_list,
             status_by_id=dep_status,
         )
-        if task.status == "done":
+        if _status_clears_blockers(task.status):
             blocked_by = []
         output.append(
             TaskRead.model_validate(task, from_attributes=True).model_copy(
@@ -1442,7 +1418,7 @@ def _task_event_payload(
         dependency_ids=dep_list,
         status_by_id=dep_status,
     )
-    if task.status == "done":
+    if _status_clears_blockers(task.status):
         blocked_by = []
     payload["task"] = (
         TaskRead.model_validate(task, from_attributes=True)
@@ -1565,14 +1541,6 @@ async def create_task(
     auth: AuthContext = USER_AUTH_DEP,
 ) -> TaskRead:
     """Create a task and initialize dependency rows."""
-    # `rework` is a transitional status only reachable via a lead PATCH from
-    # `review`. Tasks cannot be CREATED directly in `rework` state — that would
-    # bypass the "failed review" provenance the column is meant to capture.
-    if payload.status == "rework":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tasks cannot be created directly in `rework` state.",
-        )
     data = payload.model_dump(exclude={"depends_on_task_ids", "tag_ids", "custom_field_values"})
     depends_on_task_ids = list(payload.depends_on_task_ids)
     tag_ids = list(payload.tag_ids)
@@ -2054,7 +2022,7 @@ async def _task_read_response(
         board_id=board_id,
         task_ids=[task.id],
     )
-    if task.status == "done":
+    if _status_clears_blockers(task.status):
         blocked_ids = []
     return TaskRead.model_validate(task, from_attributes=True).model_copy(
         update={
@@ -2123,6 +2091,16 @@ def _validate_lead_update_request(update: _TaskUpdateInput) -> None:
                 f"{disallowed}. Allowed fields: {allowed}."
             ),
         )
+
+
+def _is_lead_rework_return(update: _TaskUpdateInput) -> bool:
+    return (
+        update.previous_status == "review"
+        and update.task.status in {"inbox", "rework"}
+        and update.actor.actor_type == "agent"
+        and update.actor.agent is not None
+        and update.actor.agent.is_board_lead
+    )
 
 
 async def _lead_effective_dependencies(
@@ -2243,6 +2221,8 @@ async def _lead_apply_status(
     if "status" not in update.updates:
         return
     target_status = _required_status_value(update.updates["status"])
+    if update.task.status == "cancelled" or target_status == "cancelled":
+        raise _operator_only_cancel_error()
     # Leads may set `in_progress` when simultaneously assigning an agent to an
     # inbox task (assignment-and-start shortcut).
     if update.task.status != "review":
@@ -2263,24 +2243,21 @@ async def _lead_apply_status(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Lead status target gate failed: review tasks can only move to `done`, "
-                f"`inbox`, or `rework` (requested: `{target_status}`)."
+                "Lead status target gate failed: review tasks can only move to `done`, `inbox`, or "
+                f"`rework` (requested: `{target_status}`)."
             ),
         )
     if target_status in {"inbox", "rework"}:
-        # Respect an explicit assignment provided by the lead in this PATCH.
-        # Without an explicit assignee, fall back to routing the task to the
-        # last worker who moved it to review (the "changes requested" return
-        # path). This fallback was previously unconditional, which defeated
-        # any explicit lead attempt to route a failed task to a different dev.
-        if "assigned_agent_id" not in update.updates:
-            update.task.assigned_agent_id = await _last_worker_who_moved_task_to_review(
-                session,
-                task_id=update.task.id,
-                board_id=update.board_id,
-                lead_agent_id=lead_agent.id,
-            )
+        update.task.previous_in_progress_at = update.task.in_progress_at
         update.task.in_progress_at = None
+        update.task.assigned_agent_id = await _last_worker_who_moved_task_to_review(
+            session,
+            task_id=update.task.id,
+            board_id=update.board_id,
+            lead_agent_id=lead_agent.id,
+        )
+        update.task.status = target_status
+        return
     update.task.status = target_status
 
 
@@ -2311,13 +2288,7 @@ async def _lead_notify_new_assignee(
         else None
     )
     if board:
-        if (
-            update.previous_status == "review"
-            and update.task.status in {"inbox", "rework"}
-            and update.actor.actor_type == "agent"
-            and update.actor.agent
-            and update.actor.agent.is_board_lead
-        ):
+        if _is_lead_rework_return(update):
             await _notify_agent_on_task_rework(
                 session=session,
                 board=board,
@@ -2410,7 +2381,7 @@ async def _apply_lead_task_update(
         agent_id=update.actor.agent.id,
         board_id=update.board_id,
     )
-    unblocked = await _reconcile_dependents_for_dependency_toggle(
+    await _reconcile_dependents_for_dependency_toggle(
         session,
         board_id=update.board_id,
         dependency_task=update.task,
@@ -2420,15 +2391,6 @@ async def _apply_lead_task_update(
     await session.commit()
     await session.refresh(update.task)
     await _lead_notify_new_assignee(session, update=update)
-    if unblocked:
-        board = await session.get(Board, update.board_id)
-        if board:
-            await _notify_agents_on_dependency_unblocked(
-                session=session,
-                board=board,
-                completed_task=update.task,
-                unblocked_tasks=unblocked,
-            )
     return await _task_read_response(
         session,
         task=update.task,
@@ -2492,28 +2454,8 @@ async def _apply_non_lead_agent_task_rules(
                 detail="Only board leads can change task status.",
             )
         status_value = _required_status_value(update.updates["status"])
-        # `rework` is a lead-only terminal-from-review state: only a board lead
-        # may place a task in `rework` (after a failed review). Non-lead agents
-        # can pick up a rework task and move it forward, but they may never
-        # PUT a task into rework themselves.
-        if status_value == "rework":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only board leads can move a task to `rework`.",
-            )
-        # When a task is currently in `rework`, force the worker to restart the
-        # review cycle from the beginning: the only valid worker transitions
-        # are rework->in_progress (pick it up and fix it) or rework->inbox
-        # (drop it back into the queue). Shortcutting to `review` or `done`
-        # would bypass the "fix it first" intent of the rework column.
-        if update.task.status == "rework" and status_value not in {"in_progress", "inbox"}:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Rework tasks must re-enter the review cycle via `in_progress`. "
-                    f"Direct transition rework -> `{status_value}` is not allowed."
-                ),
-            )
+        if status_value == "cancelled" or update.task.status == "cancelled":
+            raise _operator_only_cancel_error()
         if status_value != "inbox":
             dep_ids = await _task_dep_ids(
                 session,
@@ -2581,9 +2523,11 @@ async def _apply_admin_task_rules(
     target_status = _required_status_value(
         update.updates.get("status", update.task.status),
     )
-    # Reset blocked tasks to inbox unless the task is already done and remains
-    # done, which is the explicit done-task exception.
-    if blocked_ids and not (update.task.status == "done" and target_status == "done"):
+    # Reset blocked tasks to inbox unless the task is moving into a terminal
+    # status that intentionally clears blockers from active work tracking.
+    if blocked_ids and not (
+        (update.task.status == "done" and target_status == "done") or target_status == "cancelled"
+    ):
         update.task.status = "inbox"
         update.task.assigned_agent_id = None
         update.task.in_progress_at = None
@@ -2596,20 +2540,19 @@ async def _apply_admin_task_rules(
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.assigned_agent_id = None
             update.task.in_progress_at = None
+        elif status_value == "cancelled":
+            update.task.previous_in_progress_at = update.task.in_progress_at
+            update.task.assigned_agent_id = None
+            update.task.in_progress_at = None
+            await _reject_pending_move_to_done_approvals_for_task(
+                session,
+                board_id=update.board_id,
+                task_id=update.task.id,
+            )
         elif status_value == "review":
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.assigned_agent_id = None
             update.task.in_progress_at = None
-        elif status_value == "rework":
-            update.task.previous_in_progress_at = update.task.in_progress_at
-            update.task.in_progress_at = None
-            # Admin path: if the admin did not supply an explicit assignee, do
-            # NOT silently strand the task on the lead (who is the auto-assignee
-            # of `review` tasks via `_assign_review_task_to_lead`). Clear the
-            # assignee so the rework task lands unassigned; the admin is
-            # expected to explicitly re-assign as part of the same PATCH.
-            if "assigned_agent_id" not in update.updates:
-                update.task.assigned_agent_id = None
         elif status_value == "in_progress":
             update.task.in_progress_at = utcnow()
 
@@ -2644,27 +2587,6 @@ async def _record_task_comment_from_update(
     )
     session.add(event)
     await session.commit()
-    # Notify mentioned agents in inline PATCH comments (same as dedicated comment endpoint).
-    # No double-notification risk: this path (_record_task_comment_from_update) is called
-    # from _finalize_updated_task (PATCH), while the dedicated POST /comments endpoint
-    # calls _notify_task_comment_targets directly. These are mutually exclusive code paths.
-    targets, mention_names = await _comment_targets(
-        session,
-        task=update.task,
-        message=update.comment,
-        actor=update.actor,
-    )
-    if targets:
-        await _notify_task_comment_targets(
-            session,
-            request=_TaskCommentNotifyRequest(
-                task=update.task,
-                actor=update.actor,
-                message=update.comment,
-                targets=targets,
-                mention_names=mention_names,
-            ),
-        )
 
 
 async def _record_task_update_activity(
@@ -2686,7 +2608,7 @@ async def _record_task_update_activity(
         agent_id=actor_agent_id,
         board_id=update.board_id,
     )
-    unblocked = await _reconcile_dependents_for_dependency_toggle(
+    await _reconcile_dependents_for_dependency_toggle(
         session,
         board_id=update.board_id,
         dependency_task=update.task,
@@ -2694,15 +2616,6 @@ async def _record_task_update_activity(
         actor_agent_id=actor_agent_id,
     )
     await session.commit()
-    if unblocked:
-        board = await session.get(Board, update.board_id)
-        if board:
-            await _notify_agents_on_dependency_unblocked(
-                session=session,
-                board=board,
-                completed_task=update.task,
-                unblocked_tasks=unblocked,
-            )
 
 
 async def _assign_review_task_to_lead(
@@ -2761,6 +2674,7 @@ async def _notify_task_update_assignment_changes(
     entered_in_progress = (
         update.task.status == "in_progress" and update.previous_status != "in_progress"
     )
+
     if entered_in_progress and not assignment_changed:
         current_board = await _board()
         if current_board:
@@ -2775,13 +2689,7 @@ async def _notify_task_update_assignment_changes(
     if not assignment_changed:
         return
 
-    if (
-        update.previous_status == "review"
-        and update.task.status in {"inbox", "rework"}
-        and update.actor.actor_type == "agent"
-        and update.actor.agent
-        and update.actor.agent.is_board_lead
-    ):
+    if _is_lead_rework_return(update):
         current_board = await _board()
         if current_board:
             await _notify_agent_on_task_rework(

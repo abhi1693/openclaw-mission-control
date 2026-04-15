@@ -168,27 +168,23 @@ async def _send_control_command(
         skipped,
     )
 
-    # Disable/enable gateway heartbeats for board agents on pause/resume.
+    # Gateway `set-heartbeats` is global per gateway, not per-agent.
     enable = not is_pause
-    for agent in pause_targets:
-        if not agent.heartbeat_config or not agent.heartbeat_config.get("every"):
-            continue
-        agent_key = f"mc-{agent.id}" if not agent.is_board_lead else f"lead-{board.id}"
-        try:
-            await openclaw_call(
-                "set-heartbeats",
-                {"agentId": agent_key, "enabled": enable},
-                config=config,
-            )
-        except Exception as exc:
-            logger.warning(
-                "board_memory.control_command.set_heartbeats_failed "
-                "command=%s agent=%s enabled=%s error=%s",
-                command,
-                agent.name,
-                enable,
-                str(exc),
-            )
+    try:
+        await openclaw_call(
+            "set-heartbeats",
+            {"enabled": enable},
+            config=config,
+        )
+    except Exception as exc:
+        logger.warning(
+            "board_memory.control_command.set_heartbeats_failed "
+            "command=%s board_id=%s enabled=%s error=%s",
+            command,
+            board.id,
+            enable,
+            str(exc),
+        )
     logger.info(
         "board_memory.control_command.heartbeats "
         "command=%s board_id=%s enabled=%s",

@@ -15,47 +15,14 @@ DEFAULT_HEARTBEAT_CONFIG: dict[str, Any] = {
     "every": "10m",
     "target": "last",
     "includeReasoning": False,
-    # lightContext=False matches the gateway's natural default (see
-    # `pi-embedded-BYdcxQ5A.js:338` applyContextModeFilter + `runtime-
-    # BXvktGYG.js:1152` bootstrapContextMode) and the OpenClaw docs at
-    # https://docs.openclaw.ai/gateway/heartbeat which declare "lightContext=false"
-    # as the documented default. In lightweight mode the gateway strips
-    # every bootstrap file except HEARTBEAT.md, so the heartbeat session
-    # has no TOOLS.md, no AGENTS.md, no IDENTITY.md, and no MEMORY.md —
-    # and therefore no way to resolve $BASE_URL / $AUTH_TOKEN / $BOARD_ID
-    # for the check-in curl, no way to read operating rules, and no way
-    # to post updates. This was a real incident: commit e37a34e flipped
-    # the MC default to True for token savings and immediately produced
-    # 22 heartbeat "ok" events with zero nudges because the Supervisor
-    # could not execute any curl under lightweight mode (see docs/NOTES.md
-    # §"Why the Supervisor heartbeat says OK without nudging"). All 8
-    # production agents have been on lightContext=False via per-agent DB
-    # override since then. This code default aligns MC with the fleet,
-    # the gateway default, and the docs. Explicit `lightContext=True`
-    # overrides remain possible for agents that genuinely need the
-    # minimal-context path, but the post-refactor templates (AGENTS.md
-    # playbooks referenced from a slim HEARTBEAT.md) assume full
-    # bootstrap context and MUST NOT be paired with lightContext=True.
-    "lightContext": False,
-    "isolatedSession": True,
 }
-# Note: gateway-only fields (model, ackMaxChars, prompt) are not included
-# here. They are preserved during config.patch merges because the merge
-# starts from the existing gateway config and only overwrites MC-managed keys.
 
-# Worker heartbeats disabled (0m) — workers wake via deliver=True only.
-# Supervisor heartbeat is 10m. OFFLINE_AFTER must exceed Supervisor interval + grace.
-# Workers will show offline after 35m since last deliver session — acceptable.
-# TODO: Replace with per-agent offline detection from effective heartbeat interval.
-OFFLINE_AFTER = timedelta(minutes=35)
+OFFLINE_AFTER = timedelta(minutes=10)
 HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL = timedelta(minutes=1)
 # Provisioning convergence policy:
-# - require first heartbeat/check-in within this deadline after wake
-# - must be longer than the longest heartbeat interval (currently 30m for DevOps)
-# - previously 30s which caused restart loops for agents with 4m+ intervals:
-#   reconcile retried → config.patch → SIGUSR1 restart → timer reset → never fires
+# - require first heartbeat/check-in within 30s of wake
 # - allow up to 3 wake attempts before giving up
-CHECKIN_DEADLINE_AFTER_WAKE = timedelta(minutes=35)
+CHECKIN_DEADLINE_AFTER_WAKE = timedelta(seconds=30)
 MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN = 3
 AGENT_SESSION_PREFIX = "agent"
 
@@ -88,38 +55,7 @@ EXTRA_IDENTITY_PROFILE_FIELDS = {
     "purpose": "identity_purpose",
     "personality": "identity_personality",
     "custom_instructions": "identity_custom_instructions",
-    # Per-agent ACP delegation workflow selector. Controls which
-    # `## Code Delegation (ACP)` branch a worker renders in AGENTS.md.
-    # Valid values:
-    #   - ``"claude_single_spawn"`` (default, absent) → one sessions_spawn
-    #     with ``agentId: "claude"`` doing implement + /simplify + /codex
-    #     review in the same call. Appropriate for most worker roles.
-    #   - ``"codex_then_claude_review"`` → two spawns per task: first
-    #     Codex implements via ``agentId: "codex"``, then Claude Code
-    #     reviews the resulting commit via ``agentId: "claude"`` with
-    #     /simplify + /codex adversarial-review. Used for
-    #     Programmer-Backend currently.
-    #
-    # Templates branch on ``identity_dev_acp_flow`` instead of matching
-    # ``agent_name == "Programmer-Backend"`` literally — that match was
-    # brittle because agent names are editable display fields. This
-    # profile field survives renames.
     "dev_acp_flow": "identity_dev_acp_flow",
-    # Per-agent validation workflow selector. Controls which VALIDATING
-    # checklist and HARD RULES variant a worker renders.
-    # Valid values:
-    #   - ``"qa_validation"`` → QA-specific checklist (code-existence
-    #     check, acceptance-criterion validation, proof-format rules,
-    #     re-validate mandate) + QA HARD RULES ("re-validate with fresh
-    #     evidence"). Used for QA-Unit and QA-E2E currently.
-    #   - absent/default → developer checklist (typecheck, lint, tests,
-    #     build, deploy health) + developer HARD RULES ("implement real
-    #     changes and show a new commit").
-    #
-    # Replaces the brittle ``"QA" in identity_role or agent_name``
-    # heuristic which would false-positive on agents like "QA-Security"
-    # with role "Security Auditor".
-    "validation_flow": "identity_validation_flow",
 }
 
 DEFAULT_GATEWAY_FILES = frozenset(
@@ -155,7 +91,7 @@ LEAD_GATEWAY_FILES = frozenset(
 # Examples:
 # - USER.md: human-provided context + lead intake notes
 # - MEMORY.md: curated long-term memory (consolidated)
-PRESERVE_AGENT_EDITABLE_FILES = frozenset({"USER.md", "MEMORY.md", "IDENTITY.md"})
+PRESERVE_AGENT_EDITABLE_FILES = frozenset({"USER.md", "MEMORY.md"})
 
 HEARTBEAT_LEAD_TEMPLATE = "BOARD_HEARTBEAT.md.j2"
 HEARTBEAT_AGENT_TEMPLATE = "BOARD_HEARTBEAT.md.j2"

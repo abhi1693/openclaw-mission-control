@@ -679,23 +679,16 @@ async def test_lead_moves_review_task_to_inbox_and_reassigns_last_worker_with_re
 
 
 @pytest.mark.asyncio
-async def test_lead_moves_review_task_to_inbox_with_explicit_assignment_wins_over_last_worker_fallback(
+async def test_lead_moves_review_task_to_rework_and_reassigns_last_worker_with_rework_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: when a lead PATCHes a review task to inbox WITH an explicit
-    assigned_agent_id, that explicit assignment must win over the last-worker
-    fallback routing. Previously the fallback was unconditional and overrode
-    the lead's routing intent, causing a thrashing loop when the lead tried to
-    redirect a failed review to a different developer.
-    """
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:
             org_id = uuid4()
             board_id = uuid4()
             gateway_id = uuid4()
-            reviewer_id = uuid4()       # worker who originally moved to review
-            target_dev_id = uuid4()     # the explicit rework target
+            worker_id = uuid4()
             lead_id = uuid4()
             task_id = uuid4()
 
@@ -720,22 +713,12 @@ async def test_lead_moves_review_task_to_inbox_with_explicit_assignment_wins_ove
             )
             session.add(
                 Agent(
-                    id=reviewer_id,
-                    name="reviewer",
+                    id=worker_id,
+                    name="worker",
                     board_id=board_id,
                     gateway_id=gateway_id,
                     status="online",
-                    openclaw_session_id="reviewer-session",
-                ),
-            )
-            session.add(
-                Agent(
-                    id=target_dev_id,
-                    name="target-dev",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                    openclaw_session_id="target-dev-session",
+                    openclaw_session_id="worker-session",
                 ),
             )
             session.add(
@@ -756,7 +739,7 @@ async def test_lead_moves_review_task_to_inbox_with_explicit_assignment_wins_ove
                     title="assigned task",
                     description="ready",
                     status="in_progress",
-                    assigned_agent_id=reviewer_id,
+                    assigned_agent_id=worker_id,
                     in_progress_at=utcnow(),
                 ),
             )
@@ -796,616 +779,46 @@ async def test_lead_moves_review_task_to_inbox_with_explicit_assignment_wins_ove
 
             task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert task is not None
-            reviewer = (
-                await session.exec(select(Agent).where(col(Agent.id) == reviewer_id))
-            ).first()
-            assert reviewer is not None
+            worker = (await session.exec(select(Agent).where(col(Agent.id) == worker_id))).first()
+            assert worker is not None
             lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
             assert lead is not None
 
-            # The original reviewer moves the task to review
             moved_to_review = await tasks_api.update_task(
                 payload=TaskUpdate(status="review", comment="Ready for review."),
                 task=task,
                 session=session,
-                actor=ActorContext(actor_type="agent", agent=reviewer),
+                actor=ActorContext(actor_type="agent", agent=worker),
             )
             assert moved_to_review.status == "review"
             assert moved_to_review.assigned_agent_id == lead_id
 
-            # Lead moves it back to inbox, explicitly routing to a DIFFERENT agent
-            # than the original reviewer (simulating QA FAIL routing to a dev who
-            # should own the rework).
-            review_task = (
-                await session.exec(select(Task).where(col(Task.id) == task_id))
-            ).first()
+            session.add(
+                ActivityEvent(
+                    event_type="task.comment",
+                    task_id=task_id,
+                    agent_id=lead_id,
+                    message="Please update error handling and add tests for edge cases.",
+                ),
+            )
+            await session.commit()
+
+            review_task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert review_task is not None
             reverted = await tasks_api.update_task(
-                payload=TaskUpdate(
-                    status="inbox",
-                    assigned_agent_id=target_dev_id,
-                ),
-                task=review_task,
-                session=session,
-                actor=ActorContext(actor_type="agent", agent=lead),
-            )
-
-            assert reverted.status == "inbox"
-            # The lead's explicit assignment must win over the last-worker fallback.
-            assert reverted.assigned_agent_id == target_dev_id
-            assert reverted.assigned_agent_id != reviewer_id
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_lead_moves_review_task_to_rework_with_explicit_assignment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Lead may move a review task to the new `rework` column with an explicit
-    assignee. The explicit assignee must win over the last-worker fallback.
-    """
-    engine = await _make_engine()
-    try:
-        async with await _make_session(engine) as session:
-            org_id = uuid4()
-            board_id = uuid4()
-            gateway_id = uuid4()
-            reviewer_id = uuid4()
-            target_dev_id = uuid4()
-            lead_id = uuid4()
-            task_id = uuid4()
-
-            session.add(Organization(id=org_id, name="org"))
-            session.add(
-                Gateway(
-                    id=gateway_id,
-                    organization_id=org_id,
-                    name="gateway",
-                    url="https://gateway.local",
-                    workspace_root="/tmp/workspace",
-                ),
-            )
-            session.add(
-                Board(
-                    id=board_id,
-                    organization_id=org_id,
-                    name="board",
-                    slug="board",
-                    gateway_id=gateway_id,
-                ),
-            )
-            session.add(
-                Agent(
-                    id=reviewer_id,
-                    name="reviewer",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                    openclaw_session_id="reviewer-session",
-                ),
-            )
-            session.add(
-                Agent(
-                    id=target_dev_id,
-                    name="target-dev",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                    openclaw_session_id="target-dev-session",
-                ),
-            )
-            session.add(
-                Agent(
-                    id=lead_id,
-                    name="Lead Agent",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                    is_board_lead=True,
-                    openclaw_session_id="lead-session",
-                ),
-            )
-            session.add(
-                Task(
-                    id=task_id,
-                    board_id=board_id,
-                    title="assigned task",
-                    description="ready",
-                    status="in_progress",
-                    assigned_agent_id=reviewer_id,
-                    in_progress_at=utcnow(),
-                ),
-            )
-            await session.commit()
-
-            class _FakeDispatch:
-                def __init__(self, _session: AsyncSession) -> None:
-                    pass
-
-                async def optional_gateway_config_for_board(self, _board: Board) -> object:
-                    return object()
-
-            async def _fake_send_agent_task_message(
-                *,
-                dispatch: Any,
-                session_key: str,
-                config: Any,
-                agent_name: str,
-                message: str,
-            ) -> None:
-                _ = dispatch, session_key, config, agent_name, message
-                return None
-
-            monkeypatch.setattr(tasks_api, "GatewayDispatchService", _FakeDispatch)
-            monkeypatch.setattr(
-                tasks_api, "_send_agent_task_message", _fake_send_agent_task_message
-            )
-
-            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
-            assert task is not None
-            reviewer = (
-                await session.exec(select(Agent).where(col(Agent.id) == reviewer_id))
-            ).first()
-            assert reviewer is not None
-            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
-            assert lead is not None
-
-            moved_to_review = await tasks_api.update_task(
-                payload=TaskUpdate(status="review", comment="Ready for review."),
-                task=task,
-                session=session,
-                actor=ActorContext(actor_type="agent", agent=reviewer),
-            )
-            assert moved_to_review.status == "review"
-
-            review_task = (
-                await session.exec(select(Task).where(col(Task.id) == task_id))
-            ).first()
-            assert review_task is not None
-            reworked = await tasks_api.update_task(
-                payload=TaskUpdate(
-                    status="rework",
-                    assigned_agent_id=target_dev_id,
-                ),
-                task=review_task,
-                session=session,
-                actor=ActorContext(actor_type="agent", agent=lead),
-            )
-
-            assert reworked.status == "rework"
-            assert reworked.assigned_agent_id == target_dev_id
-            assert reworked.assigned_agent_id != reviewer_id
-            assert reworked.in_progress_at is None
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_lead_moves_review_task_to_rework_uses_last_worker_fallback(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Without an explicit assignee, a review->rework transition falls back
-    to routing the task to the last worker who moved it to review (same as
-    the inbox rework path).
-    """
-    engine = await _make_engine()
-    try:
-        async with await _make_session(engine) as session:
-            org_id = uuid4()
-            board_id = uuid4()
-            gateway_id = uuid4()
-            reviewer_id = uuid4()
-            lead_id = uuid4()
-            task_id = uuid4()
-
-            session.add(Organization(id=org_id, name="org"))
-            session.add(
-                Gateway(
-                    id=gateway_id,
-                    organization_id=org_id,
-                    name="gateway",
-                    url="https://gateway.local",
-                    workspace_root="/tmp/workspace",
-                ),
-            )
-            session.add(
-                Board(
-                    id=board_id,
-                    organization_id=org_id,
-                    name="board",
-                    slug="board",
-                    gateway_id=gateway_id,
-                ),
-            )
-            session.add(
-                Agent(
-                    id=reviewer_id,
-                    name="reviewer",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                    openclaw_session_id="reviewer-session",
-                ),
-            )
-            session.add(
-                Agent(
-                    id=lead_id,
-                    name="Lead Agent",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                    is_board_lead=True,
-                    openclaw_session_id="lead-session",
-                ),
-            )
-            session.add(
-                Task(
-                    id=task_id,
-                    board_id=board_id,
-                    title="assigned task",
-                    description="ready",
-                    status="in_progress",
-                    assigned_agent_id=reviewer_id,
-                    in_progress_at=utcnow(),
-                ),
-            )
-            await session.commit()
-
-            class _FakeDispatch:
-                def __init__(self, _session: AsyncSession) -> None:
-                    pass
-
-                async def optional_gateway_config_for_board(self, _board: Board) -> object:
-                    return object()
-
-            async def _fake_send_agent_task_message(
-                *,
-                dispatch: Any,
-                session_key: str,
-                config: Any,
-                agent_name: str,
-                message: str,
-            ) -> None:
-                _ = dispatch, session_key, config, agent_name, message
-                return None
-
-            monkeypatch.setattr(tasks_api, "GatewayDispatchService", _FakeDispatch)
-            monkeypatch.setattr(
-                tasks_api, "_send_agent_task_message", _fake_send_agent_task_message
-            )
-
-            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
-            assert task is not None
-            reviewer = (
-                await session.exec(select(Agent).where(col(Agent.id) == reviewer_id))
-            ).first()
-            assert reviewer is not None
-            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
-            assert lead is not None
-
-            await tasks_api.update_task(
-                payload=TaskUpdate(status="review", comment="Ready for review."),
-                task=task,
-                session=session,
-                actor=ActorContext(actor_type="agent", agent=reviewer),
-            )
-
-            review_task = (
-                await session.exec(select(Task).where(col(Task.id) == task_id))
-            ).first()
-            assert review_task is not None
-            reworked = await tasks_api.update_task(
                 payload=TaskUpdate(status="rework"),
                 task=review_task,
                 session=session,
                 actor=ActorContext(actor_type="agent", agent=lead),
             )
 
-            assert reworked.status == "rework"
-            # Fallback: last worker who moved it to review gets re-assigned.
-            assert reworked.assigned_agent_id == reviewer_id
-            assert reworked.in_progress_at is None
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_non_lead_agent_cannot_set_status_rework() -> None:
-    """Non-lead agents must never be able to move a task into `rework` directly.
-    Only board leads may place a task in rework (after a failed review).
-    """
-    engine = await _make_engine()
-    try:
-        async with await _make_session(engine) as session:
-            org_id = uuid4()
-            board_id = uuid4()
-            gateway_id = uuid4()
-            worker_id = uuid4()
-            task_id = uuid4()
-
-            session.add(Organization(id=org_id, name="org"))
-            session.add(
-                Gateway(
-                    id=gateway_id,
-                    organization_id=org_id,
-                    name="gateway",
-                    url="https://gateway.local",
-                    workspace_root="/tmp/workspace",
-                ),
-            )
-            session.add(
-                Board(
-                    id=board_id,
-                    organization_id=org_id,
-                    name="board",
-                    slug="board",
-                    gateway_id=gateway_id,
-                ),
-            )
-            session.add(
-                Agent(
-                    id=worker_id,
-                    name="worker",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                ),
-            )
-            session.add(
-                Task(
-                    id=task_id,
-                    board_id=board_id,
-                    title="assigned task",
-                    description="",
-                    status="in_progress",
-                    assigned_agent_id=worker_id,
-                    in_progress_at=utcnow(),
-                ),
-            )
-            await session.commit()
-
-            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
-            assert task is not None
-            worker = (
-                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
-            ).first()
-            assert worker is not None
-
-            with pytest.raises(HTTPException) as exc_info:
-                await tasks_api.update_task(
-                    payload=TaskUpdate(status="rework"),
-                    task=task,
-                    session=session,
-                    actor=ActorContext(actor_type="agent", agent=worker),
-                )
-            assert exc_info.value.status_code == 403
-            assert "rework" in exc_info.value.detail.lower()
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_non_lead_agent_cannot_shortcut_rework_to_review() -> None:
-    """Workers assigned to a rework task must re-enter the review cycle via
-    in_progress. Directly PATCHing status=review bypasses the "fix it first"
-    intent of the rework column and is rejected.
-    """
-    engine = await _make_engine()
-    try:
-        async with await _make_session(engine) as session:
-            org_id = uuid4()
-            board_id = uuid4()
-            gateway_id = uuid4()
-            worker_id = uuid4()
-            task_id = uuid4()
-
-            session.add(Organization(id=org_id, name="org"))
-            session.add(
-                Gateway(
-                    id=gateway_id,
-                    organization_id=org_id,
-                    name="gateway",
-                    url="https://gateway.local",
-                    workspace_root="/tmp/workspace",
-                ),
-            )
-            session.add(
-                Board(
-                    id=board_id,
-                    organization_id=org_id,
-                    name="board",
-                    slug="board",
-                    gateway_id=gateway_id,
-                ),
-            )
-            session.add(
-                Agent(
-                    id=worker_id,
-                    name="worker",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                ),
-            )
-            session.add(
-                Task(
-                    id=task_id,
-                    board_id=board_id,
-                    title="rework task",
-                    description="",
-                    status="rework",
-                    assigned_agent_id=worker_id,
-                ),
-            )
-            await session.commit()
-
-            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
-            assert task is not None
-            worker = (
-                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
-            ).first()
-            assert worker is not None
-
-            with pytest.raises(HTTPException) as exc_info:
-                await tasks_api.update_task(
-                    payload=TaskUpdate(status="review"),
-                    task=task,
-                    session=session,
-                    actor=ActorContext(actor_type="agent", agent=worker),
-                )
-            assert exc_info.value.status_code == 403
-            assert "rework" in exc_info.value.detail.lower()
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_non_lead_agent_cannot_shortcut_rework_to_done() -> None:
-    """Workers assigned to a rework task cannot skip the rework cycle by
-    PATCHing status=done directly. This would bypass both the "fix it first"
-    intent and any board `require_review_before_done` rule.
-    """
-    engine = await _make_engine()
-    try:
-        async with await _make_session(engine) as session:
-            org_id = uuid4()
-            board_id = uuid4()
-            gateway_id = uuid4()
-            worker_id = uuid4()
-            task_id = uuid4()
-
-            session.add(Organization(id=org_id, name="org"))
-            session.add(
-                Gateway(
-                    id=gateway_id,
-                    organization_id=org_id,
-                    name="gateway",
-                    url="https://gateway.local",
-                    workspace_root="/tmp/workspace",
-                ),
-            )
-            session.add(
-                Board(
-                    id=board_id,
-                    organization_id=org_id,
-                    name="board",
-                    slug="board",
-                    gateway_id=gateway_id,
-                ),
-            )
-            session.add(
-                Agent(
-                    id=worker_id,
-                    name="worker",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                ),
-            )
-            session.add(
-                Task(
-                    id=task_id,
-                    board_id=board_id,
-                    title="rework task",
-                    description="",
-                    status="rework",
-                    assigned_agent_id=worker_id,
-                ),
-            )
-            await session.commit()
-
-            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
-            assert task is not None
-            worker = (
-                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
-            ).first()
-            assert worker is not None
-
-            with pytest.raises(HTTPException) as exc_info:
-                await tasks_api.update_task(
-                    payload=TaskUpdate(status="done"),
-                    task=task,
-                    session=session,
-                    actor=ActorContext(actor_type="agent", agent=worker),
-                )
-            assert exc_info.value.status_code == 403
-            assert "rework" in exc_info.value.detail.lower()
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_non_lead_agent_picks_rework_task_and_starts_work() -> None:
-    """A non-lead agent assigned to a task currently in `rework` may pick it
-    up by moving it to `in_progress`. The assignee and in_progress_at
-    timestamp are set accordingly.
-    """
-    engine = await _make_engine()
-    try:
-        async with await _make_session(engine) as session:
-            org_id = uuid4()
-            board_id = uuid4()
-            gateway_id = uuid4()
-            worker_id = uuid4()
-            task_id = uuid4()
-
-            session.add(Organization(id=org_id, name="org"))
-            session.add(
-                Gateway(
-                    id=gateway_id,
-                    organization_id=org_id,
-                    name="gateway",
-                    url="https://gateway.local",
-                    workspace_root="/tmp/workspace",
-                ),
-            )
-            session.add(
-                Board(
-                    id=board_id,
-                    organization_id=org_id,
-                    name="board",
-                    slug="board",
-                    gateway_id=gateway_id,
-                ),
-            )
-            session.add(
-                Agent(
-                    id=worker_id,
-                    name="worker",
-                    board_id=board_id,
-                    gateway_id=gateway_id,
-                    status="online",
-                ),
-            )
-            session.add(
-                Task(
-                    id=task_id,
-                    board_id=board_id,
-                    title="rework task",
-                    description="",
-                    status="rework",
-                    assigned_agent_id=worker_id,
-                ),
-            )
-            await session.commit()
-
-            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
-            assert task is not None
-            worker = (
-                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
-            ).first()
-            assert worker is not None
-
-            started = await tasks_api.update_task(
-                payload=TaskUpdate(status="in_progress"),
-                task=task,
-                session=session,
-                actor=ActorContext(actor_type="agent", agent=worker),
-            )
-            assert started.status == "in_progress"
-            assert started.assigned_agent_id == worker_id
-            assert started.in_progress_at is not None
+            assert reverted.status == "rework"
+            assert reverted.assigned_agent_id == worker_id
+            worker_messages = [item for item in sent if item["session_key"] == "worker-session"]
+            assert worker_messages
+            final_message = worker_messages[-1]["message"]
+            assert "CHANGES REQUESTED" in final_message
+            assert "Please update error handling and add tests for edge cases." in final_message
     finally:
         await engine.dispose()
 

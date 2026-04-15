@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from abc import ABC
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
 from typing import TypeVar
 from uuid import UUID
 
@@ -40,7 +39,6 @@ from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConf
 from app.services.openclaw.gateway_rpc import OpenClawGatewayError, openclaw_call
 from app.services.openclaw.internal.agent_key import agent_key
 from app.services.openclaw.internal.retry import with_coordination_gateway_retry
-from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import (
     LeadAgentOptions,
@@ -49,8 +47,9 @@ from app.services.openclaw.provisioning_db import (
     _get_existing_auth_token,
 )
 from app.services.openclaw.provisioning import _control_plane_for_gateway
-from app.services.openclaw.shared import GatewayAgentIdentity
+from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
 from app.services.openclaw.constants import HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
+from app.services.openclaw.shared import GatewayAgentIdentity
 
 _T = TypeVar("_T")
 
@@ -250,6 +249,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             actor_agent.id,
             target_agent_id,
         )
+
 
     async def recover_board_agent(
         self,
