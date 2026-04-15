@@ -212,3 +212,84 @@ async def test_update_approval_rejects_reopening_to_pending_with_existing_pendin
             ]
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_create_move_to_done_approval_rejects_non_review_task() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task_ids = await _seed_board_with_tasks(session, task_count=1)
+            task_id = task_ids[0]
+            task = await session.get(Task, task_id)
+            assert task is not None
+            task.status = "inbox"
+            session.add(task)
+            await session.commit()
+
+            with pytest.raises(HTTPException) as exc:
+                await approvals_api.create_approval(
+                    payload=ApprovalCreate(
+                        action_type="move_to_done",
+                        task_id=task_id,
+                        payload={"reason": "Close the task."},
+                        confidence=95,
+                        status="approved",
+                    ),
+                    board=board,
+                    session=session,
+                )
+
+            assert exc.value.status_code == 409
+            assert exc.value.detail == {
+                "message": "move_to_done approvals can only be created for tasks currently in review.",
+                "task_ids": [str(task_id)],
+            }
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_move_to_done_approval_rejects_approval_when_task_left_review() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task_ids = await _seed_board_with_tasks(session, task_count=1)
+            task_id = task_ids[0]
+            task = await session.get(Task, task_id)
+            assert task is not None
+            task.status = "review"
+            session.add(task)
+            await session.commit()
+
+            created = await approvals_api.create_approval(
+                payload=ApprovalCreate(
+                    action_type="move_to_done",
+                    task_id=task_id,
+                    payload={"reason": "Close the task."},
+                    confidence=95,
+                    status="pending",
+                ),
+                board=board,
+                session=session,
+            )
+
+            task.status = "inbox"
+            session.add(task)
+            await session.commit()
+
+            with pytest.raises(HTTPException) as exc:
+                await approvals_api.update_approval(
+                    approval_id=created.id,  # type: ignore[arg-type]
+                    payload=ApprovalUpdate(status="approved"),
+                    board=board,
+                    session=session,
+                )
+
+            assert exc.value.status_code == 409
+            assert exc.value.detail == {
+                "message": "move_to_done approvals can only be created for tasks currently in review.",
+                "task_ids": [str(task_id)],
+            }
+    finally:
+        await engine.dispose()

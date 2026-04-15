@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,7 @@ from app.api.boards import router as boards_router
 from app.api.gateway import router as gateway_router
 from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
+from app.api.mission_control import router as mission_control_router
 from app.api.organizations import router as organizations_router
 from app.api.skills_marketplace import router as skills_marketplace_router
 from app.api.souls_directory import router as souls_directory_router
@@ -31,6 +33,7 @@ from app.api.tags import router as tags_router
 from app.api.task_custom_fields import router as task_custom_fields_router
 from app.api.tasks import router as tasks_router
 from app.api.users import router as users_router
+from app.api.deploy import router as deploy_router
 from app.core.config import settings
 from app.core.error_handling import install_error_handling
 from app.core.logging import configure_logging, get_logger
@@ -39,6 +42,8 @@ from app.core.rate_limit_backend import RateLimitBackend
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import init_db
 from app.schemas.health import HealthStatusResponse
+from app.services.openclaw.heartbeat_sweep import heartbeat_sweep_loop, stop_heartbeat_sweep
+from app.services.openclaw.provisioning import reconcile_agent_heartbeat_enabled_flags
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -444,10 +449,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("app.lifecycle.rate_limit backend=redis")
     else:
         logger.info("app.lifecycle.rate_limit backend=memory")
+    reconcile_result = await reconcile_agent_heartbeat_enabled_flags()
+    logger.info(
+        "app.lifecycle.heartbeat_reconcile enabled=%s disabled=%s updated=%s",
+        reconcile_result.get("enabled_agents", 0),
+        reconcile_result.get("disabled_agents", 0),
+        reconcile_result.get("updated_agents", 0),
+    )
+    sweep_stop_event = asyncio.Event()
+    sweep_task = asyncio.create_task(heartbeat_sweep_loop(sweep_stop_event), name="heartbeat-sweep-loop")
     logger.info("app.lifecycle.started")
     try:
         yield
     finally:
+        await stop_heartbeat_sweep(sweep_task, sweep_stop_event)
         logger.info("app.lifecycle.stopped")
 
 
@@ -544,6 +559,7 @@ api_v1.include_router(activity_router)
 api_v1.include_router(gateway_router)
 api_v1.include_router(gateways_router)
 api_v1.include_router(metrics_router)
+api_v1.include_router(deploy_router)
 api_v1.include_router(organizations_router)
 api_v1.include_router(souls_directory_router)
 api_v1.include_router(skills_marketplace_router)
@@ -558,6 +574,7 @@ api_v1.include_router(tasks_router)
 api_v1.include_router(task_custom_fields_router)
 api_v1.include_router(tags_router)
 api_v1.include_router(users_router)
+app.include_router(mission_control_router)
 app.include_router(api_v1)
 
 add_pagination(app)

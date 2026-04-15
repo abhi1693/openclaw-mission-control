@@ -52,3 +52,47 @@ jq -r '
 
 ## API safety
 If no confident match exists for current intent, ask one clarifying question.
+
+## Reality Map
+{% if is_main %}
+- Gateway truth: Mission Control API responses and board-lead replies.
+- Board-scoped work must be routed to the relevant lead before you answer or act.
+- If `board_id` is unknown, list boards first; do not improvise one.
+- Outbound work outputs belong in Mission Control, not OpenClaw chat.
+{% elif is_lead %}
+- Board truth: live board API state plus latest task comments. `MEMORY.md` is a cache, not the source of truth.
+- Review truth: current approvals, latest review comments, and board rules.
+- Routing truth: current blockers, dependencies, and assignee availability.
+- Never hardcode markdown endpoint recipes when `api/openapi.json` can answer the question.
+{% else %}
+{% set role_lower = (identity_role | default("") | lower) %}
+{% if "backend" in role_lower %}
+- Primary backend repo comes from the task or current handoff, not this file.
+- Contract truth: checked-in OpenAPI/schema plus live OpenAPI when the task asks for deployed truth.
+- Local tests prove code health, not deployment status.
+- If a prompt names a specific environment, treat that live API as a separate verification target.
+{% elif "frontend" in role_lower %}
+- Primary frontend repo comes from the task or current handoff, not this file.
+- Live UI truth comes from the named environment in the task, not from local source.
+- Evidence order for UI: browser observation > network/console > built asset > source code.
+- Bundle grep can support a hypothesis, but it is not browser proof.
+{% elif "architect" in role_lower %}
+- Review truth comes from the prompt evidence, task comments, cited files, and contract docs.
+- Your job is to judge design, contract, and risk; not to patch code.
+- If enough evidence is already present, produce the verdict instead of requesting a repo tour.
+{% elif "qa-e2e" in role_lower or "e2e" in role_lower %}
+- Evidence order for UI: browser observation > console/network output > screenshot/video > source code.
+- Browser-required tasks can be marked `not verified` when setup or infra blocks the run; do not invent a PASS or FAIL.
+- Build drift, auth/setup failure, and application regression are different outcomes. Keep them separated.
+{% elif "qa-unit" in role_lower or "quality assurance" in role_lower or "validator" in role_lower or "qa" in role_lower %}
+- Evidence order: reproduction > raw command output > logs > summaries > claims.
+- One failed acceptance criterion is enough to block a pass.
+- Code existence and green local tests are not the same as verified behavior.
+{% elif "devops" in role_lower or "infra" in role_lower %}
+- The approved deploy path comes from the task, current handoff, or deploy docs. Never edit source directly on production.
+- Deployment proof requires all of: service/config correctness, artifact path correctness, and live HTTP behavior.
+- Source changes are not deploy proof. Service restarts are not deploy proof. Live response is proof.
+{% else %}
+- Use the strongest available evidence first and keep source, deploy, and runtime truth separated.
+{% endif %}
+{% endif %}

@@ -12,6 +12,7 @@ from app.db.session import get_session
 from app.schemas.common import OkResponse
 from app.schemas.gateway_api import (
     GatewayCommandsResponse,
+    GatewayEvalSessionEnsureRequest,
     GatewayResolveQuery,
     GatewaySessionHistoryResponse,
     GatewaySessionMessageRequest,
@@ -134,6 +135,84 @@ async def send_gateway_session_message(
     await service.send_session_message(
         session_id=session_id,
         payload=payload,
+        board_id=board_id,
+        organization_id=ctx.organization.id,
+        user=auth.user,
+    )
+    return OkResponse()
+
+
+@router.post("/evals/sessions/{session_id}", response_model=GatewaySessionResponse)
+async def ensure_eval_gateway_session(
+    session_id: str,
+    payload: GatewayEvalSessionEnsureRequest,
+    board_id: str | None = BOARD_ID_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    auth: AuthContext = AUTH_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> GatewaySessionResponse:
+    """Create or reset an isolated eval session for a board gateway."""
+    service = GatewaySessionService(session)
+    return await service.ensure_eval_session(
+        session_id=session_id,
+        payload=payload,
+        board_id=board_id,
+        organization_id=ctx.organization.id,
+        user=auth.user,
+    )
+
+
+@router.get("/evals/sessions/{session_id}/history", response_model=GatewaySessionHistoryResponse)
+async def get_eval_gateway_session_history(
+    session_id: str,
+    board_id: str | None = BOARD_ID_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    auth: AuthContext = AUTH_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> GatewaySessionHistoryResponse:
+    """Fetch chat history for an isolated eval session."""
+    service = GatewaySessionService(session)
+    return await service.get_eval_session_history(
+        session_id=session_id,
+        board_id=board_id,
+        organization_id=ctx.organization.id,
+        user=auth.user,
+    )
+
+
+@router.post("/evals/sessions/{session_id}/message", response_model=OkResponse)
+async def send_eval_gateway_session_message(
+    session_id: str,
+    payload: GatewaySessionMessageRequest,
+    board_id: str | None = BOARD_ID_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    auth: AuthContext = AUTH_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> OkResponse:
+    """Send a prompt into an isolated eval session."""
+    service = GatewaySessionService(session)
+    await service.send_eval_session_message(
+        session_id=session_id,
+        payload=payload,
+        board_id=board_id,
+        organization_id=ctx.organization.id,
+        user=auth.user,
+    )
+    return OkResponse()
+
+
+@router.delete("/evals/sessions/{session_id}", response_model=OkResponse)
+async def delete_eval_gateway_session(
+    session_id: str,
+    board_id: str | None = BOARD_ID_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    auth: AuthContext = AUTH_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> OkResponse:
+    """Delete an isolated eval session."""
+    service = GatewaySessionService(session)
+    await service.delete_eval_session(
+        session_id=session_id,
         board_id=board_id,
         organization_id=ctx.organization.id,
         user=auth.user,

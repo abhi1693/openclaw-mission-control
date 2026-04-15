@@ -15,6 +15,13 @@ class GatewaySessionMessageRequest(SQLModel):
     content: NonEmptyStr
 
 
+class GatewayEvalSessionEnsureRequest(SQLModel):
+    """Request payload for creating/resetting an isolated eval session."""
+
+    label: str | None = None
+    reset: bool = False
+
+
 class GatewayResolveQuery(SQLModel):
     """Query parameters used to resolve which gateway to target."""
 

@@ -105,7 +105,7 @@ async def _update_task_status(
     *,
     task: Task,
     agent: Agent,
-    status: Literal["inbox", "in_progress", "review", "done"],
+    status: Literal["inbox", "in_progress", "review", "rework", "done", "cancelled"],
 ) -> TaskRead:
     return await tasks_api.update_task(
         payload=TaskUpdate(status=status),
@@ -483,6 +483,129 @@ async def test_update_task_allows_dependency_change_with_pending_approval() -> N
             assert updated.depends_on_task_ids == [dependency.id]
             assert updated.status == "inbox"
             assert updated.blocked_by_task_ids == [dependency.id]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_admin_can_cancel_task_and_clear_assignment() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _board, task, _agent = await _seed_board_task_and_agent(
+                session,
+                task_status="in_progress",
+                require_approval_for_done=False,
+            )
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(status="cancelled"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="user"),
+            )
+
+            assert updated.status == "cancelled"
+            assert updated.assigned_agent_id is None
+            assert updated.in_progress_at is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_admin_can_cancel_blocked_task_and_response_is_not_forced_back_to_inbox() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task, _agent = await _seed_board_task_and_agent(
+                session,
+                task_status="in_progress",
+                require_approval_for_done=False,
+            )
+            dependency = Task(
+                id=uuid4(),
+                board_id=board.id,
+                title="Dependency",
+                status="inbox",
+            )
+            session.add(dependency)
+            await session.commit()
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(
+                    status="cancelled",
+                    depends_on_task_ids=[dependency.id],
+                ),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="user"),
+            )
+
+            assert updated.status == "cancelled"
+            assert updated.assigned_agent_id is None
+            assert updated.in_progress_at is None
+            assert updated.blocked_by_task_ids == []
+            assert updated.is_blocked is False
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_admin_can_reopen_cancelled_task_to_inbox() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _board, task, _agent = await _seed_board_task_and_agent(
+                session,
+                task_status="cancelled",
+                require_approval_for_done=False,
+            )
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(status="inbox"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="user"),
+            )
+
+            assert updated.status == "inbox"
+            assert updated.assigned_agent_id is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cancelling_task_rejects_pending_move_to_done_approval() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, task, _agent = await _seed_board_task_and_agent(
+                session,
+                task_status="review",
+                require_approval_for_done=False,
+            )
+            approval = Approval(
+                id=uuid4(),
+                board_id=board.id,
+                task_id=task.id,
+                action_type="move_to_done",
+                confidence=91,
+                status="pending",
+            )
+            session.add(approval)
+            await session.commit()
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(status="cancelled"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="user"),
+            )
+
+            await session.refresh(approval)
+            assert updated.status == "cancelled"
+            assert approval.status == "rejected"
+            assert approval.resolved_at is not None
     finally:
         await engine.dispose()
 

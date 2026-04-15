@@ -870,6 +870,10 @@ async def test_provision_main_agent_uses_dedicated_openclaw_agent_id(monkeypatch
         _fake_list_agent_files,
     )
     monkeypatch.setattr(agent_provisioning, "_render_agent_files", _fake_render_agent_files)
+
+    async def _fake_openclaw_call(*args, **kwargs):
+        return {"ok": True, "enabled": True}
+    monkeypatch.setattr(agent_provisioning, "openclaw_call", _fake_openclaw_call)
     monkeypatch.setattr(
         agent_provisioning.BaseAgentLifecycleManager,
         "_set_agent_files",

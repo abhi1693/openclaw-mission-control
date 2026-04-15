@@ -47,6 +47,7 @@ from app.schemas.agents import (
 from app.schemas.common import OkResponse
 from app.schemas.gateways import GatewayTemplatesSyncError, GatewayTemplatesSyncResult
 from app.services.activity_log import record_activity
+from app.services.openclaw.acp_policy import converge_identity_dev_acp_flow
 from app.services.openclaw.constants import (
     _TOOLS_KV_RE,
     DEFAULT_HEARTBEAT_CONFIG,
@@ -197,6 +198,9 @@ class OpenClawProvisioningService(OpenClawDBService):
             "role": "Board Lead",
             "communication_style": "direct, concise, practical",
             "emoji": ":gear:",
+            "purpose": "Own board-level coordination and delivery quality by turning objectives into delegated, verifiable outcomes.",
+            "personality": "Strategic operator. Cuts through ambiguity. Keeps the team moving and the story honest.",
+            "custom_instructions": "Never implement by default. Route work, keep blockers explicit, and preserve uncomfortable reality instead of smoothing it over.",
         }
         if config_options.identity_profile:
             merged_identity_profile.update(
@@ -325,6 +329,14 @@ class OpenClawProvisioningService(OpenClawDBService):
         else:
             agents = []
 
+        changed_agents = [agent for agent in agents if _converge_agent_dev_acp_flow(agent)]
+        if changed_agents:
+            for agent in changed_agents:
+                self.session.add(agent)
+            await self.session.commit()
+            for agent in changed_agents:
+                await self.session.refresh(agent)
+
         stop_sync = False
         for agent in agents:
             board = boards_by_id.get(agent.board_id) if agent.board_id is not None else None
@@ -355,6 +367,15 @@ class _SyncContext:
     control_plane: OpenClawGatewayControlPlane
     backoff: GatewayBackoff
     options: GatewayTemplateSyncOptions
+
+
+def _converge_agent_dev_acp_flow(agent: Agent) -> bool:
+    profile = converge_identity_dev_acp_flow(agent.identity_profile)
+    if profile is None:
+        return False
+    agent.identity_profile = profile
+    agent.updated_at = utcnow()
+    return True
 
 
 def _parse_tools_md(content: str) -> dict[str, str]:

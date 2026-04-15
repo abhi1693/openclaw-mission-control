@@ -1,0 +1,243 @@
+{% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set role_tag = "agent-main" if is_main else ("agent-lead" if is_lead else "agent-worker") %}
+{% if is_main %}
+# HEARTBEAT.md
+
+## Purpose
+Main agent heartbeat. You are not tied to any board.
+
+## Setup
+Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, and agent identity before proceeding. If any are missing, stop and request a provisioning update.
+
+## API Discovery
+Before API-heavy work, refresh endpoints:
+
+```bash
+curl -fsS "$BASE_URL/openapi.json" -o /tmp/openapi.json
+jq -r '.paths | to_entries[] | .key as $p | .value | to_entries[] | select((.value.tags // []) | index("{{ role_tag }}")) | "\(.key|ascii_upcase) \($p) \(.value.summary // "")"' /tmp/openapi.json | sort
+```
+
+## Protocol
+- All outputs go to Mission Control via HTTP.
+- Always include: `X-Agent-Token: $AUTH_TOKEN`
+
+## Schedule
+- On first cycle after wake/bootstrap, check in immediately.
+- Do not claim or move board tasks unless explicitly instructed.
+- Handle any pending `LEAD REQUEST: ASK USER` messages promptly (see AGENTS.md).
+
+## Heartbeat Checklist
+1) Check in: `POST $BASE_URL/api/v1/agent/heartbeat` with header `X-Agent-Token: $AUTH_TOKEN`.
+2) If check-in fails (5xx/network), stop. Do **not** write memory updates until next successful check-in.
+
+## Memory Maintenance
+Do not perform memory maintenance every heartbeat. Only do it when explicitly instructed, idle for more than 1 hour, or when there is clear net-new durable information to preserve.
+
+## When to Say HEARTBEAT_OK
+Say `HEARTBEAT_OK` only when:
+1) Heartbeat check-in succeeded.
+2) Any pending high-priority gateway-main duty was handled.
+3) No outage rule was violated.
+
+Do **not** say `HEARTBEAT_OK` if check-in failed.
+{% else %}
+# HEARTBEAT.md
+
+## Purpose
+{% if is_lead %}
+Run the board as an operator: keep execution moving, enforce board rules, and close work safely.
+{% else %}
+Do real work with low noise while sharing useful knowledge across the board.
+{% endif %}
+
+## Setup
+Read `TOOLS.md` for `BASE_URL`, `AUTH_TOKEN`, `BOARD_ID`, and agent identity. If missing, stop.
+
+## Rules
+- Post only to task comments, never board chat (unless routing/coordinating).
+- **Timezone:** Use `BOARD_TIMEZONE` from TOOLS.md for date displays, not UTC.
+- Do not assume exec is blocked from an earlier session. Try the command first.
+- **Board API is your source of truth, NOT MEMORY.md.** Always query current state.
+
+## Pre-Flight
+1) Check in: `POST $BASE_URL/api/v1/agent/heartbeat` with `X-Agent-Token: $AUTH_TOKEN`
+2) If fails, stop. Try next heartbeat.
+
+{% if is_lead %}
+## Board Lead Checklist
+
+**You are an operator — NEVER write code. Route via nudge. EXECUTE curl commands, do not just discuss.**
+
+**NEVER implement code.** Your Codex/Claude Code calls use `--sandbox read-only`. If a task needs code changes, reject to inbox and assign to Programmer.
+
+### Step 1 — Check In
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TOKEN"
+```
+
+### Step 2 — Health Scan
+```bash
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/tasks.json
+curl -fsS "$BASE_URL/api/v1/agent/agents?board_id=$BOARD_ID&limit=100" -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/agents.json
+python3 -c "
+import sys,json
+from datetime import datetime,timezone
+tasks=json.load(open('/tmp/tasks.json')).get('items',[])
+agents=json.load(open('/tmp/agents.json')).get('items',[])
+agents_by_id={a['id']:a for a in agents if isinstance(a,dict)}
+now=datetime.now(timezone.utc)
+for t in tasks:
+    s=t.get('status','')
+    if s=='done': continue
+    if s not in ('in_progress','review','inbox'): continue
+    aid=t.get('assigned_agent_id','unassigned') or 'unassigned'
+    updated=datetime.fromisoformat(t['updated_at'].replace('Z','+00:00'))
+    age=int((now-updated).total_seconds()/60)
+    a=agents_by_id.get(aid,{})
+    print(f\"{s:12} {age:4}m agent={aid} agent_status={a.get('status','?')} {t['title'][:50]} task_id={t['id']}\")
+"
+```
+**Act on findings:**
+- `in_progress` 30+ min → nudge: "Status check — are you blocked?"
+- `in_progress` 60+ min → escalate `@Miguel Agent stuck 60+ min.`
+- Offline agent with live task → recover first, then nudge.
+- **Always nudge after reassigning.** Do not just PATCH and leave.
+
+### Step 3 — Route Review Tasks to QA
+For each `review` task not yet validated (no comment with "QA-Unit validation", "QA-E2E validation", or "QA validation"):
+1. **QA-Unit** (ALL tasks): nudge for typecheck, lint, tests.
+2. **QA-E2E** (frontend tasks): nudge for browser evaluation + scored rubric.
+3. Backend-only: QA-Unit only. Frontend: both.
+4. Wait for all applicable QA to post.
+
+**If QA posts FAIL:** EXECUTE these commands:
+1. Reject pending approval:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/boards/$BOARD_ID/approvals/$APPROVAL_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "rejected"}'
+```
+2. Move to inbox + reassign + nudge developer:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "inbox", "assigned_agent_id": "DEV_AGENT_ID"}'
+```
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/agents/$DEV_AGENT_ID/nudge" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "QA FAILED: DETAILS. Fix and tag @lead when moving to review."}'
+```
+
+**If QA posts PASS:** Create approval:
+{% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/approvals" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"task_id": "TASK_UUID", "action_type": "move_to_done", "confidence": QA_CONFIDENCE, "lead_reasoning": "QA passed", "payload": {"qa_evidence": "SUMMARY"}}'
+```
+Then notify: `@Miguel Task TITLE ready for approval.`
+{% endif %}
+- Do NOT run your own review. Review chain: workers /simplify, Architect reviews code, QA-E2E evaluates.
+- Challenge thin QA evidence (no scores, no screenshots → send back).
+
+### Step 4 — Dependency Check
+Blocked tasks → nudge: "Your task depends on X. Stop and wait."
+
+### Step 5 — Synthesis Report
+If ALL tasks `done` and MEMORY.md does NOT contain `synthesis_done:$BOARD_ID`:
+```bash
+codex exec -m gpt-5.4 --sandbox read-only "Synthesize project completion report. Collect all tasks/comments, synthesize what was built. Post as board memory."
+```
+Write `synthesis_done:$BOARD_ID` to MEMORY.md after.
+
+### HEARTBEAT_OK Gate
+All of these must be true:
+1. Check-in succeeded.
+2. Health scan output pasted.
+3. Review tasks routed or approved.
+4. No blocked agents unaddressed.
+5. Synthesis done if all tasks complete.
+
+### Board Rules
+- `require_approval_for_done`: `{{ board_rule_require_approval_for_done }}`
+- `require_review_before_done`: `{{ board_rule_require_review_before_done }}`
+- `block_status_changes_with_pending_approval`: `{{ board_rule_block_status_changes_with_pending_approval }}`
+- `only_lead_can_change_status`: `{{ board_rule_only_lead_can_change_status }}`
+{% else %}
+## Worker Loop
+
+### Verify State
+If MEMORY.md says "Done" but board shows `inbox`/`in_progress` → MEMORY.md is wrong. Board is truth.
+
+### Execute
+1) Check in.
+2) Pick task: continue `in_progress`; else pick assigned `inbox`; else pick assigned `review` (if QA); else idle.
+3) When picking `inbox`, PATCH to `in_progress` IMMEDIATELY:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "in_progress"}'
+```
+4) Read task description + comments for requirements. If blocked (`is_blocked=True`), post comment and wait. If no spec, ask `@lead`.
+5) **Execute your workflow.** Run through ALL states in one session:
+   **PLANNING:** Activate skills (see IDENTITY.md). Read task + specs. Write plan to MEMORY.md.
+   **CONTRACT CHECK:** HIGH/MEDIUM new-feature: wait for `qa_signoff=approved` from @lead before coding.
+   **IMPLEMENTING:** Delegate to ACP. Run typecheck/lint/tests. If no tests, write them first. Review with `/simplify`. Fix issues. Continue to VALIDATING.
+   **VALIDATING:** Self-validate (see `$SHARED_WORKSPACE/docs/validation-cookbook.md`). If passes → Step 6. If fails → back to IMPLEMENTING.
+   **REFINE OR PIVOT:** If QA rejects twice on same issue, decide refine or pivot. Post decision.
+   Do NOT stop between states unless blocked.
+6) Move to `review`:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "review", "comment": "Self-validation passed. Evidence: EVIDENCE @lead"}'
+```
+
+### If you are QA and validating a `review` task:
+Post as **task comment** (NOT board chat), use YOUR name as prefix, tag `@lead`:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "YOUR_NAME validation\n\nPASS/FAIL — EVIDENCE\n\n@lead"}'
+```
+
+### If QA reports a failure on YOUR task:
+Read the QA comment. Fix the issue, redeploy, notify: `@qa_agent Fixed: WHAT_CHANGED. Please retest.`
+
+### Role Boundaries
+Stay in your role. Ask `@lead` for cross-role work.
+
+### Progress
+Post task comment every 30 min while working.
+
+### Workspace
+Work ONLY in your own workspace. Shared workspace (`$SHARED_WORKSPACE`) for cross-agent artifacts.
+
+### Idle
+If no task: `@lead I am idle. Available for work.`
+{% endif %}
+
+## Task Comment Format
+```md
+**Update**
+- Net-new artifact/decision/blocker
+
+**Evidence**
+- Commands, links, outputs, or proof
+
+**Next**
+- Next 1-2 concrete actions
+```
+
+## When to Return `HEARTBEAT_OK`
+{% if is_lead %}
+See the HEARTBEAT_OK Gate above.
+{% else %}
+Say `HEARTBEAT_OK` when check-in succeeded and you either completed work, reported a blocker, or are idle with no tasks.
+{% endif %}
+
+## Memory Maintenance
+Do not perform memory maintenance every heartbeat. Only when explicitly instructed, idle 1+ hour, or clear net-new durable information.
+{% endif %}

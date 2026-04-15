@@ -1,0 +1,151 @@
+{% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% if is_main %}
+# HEARTBEAT.md
+
+## Purpose
+This file defines the main agent heartbeat. You are not tied to any board.
+
+## Required inputs
+- BASE_URL: `{{ base_url }}`
+- AUTH_TOKEN: `{{ auth_token }}`
+- AGENT_NAME
+- AGENT_ID
+
+If any required input is missing, stop and request a provisioning update.
+
+## API source of truth (OpenAPI)
+Use OpenAPI role tags for main-agent endpoints.
+
+```bash
+curl -s "{{ base_url }}/openapi.json" -o /tmp/openapi.json
+jq -r '
+  .paths | to_entries[] | .key as $path
+  | .value | to_entries[]
+  | select((.value.tags // []) | index("agent-main"))
+  | ((.value.summary // "") | gsub("\\s+"; " ")) as $summary
+  | ((.value.description // "") | split("\n")[0] | gsub("\\s+"; " ")) as $desc
+  | "\(.key|ascii_upcase)\t\($path)\t\($summary)\t\($desc)"
+' /tmp/openapi.json | sort
+```
+
+## Mission Control Response Protocol
+- All outputs must be sent to Mission Control via HTTP.
+- Always include: `X-Agent-Token: {{ auth_token }}`
+
+## Schedule
+- If a heartbeat schedule is configured, send a lightweight check-in only.
+- On first cycle after wake/bootstrap, run heartbeat check-in immediately (do not wait for cadence).
+- Do not claim or move board tasks unless explicitly instructed by Mission Control.
+- If you have any pending `LEAD REQUEST: ASK USER` messages in OpenClaw chat, handle them promptly (see AGENTS.md).
+
+## Heartbeat checklist
+1) Check in immediately:
+- Use the `agent-main` heartbeat endpoint (`POST /api/v1/agent/heartbeat`).
+- Startup check-in example:
+
+```bash
+curl -s -X POST "{{ base_url }}/api/v1/agent/heartbeat" \
+  -H "X-Agent-Token: {{ auth_token }}"
+```
+
+- If check-in fails due to 5xx/network, stop and retry next heartbeat.
+- During that failure window, do **not** write memory updates (`MEMORY.md`, daily memory files).
+
+## Memory Maintenance (every 2-3 days)
+1) Read recent `memory/YYYY-MM-DD.md` files.
+2) Update `MEMORY.md` with durable facts/decisions.
+3) Update `MEMORY.md` with evolving preferences and identity.
+4) Prune stale content.
+
+## Common mistakes (avoid)
+- Claiming board tasks without instruction.
+
+## When to say HEARTBEAT_OK
+You may say `HEARTBEAT_OK` only when:
+1) Heartbeat check-in succeeded, and
+2) Any pending high-priority gateway-main duty for this cycle was handled (if present), and
+3) No outage rule was violated (no memory writes during 5xx/network failure window).
+
+Do **not** say `HEARTBEAT_OK` if check-in failed.
+{% else %}
+# HEARTBEAT.md
+
+## Required Inputs
+- `BASE_URL`: `{{ base_url }}`
+- `AUTH_TOKEN`: `{{ auth_token }}`
+- `BOARD_ID`: `{{ board_id }}`
+
+If any required input is missing, stop and request a provisioning update.
+
+## Rules
+- Task updates go only to task comments, never chat.
+- Post only when there is net-new value.
+- If any API call returns 5xx, stop and retry next heartbeat.
+
+## Steps — Execute in Order
+
+### Step 1: Health check
+
+```bash
+curl -fsS "{{ base_url }}/healthz"
+```
+
+If this fails, stop. Do not proceed.
+
+### Step 2: Check in
+
+```bash
+curl -s -X POST "{{ base_url }}/api/v1/agent/heartbeat" \
+  -H "X-Agent-Token: {{ auth_token }}"
+```
+
+If this fails, stop. Do not say HEARTBEAT_OK.
+
+### Step 3: Pull context
+
+Get your tasks:
+```bash
+curl -s "{{ base_url }}/api/v1/agent/boards/{{ board_id }}/tasks?status=in_progress&status=inbox" \
+  -H "X-Agent-Token: {{ auth_token }}"
+```
+
+Pull board memory (non-chat):
+```bash
+curl -s "{{ base_url }}/api/v1/agent/boards/{{ board_id }}/memory?is_chat=false&limit=20" \
+  -H "X-Agent-Token: {{ auth_token }}"
+```
+
+{% if is_lead %}
+### Step 4: Board Lead Work
+
+If there are tasks:
+1) Review task statuses and enforce board rules.
+2) Ensure assigned agents are progressing.
+3) Unblock stuck work with concrete decisions.
+4) Post task comments only with net-new decisions or direction.
+
+Board Rules:
+- `require_review_before_done`: `{{ board_rule_require_review_before_done }}`
+- `require_approval_for_done`: `{{ board_rule_require_approval_for_done }}`
+- `comment_required_for_review`: `{{ board_rule_comment_required_for_review }}`
+- `block_status_changes_with_pending_approval`: `{{ board_rule_block_status_changes_with_pending_approval }}`
+- `only_lead_can_change_status`: `{{ board_rule_only_lead_can_change_status }}`
+- `max_agents`: `{{ board_rule_max_agents }}`
+
+If no tasks need attention, skip to Step 5.
+{% else %}
+### Step 4: Worker Work
+
+If you have an `in_progress` task: continue working on it.
+Else if you have an `inbox` task: start working on it.
+Else if there are `review` tasks on the board: add one concrete assist comment.
+Else: skip to Step 5.
+
+When working on a task, post a task comment only if you have a concrete update (artifact, decision, blocker).
+{% endif %}
+
+### Step 5: Done
+
+Say `HEARTBEAT_OK`.
+{% endif %}

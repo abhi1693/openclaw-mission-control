@@ -304,24 +304,33 @@ def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -
     )
 
 
-def test_agents_md_contains_code_delegation_section_for_workers() -> None:
-    """AGENTS.md is the authoritative home for ACP delegation
-    instructions for workers. This test guards the Code Delegation
-    section's presence and ensures leads and main agents do not get
-    the worker delegation boilerplate.
+def test_agents_md_code_delegation_references_skill() -> None:
+    """The Code Delegation section must explicitly tell agents to use the
+    acp-delegation skill. ACP payloads live in the skill, not inline.
+    Leads and main agents must NOT have this section.
     """
-    worker_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="QA-Unit",
-        agent_id="qa-id",
-    )
-    assert "## Code Delegation (ACP)" in worker_agents, (
-        "AGENTS.md must have a Code Delegation section for workers"
-    )
-    assert "sessions_spawn" in worker_agents
-    assert '"agentId": "claude"' in worker_agents
+    for flow in ["claude_with_skills", "review_only", "codex_then_claude_review", ""]:
+        agents = _render_template(
+            "BOARD_AGENTS.md.j2",
+            is_main_agent=False,
+            is_board_lead=False,
+            agent_name="Worker",
+            agent_id="w-id",
+            identity_dev_acp_flow=flow,
+        )
+        assert "## Code Delegation (ACP)" in agents, (
+            f"AGENTS.md must have Code Delegation section (flow={flow!r})"
+        )
+        assert "acp-delegation" in agents, (
+            f"AGENTS.md must tell agents to use the acp-delegation skill (flow={flow!r})"
+        )
+        assert "use" in agents.lower() and "skill" in agents.lower(), (
+            f"AGENTS.md must explicitly say 'use ... skill' (flow={flow!r})"
+        )
+        # Inline payloads must NOT be in the template
+        assert '"agentId": "claude"' not in agents, (
+            f"ACP payloads must be in the skill, not inline (flow={flow!r})"
+        )
 
     lead_agents = _render_template(
         "BOARD_AGENTS.md.j2",
@@ -330,10 +339,7 @@ def test_agents_md_contains_code_delegation_section_for_workers() -> None:
         agent_name="Supervisor",
         agent_id="lead-id",
     )
-    assert "## Code Delegation (ACP)" not in lead_agents, (
-        "leads delegate by assigning tasks, not by spawning ACP "
-        "sessions — the section must be worker-only"
-    )
+    assert "## Code Delegation (ACP)" not in lead_agents
 
     main_agents = _render_template(
         "BOARD_AGENTS.md.j2",
@@ -342,185 +348,7 @@ def test_agents_md_contains_code_delegation_section_for_workers() -> None:
         agent_name="Main Agent",
         agent_id="main-id",
     )
-    assert "## Code Delegation (ACP)" not in main_agents, (
-        "main agents are not board workers — the section must not "
-        "appear in the main-agent rendering"
-    )
-
-
-def test_agents_md_code_delegation_codex_then_claude_review_flow() -> None:
-    """Workers with ``identity_profile.dev_acp_flow =
-    'codex_then_claude_review'`` must render a two-stage workflow in
-    their AGENTS.md Code Delegation section: Codex implements, Claude
-    Code reviews. Two separate spawn payloads, with review running
-    after the implementation commit exists.
-
-    This test uses the per-agent flow flag, not the literal agent name.
-    The previous implementation branched on ``agent_name ==
-    "Programmer-Backend"`` which was brittle — agent names are editable
-    display fields, so a rename would silently drop the two-stage flow.
-    """
-    pb_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="Programmer-Backend",
-        agent_id="pb-id",
-        identity_dev_acp_flow="codex_then_claude_review",
-    )
-    assert "## Code Delegation (ACP)" in pb_agents
-    assert "Stage 1" in pb_agents and "Stage 2" in pb_agents, (
-        "codex_then_claude_review flow must have two distinct ACP stages"
-    )
-    assert '"agentId": "codex"' in pb_agents, (
-        "Stage 1 must use codex as the implementation ACP agent"
-    )
-    assert '"agentId": "claude"' in pb_agents, (
-        "Stage 2 must use claude as the review ACP agent"
-    )
-    assert "Codex implements" in pb_agents and "Claude Code reviews" in pb_agents
-    # Review must run after the implementation commit exists.
-    lowered = pb_agents.lower()
-    assert "after" in lowered and "commit" in lowered
-
-
-def test_agents_md_code_delegation_renamed_programmer_backend_keeps_two_stage_flow() -> None:
-    """Regression: if Programmer-Backend is renamed in the DB (agents are
-    display-name-editable), the two-stage Codex+Claude flow MUST still
-    render because we key on ``identity_profile.dev_acp_flow``, not on
-    ``agent_name``. This test would have caught the old brittle
-    discriminator.
-    """
-    renamed_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="Backend Engineer",  # renamed from "Programmer-Backend"
-        agent_id="pb-id",
-        identity_dev_acp_flow="codex_then_claude_review",
-    )
-    assert '"agentId": "codex"' in renamed_agents, (
-        "renaming the display name must not drop the two-stage flow"
-    )
-    assert "Stage 1" in renamed_agents and "Stage 2" in renamed_agents
-
-
-def test_agents_md_code_delegation_default_workers_keep_single_claude_spawn() -> None:
-    """Workers without an explicit dev_acp_flow flag (absent, empty, or
-    any value other than ``'codex_then_claude_review'``) must render the
-    default single-spawn Claude-Code-does-it-all flow.
-    """
-    default_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="QA-Unit",
-        agent_id="qa-id",
-        # identity_dev_acp_flow intentionally omitted → default flow
-    )
-    assert '"agentId": "claude"' in default_agents
-    assert '"agentId": "codex"' not in default_agents, (
-        "absent flow flag must default to single-spawn Claude Code"
-    )
-    assert "Stage 1" not in default_agents
-
-    # Even with the literal agent_name "Programmer-Backend", an absent
-    # flow flag must NOT trigger the two-stage branch — the template
-    # must key on the flag, not the name.
-    pb_name_no_flag = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="Programmer-Backend",
-        agent_id="pb-id",
-        # no identity_dev_acp_flow
-    )
-    assert '"agentId": "codex"' not in pb_name_no_flag, (
-        "template MUST NOT key on agent_name — absent flag means default flow"
-    )
-
-
-def test_agents_md_code_delegation_review_only_flow_for_architect() -> None:
-    """Architect agents with ``identity_profile.dev_acp_flow =
-    'review_only'`` must render a review/spec-writing delegation
-    section — NOT the implementation-oriented default. The Architect's
-    IDENTITY says "NEVER write implementation code", so the Code
-    Delegation section must not contain "Implement:" task prompts.
-    """
-    arch_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="Architect",
-        agent_id="arch-id",
-        identity_dev_acp_flow="review_only",
-    )
-    assert "## Code Delegation (ACP)" in arch_agents
-    assert "Review-only workflow" in arch_agents, (
-        "review_only flow must clearly state this is review-only"
-    )
-    assert "adversarial-review" in arch_agents.lower() or "adversarial review" in arch_agents.lower(), (
-        "review_only flow must include the /codex adversarial review pattern"
-    )
-    # Must NOT have implementation-oriented prompts
-    assert '"task": "Implement:' not in arch_agents, (
-        "review_only flow MUST NOT contain 'Implement:' task prompts — "
-        "the Architect's IDENTITY says NEVER write implementation code"
-    )
-    assert "Do NOT use the implementation delegation pattern" in arch_agents, (
-        "review_only flow must explicitly forbid the implementation pattern"
-    )
-
-
-def test_agents_md_code_delegation_claude_with_skills_for_pf() -> None:
-    """PF agents with ``identity_profile.dev_acp_flow =
-    'claude_with_skills'`` must render the Claude Code ACP flow with
-    frontend design skill references (/simplify, /codex,
-    /frontend-review, /frontend-architecture, /frontend-aesthetics).
-    """
-    pf_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="Programmer-Frontend",
-        agent_id="pf-id",
-        identity_dev_acp_flow="claude_with_skills",
-    )
-    assert "## Code Delegation (ACP)" in pf_agents
-    assert "Claude Code ACP with superpowers + design skills" in pf_agents, (
-        "claude_with_skills flow must state it uses superpowers + design skills"
-    )
-    assert "sessions_spawn" in pf_agents, (
-        "claude_with_skills flow must use sessions_spawn for ACP delegation"
-    )
-    # Must have all 5 skill references
-    for skill in ["/simplify", "/codex", "/frontend-review", "/frontend-architecture", "/frontend-aesthetics"]:
-        assert skill in pf_agents, (
-            f"claude_with_skills flow must reference {skill}"
-        )
-    # Must have the ACP session timeout rule
-    assert "ACP Session Timeout" in pf_agents, (
-        "claude_with_skills flow must include the ACP Session Timeout rule"
-    )
-    # Must NOT have direct-flow instructions
-    assert "Do NOT spawn ACP sessions" not in pf_agents, (
-        "claude_with_skills flow must NOT contain direct-flow instructions"
-    )
-
-
-def test_agents_md_code_delegation_review_only_does_not_render_for_default_workers() -> None:
-    """Workers without the review_only flag must NOT get the review-only
-    section — they should get the default implementation flow.
-    """
-    default_agents = _render_template(
-        "BOARD_AGENTS.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        agent_name="QA-Unit",
-        agent_id="qa-id",
-    )
-    assert "Review-only workflow" not in default_agents
-    assert "Spec Writing" not in default_agents
+    assert "## Code Delegation (ACP)" not in main_agents
 
 
 def test_soul_is_values_only_no_operational_steps() -> None:

@@ -71,7 +71,7 @@ def _task_to_card(
         dependency_ids=depends_on_task_ids,
         status_by_id=dependency_status_by_id_map,
     )
-    if task.status == "done":
+    if task.status in {"done", "cancelled"}:
         blocked_by_task_ids = []
     return card.model_copy(
         update={

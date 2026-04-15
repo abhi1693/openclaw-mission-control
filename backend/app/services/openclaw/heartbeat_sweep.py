@@ -19,6 +19,7 @@ from app.services.openclaw.constants import MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
 from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
+from app.services.openclaw.provisioning import reconcile_agent_heartbeat_enabled_flags
 
 logger = get_logger(__name__)
 SWEEP_INTERVAL_SECONDS = 300
@@ -255,6 +256,13 @@ async def heartbeat_sweep_loop(stop_event: asyncio.Event) -> None:
     try:
         while not stop_event.is_set():
             try:
+                reconcile_result = await reconcile_agent_heartbeat_enabled_flags()
+                logger.info(
+                    "heartbeat_sweep.reconcile enabled=%s disabled=%s updated=%s",
+                    reconcile_result.get("enabled_agents", 0),
+                    reconcile_result.get("disabled_agents", 0),
+                    reconcile_result.get("updated_agents", 0),
+                )
                 await sweep_once()
                 await sweep_stuck_tasks()
             except Exception:

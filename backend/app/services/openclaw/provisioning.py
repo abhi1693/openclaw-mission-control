@@ -14,14 +14,19 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
+
+from sqlmodel import select, text
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.db.session import async_session_maker
 from app.models.agents import Agent
 from app.models.boards import Board
 from app.models.gateways import Gateway
+from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services import souls_directory
 from app.services.openclaw.constants import (
     BOARD_SHARED_TEMPLATE_MAP,
@@ -1241,6 +1246,98 @@ def _control_plane_for_gateway(gateway: Gateway) -> OpenClawGatewayControlPlane:
     )
 
 
+async def _gateway_config_for_board_id(board_id: UUID) -> GatewayClientConfig | None:
+    async with async_session_maker() as session:
+        board = (await session.exec(select(Board).where(Board.id == board_id))).first()
+        if board is None or board.gateway_id is None:
+            return None
+
+        dispatch = GatewayDispatchService(session)
+        config = await dispatch.optional_gateway_config_for_board(board)
+        if config is not None:
+            return config
+
+        gateway = (await session.exec(select(Gateway).where(Gateway.id == board.gateway_id))).first()
+        if gateway is None:
+            return None
+        return GatewayClientConfig(
+            url=gateway.url or "ws://192.168.2.60:18789",
+            token=gateway.token or None,
+            allow_insecure_tls=gateway.allow_insecure_tls,
+            disable_device_pairing=gateway.disable_device_pairing,
+        )
+
+
+async def _any_board_active_on_gateway(gateway_id: UUID) -> bool:
+    async with async_session_maker() as session:
+        paused_rows = await session.exec(
+            text(
+                """
+                SELECT b.id
+                FROM boards b
+                LEFT JOIN board_pause_states bps ON bps.board_id = b.id
+                WHERE b.gateway_id = :gateway_id
+                  AND COALESCE(bps.is_paused, FALSE) = FALSE
+                LIMIT 1
+                """
+            ).bindparams(gateway_id=gateway_id)
+        )
+        return paused_rows.first() is not None
+
+
+async def reconcile_agent_heartbeat_enabled_flags() -> dict[str, int]:
+    """Keep gateway global heartbeats aligned with board pause state."""
+    async with async_session_maker() as session:
+        gateway_ids = list((await session.exec(select(Gateway.id))).all())
+
+    enabled = 0
+    disabled = 0
+    updated = 0
+
+    for gateway_id in gateway_ids:
+        async with async_session_maker() as session:
+            boards = (await session.exec(select(Board).where(Board.gateway_id == gateway_id))).all()
+        if not boards:
+            continue
+
+        config = await _gateway_config_for_board_id(boards[0].id)
+        if config is None:
+            logger.warning(
+                "heartbeat_reconcile.skip_missing_config gateway_id=%s",
+                gateway_id,
+            )
+            continue
+
+        should_enable = await _any_board_active_on_gateway(gateway_id)
+        try:
+            result = await openclaw_call(
+                "set-heartbeats",
+                {"enabled": should_enable},
+                config=config,
+            )
+            updated += 1
+            if should_enable:
+                enabled += 1
+            else:
+                disabled += 1
+            logger.info(
+                "heartbeat_reconcile.applied gateway_id=%s enabled=%s result=%s",
+                gateway_id,
+                should_enable,
+                result,
+            )
+        except Exception as exc:
+            logger.warning(
+                "heartbeat_reconcile.failed gateway_id=%s enabled=%s error=%s",
+                gateway_id,
+                should_enable,
+                str(exc),
+                exc_info=True,
+            )
+
+    return {"enabled_agents": enabled, "disabled_agents": disabled, "updated_agents": updated}
+
+
 async def _patch_gateway_agent_heartbeats(
     gateway: Gateway,
     *,
@@ -1367,6 +1464,11 @@ class OpenClawGatewayProvisioner:
 
         control_plane = _control_plane_for_gateway(gateway)
         manager = manager_type(gateway, control_plane)
+        await openclaw_call(
+            "set-heartbeats",
+            {"enabled": True},
+            config=GatewayClientConfig(url=gateway.url, token=gateway.token, allow_insecure_tls=gateway.allow_insecure_tls, disable_device_pairing=gateway.disable_device_pairing),
+        )
         await manager.provision(
             agent=agent,
             board=board,
