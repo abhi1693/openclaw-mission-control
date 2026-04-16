@@ -199,6 +199,86 @@ async def test_openclaw_call_surfaces_scope_error_without_device_fallback(
 
 
 @pytest.mark.asyncio
+async def test_openclaw_call_logs_expected_duplicate_agents_create_as_info(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_call_once(
+        method: str,
+        params: dict[str, object] | None,
+        *,
+        config: GatewayConfig,
+        gateway_url: str,
+    ) -> object:
+        del method, params, config, gateway_url
+        raise OpenClawGatewayError("agent already exists")
+
+    seen: list[tuple[str, str]] = []
+
+    def _fake_info(message: str, *args: object) -> None:
+        seen.append(("info", message % args))
+
+    def _fake_warning(message: str, *args: object) -> None:
+        seen.append(("warning", message % args))
+
+    monkeypatch.setattr(gateway_rpc, "_openclaw_call_once", _fake_call_once)
+    monkeypatch.setattr(gateway_rpc.logger, "info", _fake_info)
+    monkeypatch.setattr(gateway_rpc.logger, "warning", _fake_warning)
+
+    with pytest.raises(OpenClawGatewayError, match="agent already exists"):
+        await openclaw_call(
+            "agents.create",
+            {"name": "agent-a", "workspace": "/tmp/agent-a"},
+            config=GatewayConfig(url="ws://gateway.example/ws"),
+        )
+
+    assert any(
+        level == "info" and "gateway.rpc.call.gateway_expected_error method=agents.create" in msg
+        for level, msg in seen
+    )
+    assert not any(level == "warning" for level, _msg in seen)
+
+
+@pytest.mark.asyncio
+async def test_openclaw_call_logs_unexpected_gateway_error_as_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_call_once(
+        method: str,
+        params: dict[str, object] | None,
+        *,
+        config: GatewayConfig,
+        gateway_url: str,
+    ) -> object:
+        del method, params, config, gateway_url
+        raise OpenClawGatewayError("gateway refused update")
+
+    seen: list[tuple[str, str]] = []
+
+    def _fake_info(message: str, *args: object) -> None:
+        seen.append(("info", message % args))
+
+    def _fake_warning(message: str, *args: object) -> None:
+        seen.append(("warning", message % args))
+
+    monkeypatch.setattr(gateway_rpc, "_openclaw_call_once", _fake_call_once)
+    monkeypatch.setattr(gateway_rpc.logger, "info", _fake_info)
+    monkeypatch.setattr(gateway_rpc.logger, "warning", _fake_warning)
+
+    with pytest.raises(OpenClawGatewayError, match="gateway refused update"):
+        await openclaw_call(
+            "agents.create",
+            {"name": "agent-a", "workspace": "/tmp/agent-a"},
+            config=GatewayConfig(url="ws://gateway.example/ws"),
+        )
+
+    assert any(
+        level == "warning" and "gateway.rpc.call.gateway_error method=agents.create" in msg
+        for level, msg in seen
+    )
+    assert not any("gateway_expected_error" in msg for _level, msg in seen)
+
+
+@pytest.mark.asyncio
 async def test_openclaw_call_config_patch_builds_operator_connect_params(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

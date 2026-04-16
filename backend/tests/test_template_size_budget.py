@@ -552,6 +552,94 @@ def test_qa_discriminator_does_not_false_positive_on_name_containing_qa() -> Non
     )
 
 
+def test_phase1_review_loop_guardrails_render_for_frontend_architect_and_lead() -> None:
+    frontend_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Programmer-Frontend",
+            "agent_id": "pf-id",
+            "identity_role": "Frontend Developer",
+        },
+    )
+    assert "one or more active blockers" in frontend_agents
+    assert "Do not replace requested live/browser evidence with grep, build, or source-only proof." in frontend_agents
+    assert "If multiple reviewers identified blockers, address each one explicitly." in frontend_agents
+    assert "Do not reopen a resolved product decision unless `@lead` or Architect changes it." in frontend_agents
+    assert "Treat `review_packet_type` and `validation_target*` as authoritative unless `@lead` changes them." in frontend_agents
+    assert "do not claim deploy blockage without outage or runtime/source mismatch evidence." in frontend_agents
+    assert "Active blocker cleared:" in frontend_agents
+
+    architect_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Architect",
+            "agent_id": "arch-id",
+            "identity_role": "System Architect and Code Reviewer",
+            "identity_dev_acp_flow": "review_only",
+        },
+    )
+    assert "Review against the declared `review_packet_type` and `validation_target*` fields." in architect_agents
+    assert "and no newer commits or evidence reopen the issue" in architect_agents
+
+    lead_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": True,
+            "agent_name": "Supervisor",
+            "agent_id": "lead-id",
+        },
+    )
+    assert "After 2 failed resubmits on one blocker" in lead_agents
+    assert "Post one blocker summary" in lead_agents
+    assert "Keep failed review in `rework`" in lead_agents
+    assert "worker escalation still starts at `3+ rejections`." in lead_agents
+    assert "set `review_packet_type`, known `validation_target*`, and `operator_decision_required` when needed" in lead_agents
+    assert "route around operator-gated work" in lead_agents
+
+
+def test_agents_md_variants_fit_current_local_bootstrap_cap() -> None:
+    variants = {
+        "main": {"is_main_agent": True, "is_board_lead": False, **_REALISTIC_RENDER_CONTEXT},
+        "lead": {
+            "is_main_agent": False,
+            "is_board_lead": True,
+            "agent_name": "Supervisor",
+            "identity_role": "Board Lead",
+            **_REALISTIC_RENDER_CONTEXT,
+        },
+        "worker": {
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Programmer-Frontend",
+            "identity_role": "Frontend Developer",
+            **_REALISTIC_RENDER_CONTEXT,
+        },
+        "architect": {
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Architect",
+            "identity_role": "System Architect and Code Reviewer",
+            "identity_dev_acp_flow": "review_only",
+            **_REALISTIC_RENDER_CONTEXT,
+        },
+    }
+    for variant_name, ctx in variants.items():
+        rendered = _render_template("BOARD_AGENTS.md.j2", **ctx)
+        size = len(rendered)
+        assert size <= BOOTSTRAP_PER_FILE_MAX_CHARS, (
+            f"BOARD_AGENTS.md.j2 ({variant_name}) renders to {size} chars "
+            f"(local per-file cap {BOOTSTRAP_PER_FILE_MAX_CHARS})"
+        )
+
+
 @_SKIP_LOCAL_TEMPLATE_PHILOSOPHY
 def test_soul_and_heartbeat_reference_agents_md_for_delegation() -> None:
     """SOUL.md's Ralph loop and HEARTBEAT.md's IMPLEMENTING state must

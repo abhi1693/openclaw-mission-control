@@ -220,6 +220,13 @@ class GatewayConfig:
     disable_device_pairing: bool = False
 
 
+def _is_expected_idempotent_gateway_error(method: str, exc: OpenClawGatewayError) -> bool:
+    if method != "agents.create":
+        return False
+    message = str(exc).lower()
+    return any(marker in message for marker in ("already", "exist", "duplicate", "conflict"))
+
+
 def _build_gateway_url(config: GatewayConfig) -> str:
     base_url: str = (config.url or "").strip()
     if not base_url:
@@ -507,12 +514,19 @@ async def openclaw_call(
             int((perf_counter() - started_at) * 1000),
         )
         return payload
-    except OpenClawGatewayError:
-        logger.warning(
-            "gateway.rpc.call.gateway_error method=%s duration_ms=%s",
-            method,
-            int((perf_counter() - started_at) * 1000),
-        )
+    except OpenClawGatewayError as exc:
+        if _is_expected_idempotent_gateway_error(method, exc):
+            logger.info(
+                "gateway.rpc.call.gateway_expected_error method=%s duration_ms=%s",
+                method,
+                int((perf_counter() - started_at) * 1000),
+            )
+        else:
+            logger.warning(
+                "gateway.rpc.call.gateway_error method=%s duration_ms=%s",
+                method,
+                int((perf_counter() - started_at) * 1000),
+            )
         raise
     except (
         TimeoutError,
