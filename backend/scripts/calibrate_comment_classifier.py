@@ -40,8 +40,15 @@ from pathlib import Path
 from app.services.comment_classifier import ClassifierFlag, classify
 
 HEALTHY_MAX_FLAG_RATE = 0.15
-PATHOLOGICAL_MIN_FLAG_RATE = 0.30
-PATHOLOGICAL_MAX_FLAG_RATE = 0.45
+
+# Per-rule pathological targets from amendment §9. ±5% band on the
+# spec's measured rates (32% ack-only, 7% near-duplicate). The two
+# rules have very different expected prevalences, so a single shared
+# band overshoots one and undershoots the other.
+PATHOLOGICAL_TARGETS: dict[str, tuple[float, float]] = {
+    "ack_only": (0.27, 0.37),
+    "near_duplicate": (0.02, 0.12),
+}
 
 
 @dataclass(frozen=True)
@@ -149,13 +156,14 @@ def _evaluate_gate(
                 f"healthy[{rule}]: {hrate:.1%} > {HEALTHY_MAX_FLAG_RATE:.0%} gate"
             )
         prate = pathological.rule_rate(rule)
-        if prate < PATHOLOGICAL_MIN_FLAG_RATE:
+        lo, hi = PATHOLOGICAL_TARGETS[rule]
+        if prate < lo:
             failures.append(
-                f"pathological[{rule}]: {prate:.1%} < {PATHOLOGICAL_MIN_FLAG_RATE:.0%} gate"
+                f"pathological[{rule}]: {prate:.1%} < {lo:.0%} gate"
             )
-        if prate > PATHOLOGICAL_MAX_FLAG_RATE:
+        if prate > hi:
             failures.append(
-                f"pathological[{rule}]: {prate:.1%} > {PATHOLOGICAL_MAX_FLAG_RATE:.0%} gate"
+                f"pathological[{rule}]: {prate:.1%} > {hi:.0%} gate"
             )
 
     # Per-packet healthy gate
@@ -200,8 +208,10 @@ def main(argv: list[str] | None = None) -> int:
         },
         "gates": {
             "healthy_max_flag_rate": HEALTHY_MAX_FLAG_RATE,
-            "pathological_min_flag_rate": PATHOLOGICAL_MIN_FLAG_RATE,
-            "pathological_max_flag_rate": PATHOLOGICAL_MAX_FLAG_RATE,
+            "pathological_targets": {
+                rule: {"min": lo, "max": hi}
+                for rule, (lo, hi) in PATHOLOGICAL_TARGETS.items()
+            },
         },
         "failures": failures,
     }

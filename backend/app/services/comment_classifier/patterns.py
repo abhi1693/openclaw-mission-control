@@ -23,8 +23,9 @@ from app.services.mentions import MENTION_PATTERN
 
 # --- Rule A: ack-only detection ------------------------------------------
 
+# MULTILINE so markdown preambles ("# Update\nAcknowledged.") still match.
 ACK_HEAD_RE = re.compile(
-    r"^\s*(acknowledged|received|confirmed|understood|noted|ack(?:nowledged)?)\b",
+    r"(?m)^\s*(acknowledged|received|confirmed|understood|noted|ack(?:nowledged)?)\b",
     re.IGNORECASE,
 )
 
@@ -45,23 +46,31 @@ _NEG_EVIDENCE_PARTS: tuple[re.Pattern[str], ...] = (
     re.compile(r"```", re.MULTILINE),
     # file reference with extension
     re.compile(
-        r"\b\w+\.(py|ts|tsx|jsx|js|json|md|sql|yml|yaml|sh|toml|lock)\b",
+        r"\b\w+\.(py|ts|tsx|jsx|js|json5?|md|sql|yml|yaml|sh|toml|lock)\b",
         re.IGNORECASE,
     ),
     # URL
     re.compile(r"https?://"),
     # git SHA shape — word-bounded to avoid long UUID false hits
     re.compile(r"\b[a-f0-9]{7,40}\b"),
-    # test / build / HTTP signals
+    # test / build / HTTP signals. FAIL is matched standalone (the earlier
+    # `FAIL\s*:\b` form was broken — `\b` after `:` needed a following
+    # word char, which `FAIL: 1 test failing` never provides).
     re.compile(
-        r"\b(PASS|FAIL\s*:|running tests?|lighthouse|playwright|vitest|"
+        r"\b(PASS|FAIL|running tests?|lighthouse|playwright|vitest|"
         r"build PASS|HTTP \d{3})\b"
     ),
 )
 
+# Routing/hand-off verbs. The verb alone is sufficient signal — requiring
+# a specific follower (to|back|this|it|up|over) missed bare "reassigning"
+# and complements like "sending the patch" / "routing through Architect".
+# In shadow-flagging mode a false negative (incidental "sending" word
+# treated as routing) is bounded; a false positive (legit hand-off
+# misclassified as ack-theater) is more disruptive.
 ROUTING_VERB_RE = re.compile(
-    r"\b(reassign(?:ing)?|routing|bouncing|sending|handing|forwarding|"
-    r"delegating|escalating)\s+(?:to|back|this|it|up|over)\b",
+    r"\b(reassign(?:ing|ed|s)?|routing|bouncing|sending|handing|"
+    r"forwarding|delegating|escalating)\b",
     re.IGNORECASE,
 )
 

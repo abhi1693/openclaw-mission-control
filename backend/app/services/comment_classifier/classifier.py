@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
+from app.core.time import utcnow
 from app.services.comment_classifier.patterns import (
     ACK_HEAD_RE,
     ACK_MAX_WORDS,
@@ -125,8 +126,18 @@ def classify(
 
     gap: float | None = None
     if prior_comment is not None and prior_comment_created_at is not None:
-        reference = now or datetime.now(prior_comment_created_at.tzinfo)
-        gap = (reference - prior_comment_created_at).total_seconds()
+        reference = now if now is not None else utcnow()
+        # MC's app.core.time.utcnow() returns naive UTC; DB timestamps
+        # are naive. Tests and some callers supply tz-aware datetimes.
+        # Normalize both sides to naive UTC so mixed-awareness inputs
+        # don't raise TypeError.
+        ref = reference.replace(tzinfo=None) if reference.tzinfo else reference
+        prior_ts = (
+            prior_comment_created_at.replace(tzinfo=None)
+            if prior_comment_created_at.tzinfo
+            else prior_comment_created_at
+        )
+        gap = (ref - prior_ts).total_seconds()
     if _is_near_duplicate(message, prior=prior_comment, gap_seconds=gap):
         flags.append(ClassifierFlag.NEAR_DUPLICATE)
 

@@ -242,3 +242,87 @@ def test_classifier_flag_values_are_stable_strings() -> None:
 
     assert str(ClassifierFlag.ACK_ONLY) == "ack_only"
     assert str(ClassifierFlag.NEAR_DUPLICATE) == "near_duplicate"
+
+
+# --- Codex review fixes: FAIL signal, bare routing, tz mix, md preamble ---
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Acknowledged. FAIL: 1 test failing.",
+        "Acknowledged. FAIL: see log.",
+        "Acknowledged. FAIL - see stack trace",
+        "Acknowledged. The pytest FAIL was on line 40",
+    ],
+)
+def test_ack_only_not_flagged_when_message_contains_FAIL(message: str) -> None:
+    """FAIL is a test-failure signal — counts as negative evidence.
+
+    Codex HIGH review: the prior ``FAIL\\s*:`` regex had a broken ``\\b``
+    anchor after the colon, so ``FAIL: 1 test failing`` slipped through
+    and got flagged as pure ack.
+    """
+
+    flags = classify(message, packet_type="frontend_ui")
+    assert ClassifierFlag.ACK_ONLY not in flags
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Acknowledged. Reassigning.",
+        "Acknowledged. Routing through Architect.",
+        "Acknowledged. Sending the patch.",
+        "Acknowledged. Delegating.",
+        "Acknowledged. Escalating to OP-1.",
+    ],
+)
+def test_ack_only_not_flagged_on_bare_routing_verbs(message: str) -> None:
+    """Bare routing verbs exempt the comment from ack-only theater.
+
+    Codex MEDIUM review: the narrow ``verb + to|back|this|it|up|over``
+    regex missed legitimate routing like ``Routing through Architect``
+    or ``Sending the patch``.
+    """
+
+    flags = classify(message, packet_type="frontend_ui")
+    assert ClassifierFlag.ACK_ONLY not in flags
+
+
+def test_classify_handles_mixed_tz_awareness_without_crashing() -> None:
+    """Codex MEDIUM: prod stores naive UTC; a caller-supplied aware
+    ``now`` with a naive DB prior must not raise TypeError."""
+
+    from datetime import timezone as _tz
+
+    naive_prior_time = datetime(2026, 4, 17, 12, 0, 0)  # no tzinfo
+    aware_now = datetime(2026, 4, 17, 12, 0, 30, tzinfo=_tz.utc)
+    msg = "Acknowledged. No status change. @lead"
+    flags = classify(
+        msg,
+        packet_type="frontend_ui",
+        prior_comment=msg,
+        prior_comment_created_at=naive_prior_time,
+        now=aware_now,
+    )
+    # Specifically: no TypeError raised. Duplicate detection still works
+    # because both sides are normalized to naive before subtraction.
+    assert ClassifierFlag.NEAR_DUPLICATE in flags
+
+
+def test_ack_only_flagged_after_markdown_preamble() -> None:
+    """Codex LOW: absolute-start anchor missed ack tokens that follow a
+    markdown header or blockquote. MULTILINE fixes the miss."""
+
+    msg = "# Update\nAcknowledged. No status change."
+    flags = classify(msg, packet_type="frontend_ui")
+    assert ClassifierFlag.ACK_ONLY in flags
+
+
+def test_ack_only_not_flagged_when_message_cites_json5_file() -> None:
+    """Codex LOW: the extension allowlist missed ``json5``."""
+
+    msg = "Acknowledged. Fixed in config.json5."
+    flags = classify(msg, packet_type="frontend_ui")
+    assert ClassifierFlag.ACK_ONLY not in flags
