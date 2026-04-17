@@ -14,6 +14,40 @@ _ERR_GATEWAY_REQUIRED = "gateway_id is required"
 _ERR_DESCRIPTION_REQUIRED = "description is required"
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID)
 
+# Canonical rollout flag keys. See
+# docs/plans/2026-04-17-mc-delivery-enforcement-plan-phase-1-amendments.md §A.3
+# for why this is an allowlist (F4) rather than open-ended. Unknown keys land
+# in Board.rollout_flags_unknown so that operator attempts to enable new flags
+# are observable without requiring a code change to unblock them.
+ROLLOUT_FLAG_ALLOWLIST = frozenset(
+    {
+        "comment_policy_v1",
+        "structured_blockers_v1",
+        "operator_decisions_v1",
+        "deploy_truth_v1",
+        "heartbeat_watchdog_v1",
+    }
+)
+
+
+def partition_rollout_flags(
+    flags: dict[str, bool] | None,
+) -> tuple[dict[str, bool], dict[str, bool]]:
+    """Split a flag dict into (known, unknown) by the canonical allowlist."""
+
+    if not flags:
+        return {}, {}
+    known: dict[str, bool] = {}
+    unknown: dict[str, bool] = {}
+    for key, value in flags.items():
+        if not isinstance(value, bool):
+            continue
+        if key in ROLLOUT_FLAG_ALLOWLIST:
+            known[key] = value
+        else:
+            unknown[key] = value
+    return known, unknown
+
 
 class BoardBase(SQLModel):
     """Shared board fields used across create and read payloads."""
@@ -36,6 +70,8 @@ class BoardBase(SQLModel):
     only_lead_can_change_status: bool = False
     show_cancelled_column: bool = False
     max_agents: int = Field(default=1, ge=0)
+    rollout_flags: dict[str, bool] = Field(default_factory=dict)
+    rollout_flags_unknown: dict[str, bool] = Field(default_factory=dict)
 
 
 class BoardCreate(BoardBase):
@@ -82,6 +118,7 @@ class BoardUpdate(SQLModel):
     only_lead_can_change_status: bool | None = None
     show_cancelled_column: bool | None = None
     max_agents: int | None = Field(default=None, ge=0)
+    rollout_flags: dict[str, bool] | None = None
 
     @model_validator(mode="after")
     def validate_gateway_id(self) -> Self:

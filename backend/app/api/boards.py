@@ -28,7 +28,7 @@ from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board
 from app.models.gateways import Gateway
-from app.schemas.boards import BoardCreate, BoardRead, BoardUpdate
+from app.schemas.boards import BoardCreate, BoardRead, BoardUpdate, partition_rollout_flags
 from app.schemas.common import OkResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.view_models import BoardGroupSnapshot, BoardSnapshot
@@ -193,6 +193,14 @@ async def _apply_board_update(
     board: Board,
 ) -> Board:
     updates = payload.model_dump(exclude_unset=True)
+    # Partition rollout flags into known (allowlist) and unknown buckets.
+    # See schemas/boards.py::partition_rollout_flags for the allowlist and
+    # docs/plans/2026-04-17-mc-delivery-enforcement-plan-phase-1-amendments.md
+    # sections A.3, A.4 for the rationale.
+    if "rollout_flags" in updates:
+        known, unknown = partition_rollout_flags(updates.pop("rollout_flags"))
+        updates["rollout_flags"] = known
+        updates["rollout_flags_unknown"] = unknown
     if "gateway_id" in updates:
         await _require_gateway(
             session,
@@ -487,6 +495,11 @@ async def create_board(
     """Create a board in the active organization."""
     data = payload.model_dump()
     data["organization_id"] = ctx.organization.id
+    # Partition rollout flags the same way PATCH does, so unknown keys
+    # land in the capture bucket rather than the canonical field.
+    known, unknown = partition_rollout_flags(data.get("rollout_flags"))
+    data["rollout_flags"] = known
+    data["rollout_flags_unknown"] = unknown
     return await crud.create(session, Board, **data)
 
 

@@ -46,5 +46,13 @@ class Board(TenantScoped, table=True):
     only_lead_can_change_status: bool = Field(default=False)
     show_cancelled_column: bool = Field(default=False)
     max_agents: int = Field(default=1)
+    rollout_flags: dict[str, bool] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+    )
+    rollout_flags_unknown: dict[str, bool] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
