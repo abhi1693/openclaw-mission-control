@@ -104,30 +104,33 @@ def classify_corpus(rows: Iterable[CorpusRow]) -> list[tuple[CorpusRow, list[Cla
 class CorpusSummary:
     total: int
     per_rule: dict[str, int]
+    per_packet_total: dict[str, int]
     per_rule_per_packet: dict[str, dict[str, int]]
 
     def rule_rate(self, rule: str) -> float:
         return (self.per_rule.get(rule, 0) / self.total) if self.total else 0.0
 
     def rule_rate_per_packet(self, rule: str, packet: str) -> float:
+        total = self.per_packet_total.get(packet, 0)
         bucket = self.per_rule_per_packet.get(packet, {})
-        total = sum(v for k, v in bucket.items() if k == "__count__")
         return (bucket.get(rule, 0) / total) if total else 0.0
 
 
 def summarize(results: list[tuple[CorpusRow, list[ClassifierFlag]]]) -> CorpusSummary:
     total = len(results)
     per_rule: dict[str, int] = defaultdict(int)
+    per_packet_total: dict[str, int] = defaultdict(int)
     per_rule_per_packet: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row, flags in results:
         packet = row.packet_type or "__unset__"
-        per_rule_per_packet[packet]["__count__"] += 1
+        per_packet_total[packet] += 1
         for flag in flags:
             per_rule[flag.value] += 1
             per_rule_per_packet[packet][flag.value] += 1
     return CorpusSummary(
         total=total,
         per_rule=dict(per_rule),
+        per_packet_total=dict(per_packet_total),
         per_rule_per_packet={k: dict(v) for k, v in per_rule_per_packet.items()},
     )
 
@@ -156,10 +159,10 @@ def _evaluate_gate(
             )
 
     # Per-packet healthy gate
-    for packet, counts in healthy.per_rule_per_packet.items():
-        total = counts.get("__count__", 0)
+    for packet, total in healthy.per_packet_total.items():
         if total == 0:
             continue
+        counts = healthy.per_rule_per_packet.get(packet, {})
         for rule in (ClassifierFlag.ACK_ONLY.value, ClassifierFlag.NEAR_DUPLICATE.value):
             rate = counts.get(rule, 0) / total
             if rate > HEALTHY_MAX_FLAG_RATE:
@@ -186,11 +189,13 @@ def main(argv: list[str] | None = None) -> int:
         "healthy": {
             "total": healthy.total,
             "per_rule": healthy.per_rule,
+            "per_packet_total": healthy.per_packet_total,
             "per_rule_per_packet": healthy.per_rule_per_packet,
         },
         "pathological": {
             "total": pathological.total,
             "per_rule": pathological.per_rule,
+            "per_packet_total": pathological.per_packet_total,
             "per_rule_per_packet": pathological.per_rule_per_packet,
         },
         "gates": {

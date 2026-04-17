@@ -19,11 +19,11 @@ from app.services.comment_classifier.patterns import (
     LAX_PACKET_TYPES,
     NEAR_DUPLICATE_JACCARD_THRESHOLD,
     NEAR_DUPLICATE_WINDOW_SECONDS,
-    _has_negative_evidence,
-    _has_routing_verb,
-    _jaccard,
-    _normalize_for_jaccard,
-    _word_count,
+    has_negative_evidence,
+    has_routing_verb,
+    jaccard,
+    normalize_for_jaccard,
+    word_count,
 )
 
 
@@ -40,8 +40,6 @@ class ClassifierFlag(StrEnum):
 
 
 def _has_ack_shape(message: str) -> bool:
-    """True when the message is opening or phrased as an acknowledgment."""
-
     return bool(ACK_HEAD_RE.search(message) or ACK_PHRASE_RE.search(message))
 
 
@@ -59,17 +57,18 @@ def _is_ack_only(message: str, *, packet_type: str | None) -> bool:
 
     if not _has_ack_shape(message):
         return False
-    if _has_negative_evidence(message):
+    if has_negative_evidence(message):
         return False
-    if _word_count(message) > ACK_MAX_WORDS:
+    if word_count(message) > ACK_MAX_WORDS:
         return False
-    if _has_routing_verb(message):
+    if has_routing_verb(message):
         return False
 
-    is_lax = packet_type in LAX_PACKET_TYPES
-    if is_lax:
-        return _word_count(message) <= LAX_MAX_WORDS
-    # Strict or unspecified -> flag.
+    if packet_type in LAX_PACKET_TYPES:
+        return word_count(message) <= LAX_MAX_WORDS
+    # Strict, unset, or unrecognized packet types all flag. Unknown is
+    # treated as strict: safer to over-flag a legit comment (operator
+    # toggles include_flagged=true) than silently under-flag theater.
     return True
 
 
@@ -81,8 +80,8 @@ def _is_near_duplicate(
 ) -> bool:
     """Compare ``message`` to the same author's previous same-task comment.
 
-    The caller is responsible for having fetched exactly the right
-    ``prior`` (same agent + same task + most recent). Time-window and
+    The caller is responsible for fetching the right ``prior`` (same
+    agent + same task + most recent within the window). Time-window and
     similarity gates are applied here.
     """
 
@@ -90,7 +89,7 @@ def _is_near_duplicate(
         return False
     if gap_seconds < 0 or gap_seconds > NEAR_DUPLICATE_WINDOW_SECONDS:
         return False
-    sim = _jaccard(_normalize_for_jaccard(prior), _normalize_for_jaccard(message))
+    sim = jaccard(normalize_for_jaccard(prior), normalize_for_jaccard(message))
     return sim >= NEAR_DUPLICATE_JACCARD_THRESHOLD
 
 

@@ -1,26 +1,33 @@
 """Regex patterns and packet-type taxonomy for the comment classifier.
 
-Kept in their own module so the calibration script at
-``scripts/calibrate_comment_classifier.py`` can import them without
-pulling in the full classifier dependency tree, and so future rule
-tuning is a focused diff against a single file.
+Kept in its own module so the calibration script at
+``scripts/calibrate_comment_classifier.py`` can import patterns without
+pulling in the full classifier dependency tree, and so rule tuning is a
+focused diff against a single file.
+
+Helpers are package-public (no leading underscore) because they are
+imported by the sibling ``classifier`` module. The module as a whole is
+an implementation detail of ``app.services.comment_classifier``.
 """
 
 from __future__ import annotations
 
 import re
+from typing import get_args
+
+from app.schemas.tasks import (
+    REVIEW_PACKET_TYPES_REQUIRING_VALIDATION_TARGET,
+    ReviewPacketType,
+)
+from app.services.mentions import MENTION_PATTERN
 
 # --- Rule A: ack-only detection ------------------------------------------
 
-# Anchored at message start (first ~40 chars). Matches opening receipts.
 ACK_HEAD_RE = re.compile(
     r"^\s*(acknowledged|received|confirmed|understood|noted|ack(?:nowledged)?)\b",
     re.IGNORECASE,
 )
 
-# Phrase anywhere in the body. Matches the "holding fail-closed, no change,
-# silence is correct" language that dominates Supervisor/QA acknowledgment
-# theater on the Dev Squad incident corpus.
 ACK_PHRASE_RE = re.compile(
     r"\b("
     r"no status change|no change|"
@@ -33,8 +40,6 @@ ACK_PHRASE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Negative evidence: any one of these disqualifies an otherwise-ack-shaped
-# comment. Presence signals the author added real information.
 _NEG_EVIDENCE_PARTS: tuple[re.Pattern[str], ...] = (
     # fenced or inline code
     re.compile(r"```", re.MULTILINE),
@@ -45,8 +50,7 @@ _NEG_EVIDENCE_PARTS: tuple[re.Pattern[str], ...] = (
     ),
     # URL
     re.compile(r"https?://"),
-    # git SHA shape (anchored at word boundary to avoid false hits on long
-    # uuids that happen to start with hex chars — uuid includes hyphens)
+    # git SHA shape — word-bounded to avoid long UUID false hits
     re.compile(r"\b[a-f0-9]{7,40}\b"),
     # test / build / HTTP signals
     re.compile(
@@ -55,8 +59,6 @@ _NEG_EVIDENCE_PARTS: tuple[re.Pattern[str], ...] = (
     ),
 )
 
-# English routing verbs: even short messages are legitimate when they
-# hand work off to a different role.
 ROUTING_VERB_RE = re.compile(
     r"\b(reassign(?:ing)?|routing|bouncing|sending|handing|forwarding|"
     r"delegating|escalating)\s+(?:to|back|this|it|up|over)\b",
@@ -69,14 +71,11 @@ ACK_MAX_WORDS = 300
 
 # --- Packet-type severity modulation -------------------------------------
 #
-# Taxonomy from prod ``backend/app/schemas/tasks.py`` (ReviewPacketType).
-# Strict types expect evidence on every substantive comment; short acks
-# are noise. Lax types (reviews, copy) legitimately produce short acks;
-# the classifier only flags them when the message is both short AND
-# contains no routing verb.
+# Shares taxonomy with the prod delivery-contract code so a new
+# ``ReviewPacketType`` addition updates both call sites atomically.
 
-STRICT_PACKET_TYPES = frozenset({"frontend_ui", "backend_api", "infra_ops", "mixed"})
-LAX_PACKET_TYPES = frozenset({"review_only", "content_copy", "other"})
+STRICT_PACKET_TYPES = REVIEW_PACKET_TYPES_REQUIRING_VALIDATION_TARGET
+LAX_PACKET_TYPES: frozenset[str] = frozenset(get_args(ReviewPacketType)) - STRICT_PACKET_TYPES
 LAX_MAX_WORDS = 15
 
 # --- Rule B: near-duplicate detection ------------------------------------
@@ -84,38 +83,36 @@ LAX_MAX_WORDS = 15
 NEAR_DUPLICATE_WINDOW_SECONDS = 300
 NEAR_DUPLICATE_JACCARD_THRESHOLD = 0.90
 
-# Stripped patterns used during normalization for jaccard comparison.
 _STRIP_CODE_FENCE_RE = re.compile(r"```[\s\S]*?```")
 _STRIP_INLINE_CODE_RE = re.compile(r"`[^`]+`")
-_STRIP_MENTION_RE = re.compile(r"@\w+")
 _STRIP_URL_RE = re.compile(r"https?://\S+")
 _PUNCT_TO_SPACE_RE = re.compile(r"[^\w\s]")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
-def _has_negative_evidence(message: str) -> bool:
+def has_negative_evidence(message: str) -> bool:
     return any(pattern.search(message) for pattern in _NEG_EVIDENCE_PARTS)
 
 
-def _has_routing_verb(message: str) -> bool:
+def has_routing_verb(message: str) -> bool:
     return ROUTING_VERB_RE.search(message) is not None
 
 
-def _word_count(message: str) -> int:
+def word_count(message: str) -> int:
     return len(message.split())
 
 
-def _normalize_for_jaccard(message: str) -> str:
+def normalize_for_jaccard(message: str) -> str:
     s = _STRIP_CODE_FENCE_RE.sub("", message)
     s = _STRIP_INLINE_CODE_RE.sub("", s)
-    s = _STRIP_MENTION_RE.sub("", s)
+    s = MENTION_PATTERN.sub("", s)
     s = _STRIP_URL_RE.sub("", s)
     s = _PUNCT_TO_SPACE_RE.sub(" ", s).lower()
     s = _WHITESPACE_RE.sub(" ", s).strip()
     return s
 
 
-def _jaccard(a: str, b: str) -> float:
+def jaccard(a: str, b: str) -> float:
     ta, tb = set(a.split()), set(b.split())
     if not ta or not tb:
         return 0.0
