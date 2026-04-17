@@ -193,14 +193,19 @@ async def _apply_board_update(
     board: Board,
 ) -> Board:
     updates = payload.model_dump(exclude_unset=True)
-    # Partition rollout flags into known (allowlist) and unknown buckets.
-    # See schemas/boards.py::partition_rollout_flags for the allowlist and
-    # docs/plans/2026-04-17-mc-delivery-enforcement-plan-phase-1-amendments.md
-    # sections A.3, A.4 for the rationale.
+    # Merge (not replace) rollout flags so one-key patches don't wipe others
+    # and the unknown-capture bucket survives writes that don't touch it.
+    # To disable a specific flag, PATCH it with `false`; there is no endpoint
+    # for clearing all flags because no use case exists yet.
     if "rollout_flags" in updates:
-        known, unknown = partition_rollout_flags(updates.pop("rollout_flags"))
-        updates["rollout_flags"] = known
-        updates["rollout_flags_unknown"] = unknown
+        incoming_known, incoming_unknown = partition_rollout_flags(
+            updates.pop("rollout_flags")
+        )
+        updates["rollout_flags"] = {**(board.rollout_flags or {}), **incoming_known}
+        updates["rollout_flags_unknown"] = {
+            **(board.rollout_flags_unknown or {}),
+            **incoming_unknown,
+        }
     if "gateway_id" in updates:
         await _require_gateway(
             session,

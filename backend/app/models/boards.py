@@ -46,13 +46,17 @@ class Board(TenantScoped, table=True):
     only_lead_can_change_status: bool = Field(default=False)
     show_cancelled_column: bool = Field(default=False)
     max_agents: int = Field(default=1)
+    # server_default is intentionally absent here: the migration applies it
+    # once for the backfill, then clears it, so the post-migration DB state
+    # has no default. The app-layer default_factory handles new rows created
+    # via the ORM.
     rollout_flags: dict[str, bool] = Field(
         default_factory=dict,
-        sa_column=Column(JSON, nullable=False, server_default="{}"),
+        sa_column=Column(JSON, nullable=False),
     )
     rollout_flags_unknown: dict[str, bool] = Field(
         default_factory=dict,
-        sa_column=Column(JSON, nullable=False, server_default="{}"),
+        sa_column=Column(JSON, nullable=False),
     )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

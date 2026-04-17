@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Self
 from uuid import UUID
 
-from pydantic import model_validator
+from pydantic import StrictBool, model_validator
 from sqlmodel import Field, SQLModel
 
 _ERR_GOAL_FIELDS_REQUIRED = "Confirmed goal boards require objective and success_metrics"
@@ -33,15 +33,18 @@ ROLLOUT_FLAG_ALLOWLIST = frozenset(
 def partition_rollout_flags(
     flags: dict[str, bool] | None,
 ) -> tuple[dict[str, bool], dict[str, bool]]:
-    """Split a flag dict into (known, unknown) by the canonical allowlist."""
+    """Split a flag dict into (known, unknown) by the canonical allowlist.
+
+    Type validation (reject non-bool values) is Pydantic's job via
+    ``dict[str, StrictBool]`` on the ingress schemas; this helper assumes
+    clean input.
+    """
 
     if not flags:
         return {}, {}
     known: dict[str, bool] = {}
     unknown: dict[str, bool] = {}
     for key, value in flags.items():
-        if not isinstance(value, bool):
-            continue
         if key in ROLLOUT_FLAG_ALLOWLIST:
             known[key] = value
         else:
@@ -70,7 +73,7 @@ class BoardBase(SQLModel):
     only_lead_can_change_status: bool = False
     show_cancelled_column: bool = False
     max_agents: int = Field(default=1, ge=0)
-    rollout_flags: dict[str, bool] = Field(default_factory=dict)
+    rollout_flags: dict[str, StrictBool] = Field(default_factory=dict)
 
 
 class BoardCreate(BoardBase):
@@ -117,7 +120,7 @@ class BoardUpdate(SQLModel):
     only_lead_can_change_status: bool | None = None
     show_cancelled_column: bool | None = None
     max_agents: int | None = Field(default=None, ge=0)
-    rollout_flags: dict[str, bool] | None = None
+    rollout_flags: dict[str, StrictBool] | None = None
 
     @model_validator(mode="after")
     def validate_gateway_id(self) -> Self:
@@ -140,6 +143,6 @@ class BoardRead(BoardBase):
 
     id: UUID
     organization_id: UUID
-    rollout_flags_unknown: dict[str, bool] = Field(default_factory=dict)
+    rollout_flags_unknown: dict[str, StrictBool] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime

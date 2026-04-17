@@ -7,17 +7,22 @@ which require:
 
 - known keys go into ``rollout_flags``
 - unknown keys go into ``rollout_flags_unknown``
-- non-boolean values are dropped silently (type coercion not implicit)
-- empty / None input produces two empty dicts
+- type validation (reject non-bool values) happens at the Pydantic ingress,
+  not in the partition helper
 
 Integration tests for the API PATCH/POST wiring live alongside the other
-``test_boards_api*.py`` suites; this file covers the pure partition helper.
+``test_boards_api*.py`` suites; this file covers the pure partition helper
+and the ingress-type validation.
 """
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from app.schemas.boards import (
     ROLLOUT_FLAG_ALLOWLIST,
+    BoardUpdate,
     partition_rollout_flags,
 )
 
@@ -75,21 +80,6 @@ def test_partition_mixed_input_splits_correctly() -> None:
     assert unknown == {"future_flag_v99": True, "random_key": False}
 
 
-def test_partition_drops_non_boolean_values() -> None:
-    """Rollout flags are strictly boolean — strings/ints/lists are dropped."""
-
-    flags = {
-        "comment_policy_v1": True,
-        "structured_blockers_v1": "true",  # str, not bool -> dropped
-        "operator_decisions_v1": 1,  # int, not bool -> dropped
-        "deploy_truth_v1": None,  # None, not bool -> dropped
-        "unknown_but_bool": True,
-    }
-    known, unknown = partition_rollout_flags(flags)
-    assert known == {"comment_policy_v1": True}
-    assert unknown == {"unknown_but_bool": True}
-
-
 def test_partition_preserves_false_values() -> None:
     """False is a legal flag state and must survive partitioning."""
 
@@ -97,3 +87,35 @@ def test_partition_preserves_false_values() -> None:
     known, unknown = partition_rollout_flags(flags)
     assert known == {"comment_policy_v1": False}
     assert unknown == {"future_flag_v9": False}
+
+
+def test_board_update_rejects_coerced_string_bools() -> None:
+    """StrictBool on the ingress schema rejects lax coercion.
+
+    Without ``StrictBool``, Pydantic lax mode coerces ``"true"`` -> True
+    and ``"off"`` -> False, so operator typos silently flip flags. The
+    amendment requires strict bool; this test pins that.
+    """
+
+    for bad_value in ("true", "false", "off", "yes", 1, 0):
+        with pytest.raises(ValidationError):
+            BoardUpdate(rollout_flags={"comment_policy_v1": bad_value})
+
+
+def test_board_update_accepts_strict_bools() -> None:
+    """Actual bool values pass through BoardUpdate unchanged."""
+
+    update = BoardUpdate(
+        rollout_flags={"comment_policy_v1": True, "heartbeat_watchdog_v1": False}
+    )
+    assert update.rollout_flags == {
+        "comment_policy_v1": True,
+        "heartbeat_watchdog_v1": False,
+    }
+
+
+def test_board_update_rejects_none_inside_flag_dict() -> None:
+    """``None`` is not a bool and must not sneak through as a flag value."""
+
+    with pytest.raises(ValidationError):
+        BoardUpdate(rollout_flags={"comment_policy_v1": None})
