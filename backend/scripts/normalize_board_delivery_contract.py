@@ -60,6 +60,10 @@ def summarize_patch(patch: NormalizationTaskPatch) -> str:
     return f"{label}: {fields}"
 
 
+def render_dry_run_lines(manifest: BoardDeliveryContractManifest) -> list[str]:
+    return [f"DRY RUN {summarize_patch(patch)}" for patch in manifest.tasks]
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Normalize task delivery-contract metadata from a manifest.",
@@ -107,9 +111,13 @@ async def _apply_manifest(
     dry_run: bool,
     actor_user_id: UUID | None,
 ) -> int:
+    if dry_run:
+        for line in render_dry_run_lines(manifest):
+            print(line)
+        return 0
+
     actor_user: User | None = None
-    if not dry_run:
-        actor_user = await _resolve_actor_user(user_id=actor_user_id or manifest.actor_user_id)
+    actor_user = await _resolve_actor_user(user_id=actor_user_id or manifest.actor_user_id)
     async with async_session_maker() as session:
         for patch in manifest.tasks:
             task = await session.get(Task, patch.task_id)
@@ -123,10 +131,6 @@ async def _apply_manifest(
                 raise SystemExit(
                     f"Task {patch.task_id} title mismatch: expected {patch.title!r}, found {task.title!r}"
                 )
-            if dry_run:
-                print(f"DRY RUN {summarize_patch(patch)}")
-                continue
-
             update_model = patch.update
             updates = update_model.model_dump(exclude_unset=True)
             comment = update_model.comment if "comment" in update_model.model_fields_set else None

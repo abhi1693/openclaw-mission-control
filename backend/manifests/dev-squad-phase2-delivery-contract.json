@@ -1,0 +1,121 @@
+{
+  "board_id": "05002170-201b-4c66-bae1-26c0c833f206",
+  "tasks": [
+    {
+      "task_id": "5f847e51-76d4-4364-bafd-cdf345367ad7",
+      "title": "Phase 2 / Track B — Security & Data section rewrite",
+      "update": {
+        "status": "inbox",
+        "assigned_agent_id": null,
+        "review_packet_type": "frontend_ui",
+        "validation_target": "http://192.168.2.60:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "review",
+        "operator_decision_required": true,
+        "operator_decision_summary": "Awaiting OP-1 security compliance posture before any RFP-facing security card copy can proceed.",
+        "comment": "Normalize Track B as operator-gated work. Remove it from active implementation until OP-1 lands, but preserve the expected frontend review target."
+      }
+    },
+    {
+      "task_id": "5b261dfc-4819-4d6e-84aa-bf5dafee2489",
+      "title": "Phase 2 / Track E — Commercial foundation (SEO + legal + performance + analytics)",
+      "update": {
+        "review_packet_type": "mixed",
+        "validation_target": "http://192.168.2.64:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "all",
+        "comment": "Attach the authoritative MC .64 delivery contract for Track E so rework/review stops negotiating the runtime target in comments."
+      }
+    },
+    {
+      "task_id": "ab43d7a5-2bea-41bf-87e5-1b1978f86ef9",
+      "title": "Phase 2 / Track D.3 — Wire API inventory into DocsPage",
+      "update": {
+        "review_packet_type": "frontend_ui",
+        "validation_target": "http://192.168.2.64:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "review",
+        "comment": "Attach the authoritative MC .64 docs target so D.3 rework/review evaluates one declared runtime surface."
+      }
+    },
+    {
+      "task_id": "91d4d2ba-ace0-41de-afcf-de8816bcd7db",
+      "title": "Phase 2 / Track D.1 — Docs sidebar content (no PB dependency)",
+      "update": {
+        "review_packet_type": "content_copy",
+        "comment": "Declare D.1 as a content-copy review lane so review truth is explicit even without a runtime validation target."
+      }
+    },
+    {
+      "task_id": "7aaba6ba-0c85-45c8-bbd1-b8642415071c",
+      "title": "Phase 2 / Screenshot freshness gate",
+      "update": {
+        "review_packet_type": "review_only",
+        "validation_target": "http://192.168.2.63:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "runtime",
+        "comment": "Declare the screenshot freshness gate as a live-runtime review lane against the current TaskFlow dashboard."
+      }
+    },
+    {
+      "task_id": "ce89e90f-f160-47eb-a364-374fbcc26785",
+      "title": "Phase 2 / Track C — Product page feature deep-dives",
+      "update": {
+        "review_packet_type": "frontend_ui",
+        "validation_target": "http://192.168.2.60:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "all",
+        "comment": "Attach the live TaskFlow marketing-site target before Track C leaves inbox so screenshot/proof disputes do not restart."
+      }
+    },
+    {
+      "task_id": "d113f478-8787-4ae9-bb5e-cf5d0059d8b3",
+      "title": "Phase 2 / Track A.Review — Architect locale-JSON quality review",
+      "update": {
+        "review_packet_type": "review_only",
+        "comment": "Declare A.Review as a review-only packet so locale quality review has explicit evidence shape when it activates."
+      }
+    },
+    {
+      "task_id": "1c43a381-9de5-43b7-8dc9-c237bc378848",
+      "title": "Phase 2 / Track A.3 — Docs page i18n",
+      "update": {
+        "review_packet_type": "frontend_ui",
+        "validation_target": "http://192.168.2.60:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "all",
+        "comment": "Pre-bind the TaskFlow live target for Docs i18n before A.3 activates."
+      }
+    },
+    {
+      "task_id": "c74b65aa-43e0-45fb-9f68-82dfa62b1640",
+      "title": "Phase 2 / Track A.2 — Product page i18n",
+      "update": {
+        "review_packet_type": "frontend_ui",
+        "validation_target": "http://192.168.2.60:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "all",
+        "comment": "Pre-bind the TaskFlow live target for Product i18n before A.2 activates."
+      }
+    },
+    {
+      "task_id": "898973db-9879-480a-9a72-53922837241b",
+      "title": "Phase 2 / Track A.1 — Landing page i18n",
+      "update": {
+        "review_packet_type": "frontend_ui",
+        "validation_target": "http://192.168.2.60:3000",
+        "validation_target_kind": "live_url",
+        "validation_target_scope": "all",
+        "comment": "Attach the authoritative .60 live target for Landing i18n so the current deployment-drift blocker is encoded on the task."
+      }
+    },
+    {
+      "task_id": "5b7abdd2-4549-4459-b338-6f30052c0b9c",
+      "title": "Phase 2 / QA gate — full acceptance criteria",
+      "update": {
+        "review_packet_type": "review_only",
+        "comment": "Declare the Phase 2 QA gate as a review-only packet so final acceptance uses an explicit non-implementation evidence contract."
+      }
+    }
+  ]
+}

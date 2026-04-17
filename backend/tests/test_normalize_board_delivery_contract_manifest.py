@@ -9,6 +9,7 @@ from app.schemas.tasks import TaskUpdate
 from scripts.normalize_board_delivery_contract import (
     BoardDeliveryContractManifest,
     NormalizationTaskPatch,
+    render_dry_run_lines,
     summarize_patch,
 )
 
@@ -48,3 +49,37 @@ def test_manifest_requires_tasks() -> None:
             board_id=uuid4(),
             tasks=[],
         )
+
+
+def test_render_dry_run_lines_emits_all_patch_summaries() -> None:
+    manifest = BoardDeliveryContractManifest(
+        board_id=uuid4(),
+        tasks=[
+            NormalizationTaskPatch(
+                task_id=uuid4(),
+                title="Track B",
+                update=TaskUpdate(
+                    status="inbox",
+                    operator_decision_required=True,
+                    operator_decision_summary="Awaiting operator input.",
+                ),
+            ),
+            NormalizationTaskPatch(
+                task_id=uuid4(),
+                title="Track E",
+                update=TaskUpdate(
+                    review_packet_type="mixed",
+                    validation_target="http://192.168.2.64:3000",
+                    validation_target_kind="live_url",
+                    validation_target_scope="all",
+                ),
+            ),
+        ],
+    )
+
+    lines = render_dry_run_lines(manifest)
+
+    assert lines == [
+        "DRY RUN Track B: operator_decision_required, operator_decision_summary, status",
+        "DRY RUN Track E: review_packet_type, validation_target, validation_target_kind, validation_target_scope",
+    ]
