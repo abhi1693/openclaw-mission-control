@@ -8,8 +8,21 @@ the comment and its observability signals commit atomically.
 See ``docs/plans/2026-04-17-mc-delivery-enforcement-plan-phase-1-amendments.md``
 sections A.2 and A.4.
 
-Retention of the events themselves is 90 days per amendment §A.4; a
-separate purge job (not in this module) enforces it.
+Retention of the events themselves is controlled by
+``settings.shadow_metric_retention_days`` (default 90) per amendment
+§A.4. The purge job itself is **not yet implemented** — operators
+should treat the table as append-only until a nightly job is wired
+(expected in a follow-up commit). Until then the created_at index
+keeps a manual ``DELETE FROM shadow_metric_events WHERE created_at <
+now() - interval 'N days'`` cheap.
+
+Concurrency note: the near-duplicate classifier reads the prior
+comment with no locking. Two same-agent comments posted within
+microseconds both see the same "prior", so a near-duplicate between
+them is unflagged. This is an intentional simplification —
+observational metrics don't need strict serialization, and adding
+``SELECT FOR UPDATE`` would serialize every comment write on the
+task row.
 """
 
 from __future__ import annotations

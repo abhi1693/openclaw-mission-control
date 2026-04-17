@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     # Database lifecycle
     db_auto_migrate: bool = False
 
+    # Shadow-metric retention window in days. Amendment §A.4 mandates
+    # a daily purge of rows older than this cutoff. Default 90.
+    # Purge job itself is TODO — see services/shadow_metrics.py.
+    shadow_metric_retention_days: int = 90
+
     # RQ queueing / dispatch
     rq_redis_url: str = "redis://localhost:6379/0"
     rq_queue_name: str = "default"

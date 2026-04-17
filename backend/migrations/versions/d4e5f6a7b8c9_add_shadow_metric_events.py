@@ -43,19 +43,19 @@ def upgrade() -> None:
         sa.Column(
             "task_id",
             sa.Uuid(),
-            sa.ForeignKey("tasks.id", ondelete="SET NULL"),
+            sa.ForeignKey("tasks.id", ondelete="CASCADE"),
             nullable=True,
         ),
         sa.Column(
             "agent_id",
             sa.Uuid(),
-            sa.ForeignKey("agents.id", ondelete="SET NULL"),
+            sa.ForeignKey("agents.id", ondelete="CASCADE"),
             nullable=True,
         ),
         sa.Column(
             "board_id",
             sa.Uuid(),
-            sa.ForeignKey("boards.id", ondelete="SET NULL"),
+            sa.ForeignKey("boards.id", ondelete="CASCADE"),
             nullable=True,
         ),
         sa.Column("source_event_id", sa.Uuid(), nullable=True),

@@ -39,17 +39,21 @@ class ShadowMetricEvent(QueryModel, table=True):
     # "task.actionability_violation_candidate". See app.services.shadow_metrics
     # for the canonical constants.
     event_type: str = Field(index=True)
+    # ON DELETE CASCADE so shadow rows track their subject: when the
+    # task/agent/board is deleted, the observability history for it is
+    # no longer meaningful (source_event_id would dangle anyway since
+    # task deletion removes the underlying activity_events rows).
     task_id: UUID | None = Field(
         default=None,
-        sa_column=Column(Uuid(), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True),
+        sa_column=Column(Uuid(), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True),
     )
     agent_id: UUID | None = Field(
         default=None,
-        sa_column=Column(Uuid(), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True),
+        sa_column=Column(Uuid(), ForeignKey("agents.id", ondelete="CASCADE"), nullable=True),
     )
     board_id: UUID | None = Field(
         default=None,
-        sa_column=Column(Uuid(), ForeignKey("boards.id", ondelete="SET NULL"), nullable=True),
+        sa_column=Column(Uuid(), ForeignKey("boards.id", ondelete="CASCADE"), nullable=True),
     )
     # Optional pointer to the activity event that triggered this metric.
     # Not a FK — activity rows may be pruned independently.

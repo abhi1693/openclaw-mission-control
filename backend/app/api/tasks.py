@@ -68,8 +68,11 @@ from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
 from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 from app.services.openclaw.provisioning_db import AgentLifecycleService
+from app.core.logging import get_logger
 from app.services.organizations import require_board_access
 from app.services.shadow_metrics import build_shadow_events_for_comment
+
+logger = get_logger(__name__)
 from app.services.tags import (
     TagState,
     load_tag_state,
@@ -3002,17 +3005,25 @@ async def create_task_comment(
     )
     # Build shadow-metric events BEFORE adding the comment to the session
     # so the prior-comment lookup doesn't see the uncommitted row. These
-    # commit atomically with the comment; classifier failures degrade to
-    # an empty list (see services/shadow_metrics.py).
-    shadow_events = await build_shadow_events_for_comment(
-        session,
-        task_id=task.id,
-        board_id=task.board_id,
-        agent_id=_comment_actor_id(actor),
-        source_event_id=event.id,
-        message=payload.message,
-        packet_type=task.review_packet_type,
-    )
+    # commit atomically with the comment. Outer try/except isolates the
+    # observability path from the comment write: a dead shadow query
+    # must NOT kill a user-facing POST.
+    try:
+        shadow_events = await build_shadow_events_for_comment(
+            session,
+            task_id=task.id,
+            board_id=task.board_id,
+            agent_id=_comment_actor_id(actor),
+            source_event_id=event.id,
+            message=payload.message,
+            packet_type=task.review_packet_type,
+        )
+    except Exception:
+        logger.exception(
+            "shadow_metrics.hook_failed task_id=%s — comment write proceeds",
+            task.id,
+        )
+        shadow_events = []
     session.add(event)
     for shadow in shadow_events:
         session.add(shadow)
