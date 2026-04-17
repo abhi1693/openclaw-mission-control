@@ -43,6 +43,10 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import init_db
 from app.schemas.health import HealthStatusResponse
 from app.services.openclaw.heartbeat_sweep import heartbeat_sweep_loop, stop_heartbeat_sweep
+from app.services.openclaw.heartbeat_watchdog import (
+    heartbeat_watchdog_loop,
+    stop_heartbeat_watchdog,
+)
 from app.services.openclaw.provisioning import reconcile_agent_heartbeat_enabled_flags
 
 if TYPE_CHECKING:
@@ -458,10 +462,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     )
     sweep_stop_event = asyncio.Event()
     sweep_task = asyncio.create_task(heartbeat_sweep_loop(sweep_stop_event), name="heartbeat-sweep-loop")
+    watchdog_stop_event = asyncio.Event()
+    watchdog_task = asyncio.create_task(
+        heartbeat_watchdog_loop(watchdog_stop_event), name="heartbeat-watchdog-loop"
+    )
     logger.info("app.lifecycle.started")
     try:
         yield
     finally:
+        await stop_heartbeat_watchdog(watchdog_task, watchdog_stop_event)
         await stop_heartbeat_sweep(sweep_task, sweep_stop_event)
         logger.info("app.lifecycle.stopped")
 
