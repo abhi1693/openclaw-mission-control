@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from sqlalchemy import Column, ForeignKey, Uuid
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -29,7 +30,13 @@ class AgentHeartbeatRepairEvent(QueryModel, table=True):
     __tablename__ = "agent_heartbeat_repair_events"  # pyright: ignore[reportAssignmentType]
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    agent_id: UUID = Field(foreign_key="agents.id", index=True)
+    agent_id: UUID = Field(
+        sa_column=Column(
+            Uuid(),
+            ForeignKey("agents.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+    )
     prev_deadline: datetime | None = None
     last_seen_at: datetime | None = None
     wake_attempts: int = Field(default=0)

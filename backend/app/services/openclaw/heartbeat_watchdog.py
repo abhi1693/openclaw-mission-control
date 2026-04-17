@@ -33,6 +33,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, func
+from sqlalchemy import update as sa_update
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -45,7 +46,9 @@ from app.models.agents import Agent
 from app.services.openclaw.constants import (
     CHECKIN_DEADLINE_AFTER_WAKE,
     HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
+    OFFLINE_AFTER,
 )
+from app.services.openclaw.provisioning import _is_disabled_heartbeat_every
 
 logger = get_logger(__name__)
 
@@ -58,6 +61,37 @@ class RepairReason(StrEnum):
     """Categorized cause of a watchdog repair. Stored in the forensic log."""
 
     NULL_DEADLINE_ON_ONLINE = "null_deadline_on_online"
+
+
+def _is_heartbeat_enabled(agent: Agent) -> bool:
+    """True when the agent's config asks for periodic heartbeats.
+
+    Disabled spellings ("0m", "off", "none", "disabled", "<= 0 numeric")
+    are recognised via the canonical helper; the watchdog must not fabricate
+    deadlines for agents that were configured to have none.
+    """
+
+    cfg = agent.heartbeat_config
+    if not isinstance(cfg, dict):
+        return True  # no config == default heartbeat is enabled
+    return not _is_disabled_heartbeat_every(cfg.get("every"))
+
+
+def _null_deadline_is_suspicious(agent: Agent, *, now: datetime) -> bool:
+    """True when the null deadline has persisted past a healthy checkin window.
+
+    Legitimate lifecycle writes (``wake=False`` template syncs,
+    ``lifecycle_orchestrator.py:293``) briefly leave ``checkin_deadline_at``
+    null until the agent's next natural heartbeat reinstates it. Waiting
+    for ``OFFLINE_AFTER`` since the last seen-time (or since the last update
+    if never seen) distinguishes that legitimate transient from a persistent
+    writer-bug drop.
+    """
+
+    reference = agent.last_seen_at if agent.last_seen_at is not None else agent.updated_at
+    if reference is None:
+        return False
+    return (now - reference) >= OFFLINE_AFTER
 
 
 @dataclass(frozen=True)
@@ -137,16 +171,17 @@ async def _count_recent_repairs_by_agent(
 async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
     """Run one watchdog pass against the given session.
 
-    All repaired agents are batched into a single ``session.commit()`` at
-    the end, and the 1h-window repeat count is fetched once up-front via
-    a GROUP BY query rather than per-agent round trips. Under a stuck-
-    writer storm this keeps sweep cost at 2 round trips regardless of how
-    many agents are being repaired.
+    Skips agents whose heartbeat is disabled and agents whose null state
+    has not yet persisted past ``OFFLINE_AFTER`` (both are legitimate
+    transient/resting states, not bugs). Uses a conditional UPDATE so a
+    concurrent heartbeat commit races cleanly: only rows still null when
+    the UPDATE fires get a new deadline. Logs and alerts fire AFTER the
+    commit so downstream consumers never see repairs that didn't persist.
     """
 
     now = utcnow()
     alert_since = now - REPEAT_REPAIR_ALERT_WINDOW
-    candidates = (
+    raw_candidates = (
         await session.exec(
             select(Agent).where(
                 and_(
@@ -156,11 +191,19 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             )
         )
     ).all()
+
+    candidates = [
+        agent
+        for agent in raw_candidates
+        if _is_heartbeat_enabled(agent)
+        and _null_deadline_is_suspicious(agent, now=now)
+    ]
     report = SweepReport(total_scanned=len(candidates))
     if not candidates:
         return report
 
     prior_counts = await _count_recent_repairs_by_agent(session, since=alert_since)
+    pending_logs: list[tuple[RepairOutcome, bool]] = []
     new_this_sweep: dict[UUID, int] = {}
 
     for agent in candidates:
@@ -183,6 +226,32 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             )
             continue
 
+        # Compare-and-swap: only repair if the deadline is still null. A
+        # concurrent heartbeat/lifecycle write that beat us here wins;
+        # rowcount==0 means "someone else handled it, skip".
+        result = await session.exec(
+            sa_update(Agent)
+            .where(
+                and_(
+                    col(Agent.id) == agent.id,
+                    col(Agent.checkin_deadline_at).is_(None),
+                )
+            )
+            .values(checkin_deadline_at=new_deadline)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            report.outcomes.append(
+                RepairOutcome(
+                    agent_id=str(agent.id),
+                    agent_name=agent.name,
+                    action="skipped",
+                    prev_deadline=None,
+                    new_deadline=None,
+                    reason="concurrent-write-won",
+                )
+            )
+            continue
+
         elapsed = (
             (now - agent.last_seen_at).total_seconds()
             if agent.last_seen_at is not None
@@ -198,51 +267,50 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             new_deadline=new_deadline,
         )
         session.add(event)
-        agent.checkin_deadline_at = new_deadline
-        session.add(agent)
 
         new_this_sweep[agent.id] = new_this_sweep.get(agent.id, 0) + 1
-        repeat_count = (
-            prior_counts.get(agent.id, 0) + new_this_sweep[agent.id]
-        )
+        repeat_count = prior_counts.get(agent.id, 0) + new_this_sweep[agent.id]
         alert_triggered = repeat_count >= REPEAT_REPAIR_ALERT_THRESHOLD
         if alert_triggered:
             report.alerts += 1
-            logger.warning(
-                "heartbeat_watchdog.repeat_repair_alert "
-                "agent_id=%s agent_name=%s repair_count_1h=%d window_seconds=%d "
-                "threshold=%d",
-                agent.id,
-                agent.name,
-                repeat_count,
-                int(REPEAT_REPAIR_ALERT_WINDOW.total_seconds()),
-                REPEAT_REPAIR_ALERT_THRESHOLD,
-            )
-        else:
-            logger.info(
-                "heartbeat_watchdog.repaired "
-                "agent_id=%s agent_name=%s new_deadline=%s repair_count_1h=%d",
-                agent.id,
-                agent.name,
-                new_deadline.isoformat(),
-                repeat_count,
-            )
-
         report.repaired += 1
-        report.outcomes.append(
-            RepairOutcome(
-                agent_id=str(agent.id),
-                agent_name=agent.name,
-                action="repaired",
-                prev_deadline=None,
-                new_deadline=new_deadline.isoformat(),
-                repeat_count_1h=repeat_count,
-                alert_triggered=alert_triggered,
-            )
+        outcome = RepairOutcome(
+            agent_id=str(agent.id),
+            agent_name=agent.name,
+            action="repaired",
+            prev_deadline=None,
+            new_deadline=new_deadline.isoformat(),
+            repeat_count_1h=repeat_count,
+            alert_triggered=alert_triggered,
         )
+        report.outcomes.append(outcome)
+        pending_logs.append((outcome, alert_triggered))
 
     if report.repaired:
         await session.commit()
+        # Log only after durable commit so alert consumers never see
+        # repairs that rolled back.
+        for outcome, alert_triggered in pending_logs:
+            if alert_triggered:
+                logger.warning(
+                    "heartbeat_watchdog.repeat_repair_alert "
+                    "agent_id=%s agent_name=%s repair_count_1h=%d window_seconds=%d "
+                    "threshold=%d",
+                    outcome.agent_id,
+                    outcome.agent_name,
+                    outcome.repeat_count_1h,
+                    int(REPEAT_REPAIR_ALERT_WINDOW.total_seconds()),
+                    REPEAT_REPAIR_ALERT_THRESHOLD,
+                )
+            else:
+                logger.info(
+                    "heartbeat_watchdog.repaired "
+                    "agent_id=%s agent_name=%s new_deadline=%s repair_count_1h=%d",
+                    outcome.agent_id,
+                    outcome.agent_name,
+                    outcome.new_deadline,
+                    outcome.repeat_count_1h,
+                )
 
     logger.info(
         "heartbeat_watchdog.sweep_complete scanned=%d repaired=%d failed=%d alerts=%d",

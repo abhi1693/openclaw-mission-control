@@ -33,7 +33,7 @@ def upgrade() -> None:
         sa.Column(
             "agent_id",
             sa.Uuid(),
-            sa.ForeignKey("agents.id"),
+            sa.ForeignKey("agents.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column("prev_deadline", sa.DateTime(), nullable=True),
@@ -44,13 +44,13 @@ def upgrade() -> None:
         sa.Column("new_deadline", sa.DateTime(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
-    # Composite covers the watchdog's (agent_id, created_at >= since) query
-    # and also serves standalone agent_id lookups. No separate created_at
-    # index: reason-wide scans are rare and can seq-scan until needed.
+    # (created_at, agent_id) serves the windowed GROUP BY agent_id query
+    # which filters ``created_at >= since`` first, then aggregates. Leading
+    # with created_at lets the planner do a range scan, then HashAggregate.
     op.create_index(
-        op.f("ix_agent_heartbeat_repair_events_agent_id_created_at"),
+        op.f("ix_agent_heartbeat_repair_events_created_at_agent_id"),
         "agent_heartbeat_repair_events",
-        ["agent_id", "created_at"],
+        ["created_at", "agent_id"],
         unique=False,
     )
     op.create_index(
@@ -67,7 +67,7 @@ def downgrade() -> None:
         table_name="agent_heartbeat_repair_events",
     )
     op.drop_index(
-        op.f("ix_agent_heartbeat_repair_events_agent_id_created_at"),
+        op.f("ix_agent_heartbeat_repair_events_created_at_agent_id"),
         table_name="agent_heartbeat_repair_events",
     )
     op.drop_table("agent_heartbeat_repair_events")
