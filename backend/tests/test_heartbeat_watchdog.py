@@ -29,42 +29,11 @@ from app.services.openclaw.constants import (
     HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
 )
 from app.services.openclaw.heartbeat_watchdog import (
-    REPAIR_REASON_NULL_DEADLINE,
     REPEAT_REPAIR_ALERT_THRESHOLD,
-    _parse_heartbeat_interval,
+    RepairReason,
     compute_repair_deadline,
     sweep_null_deadlines_once,
 )
-
-
-# --- pure function tests --------------------------------------------------
-
-
-def test_parse_interval_minutes() -> None:
-    assert _parse_heartbeat_interval("10m") == timedelta(minutes=10)
-
-
-def test_parse_interval_seconds() -> None:
-    assert _parse_heartbeat_interval("45s") == timedelta(seconds=45)
-
-
-def test_parse_interval_hours() -> None:
-    assert _parse_heartbeat_interval("2h") == timedelta(hours=2)
-
-
-def test_parse_interval_disabled_returns_zero() -> None:
-    assert _parse_heartbeat_interval("0m") == timedelta(0)
-
-
-def test_parse_interval_empty_uses_default_10m() -> None:
-    # DEFAULT_HEARTBEAT_CONFIG says "every: 10m"
-    assert _parse_heartbeat_interval(None) == timedelta(minutes=10)
-    assert _parse_heartbeat_interval("") == timedelta(minutes=10)
-
-
-def test_parse_interval_malformed_uses_default_10m() -> None:
-    assert _parse_heartbeat_interval("bogus") == timedelta(minutes=10)
-    assert _parse_heartbeat_interval("5x") == timedelta(minutes=10)
 
 
 def test_compute_deadline_uses_config_plus_grace() -> None:
@@ -91,9 +60,10 @@ def test_compute_deadline_falls_back_when_config_empty() -> None:
 
 
 def test_compute_deadline_falls_back_when_heartbeat_disabled() -> None:
-    # A config of "every: 0m" means no heartbeat; watchdog must still set
-    # some deadline rather than returning now. Fall through to
-    # CHECKIN_DEADLINE_AFTER_WAKE.
+    """``parse_every_to_seconds`` rejects ``"0m"``; the watchdog must still
+    set a concrete deadline rather than leaving the agent null. Fall
+    through to ``CHECKIN_DEADLINE_AFTER_WAKE``."""
+
     now = datetime(2026, 4, 17, 12, 0, 0)
     agent = Agent(
         id=uuid4(),
@@ -104,7 +74,17 @@ def test_compute_deadline_falls_back_when_heartbeat_disabled() -> None:
     assert compute_repair_deadline(agent, now=now) == now + CHECKIN_DEADLINE_AFTER_WAKE
 
 
-# --- fake-session sweep integration tests ---------------------------------
+def test_compute_deadline_falls_back_when_config_malformed() -> None:
+    """Malformed ``every`` values must not raise out of the watchdog."""
+
+    now = datetime(2026, 4, 17, 12, 0, 0)
+    agent = Agent(
+        id=uuid4(),
+        name="DevOps",
+        status="online",
+        heartbeat_config={"every": "bogus"},
+    )
+    assert compute_repair_deadline(agent, now=now) == now + CHECKIN_DEADLINE_AFTER_WAKE
 
 
 @dataclass
@@ -126,24 +106,19 @@ class _FakeExecResult:
 class _FakeSweepSession:
     """Minimal AsyncSession stand-in sufficient for the watchdog sweep.
 
-    Captures inserted rows so tests can assert the forensic event shape
-    without standing up a real DB. ``_count_recent_repairs`` is patched
-    on the module to read from ``repair_events`` directly.
+    ``_count_recent_repairs_by_agent`` is monkeypatched on the module to
+    read from ``repair_events`` directly, so the sweep's SELECT+GROUP BY
+    never hits real SQL.
     """
 
     agents: list[Agent]
     commits: int = 0
-    added: list[Any] = field(default_factory=list)
     repair_events: list[AgentHeartbeatRepairEvent] = field(default_factory=list)
 
     async def exec(self, _statement: Any) -> _FakeExecResult:
-        # The watchdog issues one select-agents statement per sweep. The
-        # count query is patched on the module; this method only has to
-        # serve the agent fetch.
         return _FakeExecResult(rows=list(self.agents))
 
     def add(self, value: Any) -> None:
-        self.added.append(value)
         if isinstance(value, AgentHeartbeatRepairEvent):
             self.repair_events.append(value)
 
@@ -151,17 +126,16 @@ class _FakeSweepSession:
         self.commits += 1
 
 
-async def _fake_count(
+async def _fake_count_by_agent(
     session: _FakeSweepSession,
     *,
-    agent_id: UUID,
     since: datetime,
-) -> int:
-    return sum(
-        1
-        for event in session.repair_events
-        if event.agent_id == agent_id and event.created_at >= since
-    )
+) -> dict[UUID, int]:
+    counts: dict[UUID, int] = {}
+    for event in session.repair_events:
+        if event.created_at >= since:
+            counts[event.agent_id] = counts.get(event.agent_id, 0) + 1
+    return counts
 
 
 @pytest.mark.asyncio
@@ -182,8 +156,8 @@ async def test_sweep_repairs_online_null_deadline(
     )
     session = _FakeSweepSession(agents=[agent])
     monkeypatch.setattr(
-        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs",
-        _fake_count,
+        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs_by_agent",
+        _fake_count_by_agent,
     )
     report = await sweep_null_deadlines_once(session)  # type: ignore[arg-type]
 
@@ -197,7 +171,7 @@ async def test_sweep_repairs_online_null_deadline(
     assert event.agent_id == agent.id
     assert event.prev_deadline is None
     assert event.wake_attempts == 2
-    assert event.repair_reason == REPAIR_REASON_NULL_DEADLINE
+    assert event.repair_reason == RepairReason.NULL_DEADLINE_ON_ONLINE
     expected_new = now + timedelta(minutes=5) + HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
     assert abs((event.new_deadline - expected_new).total_seconds()) < 2
     assert agent.checkin_deadline_at == event.new_deadline
@@ -219,8 +193,8 @@ async def test_sweep_ignores_non_online_agent(
     # an empty list (fake exec ignores the statement's WHERE clauses).
     session = _FakeSweepSession(agents=[])
     monkeypatch.setattr(
-        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs",
-        _fake_count,
+        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs_by_agent",
+        _fake_count_by_agent,
     )
     report = await sweep_null_deadlines_once(session)  # type: ignore[arg-type]
     assert report.total_scanned == 0
@@ -246,14 +220,14 @@ async def test_sweep_triggers_alert_at_repeat_threshold(
     prior_events = [
         AgentHeartbeatRepairEvent(
             agent_id=agent.id,
-            repair_reason=REPAIR_REASON_NULL_DEADLINE,
+            repair_reason=RepairReason.NULL_DEADLINE_ON_ONLINE,
             new_deadline=now - timedelta(minutes=40),
             wake_attempts=0,
             created_at=now - timedelta(minutes=40),
         ),
         AgentHeartbeatRepairEvent(
             agent_id=agent.id,
-            repair_reason=REPAIR_REASON_NULL_DEADLINE,
+            repair_reason=RepairReason.NULL_DEADLINE_ON_ONLINE,
             new_deadline=now - timedelta(minutes=15),
             wake_attempts=0,
             created_at=now - timedelta(minutes=15),
@@ -261,8 +235,8 @@ async def test_sweep_triggers_alert_at_repeat_threshold(
     ]
     session = _FakeSweepSession(agents=[agent], repair_events=list(prior_events))
     monkeypatch.setattr(
-        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs",
-        _fake_count,
+        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs_by_agent",
+        _fake_count_by_agent,
     )
     report = await sweep_null_deadlines_once(session)  # type: ignore[arg-type]
 
@@ -287,8 +261,8 @@ async def test_sweep_does_not_alert_on_first_repair(
     )
     session = _FakeSweepSession(agents=[agent])
     monkeypatch.setattr(
-        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs",
-        _fake_count,
+        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs_by_agent",
+        _fake_count_by_agent,
     )
     report = await sweep_null_deadlines_once(session)  # type: ignore[arg-type]
 

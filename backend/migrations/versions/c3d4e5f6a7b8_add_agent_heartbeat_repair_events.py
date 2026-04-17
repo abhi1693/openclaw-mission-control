@@ -4,14 +4,14 @@ Revision ID: c3d4e5f6a7b8
 Revises: b2c3d4e5f6a7
 Create Date: 2026-04-17 14:30:00.000000
 
-Append-only forensic log for the I7 heartbeat watchdog. Each row records
-the state of an agent at the moment the watchdog repaired a null
-``checkin_deadline_at`` while the agent was ``status='online'``. This
-preserves diagnostic evidence that would otherwise be erased by the
-repair itself.
-
-See docs/plans/2026-04-17-mc-delivery-enforcement-plan-phase-1-amendments.md
+Append-only forensic log for the I7 heartbeat watchdog. See
+docs/plans/2026-04-17-mc-delivery-enforcement-plan-phase-1-amendments.md
 section A.1 (failure mode F1).
+
+Retention: not enforced by this migration. The shared plan allocates a
+90-day retention policy for shadow_metric_events (§A.4); the operator
+runbook should apply the same cutoff here via a nightly purge job once
+the shadow_metric_events retention job lands.
 """
 
 from __future__ import annotations
@@ -44,10 +44,13 @@ def upgrade() -> None:
         sa.Column("new_deadline", sa.DateTime(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
+    # Composite covers the watchdog's (agent_id, created_at >= since) query
+    # and also serves standalone agent_id lookups. No separate created_at
+    # index: reason-wide scans are rare and can seq-scan until needed.
     op.create_index(
-        op.f("ix_agent_heartbeat_repair_events_agent_id"),
+        op.f("ix_agent_heartbeat_repair_events_agent_id_created_at"),
         "agent_heartbeat_repair_events",
-        ["agent_id"],
+        ["agent_id", "created_at"],
         unique=False,
     )
     op.create_index(
@@ -56,25 +59,15 @@ def upgrade() -> None:
         ["repair_reason"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_agent_heartbeat_repair_events_created_at"),
-        "agent_heartbeat_repair_events",
-        ["created_at"],
-        unique=False,
-    )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        op.f("ix_agent_heartbeat_repair_events_created_at"),
-        table_name="agent_heartbeat_repair_events",
-    )
     op.drop_index(
         op.f("ix_agent_heartbeat_repair_events_repair_reason"),
         table_name="agent_heartbeat_repair_events",
     )
     op.drop_index(
-        op.f("ix_agent_heartbeat_repair_events_agent_id"),
+        op.f("ix_agent_heartbeat_repair_events_agent_id_created_at"),
         table_name="agent_heartbeat_repair_events",
     )
     op.drop_table("agent_heartbeat_repair_events")

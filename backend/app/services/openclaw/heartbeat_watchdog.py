@@ -28,12 +28,15 @@ import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import and_, func
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.durations import parse_every_to_seconds
 from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.session import async_session_maker
@@ -41,7 +44,6 @@ from app.models.agent_heartbeat_repair_events import AgentHeartbeatRepairEvent
 from app.models.agents import Agent
 from app.services.openclaw.constants import (
     CHECKIN_DEADLINE_AFTER_WAKE,
-    DEFAULT_HEARTBEAT_CONFIG,
     HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
 )
 
@@ -50,7 +52,12 @@ logger = get_logger(__name__)
 WATCHDOG_INTERVAL_SECONDS = 60
 REPEAT_REPAIR_ALERT_WINDOW = timedelta(hours=1)
 REPEAT_REPAIR_ALERT_THRESHOLD = 3
-REPAIR_REASON_NULL_DEADLINE = "null_deadline_on_online"
+
+
+class RepairReason(StrEnum):
+    """Categorized cause of a watchdog repair. Stored in the forensic log."""
+
+    NULL_DEADLINE_ON_ONLINE = "null_deadline_on_online"
 
 
 @dataclass(frozen=True)
@@ -84,83 +91,77 @@ class SweepReport:
         }
 
 
-def _parse_heartbeat_interval(every: str | None) -> timedelta:
-    """Translate an ``every`` config value to a timedelta.
-
-    Accepted: ``"10m"``, ``"60s"``, ``"1h"``. Anything unparseable falls
-    back to the DEFAULT_HEARTBEAT_CONFIG value. Returns ``timedelta(0)``
-    only when the config explicitly asks for no heartbeat (``"0m"``), so
-    callers can treat that as "watchdog cannot set a deadline".
-    """
-
-    unit_seconds = {"s": 1, "m": 60, "h": 3600}
-    default = str(DEFAULT_HEARTBEAT_CONFIG["every"])
-    candidate = (every if isinstance(every, str) and every.strip() else default).strip().lower()
-    if len(candidate) < 2 or candidate[-1] not in unit_seconds:
-        return _parse_heartbeat_interval(default) if candidate != default else timedelta(minutes=10)
-    try:
-        amount = int(candidate[:-1])
-    except ValueError:
-        return _parse_heartbeat_interval(default) if candidate != default else timedelta(minutes=10)
-    return timedelta(seconds=amount * unit_seconds[candidate[-1]])
-
-
 def compute_repair_deadline(agent: Agent, *, now: datetime) -> datetime:
     """Derive a replacement deadline for a null-deadline online agent.
 
-    Priority:
-      1. If ``heartbeat_config.every`` is set, use ``now + every + grace``.
-      2. Fall back to ``now + CHECKIN_DEADLINE_AFTER_WAKE`` — the same
-         conservative horizon used for newly-provisioned agents.
+    Uses the agent's ``heartbeat_config.every`` when parseable, falling
+    back to ``CHECKIN_DEADLINE_AFTER_WAKE`` — the same conservative horizon
+    used for newly-provisioned agents — when the config is absent, empty,
+    disabled, or malformed.
+
+    Note: ``AgentLifecycleService._next_heartbeat_deadline`` computes a
+    similar value during normal lifecycle transitions but returns ``None``
+    for disabled heartbeats. The watchdog must always return a concrete
+    deadline (the whole point is avoiding the null-deadline state), so the
+    two code paths diverge intentionally. Consolidation is deferred until
+    a third caller appears.
     """
 
     interval = CHECKIN_DEADLINE_AFTER_WAKE
     cfg = agent.heartbeat_config
     if isinstance(cfg, dict):
         every = cfg.get("every")
-        parsed = _parse_heartbeat_interval(every if isinstance(every, str) else None)
-        # Treat disabled heartbeat (0m) as "use the provisioning fallback".
-        if parsed > timedelta(0):
-            interval = parsed + HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
+        if isinstance(every, str) and every.strip():
+            with suppress(ValueError):
+                seconds = parse_every_to_seconds(every)
+                interval = (
+                    timedelta(seconds=seconds) + HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
+                )
     return now + interval
 
 
-async def _count_recent_repairs(
-    session: AsyncSession, *, agent_id: Any, since: datetime
-) -> int:
-    """Count ``AgentHeartbeatRepairEvent`` rows for an agent since ``since``."""
+async def _count_recent_repairs_by_agent(
+    session: AsyncSession, *, since: datetime
+) -> dict[UUID, int]:
+    """Return repair count per agent within the alert window, in one query."""
 
-    statement = select(func.count()).select_from(AgentHeartbeatRepairEvent).where(
-        and_(
-            col(AgentHeartbeatRepairEvent.agent_id) == agent_id,
-            col(AgentHeartbeatRepairEvent.created_at) >= since,
-        )
+    statement = (
+        select(AgentHeartbeatRepairEvent.agent_id, func.count())
+        .where(col(AgentHeartbeatRepairEvent.created_at) >= since)
+        .group_by(col(AgentHeartbeatRepairEvent.agent_id))
     )
     result = await session.exec(statement)
-    value = result.one()
-    return int(value or 0)
+    return {row[0]: int(row[1]) for row in result.all()}
 
 
 async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
     """Run one watchdog pass against the given session.
 
-    Each repaired agent gets a forensic row in
-    ``agent_heartbeat_repair_events`` and an updated
-    ``checkin_deadline_at``. Repeat-repair alerts are logged at WARN with
-    a structured signal that downstream operator-alert routing can match.
+    All repaired agents are batched into a single ``session.commit()`` at
+    the end, and the 1h-window repeat count is fetched once up-front via
+    a GROUP BY query rather than per-agent round trips. Under a stuck-
+    writer storm this keeps sweep cost at 2 round trips regardless of how
+    many agents are being repaired.
     """
 
     now = utcnow()
-    statement = select(Agent).where(
-        and_(
-            col(Agent.status) == "online",
-            col(Agent.checkin_deadline_at).is_(None),
-        )
-    )
-    candidates = (await session.exec(statement)).all()
-    report = SweepReport(total_scanned=len(candidates))
-
     alert_since = now - REPEAT_REPAIR_ALERT_WINDOW
+    candidates = (
+        await session.exec(
+            select(Agent).where(
+                and_(
+                    col(Agent.status) == "online",
+                    col(Agent.checkin_deadline_at).is_(None),
+                )
+            )
+        )
+    ).all()
+    report = SweepReport(total_scanned=len(candidates))
+    if not candidates:
+        return report
+
+    prior_counts = await _count_recent_repairs_by_agent(session, since=alert_since)
+    new_this_sweep: dict[UUID, int] = {}
 
     for agent in candidates:
         try:
@@ -193,17 +194,16 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             last_seen_at=agent.last_seen_at,
             wake_attempts=agent.wake_attempts or 0,
             elapsed_since_last_seen_seconds=elapsed,
-            repair_reason=REPAIR_REASON_NULL_DEADLINE,
+            repair_reason=RepairReason.NULL_DEADLINE_ON_ONLINE,
             new_deadline=new_deadline,
         )
         session.add(event)
         agent.checkin_deadline_at = new_deadline
         session.add(agent)
-        await session.commit()
 
-        # The newly-written event now counts toward the 1h window.
-        repeat_count = await _count_recent_repairs(
-            session, agent_id=agent.id, since=alert_since
+        new_this_sweep[agent.id] = new_this_sweep.get(agent.id, 0) + 1
+        repeat_count = (
+            prior_counts.get(agent.id, 0) + new_this_sweep[agent.id]
         )
         alert_triggered = repeat_count >= REPEAT_REPAIR_ALERT_THRESHOLD
         if alert_triggered:
@@ -241,14 +241,16 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             )
         )
 
-    if report.total_scanned > 0:
-        logger.info(
-            "heartbeat_watchdog.sweep_complete scanned=%d repaired=%d failed=%d alerts=%d",
-            report.total_scanned,
-            report.repaired,
-            report.failed,
-            report.alerts,
-        )
+    if report.repaired:
+        await session.commit()
+
+    logger.info(
+        "heartbeat_watchdog.sweep_complete scanned=%d repaired=%d failed=%d alerts=%d",
+        report.total_scanned,
+        report.repaired,
+        report.failed,
+        report.alerts,
+    )
     return report
 
 
