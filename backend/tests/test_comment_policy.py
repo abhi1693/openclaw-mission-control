@@ -8,13 +8,12 @@ Covers amendment §1 filter semantics:
   can reveal
 
 Tests exercise the statement-level predicate (what SQL gets emitted),
-not a live DB — the compiled SQL fragment is enough to pin the
-filter's decision tree.
+not a live DB — inspecting the compiled WHERE clause is enough to pin
+the filter's decision tree.
 """
 
 from __future__ import annotations
 
-import pytest
 from sqlmodel import select
 
 from app.models.activity_events import ActivityEvent
@@ -32,18 +31,17 @@ def _base_statement() -> object:
     )
 
 
-def _sql_contains_not_flagged_predicate(statement: object) -> bool:
-    """True when the WHERE clause contains the classifier_flags filter.
+def _where_filters_on_classifier_flags(statement: object) -> bool:
+    """True when the statement's WHERE clause references classifier_flags.
 
-    The SELECT clause always mentions ``classifier_flags`` as a column,
-    so we have to inspect the WHERE predicate specifically — counting
-    occurrences of "classifier_flags" and treating ≥2 as "also in the
-    WHERE clause". The hard-case is that a filtered select has one
-    mention in the SELECT list AND one in the WHERE.
+    Inspecting ``statement.whereclause`` directly avoids false positives
+    from columns mentioned in the SELECT list.
     """
 
-    rendered = str(statement).lower()
-    return rendered.count("classifier_flags") >= 2
+    whereclause = getattr(statement, "whereclause", None)
+    if whereclause is None:
+        return False
+    return "classifier_flags" in str(whereclause)
 
 
 def test_off_mode_returns_statement_unchanged() -> None:
@@ -56,7 +54,7 @@ def test_off_mode_returns_statement_unchanged() -> None:
         actor_is_agent=False,
         include_flagged=False,
     )
-    assert not _sql_contains_not_flagged_predicate(result)
+    assert not _where_filters_on_classifier_flags(result)
 
 
 def test_off_mode_ignores_include_flagged_and_actor() -> None:
@@ -71,7 +69,7 @@ def test_off_mode_ignores_include_flagged_and_actor() -> None:
                 actor_is_agent=actor_is_agent,
                 include_flagged=include_flagged,
             )
-            assert not _sql_contains_not_flagged_predicate(result)
+            assert not _where_filters_on_classifier_flags(result)
 
 
 def test_default_hidden_filters_by_default() -> None:
@@ -83,7 +81,7 @@ def test_default_hidden_filters_by_default() -> None:
         actor_is_agent=False,
         include_flagged=False,
     )
-    assert _sql_contains_not_flagged_predicate(result)
+    assert _where_filters_on_classifier_flags(result)
 
 
 def test_default_hidden_reveals_with_include_flagged() -> None:
@@ -96,7 +94,7 @@ def test_default_hidden_reveals_with_include_flagged() -> None:
             actor_is_agent=actor_is_agent,
             include_flagged=True,
         )
-        assert not _sql_contains_not_flagged_predicate(result)
+        assert not _where_filters_on_classifier_flags(result)
 
 
 def test_hidden_strict_filters_agents_even_with_include_flagged() -> None:
@@ -109,7 +107,7 @@ def test_hidden_strict_filters_agents_even_with_include_flagged() -> None:
             actor_is_agent=True,
             include_flagged=include_flagged,
         )
-        assert _sql_contains_not_flagged_predicate(result)
+        assert _where_filters_on_classifier_flags(result)
 
 
 def test_hidden_strict_allows_non_agent_with_include_flagged() -> None:
@@ -121,7 +119,7 @@ def test_hidden_strict_allows_non_agent_with_include_flagged() -> None:
         actor_is_agent=False,
         include_flagged=True,
     )
-    assert not _sql_contains_not_flagged_predicate(result)
+    assert not _where_filters_on_classifier_flags(result)
 
 
 def test_hidden_strict_filters_non_agent_by_default() -> None:
@@ -133,21 +131,4 @@ def test_hidden_strict_filters_non_agent_by_default() -> None:
         actor_is_agent=False,
         include_flagged=False,
     )
-    assert _sql_contains_not_flagged_predicate(result)
-
-
-def test_unknown_mode_falls_back_to_off(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Unknown mode values (someone wrote 'hidden' instead of 'hidden_strict')
-    fall back to 'off' with a WARN log, not a crash."""
-
-    with caplog.at_level("WARNING", logger="app.services.comment_policy"):
-        result = apply_comment_signal_filter(
-            _base_statement(),
-            filter_mode="bogus_mode",
-            actor_is_agent=False,
-            include_flagged=False,
-        )
-    assert not _sql_contains_not_flagged_predicate(result)
-    assert "unknown_filter_mode" in caplog.text
+    assert _where_filters_on_classifier_flags(result)

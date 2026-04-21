@@ -24,17 +24,15 @@ from typing import TYPE_CHECKING
 from sqlalchemy import ColumnElement, or_
 from sqlmodel import col
 
-from app.core.logging import get_logger
 from app.models.activity_events import ActivityEvent
+from app.schemas.boards import CommentSignalFilter
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.expression import Select
 
-logger = get_logger(__name__)
-
-FILTER_OFF = "off"
-FILTER_DEFAULT_HIDDEN = "default_hidden"
-FILTER_HIDDEN_STRICT = "hidden_strict"
+FILTER_OFF: CommentSignalFilter = "off"
+FILTER_DEFAULT_HIDDEN: CommentSignalFilter = "default_hidden"
+FILTER_HIDDEN_STRICT: CommentSignalFilter = "hidden_strict"
 
 
 def _not_flagged_clause() -> ColumnElement[bool]:
@@ -58,7 +56,7 @@ def _not_flagged_clause() -> ColumnElement[bool]:
 def apply_comment_signal_filter(
     statement: "Select",
     *,
-    filter_mode: str,
+    filter_mode: CommentSignalFilter,
     actor_is_agent: bool,
     include_flagged: bool,
 ) -> "Select":
@@ -67,6 +65,8 @@ def apply_comment_signal_filter(
     Args:
         statement: the base ``SELECT FROM activity_events WHERE ...``.
         filter_mode: the board's ``comment_signal_filter`` column value.
+            The DB CHECK constraint + Pydantic Literal guarantee this is
+            one of the three canonical values.
         actor_is_agent: True for agent-token callers. These are
             subjected to the strictest filter — they never see flagged
             comments in ``hidden_strict`` mode.
@@ -82,20 +82,10 @@ def apply_comment_signal_filter(
     if filter_mode == FILTER_OFF:
         return statement
 
-    # Strict mode: agents are unconditionally filtered.
     if filter_mode == FILTER_HIDDEN_STRICT and actor_is_agent:
         return statement.where(_not_flagged_clause())
 
-    # default_hidden OR (hidden_strict + non-agent caller): respect
-    # include_flagged as an escape hatch.
     if include_flagged:
         return statement
 
-    if filter_mode in {FILTER_DEFAULT_HIDDEN, FILTER_HIDDEN_STRICT}:
-        return statement.where(_not_flagged_clause())
-
-    logger.warning(
-        "comment_policy.unknown_filter_mode mode=%s — falling back to 'off'",
-        filter_mode,
-    )
-    return statement
+    return statement.where(_not_flagged_clause())

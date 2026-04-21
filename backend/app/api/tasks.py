@@ -2000,8 +2000,12 @@ async def list_task_comments(
     ``app/services/comment_policy.py`` for filter semantics.
     """
 
-    board = await Board.objects.by_id(task.board_id).first(session)
-    filter_mode = board.comment_signal_filter if board is not None else "off"
+    filter_mode = (
+        await session.scalar(
+            select(Board.comment_signal_filter).where(Board.id == task.board_id)
+        )
+        or "off"
+    )
     statement = (
         select(ActivityEvent)
         .where(col(ActivityEvent.task_id) == task.id)
