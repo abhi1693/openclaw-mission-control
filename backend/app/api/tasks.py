@@ -3199,11 +3199,17 @@ async def _finalize_updated_task(
         await _require_operator_decision_task_not_active(session, update.task)
     if {
         "status",
+        "assigned_agent_id",
         "review_packet_type",
         "validation_target",
         "validation_target_kind",
         "validation_target_scope",
     }.intersection(update.updates):
+        # Phase IV §I2: ``assigned_agent_id`` is in the trigger set so
+        # a PATCH that clears the owner on an already-``in_progress``
+        # or ``done`` task re-validates and 409s. Without this, an
+        # admin PATCH {"assigned_agent_id": null} would silently land
+        # an ownerless active task.
         _require_delivery_contract_with_metric(
             task=update.task,
             actor_agent_id=_comment_actor_id(update.actor),

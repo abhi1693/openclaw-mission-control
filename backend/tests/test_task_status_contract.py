@@ -239,3 +239,33 @@ def test_error_message_stays_contract_when_owner_present() -> None:
     assert isinstance(detail, dict)
     assert "delivery contract metadata" in detail["message"]
     assert "not actionable" not in detail["message"]
+
+
+def test_actionability_validates_against_done_when_approval_gates_move_to_done() -> None:
+    """move_to_done approval gate must validate against the TARGET
+    state (``done``) not the task's current state (``review``).
+
+    Without this, a task whose assignee is cleared between approval
+    creation and execution would skip the owner check — ``review``
+    doesn't require an owner but ``done`` does, and the lead PATCH
+    that actually transitions to ``done`` never re-validates.
+    """
+
+    assert actionability_missing_fields(
+        status="done",
+        review_packet_type="review_only",
+        validation_target=None,
+        validation_target_kind=None,
+        validation_target_scope=None,
+        assigned_agent_id=None,
+    ) == ["assigned_agent_id"]
+    # Same payload against the current state ``review`` would NOT
+    # flag the owner — the carve-out intentionally skips it.
+    assert actionability_missing_fields(
+        status="review",
+        review_packet_type="review_only",
+        validation_target=None,
+        validation_target_kind=None,
+        validation_target_scope=None,
+        assigned_agent_id=None,
+    ) == []

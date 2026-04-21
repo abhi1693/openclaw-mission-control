@@ -260,14 +260,14 @@ async def _ensure_move_to_done_targets_have_delivery_contract(
         validation_target_scope,
         assigned_agent_id,
     ) in rows:
-        # Phase IV §I2: ``done`` is an owner-required state, so the
-        # move_to_done approval path must veto tasks with no owner.
-        # In practice the lead-assign side effect (api/tasks.py:3120)
-        # usually fills assigned_agent_id before this gate fires, but
-        # legacy-data and operator auto-approve paths would otherwise
-        # bypass the attribution guarantee.
+        # Phase IV §I2: validate against the TARGET state (``done``)
+        # not the task's current state (usually ``review``). Under the
+        # current status, the owner carve-out for ``review`` would
+        # silently skip the owner check — an assignee cleared between
+        # approval creation and execution would commit an ownerless
+        # ``done`` row via the lead PATCH path.
         missing_fields = actionability_missing_fields(
-            status=status_value,
+            status="done",
             review_packet_type=review_packet_type,
             validation_target=validation_target,
             validation_target_kind=validation_target_kind,

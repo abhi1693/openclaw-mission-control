@@ -291,6 +291,19 @@ class GatewayAdminLifecycleService(OpenClawDBService):
                 )
 
     async def clear_agent_foreign_keys(self, *, agent_id: UUID) -> None:
+        """Null out the FK so the agent row can be hard-deleted.
+
+        Phase IV §I2 invariant exception: ``done`` tasks owned by the
+        removed agent will end up with ``status='done'`` +
+        ``assigned_agent_id=None``, which technically violates the
+        owner-required invariant. The alternatives (blocking agent
+        removal, inventing an ``archived`` status, or soft-deleting
+        agents to keep the FK live) all have larger blast radii. The
+        PATCH-time guard at api/tasks.py still prevents NEW invariant
+        violations from the normal path; this function is the
+        recognised maintenance-operation exception.
+        """
+
         now = utcnow()
         await crud.update_where(
             self.session,

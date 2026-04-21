@@ -286,7 +286,14 @@ async def test_create_move_to_done_approval_rejects_review_task_missing_delivery
                     {
                         "task_id": str(task_id),
                         "status": "review",
-                        "missing_fields": ["review_packet_type"],
+                        # Phase IV §I2: gate validates against target
+                        # ``done``, which requires an owner. The test
+                        # task has no ``assigned_agent_id`` so it
+                        # surfaces alongside the missing packet type.
+                        "missing_fields": [
+                            "assigned_agent_id",
+                            "review_packet_type",
+                        ],
                     }
                 ],
             }
@@ -359,6 +366,11 @@ async def test_update_move_to_done_approval_rejects_approval_when_review_task_lo
             task.validation_target = "http://192.168.2.60:3000"
             task.validation_target_kind = "live_url"
             task.validation_target_scope = "review"
+            # Phase IV §I2: the move_to_done approval gate validates
+            # against the target ``done`` state, which requires an
+            # owner. Without one, create_approval would 409 before the
+            # test can exercise the update-path validation-drift case.
+            task.assigned_agent_id = uuid4()
             session.add(task)
             await session.commit()
 
