@@ -49,6 +49,7 @@ from app.services.openclaw.heartbeat_watchdog import (
     stop_heartbeat_watchdog,
 )
 from app.services.openclaw.provisioning import reconcile_agent_heartbeat_enabled_flags
+from app.services.retention import retention_purge_loop, stop_retention_purge
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -467,10 +468,19 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     watchdog_task = asyncio.create_task(
         heartbeat_watchdog_loop(watchdog_stop_event), name="heartbeat-watchdog-loop"
     )
+    retention_stop_event = asyncio.Event()
+    retention_task = asyncio.create_task(
+        retention_purge_loop(
+            retention_stop_event,
+            retention_days=settings.shadow_metric_retention_days,
+        ),
+        name="retention-purge-loop",
+    )
     logger.info("app.lifecycle.started")
     try:
         yield
     finally:
+        await stop_retention_purge(retention_task, retention_stop_event)
         await stop_heartbeat_watchdog(watchdog_task, watchdog_stop_event)
         await stop_heartbeat_sweep(sweep_task, sweep_stop_event)
         # Flush any pending shadow-metric emits so observability signals
