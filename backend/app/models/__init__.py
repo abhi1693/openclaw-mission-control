@@ -20,6 +20,7 @@ from app.models.organization_invite_board_access import OrganizationInviteBoardA
 from app.models.organization_invites import OrganizationInvite
 from app.models.organization_members import OrganizationMember
 from app.models.organizations import Organization
+from app.models.reviews import Review, ReviewBlocker
 from app.models.shadow_metric_events import ShadowMetricEvent
 from app.models.skills import GatewayInstalledSkill, MarketplaceSkill, SkillPack
 from app.models.tag_assignments import TagAssignment
@@ -54,6 +55,8 @@ __all__ = [
     "MarketplaceSkill",
     "SkillPack",
     "Organization",
+    "Review",
+    "ReviewBlocker",
     "ShadowMetricEvent",
     "BoardTaskCustomField",
     "TaskCustomFieldDefinition",

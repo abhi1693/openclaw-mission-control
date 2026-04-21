@@ -1,0 +1,94 @@
+"""phase II: reviews + review_blockers sidecar tables
+
+Revision ID: b2c3d4e5f6a7
+Revises: a1b2c3d4e5f6
+Create Date: 2026-04-21 16:30:00.000000
+
+Adds the two tables that back Phase II §I4 "reviews emit structured
+blockers, not prose":
+
+- ``reviews`` — one row per verdict the reviewer submitted.
+- ``review_blockers`` — join table linking a Review to the Blocker
+  rows it cited. Unique per (review_id, blocker_id) so a review can't
+  double-count the same blocker.
+
+See docs/plans/2026-04-16-mc-delivery-enforcement-plan.md §I4.
+"""
+
+from __future__ import annotations
+
+from alembic import op
+import sqlalchemy as sa
+
+
+revision = "b2c3d4e5f6a7"
+down_revision = "a1b2c3d4e5f6"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "reviews",
+        sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
+        sa.Column(
+            "board_id",
+            sa.Uuid(),
+            sa.ForeignKey("boards.id"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "task_id",
+            sa.Uuid(),
+            sa.ForeignKey("tasks.id"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column("verdict", sa.String(length=32), nullable=False),
+        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column("citation", sa.Text(), nullable=True),
+        sa.Column(
+            "reviewer_agent_id",
+            sa.Uuid(),
+            sa.ForeignKey("agents.id"),
+            nullable=True,
+            index=True,
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    )
+    op.create_check_constraint(
+        "ck_reviews_verdict_values",
+        "reviews",
+        "verdict IN ('pass', 'fail', 'needs_changes')",
+    )
+    op.create_table(
+        "review_blockers",
+        sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
+        sa.Column(
+            "review_id",
+            sa.Uuid(),
+            sa.ForeignKey("reviews.id"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "blocker_id",
+            sa.Uuid(),
+            sa.ForeignKey("blockers.id"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint(
+            "review_id",
+            "blocker_id",
+            name="uq_review_blockers_review_id_blocker_id",
+        ),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("review_blockers")
+    op.drop_constraint("ck_reviews_verdict_values", "reviews", type_="check")
+    op.drop_table("reviews")
