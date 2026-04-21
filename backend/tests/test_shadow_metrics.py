@@ -21,7 +21,9 @@ from app.models.shadow_metric_events import ShadowMetricEvent
 from app.services.shadow_metrics import (
     EVENT_COMMENT_ACK_ONLY,
     EVENT_COMMENT_NEAR_DUPLICATE,
+    EVENT_TASK_ACTIONABILITY_VIOLATION,
     build_shadow_events_for_comment,
+    emit_actionability_violation_metric,
 )
 
 
@@ -222,6 +224,103 @@ async def test_classifier_exception_returns_empty_and_logs() -> None:
         assert events == []
     finally:
         sm.classify = original  # type: ignore[assignment]
+
+
+@pytest.mark.asyncio
+async def test_actionability_violation_emits_with_separate_session() -> None:
+    """The actionability emitter uses its own short-lived session so the
+    row survives when the caller's transaction rolls back after the raise.
+
+    The test monkeypatches ``async_session_maker`` to capture the
+    ShadowMetricEvent that would be persisted.
+    """
+
+    import app.services.shadow_metrics as sm
+
+    captured: list[ShadowMetricEvent] = []
+
+    class _CaptureSession:
+        async def __aenter__(self) -> "_CaptureSession":
+            return self
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        def add(self, value: Any) -> None:
+            if isinstance(value, ShadowMetricEvent):
+                captured.append(value)
+
+        async def commit(self) -> None:
+            return None
+
+    def _maker() -> _CaptureSession:
+        return _CaptureSession()
+
+    original = sm.async_session_maker
+    sm.async_session_maker = _maker  # type: ignore[assignment]
+    try:
+        task_id = uuid4()
+        board_id = uuid4()
+        agent_id = uuid4()
+        await emit_actionability_violation_metric(
+            task_id=task_id,
+            board_id=board_id,
+            agent_id=agent_id,
+            status_value="in_progress",
+            missing_fields=["validation_target", "review_packet_type"],
+        )
+    finally:
+        sm.async_session_maker = original  # type: ignore[assignment]
+
+    assert len(captured) == 1
+    event = captured[0]
+    assert event.event_type == EVENT_TASK_ACTIONABILITY_VIOLATION
+    assert event.task_id == task_id
+    assert event.board_id == board_id
+    assert event.agent_id == agent_id
+    assert event.classifier_metadata is not None
+    assert event.classifier_metadata["status_value"] == "in_progress"
+    assert event.classifier_metadata["missing_fields"] == [
+        "validation_target",
+        "review_packet_type",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_actionability_violation_emitter_swallows_errors() -> None:
+    """A broken session must not propagate out of the emitter.
+
+    The 422 the caller is about to raise must not be delayed by an
+    observability-only failure.
+    """
+
+    import app.services.shadow_metrics as sm
+
+    class _ExplodingSession:
+        async def __aenter__(self) -> "_ExplodingSession":
+            return self
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        def add(self, _value: Any) -> None:
+            raise RuntimeError("simulated DB failure")
+
+        async def commit(self) -> None:
+            return None
+
+    original = sm.async_session_maker
+    sm.async_session_maker = lambda: _ExplodingSession()  # type: ignore[assignment]
+    try:
+        await emit_actionability_violation_metric(
+            task_id=uuid4(),
+            board_id=uuid4(),
+            agent_id=None,
+            status_value="review",
+            missing_fields=["review_packet_type"],
+        )
+    finally:
+        sm.async_session_maker = original  # type: ignore[assignment]
 
 
 @pytest.mark.asyncio

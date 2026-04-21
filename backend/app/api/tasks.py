@@ -70,7 +70,10 @@ from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.core.logging import get_logger
 from app.services.organizations import require_board_access
-from app.services.shadow_metrics import build_shadow_events_for_comment
+from app.services.shadow_metrics import (
+    build_shadow_events_for_comment,
+    emit_actionability_violation_metric,
+)
 
 logger = get_logger(__name__)
 from app.services.tags import (
@@ -271,6 +274,49 @@ def _require_delivery_contract_for_task_state(
             status_value=status_value,
             missing_fields=missing_fields,
         )
+
+
+async def _require_delivery_contract_with_metric(
+    *,
+    task: Task,
+    actor_agent_id: UUID | None,
+    status_value: str,
+    review_packet_type: str | None,
+    validation_target: str | None,
+    validation_target_kind: str | None,
+    validation_target_scope: str | None,
+) -> None:
+    """Wrapper that emits an actionability-violation shadow metric when the
+    validator is about to raise, then re-raises. The metric fires from a
+    dedicated short-lived session so it survives the caller's transaction
+    rollback. See amendment §A.5 — instrument the existing raise, don't
+    duplicate the check.
+
+    ``actor_agent_id`` is the agent UUID if the transition was agent-
+    initiated, None for user/operator paths. User-initiated violations
+    still emit the metric (the failed transition is worth recording
+    regardless of initiator); the agent_id column stays NULL.
+    """
+
+    try:
+        _require_delivery_contract_for_task_state(
+            status_value=status_value,
+            review_packet_type=review_packet_type,
+            validation_target=validation_target,
+            validation_target_kind=validation_target_kind,
+            validation_target_scope=validation_target_scope,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if detail.get("code") == "task_delivery_contract_incomplete":
+            await emit_actionability_violation_metric(
+                task_id=task.id,
+                board_id=task.board_id,
+                agent_id=actor_agent_id,
+                status_value=status_value,
+                missing_fields=list(detail.get("missing_fields", [])),
+            )
+        raise
 
 
 async def _reject_pending_move_to_done_approvals_for_task(
@@ -1658,7 +1704,9 @@ async def create_task(
         raise _blocked_task_error(blocked_by)
     if task.operator_decision_required and (task.assigned_agent_id is not None or task.status != "inbox"):
         raise _operator_decision_block_error(task.operator_decision_summary)
-    _require_delivery_contract_for_task_state(
+    await _require_delivery_contract_with_metric(
+        task=task,
+        actor_agent_id=None,  # create_task is user-initiated (USER_AUTH_DEP)
         status_value=task.status,
         review_packet_type=task.review_packet_type,
         validation_target=task.validation_target,
@@ -2897,7 +2945,9 @@ async def _finalize_updated_task(
         "validation_target_kind",
         "validation_target_scope",
     }.intersection(update.updates):
-        _require_delivery_contract_for_task_state(
+        await _require_delivery_contract_with_metric(
+            task=update.task,
+            actor_agent_id=_comment_actor_id(update.actor),
             status_value=update.task.status,
             review_packet_type=update.task.review_packet_type,
             validation_target=update.task.validation_target,

@@ -36,6 +36,7 @@ from sqlmodel import col, desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
+from app.db.session import async_session_maker
 from app.models.activity_events import ActivityEvent
 from app.models.shadow_metric_events import ShadowMetricEvent
 from app.services.comment_classifier import ClassifierFlag, classify
@@ -57,6 +58,48 @@ logger = logging.getLogger(__name__)
 # operator's POV.
 EVENT_COMMENT_ACK_ONLY = "comment.ack_only_candidate"
 EVENT_COMMENT_NEAR_DUPLICATE = "comment.near_duplicate_candidate"
+EVENT_TASK_ACTIONABILITY_VIOLATION = "task.actionability_violation_candidate"
+
+
+async def emit_actionability_violation_metric(
+    *,
+    task_id: UUID | None,
+    board_id: UUID | None,
+    agent_id: UUID | None,
+    status_value: str,
+    missing_fields: list[str],
+) -> None:
+    """Record a delivery-contract violation that the validator is about to raise.
+
+    Uses a dedicated short-lived session rather than the caller's so the
+    row survives the caller's transaction rollback (the 422 raise aborts
+    whatever write the caller was attempting, but the observability
+    signal must persist).
+
+    Fire-and-forget semantics: errors are logged, never propagated. The
+    caller's 422 response must not be delayed by this hook.
+    """
+
+    try:
+        async with async_session_maker() as session:
+            event = ShadowMetricEvent(
+                event_type=EVENT_TASK_ACTIONABILITY_VIOLATION,
+                task_id=task_id,
+                board_id=board_id,
+                agent_id=agent_id,
+                classifier_metadata={
+                    "status_value": status_value,
+                    "missing_fields": missing_fields,
+                },
+            )
+            session.add(event)
+            await session.commit()
+    except Exception:
+        logger.exception(
+            "shadow_metrics.actionability_emit_failed task_id=%s status=%s",
+            task_id,
+            status_value,
+        )
 
 
 def _flag_to_event_type(flag: ClassifierFlag) -> str:
