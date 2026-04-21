@@ -56,6 +56,7 @@ from app.schemas.tasks import (
     TaskCreate,
     TaskRead,
     TaskUpdate,
+    actionability_missing_fields,
     delivery_contract_missing_fields,
 )
 from app.services.activity_log import record_activity
@@ -196,13 +197,28 @@ def _delivery_contract_incomplete_error(
     status_value: str,
     missing_fields: Sequence[str],
 ) -> HTTPException:
+    # Phase IV §I2: when the assigned-owner check trips alongside (or
+    # instead of) the packet-type triplet, the word "delivery contract"
+    # is no longer accurate — surface "actionability" in the message
+    # while keeping the wire code stable for existing clients.
+    fields = list(missing_fields)
+    if "assigned_agent_id" in fields:
+        message = (
+            f"Task is not actionable for {status_value}; missing owner "
+            "and/or delivery contract metadata."
+        )
+    else:
+        message = (
+            f"Task is missing delivery contract metadata required for "
+            f"{status_value}."
+        )
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={
-            "message": f"Task is missing delivery contract metadata required for {status_value}.",
+            "message": message,
             "code": ERROR_CODE_DELIVERY_CONTRACT_INCOMPLETE,
             "status": status_value,
-            "missing_fields": list(missing_fields),
+            "missing_fields": fields,
         },
     )
 
@@ -309,15 +325,22 @@ async def _require_operator_decision_task_not_active(
 
 
 def _delivery_contract_missing_fields_for_task(task: Task) -> list[str]:
-    """Pure check: return the missing contract fields for the task's current
-    state. Empty list means the task's state is actionable."""
+    """Pure check: return the missing actionability fields for the
+    task's current state. Empty list means the state is actionable.
 
-    return delivery_contract_missing_fields(
+    Phase IV §I2 extends the Phase 0 "delivery contract" check to
+    include the assigned-owner requirement. Active states
+    (``in_progress`` / ``review`` / ``done``) must carry both a
+    packet-type + validation-target triplet AND an owner.
+    """
+
+    return actionability_missing_fields(
         status=task.status,
         review_packet_type=task.review_packet_type,
         validation_target=task.validation_target,
         validation_target_kind=task.validation_target_kind,
         validation_target_scope=task.validation_target_scope,
+        assigned_agent_id=task.assigned_agent_id,
     )
 
 

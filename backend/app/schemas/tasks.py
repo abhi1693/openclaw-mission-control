@@ -69,6 +69,59 @@ def delivery_contract_missing_fields(
     return missing_fields
 
 
+OWNER_REQUIRED_STATUSES = frozenset({"in_progress", "done"})
+
+
+def status_requires_assigned_owner(status: TaskStatus | str | None) -> bool:
+    """Phase IV §I2: owner required for active states where a specific
+    agent is doing (or completed) the work.
+
+    Excludes ``review`` because the codebase's review queue model
+    explicitly unassigns on entry — the task awaits a reviewer, the
+    assignment happens when they pick it up. Owner IS required for
+    ``in_progress`` (someone is working) and ``done`` (someone did
+    the work — preserves attribution).
+    """
+
+    return status in OWNER_REQUIRED_STATUSES
+
+
+def actionability_missing_fields(
+    *,
+    status: TaskStatus | str | None,
+    review_packet_type: ReviewPacketType | str | None,
+    validation_target: str | None,
+    validation_target_kind: ValidationTargetKind | str | None,
+    validation_target_scope: ValidationTargetScope | str | None,
+    assigned_agent_id: UUID | None,
+) -> list[str]:
+    """Phase IV §I2: union of delivery-contract fields + the
+    assigned-owner check. Tasks entering ``in_progress`` / ``review``
+    / ``done`` must carry the contract triplet; ``in_progress`` and
+    ``done`` additionally require an owner (see
+    ``status_requires_assigned_owner`` for the review-queue nuance).
+
+    Returns the list of missing fields in stable order so callers can
+    include it verbatim on the 409 payload without sorting.
+    """
+
+    if not status_requires_delivery_contract(status):
+        return []
+    missing: list[str] = []
+    if status_requires_assigned_owner(status) and assigned_agent_id is None:
+        missing.append("assigned_agent_id")
+    missing.extend(
+        delivery_contract_missing_fields(
+            status=status,
+            review_packet_type=review_packet_type,
+            validation_target=validation_target,
+            validation_target_kind=validation_target_kind,
+            validation_target_scope=validation_target_scope,
+        ),
+    )
+    return missing
+
+
 class TaskBase(SQLModel):
     """Shared task fields used by task create/read payloads."""
 
