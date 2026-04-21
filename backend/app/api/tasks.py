@@ -71,9 +71,15 @@ from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.core.logging import get_logger
 from app.services.comment_policy import apply_comment_signal_filter
 from app.services.organizations import require_board_access
+from app.services.deploy_truth import (
+    DeployTruthFetchError,
+    fetch_build_metadata,
+    packet_sha_matches_live,
+)
 from app.services.shadow_metrics import (
     build_shadow_events_for_comment,
     emit_actionability_violation_metric,
+    emit_deploy_validation_degraded_metric,
 )
 
 logger = get_logger(__name__)
@@ -189,6 +195,29 @@ def _operator_decision_block_error(summary: str | None = None) -> HTTPException:
 
 
 ERROR_CODE_DELIVERY_CONTRACT_INCOMPLETE = "task_delivery_contract_incomplete"
+ERROR_CODE_DEPLOY_TRUTH_SHA_MISMATCH = "task_deploy_truth_sha_mismatch"
+ERROR_CODE_DEPLOY_TRUTH_MISSING_PACKET_SHA = "task_deploy_truth_missing_packet_sha"
+ERROR_CODE_DEPLOY_TRUTH_UNREACHABLE = "task_deploy_truth_target_unreachable"
+
+
+def _deploy_truth_error(
+    *,
+    code: str,
+    message: str,
+    status_value: str,
+    extra: dict[str, object] | None = None,
+) -> HTTPException:
+    detail: dict[str, object] = {
+        "code": code,
+        "message": message,
+        "status": status_value,
+    }
+    if extra:
+        detail.update(extra)
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=detail,
+    )
 
 
 def _delivery_contract_incomplete_error(
@@ -378,6 +407,109 @@ def _require_delivery_contract_with_metric(
     )
 
 
+_DEPLOY_TRUTH_REQUIRED_STATUSES = frozenset({"review", "done"})
+
+
+async def _require_deploy_truth(
+    task: Task,
+    *,
+    actor_agent_id: UUID | None,
+) -> None:
+    """Phase V §I8: enforce SHA comparison on review/done transitions.
+
+    Three branches per the plan:
+
+    - ``supports_build_metadata`` is ``True`` — fetch ``/__build`` and
+      compare ``task.packet_commit_sha`` against the live SHA. Missing
+      packet SHA, unreachable endpoint, or mismatched SHA all raise
+      409 with a distinct error code so clients can render remediation
+      text specific to the gap.
+    - ``supports_build_metadata`` is ``False`` or ``None`` — emit the
+      degraded-validation shadow metric and let the transition
+      through. Burn-down is an operator dashboard concern.
+
+    Runs only for target states ``review`` and ``done``; inbox /
+    in_progress / cancelled / rework skip the gate outright.
+    """
+
+    if task.status not in _DEPLOY_TRUTH_REQUIRED_STATUSES:
+        return
+    if task.validation_target is None:
+        # No target to fetch against — delivery-contract guard above
+        # already rejected this for kinds that require a target. For
+        # ``content_copy``/``review_only`` kinds the target is legit
+        # null; deploy-truth has nothing to verify.
+        return
+
+    if task.supports_build_metadata is not True:
+        reason = (
+            "supports_build_metadata_unknown"
+            if task.supports_build_metadata is None
+            else "supports_build_metadata_false"
+        )
+        _schedule_deploy_degraded_emit(
+            task_id=task.id,
+            board_id=task.board_id,
+            agent_id=actor_agent_id,
+            status_value=task.status,
+            reason=reason,
+        )
+        return
+
+    if task.packet_commit_sha is None:
+        raise _deploy_truth_error(
+            code=ERROR_CODE_DEPLOY_TRUTH_MISSING_PACKET_SHA,
+            message=(
+                f"Transition to {task.status} requires packet_commit_sha "
+                "when the target supports build metadata."
+            ),
+            status_value=task.status,
+        )
+
+    try:
+        metadata = await fetch_build_metadata(task.validation_target)
+    except DeployTruthFetchError as exc:
+        raise _deploy_truth_error(
+            code=ERROR_CODE_DEPLOY_TRUTH_UNREACHABLE,
+            message=(
+                f"Target build endpoint unreachable: {exc}. Mark the "
+                "target supports_build_metadata=false to opt into "
+                "degraded validation."
+            ),
+            status_value=task.status,
+        ) from exc
+
+    if metadata.sha is None:
+        raise _deploy_truth_error(
+            code=ERROR_CODE_DEPLOY_TRUTH_UNREACHABLE,
+            message=(
+                f"Target /__build responded without a SHA field. "
+                "Downgrade the target's capability flag or fix the "
+                "build-metadata endpoint."
+            ),
+            status_value=task.status,
+        )
+
+    if not packet_sha_matches_live(
+        packet_sha=task.packet_commit_sha, live_sha=metadata.sha
+    ):
+        raise _deploy_truth_error(
+            code=ERROR_CODE_DEPLOY_TRUTH_SHA_MISMATCH,
+            message=(
+                f"Packet SHA {task.packet_commit_sha} does not match "
+                f"live build SHA {metadata.sha}."
+            ),
+            status_value=task.status,
+            extra={
+                "packet_commit_sha": task.packet_commit_sha,
+                "live_sha": metadata.sha,
+                "built_at": metadata.built_at,
+                "branch": metadata.branch,
+                "target": metadata.target,
+            },
+        )
+
+
 # Hold a strong reference to background emit tasks so asyncio doesn't GC
 # them mid-flight (which would trigger "Task was destroyed but it is
 # pending!" warnings). Completed tasks auto-discard via done callback.
@@ -436,6 +568,54 @@ async def drain_actionability_emit_tasks() -> None:
     """
 
     pending = list(_ACTIONABILITY_EMIT_TASKS)
+    if not pending:
+        return
+    await asyncio.gather(*pending, return_exceptions=True)
+
+
+# Mirror of the actionability backlog for the deploy-truth degraded
+# signal. Shares the same bounded-strong-ref pattern so a slow DB
+# under a busy PATCH storm drops observability instead of piling up
+# unbounded tasks.
+_DEPLOY_DEGRADED_EMIT_TASKS: set[asyncio.Task[None]] = set()
+_DEPLOY_DEGRADED_EMIT_MAX_PENDING = 128
+
+
+def _schedule_deploy_degraded_emit(
+    *,
+    task_id: UUID,
+    board_id: UUID | None,
+    agent_id: UUID | None,
+    status_value: str,
+    reason: str,
+) -> None:
+    if len(_DEPLOY_DEGRADED_EMIT_TASKS) >= _DEPLOY_DEGRADED_EMIT_MAX_PENDING:
+        logger.warning(
+            "shadow_metrics.deploy_degraded_emit_dropped_backlog_full "
+            "pending=%d limit=%d task_id=%s",
+            len(_DEPLOY_DEGRADED_EMIT_TASKS),
+            _DEPLOY_DEGRADED_EMIT_MAX_PENDING,
+            task_id,
+        )
+        return
+    task = asyncio.create_task(
+        emit_deploy_validation_degraded_metric(
+            task_id=task_id,
+            board_id=board_id,
+            agent_id=agent_id,
+            status_value=status_value,
+            reason=reason,
+        ),
+        name="shadow_metrics.deploy_validation_degraded_emit",
+    )
+    _DEPLOY_DEGRADED_EMIT_TASKS.add(task)
+    task.add_done_callback(_DEPLOY_DEGRADED_EMIT_TASKS.discard)
+
+
+async def drain_deploy_degraded_emit_tasks() -> None:
+    """Mirror of ``drain_actionability_emit_tasks`` for the §I8 emit."""
+
+    pending = list(_DEPLOY_DEGRADED_EMIT_TASKS)
     if not pending:
         return
     await asyncio.gather(*pending, return_exceptions=True)
@@ -1880,6 +2060,7 @@ async def create_task(
         task=task,
         actor_agent_id=None,  # create_task is user-initiated (USER_AUTH_DEP)
     )
+    await _require_deploy_truth(task, actor_agent_id=None)
     session.add(task)
     # Ensure the task exists in the DB before inserting dependency rows.
     await session.flush()
@@ -3212,6 +3393,21 @@ async def _finalize_updated_task(
         # an ownerless active task.
         _require_delivery_contract_with_metric(
             task=update.task,
+            actor_agent_id=_comment_actor_id(update.actor),
+        )
+    # Phase V §I8: run the deploy-truth gate on any mutation that
+    # could affect the outcome — status transition, target change,
+    # packet-SHA edit, or capability-flag flip. The gate itself
+    # short-circuits on non-review/done states so unrelated PATCHes
+    # don't pay the HTTP-fetch cost.
+    if {
+        "status",
+        "validation_target",
+        "packet_commit_sha",
+        "supports_build_metadata",
+    }.intersection(update.updates):
+        await _require_deploy_truth(
+            update.task,
             actor_agent_id=_comment_actor_id(update.actor),
         )
     await _require_no_pending_approval_for_status_change_when_enabled(

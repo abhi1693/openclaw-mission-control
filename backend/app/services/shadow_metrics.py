@@ -61,6 +61,12 @@ logger = logging.getLogger(__name__)
 EVENT_COMMENT_ACK_ONLY = "comment.ack_only_candidate"
 EVENT_COMMENT_NEAR_DUPLICATE = "comment.near_duplicate_candidate"
 EVENT_TASK_ACTIONABILITY_VIOLATION = "task.actionability_violation_candidate"
+# Phase V §I8: emitted when a task enters ``review``/``done`` with a
+# ``supports_build_metadata`` flag of ``False`` or ``None`` — the
+# transition is allowed but validation runs in degraded mode.
+# Operators should burn these down by graduating targets to
+# capability=True or marking them explicitly blind.
+EVENT_TASK_DEPLOY_VALIDATION_DEGRADED = "task.deploy_validation_degraded"
 
 
 async def emit_actionability_violation_metric(
@@ -114,6 +120,48 @@ async def emit_actionability_violation_metric(
     except Exception:
         logger.exception(
             "shadow_metrics.actionability_emit_failed task_id=%s status=%s",
+            task_id,
+            status_value,
+        )
+
+
+async def emit_deploy_validation_degraded_metric(
+    *,
+    task_id: UUID | None,
+    board_id: UUID | None,
+    agent_id: UUID | None,
+    status_value: str,
+    reason: str,
+) -> None:
+    """Record that a ``review``/``done`` transition ran without live
+    SHA verification. Same fire-and-forget contract as the
+    actionability emitter — errors logged, never propagated.
+    """
+
+    try:
+        async with async_session_maker() as session:
+            event = ShadowMetricEvent(
+                event_type=EVENT_TASK_DEPLOY_VALIDATION_DEGRADED,
+                task_id=task_id,
+                board_id=board_id,
+                agent_id=agent_id,
+                classifier_metadata={
+                    "status_value": status_value,
+                    "reason": reason,
+                },
+            )
+            session.add(event)
+            await session.commit()
+    except asyncio.CancelledError:
+        logger.info(
+            "shadow_metrics.deploy_degraded_emit_cancelled task_id=%s status=%s",
+            task_id,
+            status_value,
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "shadow_metrics.deploy_degraded_emit_failed task_id=%s status=%s",
             task_id,
             status_value,
         )
