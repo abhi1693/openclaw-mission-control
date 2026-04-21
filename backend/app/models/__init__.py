@@ -19,6 +19,10 @@ from app.models.organization_board_access import OrganizationBoardAccess
 from app.models.organization_invite_board_access import OrganizationInviteBoardAccess
 from app.models.organization_invites import OrganizationInvite
 from app.models.organization_members import OrganizationMember
+from app.models.operator_decisions import (
+    OperatorDecision,
+    OperatorDecisionTaskLink,
+)
 from app.models.organizations import Organization
 from app.models.reviews import Review, ReviewBlocker
 from app.models.shadow_metric_events import ShadowMetricEvent
@@ -54,6 +58,8 @@ __all__ = [
     "GatewayInstalledSkill",
     "MarketplaceSkill",
     "SkillPack",
+    "OperatorDecision",
+    "OperatorDecisionTaskLink",
     "Organization",
     "Review",
     "ReviewBlocker",
