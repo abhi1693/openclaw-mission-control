@@ -48,7 +48,6 @@ def upgrade() -> None:
         sa.Column("required_artifact", sa.Text(), nullable=True),
         sa.Column("target_env", sa.String(length=64), nullable=True),
         sa.Column("reopen_condition", sa.Text(), nullable=True),
-        sa.Column("citation", sa.Text(), nullable=True),
         sa.Column(
             "created_by_agent_id",
             sa.Uuid(),

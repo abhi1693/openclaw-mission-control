@@ -267,6 +267,46 @@ async def test_orm_path_can_bypass_fail_requires_blocker(
 
 
 @pytest.mark.asyncio
+async def test_orm_path_can_attach_cross_task_blocker_to_review(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """``ReviewBlocker`` has no FK-level invariant tying the blocker to
+    the review's task/board. Direct ORM writes can cross-link rows.
+    ``create_task_review`` never triggers this path (it creates
+    same-task blockers inline), but the gap is visible to anyone who
+    reaches for ``session.add(ReviewBlocker(...))`` directly. A
+    ``before_flush`` validator is the next closure."""
+
+    session, board, task, _actor = seeded
+    other_task_id = uuid4()
+    session.add(
+        Task(
+            id=other_task_id,
+            board_id=board.id,
+            title="Other task",
+            status="in_progress",
+        ),
+    )
+    other_blocker = Blocker(
+        board_id=board.id,
+        task_id=other_task_id,
+        category="source",
+        owner_role="frontend-dev",
+    )
+    session.add(other_blocker)
+    review = Review(
+        board_id=board.id,
+        task_id=task.id,
+        verdict="needs_changes",
+    )
+    session.add(review)
+    await session.flush()
+    session.add(ReviewBlocker(review_id=review.id, blocker_id=other_blocker.id))
+    # Commits without error today.
+    await session.commit()
+
+
+@pytest.mark.asyncio
 async def test_multiple_descriptors_are_distinct_blocker_rows(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
 ) -> None:
