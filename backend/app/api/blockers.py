@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import (
     ACTOR_DEP,
@@ -107,7 +108,17 @@ async def create_task_blocker(
         created_by_agent_id=actor.agent.id if actor.agent is not None else None,
     )
     session.add(blocker)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        # Partial unique index on supersedes_blocker_id serialises
+        # concurrent POSTs that both try to supersede the same prior.
+        # The loser sees 409, not 500.
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="blocker already superseded",
+        ) from exc
     await session.refresh(blocker)
     return BlockerRead.model_validate(blocker, from_attributes=True)
 
@@ -126,18 +137,31 @@ async def update_task_blocker(
     blocker = await _load_blocker(session, task=task, blocker_id=blocker_id)
     mutated = False
 
-    if (
-        payload.status_transition == "acknowledge"
-        and blocker.acknowledged_at is None
-    ):
+    if payload.status_transition == "acknowledge":
+        if blocker.resolved_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="cannot acknowledge a resolved blocker",
+            )
+        if blocker.acknowledged_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="blocker already acknowledged",
+            )
         blocker.acknowledged_at = utcnow()
         blocker.acknowledged_by_agent_id = (
             actor.agent.id if actor.agent is not None else None
         )
         mutated = True
-    if payload.status_transition == "resolve" and blocker.resolved_at is None:
+    elif payload.status_transition == "resolve":
+        if blocker.resolved_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="blocker already resolved",
+            )
         blocker.resolved_at = utcnow()
         mutated = True
+
     for field in ("required_artifact", "target_env", "reopen_condition"):
         if field in payload.model_fields_set:
             setattr(blocker, field, getattr(payload, field))

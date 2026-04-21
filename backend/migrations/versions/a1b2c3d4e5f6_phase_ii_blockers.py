@@ -71,13 +71,13 @@ def upgrade() -> None:
             sa.ForeignKey("blockers.id"),
             nullable=True,
         ),
-    )
-    # Defense-in-depth: Pydantic Literal validates API writes, but
-    # raw SQL and fixtures bypass that layer.
-    op.create_check_constraint(
-        "ck_blockers_category_values",
-        "blockers",
-        "category IN ('source', 'deploy', 'runtime', 'contract', 'operator')",
+        # Inline so SQLite auto-migrate can emit the CHECK; a
+        # post-create op.create_check_constraint() raises
+        # NotImplementedError on SQLite.
+        sa.CheckConstraint(
+            "category IN ('source', 'deploy', 'runtime', 'contract', 'operator')",
+            name="ck_blockers_category_values",
+        ),
     )
     # Fast "does this task have any open blocker?" lookup powers the
     # is_blocked derivation that lands in a follow-up commit.
@@ -117,5 +117,4 @@ def downgrade() -> None:
     op.drop_index("uq_blockers_supersedes_blocker_id_open", table_name="blockers")
     op.drop_index("ix_blockers_board_id_open", table_name="blockers")
     op.drop_index("ix_blockers_task_id_open", table_name="blockers")
-    op.drop_constraint("ck_blockers_category_values", "blockers", type_="check")
     op.drop_table("blockers")

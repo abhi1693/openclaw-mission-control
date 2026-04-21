@@ -56,11 +56,13 @@ def upgrade() -> None:
             index=True,
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-    )
-    op.create_check_constraint(
-        "ck_reviews_verdict_values",
-        "reviews",
-        "verdict IN ('pass', 'fail', 'needs_changes')",
+        # Inline CHECK — op.create_check_constraint() after a
+        # create_table() raises NotImplementedError on SQLite and the
+        # dev auto-migrator runs against SQLite.
+        sa.CheckConstraint(
+            "verdict IN ('pass', 'fail', 'needs_changes')",
+            name="ck_reviews_verdict_values",
+        ),
     )
     op.create_table(
         "review_blockers",
@@ -91,5 +93,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("review_blockers")
-    op.drop_constraint("ck_reviews_verdict_values", "reviews", type_="check")
     op.drop_table("reviews")

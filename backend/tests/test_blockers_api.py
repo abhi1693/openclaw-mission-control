@@ -270,12 +270,16 @@ async def test_patch_noop_payload_rejected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_supersede_second_writer_loses(
+async def test_supersede_duplicate_rejected_with_409(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
 ) -> None:
-    """Partial unique index must prevent two rows superseding the same
-    prior blocker — protects against a TOCTOU race between concurrent
-    POSTs that both pass the in-Python ``resolved_at IS NULL`` check."""
+    """Partial unique index on supersedes_blocker_id surfaces as a 409
+    via the handler's IntegrityError → HTTPException translation.
+
+    This single-session test does not prove the prod TOCTOU race
+    (that would need two concurrent connections); it proves the DB
+    guard that makes the race race-safe.
+    """
 
     session, board, task, actor = seeded
     prior = await create_task_blocker(
@@ -285,7 +289,6 @@ async def test_concurrent_supersede_second_writer_loses(
         session=session,
         actor=actor,  # type: ignore[arg-type]
     )
-    # First supersede succeeds.
     await create_task_blocker(
         payload=_create_payload(supersedes_blocker_id=prior.id),
         board=board,
@@ -293,15 +296,8 @@ async def test_concurrent_supersede_second_writer_loses(
         session=session,
         actor=actor,  # type: ignore[arg-type]
     )
-    from sqlalchemy.exc import IntegrityError
 
-    prior_row = await session.get(Blocker, prior.id)
-    assert prior_row is not None
-    prior_row.resolved_at = None
-    session.add(prior_row)
-    await session.commit()
-
-    with pytest.raises(IntegrityError):
+    with pytest.raises(HTTPException) as exc:
         await create_task_blocker(
             payload=_create_payload(supersedes_blocker_id=prior.id),
             board=board,
@@ -309,3 +305,64 @@ async def test_concurrent_supersede_second_writer_loses(
             session=session,
             actor=actor,  # type: ignore[arg-type]
         )
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_acknowledge_after_resolve_conflicts(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    session, board, task, actor = seeded
+    created = await create_task_blocker(
+        payload=_create_payload(),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    await update_task_blocker(
+        blocker_id=created.id,
+        payload=BlockerUpdate(status_transition="resolve"),
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    with pytest.raises(HTTPException) as exc:
+        await update_task_blocker(
+            blocker_id=created.id,
+            payload=BlockerUpdate(status_transition="acknowledge"),
+            task=task,
+            session=session,
+            actor=actor,  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_redundant_acknowledge_conflicts(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    session, board, task, actor = seeded
+    created = await create_task_blocker(
+        payload=_create_payload(),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    await update_task_blocker(
+        blocker_id=created.id,
+        payload=BlockerUpdate(status_transition="acknowledge"),
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    with pytest.raises(HTTPException) as exc:
+        await update_task_blocker(
+            blocker_id=created.id,
+            payload=BlockerUpdate(status_transition="acknowledge"),
+            task=task,
+            session=session,
+            actor=actor,  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 409
