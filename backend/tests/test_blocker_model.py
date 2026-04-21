@@ -11,6 +11,7 @@ Exercises the shape that API + enforcement code will rely on:
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import get_args
 from uuid import uuid4
 
 import pytest
@@ -19,7 +20,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
-from app.models.blockers import BLOCKER_CATEGORIES, Blocker
+from app.models.blockers import Blocker
+from app.schemas.blockers import BlockerCategory
+
+BLOCKER_CATEGORIES = get_args(BlockerCategory)
 
 
 @pytest_asyncio.fixture

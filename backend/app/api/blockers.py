@@ -12,22 +12,20 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import col, select
 
 from app.api.deps import (
+    ACTOR_DEP,
+    SESSION_DEP,
     ActorContext,
     get_board_for_actor_read,
     get_board_for_actor_write,
     get_task_or_404,
-    require_user_or_agent,
 )
 from app.core.time import utcnow
 from app.db.pagination import paginate
-from app.db.session import get_session
 from app.models.blockers import Blocker
 from app.models.tasks import Task
 from app.schemas.blockers import BlockerCreate, BlockerRead, BlockerUpdate
-from app.schemas.common import OkResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
 
 if TYPE_CHECKING:
@@ -43,23 +41,20 @@ router = APIRouter(
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 TASK_DEP = Depends(get_task_or_404)
-SESSION_DEP = Depends(get_session)
-ACTOR_DEP = Depends(require_user_or_agent)
-
-
-def _agent_id_for(actor: ActorContext) -> UUID | None:
-    return actor.agent.id if actor.agent is not None else None
 
 
 async def _load_blocker(
     session: "AsyncSession", *, task: Task, blocker_id: UUID
 ) -> Blocker:
-    stmt = (
-        select(Blocker)
-        .where(col(Blocker.id) == blocker_id)
-        .where(col(Blocker.task_id) == task.id)
-    )
-    blocker = (await session.exec(stmt)).first()
+    """Load a blocker scoped to the task, or raise 404.
+
+    The task-scoped filter is load-bearing — it prevents cross-task
+    self-FK reuse when filing a superseding blocker.
+    """
+
+    blocker = await Blocker.objects.filter_by(
+        id=blocker_id, task_id=task.id
+    ).first(session)
     if blocker is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return blocker
@@ -75,9 +70,9 @@ async def list_task_blockers(
     """List blockers filed against the task, newest first."""
 
     statement = (
-        select(Blocker)
-        .where(col(Blocker.task_id) == task.id)
-        .order_by(col(Blocker.created_at).desc())
+        Blocker.objects.filter_by(task_id=task.id)
+        .order_by(Blocker.created_at.desc())
+        .statement
     )
     return await paginate(session, statement)
 
@@ -93,8 +88,6 @@ async def create_task_blocker(
     """File a new blocker against the task."""
 
     if payload.supersedes_blocker_id is not None:
-        # Guard the self-FK: the superseded row must live on the same
-        # task so we don't leak cross-task blocker chains.
         prior = await _load_blocker(
             session, task=task, blocker_id=payload.supersedes_blocker_id
         )
@@ -111,12 +104,12 @@ async def create_task_blocker(
         target_env=payload.target_env,
         reopen_condition=payload.reopen_condition,
         supersedes_blocker_id=payload.supersedes_blocker_id,
-        created_by_agent_id=_agent_id_for(actor),
+        created_by_agent_id=actor.agent.id if actor.agent is not None else None,
     )
     session.add(blocker)
     await session.commit()
     await session.refresh(blocker)
-    return BlockerRead.model_validate(blocker.model_dump())
+    return BlockerRead.model_validate(blocker, from_attributes=True)
 
 
 @router.patch("/{blocker_id}", response_model=BlockerRead)
@@ -131,36 +124,27 @@ async def update_task_blocker(
     """Acknowledge, resolve, or sharpen an open blocker."""
 
     blocker = await _load_blocker(session, task=task, blocker_id=blocker_id)
+    mutated = False
 
-    if payload.acknowledge and blocker.acknowledged_at is None:
+    if (
+        payload.status_transition == "acknowledge"
+        and blocker.acknowledged_at is None
+    ):
         blocker.acknowledged_at = utcnow()
-        blocker.acknowledged_by_agent_id = _agent_id_for(actor)
-    if payload.resolve and blocker.resolved_at is None:
+        blocker.acknowledged_by_agent_id = (
+            actor.agent.id if actor.agent is not None else None
+        )
+        mutated = True
+    if payload.status_transition == "resolve" and blocker.resolved_at is None:
         blocker.resolved_at = utcnow()
-    if "required_artifact" in payload.model_fields_set:
-        blocker.required_artifact = payload.required_artifact
-    if "target_env" in payload.model_fields_set:
-        blocker.target_env = payload.target_env
-    if "reopen_condition" in payload.model_fields_set:
-        blocker.reopen_condition = payload.reopen_condition
+        mutated = True
+    for field in ("required_artifact", "target_env", "reopen_condition"):
+        if field in payload.model_fields_set:
+            setattr(blocker, field, getattr(payload, field))
+            mutated = True
 
-    session.add(blocker)
-    await session.commit()
-    await session.refresh(blocker)
-    return BlockerRead.model_validate(blocker.model_dump())
-
-
-@router.delete("/{blocker_id}", response_model=OkResponse)
-async def delete_task_blocker(
-    blocker_id: UUID,
-    task: Task = TASK_DEP,
-    session: "AsyncSession" = SESSION_DEP,
-    _board: "Board" = BOARD_WRITE_DEP,
-    _actor: ActorContext = ACTOR_DEP,
-) -> OkResponse:
-    """Hard-delete a blocker. Prefer resolve over delete — delete drops audit."""
-
-    blocker = await _load_blocker(session, task=task, blocker_id=blocker_id)
-    await session.delete(blocker)
-    await session.commit()
-    return OkResponse()
+    if mutated:
+        session.add(blocker)
+        await session.commit()
+        await session.refresh(blocker)
+    return BlockerRead.model_validate(blocker, from_attributes=True)

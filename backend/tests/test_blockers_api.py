@@ -20,11 +20,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.blockers import (
-    create_task_blocker,
-    delete_task_blocker,
-    update_task_blocker,
-)
+from app.api.blockers import create_task_blocker, update_task_blocker
 from app.models.agents import Agent
 from app.models.blockers import Blocker
 from app.models.boards import Board
@@ -209,7 +205,7 @@ async def test_patch_acknowledge_then_resolve(
 
     acked = await update_task_blocker(
         blocker_id=created.id,
-        payload=BlockerUpdate(acknowledge=True),
+        payload=BlockerUpdate(status_transition="acknowledge"),
         task=task,
         session=session,
         actor=actor,  # type: ignore[arg-type]
@@ -220,13 +216,13 @@ async def test_patch_acknowledge_then_resolve(
 
     resolved = await update_task_blocker(
         blocker_id=created.id,
-        payload=BlockerUpdate(resolve=True),
+        payload=BlockerUpdate(status_transition="resolve"),
         task=task,
         session=session,
         actor=actor,  # type: ignore[arg-type]
     )
     assert resolved.resolved_at is not None
-    # Idempotent re-ack shouldn't clobber the original timestamp.
+    # Resolving shouldn't clobber the prior ack timestamp.
     assert resolved.acknowledged_at == acked.acknowledged_at
 
 
@@ -257,7 +253,7 @@ async def test_patch_rejects_cross_task_blocker(
     with pytest.raises(HTTPException) as exc:
         await update_task_blocker(
             blocker_id=foreign.id,
-            payload=BlockerUpdate(acknowledge=True),
+            payload=BlockerUpdate(status_transition="acknowledge"),
             task=task,
             session=session,
             actor=actor,  # type: ignore[arg-type]
@@ -274,21 +270,42 @@ async def test_patch_noop_payload_rejected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_blocker(
+async def test_concurrent_supersede_second_writer_loses(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
 ) -> None:
+    """Partial unique index must prevent two rows superseding the same
+    prior blocker — protects against a TOCTOU race between concurrent
+    POSTs that both pass the in-Python ``resolved_at IS NULL`` check."""
+
     session, board, task, actor = seeded
-    created = await create_task_blocker(
+    prior = await create_task_blocker(
         payload=_create_payload(),
         board=board,
         task=task,
         session=session,
         actor=actor,  # type: ignore[arg-type]
     )
-    await delete_task_blocker(
-        blocker_id=created.id,
+    # First supersede succeeds.
+    await create_task_blocker(
+        payload=_create_payload(supersedes_blocker_id=prior.id),
+        board=board,
         task=task,
         session=session,
-        _actor=actor,  # type: ignore[arg-type]
+        actor=actor,  # type: ignore[arg-type]
     )
-    assert await session.get(Blocker, created.id) is None
+    from sqlalchemy.exc import IntegrityError
+
+    prior_row = await session.get(Blocker, prior.id)
+    assert prior_row is not None
+    prior_row.resolved_at = None
+    session.add(prior_row)
+    await session.commit()
+
+    with pytest.raises(IntegrityError):
+        await create_task_blocker(
+            payload=_create_payload(supersedes_blocker_id=prior.id),
+            board=board,
+            task=task,
+            session=session,
+            actor=actor,  # type: ignore[arg-type]
+        )

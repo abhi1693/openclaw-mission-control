@@ -24,8 +24,6 @@ from app.models.tenancy import TenantScoped
 
 RUNTIME_ANNOTATION_TYPES = (datetime,)
 
-REVIEW_VERDICTS = ("pass", "fail", "needs_changes")
-
 
 class Review(TenantScoped, table=True):
     """Structured review verdict on a task."""
@@ -39,13 +37,14 @@ class Review(TenantScoped, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    board_id: UUID = Field(foreign_key="boards.id", index=True)
+    # board_id is carried for tenant scope (authz + cascade) even
+    # though most reads reach it via task_id → tasks.board_id.
+    board_id: UUID = Field(foreign_key="boards.id")
     task_id: UUID = Field(foreign_key="tasks.id", index=True)
     verdict: str
-    summary: str | None = None
-    # Citation keeps the reviewer's narrative — the routing data lives
-    # in the linked blocker rows. Kept text, not JSON, so the Supervisor
-    # can render it inline without schema churn.
+    # Reviewer's narrative. Routing data lives in the linked blocker
+    # rows; this is plain text so the Supervisor can render it inline
+    # without schema churn.
     citation: str | None = None
     reviewer_agent_id: UUID | None = Field(
         default=None, foreign_key="agents.id", index=True
@@ -71,6 +70,10 @@ class ReviewBlocker(TenantScoped, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    review_id: UUID = Field(foreign_key="reviews.id", index=True)
+    # Unique (review_id, blocker_id) above already indexes review_id
+    # as the prefix column — no separate ix_review_blockers_review_id
+    # needed. Keep an index on blocker_id for "reviews citing this
+    # blocker" reverse lookups.
+    review_id: UUID = Field(foreign_key="reviews.id")
     blocker_id: UUID = Field(foreign_key="blockers.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)

@@ -31,12 +31,13 @@ def upgrade() -> None:
     op.create_table(
         "reviews",
         sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
+        # board_id carries tenant scope; no board-wide reviews index
+        # is added because the access pattern is task-scoped.
         sa.Column(
             "board_id",
             sa.Uuid(),
             sa.ForeignKey("boards.id"),
             nullable=False,
-            index=True,
         ),
         sa.Column(
             "task_id",
@@ -46,7 +47,6 @@ def upgrade() -> None:
             index=True,
         ),
         sa.Column("verdict", sa.String(length=32), nullable=False),
-        sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("citation", sa.Text(), nullable=True),
         sa.Column(
             "reviewer_agent_id",
@@ -65,12 +65,13 @@ def upgrade() -> None:
     op.create_table(
         "review_blockers",
         sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
+        # Unique (review_id, blocker_id) below already indexes
+        # review_id as the prefix column — no separate review_id index.
         sa.Column(
             "review_id",
             sa.Uuid(),
             sa.ForeignKey("reviews.id"),
             nullable=False,
-            index=True,
         ),
         sa.Column(
             "blocker_id",

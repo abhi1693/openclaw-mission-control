@@ -7,8 +7,7 @@ Create Date: 2026-04-21 16:00:00.000000
 Adds the ``blockers`` table — Phase II §I1's first-class routing
 object. Tasks flagged as blocked must now carry at least one open
 Blocker row; free-text "blocked on ..." comments become a protocol
-error in Phase VI once lane quieting is wired up. The table ships
-here so API + enforcement PRs can land incrementally.
+error in Phase VI once lane quieting is wired up.
 
 See docs/plans/2026-04-16-mc-delivery-enforcement-plan.md §I1 and
 §"Phase II — Blocker and review sidecars".
@@ -71,18 +70,17 @@ def upgrade() -> None:
             sa.Uuid(),
             sa.ForeignKey("blockers.id"),
             nullable=True,
-            index=True,
         ),
     )
-    # Defense-in-depth: Pydantic Literal will validate API writes, but
+    # Defense-in-depth: Pydantic Literal validates API writes, but
     # raw SQL and fixtures bypass that layer.
     op.create_check_constraint(
         "ck_blockers_category_values",
         "blockers",
         "category IN ('source', 'deploy', 'runtime', 'contract', 'operator')",
     )
-    # Fast "does this task have any open blocker?" lookup powers
-    # is_blocked derivation in the next commit.
+    # Fast "does this task have any open blocker?" lookup powers the
+    # is_blocked derivation that lands in a follow-up commit.
     op.create_index(
         "ix_blockers_task_id_open",
         "blockers",
@@ -90,9 +88,34 @@ def upgrade() -> None:
         postgresql_where=sa.text("resolved_at IS NULL"),
         sqlite_where=sa.text("resolved_at IS NULL"),
     )
+    # Phase VI lane-quieting + the Supervisor dashboard both scan for
+    # open blockers at board scope. Partial keeps the index tiny vs.
+    # the full board_id index that would cover every historical row.
+    op.create_index(
+        "ix_blockers_board_id_open",
+        "blockers",
+        ["board_id"],
+        postgresql_where=sa.text("resolved_at IS NULL"),
+        sqlite_where=sa.text("resolved_at IS NULL"),
+    )
+    # Race-proofs concurrent supersede: two POSTs both citing the same
+    # supersedes_blocker_id would otherwise each pass the
+    # prior.resolved_at IS NULL check and both insert a sharpening,
+    # leaving the prior row ambiguous. The partial unique index makes
+    # the second inserter fail at the DB layer.
+    op.create_index(
+        "uq_blockers_supersedes_blocker_id_open",
+        "blockers",
+        ["supersedes_blocker_id"],
+        unique=True,
+        postgresql_where=sa.text("supersedes_blocker_id IS NOT NULL"),
+        sqlite_where=sa.text("supersedes_blocker_id IS NOT NULL"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_blockers_supersedes_blocker_id_open", table_name="blockers")
+    op.drop_index("ix_blockers_board_id_open", table_name="blockers")
     op.drop_index("ix_blockers_task_id_open", table_name="blockers")
     op.drop_constraint("ck_blockers_category_values", "blockers", type_="check")
     op.drop_table("blockers")

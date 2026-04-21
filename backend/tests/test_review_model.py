@@ -8,6 +8,7 @@ invariant lives at the API layer in a follow-up commit.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Literal, get_args
 from uuid import uuid4
 
 import pytest
@@ -17,7 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
 from app.models.blockers import Blocker
-from app.models.reviews import REVIEW_VERDICTS, Review, ReviewBlocker
+from app.models.reviews import Review, ReviewBlocker
+
+# Mirror the verdict enum in one test-local Literal; the model + the
+# migration hold the CHECK constraint as the authoritative definition.
+ReviewVerdict = Literal["pass", "fail", "needs_changes"]
+REVIEW_VERDICTS = get_args(ReviewVerdict)
 
 
 @pytest_asyncio.fixture

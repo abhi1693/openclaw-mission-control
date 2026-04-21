@@ -39,20 +39,17 @@ class BlockerCreate(BlockerBase):
 
 
 class BlockerUpdate(SQLModel):
-    """Partial update — ack, resolve, or sharpen an open blocker.
+    """Partial update — sharpen the narrative or advance the lifecycle.
 
-    ``acknowledged_at`` and ``resolved_at`` are server-set; callers
-    flip the booleans ``acknowledge`` / ``resolve`` and the server
-    stamps the current timestamp. That keeps the endpoint honest
-    about clock ownership and lets the acknowledger agent be captured
-    from the request context.
+    ``acknowledged_at`` / ``resolved_at`` are server-stamped from the
+    request clock; the payload only carries the intended transition so
+    the endpoint owns the timestamp and the acknowledger's agent id.
     """
 
     required_artifact: str | None = None
     target_env: str | None = None
     reopen_condition: str | None = None
-    acknowledge: bool | None = None
-    resolve: bool | None = None
+    status_transition: Literal["acknowledge", "resolve"] | None = None
 
     @model_validator(mode="after")
     def reject_noop_update(self) -> Self:
