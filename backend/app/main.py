@@ -28,6 +28,7 @@ from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
 from app.api.mission_control import router as mission_control_router
 from app.api.organizations import router as organizations_router
+from app.api.reviews import router as reviews_router
 from app.api.skills_marketplace import router as skills_marketplace_router
 from app.api.souls_directory import router as souls_directory_router
 from app.api.tags import router as tags_router
@@ -596,6 +597,7 @@ api_v1.include_router(board_webhooks_router)
 api_v1.include_router(board_onboarding_router)
 api_v1.include_router(approvals_router)
 api_v1.include_router(blockers_router)
+api_v1.include_router(reviews_router)
 api_v1.include_router(tasks_router)
 api_v1.include_router(task_custom_fields_router)
 api_v1.include_router(tags_router)
