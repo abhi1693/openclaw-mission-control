@@ -1,6 +1,6 @@
 """phase II: structured blocker sidecar table
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: b10ca1ab1e00
 Revises: e5f6a7b8c9d0
 Create Date: 2026-04-21 16:00:00.000000
 
@@ -19,7 +19,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "a1b2c3d4e5f6"
+revision = "b10ca1ab1e00"
 down_revision = "e5f6a7b8c9d0"
 branch_labels = None
 depends_on = None

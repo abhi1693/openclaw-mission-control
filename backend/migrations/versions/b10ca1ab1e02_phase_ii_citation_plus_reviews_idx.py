@@ -1,7 +1,7 @@
 """phase II part 2: blocker.citation column + reviews task/created_at index
 
-Revision ID: c3d4e5f6a7b8
-Revises: b2c3d4e5f6a7
+Revision ID: b10ca1ab1e02
+Revises: b10ca1ab1e01
 Create Date: 2026-04-21 17:30:00.000000
 
 Follow-up changes that emerged from the /simplify + /codex review gauntlet
@@ -18,7 +18,7 @@ on Phase II reviews + is_blocked work:
   the scan index-only for tasks with rework-cycle review history.
 
 Lives in a separate revision (not an in-place edit of
-``a1b2c3d4e5f6``/``b2c3d4e5f6a7``) so any environment that stamped the
+``b10ca1ab1e00``/``b10ca1ab1e01``) so any environment that stamped the
 original Phase II revisions picks up these additions on the next
 ``alembic upgrade head``.
 """
@@ -29,8 +29,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "c3d4e5f6a7b8"
-down_revision = "b2c3d4e5f6a7"
+revision = "b10ca1ab1e02"
+down_revision = "b10ca1ab1e01"
 branch_labels = None
 depends_on = None
 

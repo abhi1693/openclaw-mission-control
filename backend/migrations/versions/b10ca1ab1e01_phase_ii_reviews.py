@@ -1,7 +1,7 @@
 """phase II: reviews + review_blockers sidecar tables
 
-Revision ID: b2c3d4e5f6a7
-Revises: a1b2c3d4e5f6
+Revision ID: b10ca1ab1e01
+Revises: b10ca1ab1e00
 Create Date: 2026-04-21 16:30:00.000000
 
 Adds the two tables that back Phase II §I4 "reviews emit structured
@@ -21,8 +21,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "b2c3d4e5f6a7"
-down_revision = "a1b2c3d4e5f6"
+revision = "b10ca1ab1e01"
+down_revision = "b10ca1ab1e00"
 branch_labels = None
 depends_on = None
 
