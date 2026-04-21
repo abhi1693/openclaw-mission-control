@@ -3134,7 +3134,11 @@ async def create_task_comment(
             task.id,
         )
         classifier_result = None
-    if classifier_result is not None and classifier_result.flags:
+    # None = hook crashed (column stays None = "not classified").
+    # classifier_ran=False = intentionally skipped (user comment / oversized;
+    # column stays None, no signal to lose).
+    # classifier_ran=True = stamp the flag list (possibly empty = "clean").
+    if classifier_result is not None and classifier_result.classifier_ran:
         event.classifier_flags = [flag.value for flag in classifier_result.flags]
     session.add(event)
     if classifier_result is not None:

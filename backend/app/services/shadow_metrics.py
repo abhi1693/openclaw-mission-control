@@ -159,7 +159,7 @@ async def _fetch_prior_comment(
     return (await session.exec(statement)).first()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CommentClassifierResult:
     """Output of the comment classifier hook.
 
@@ -167,10 +167,17 @@ class CommentClassifierResult:
     ActivityEvent row for fast GET filtering) from the shadow events
     (long-term observability storage). Both commit atomically via the
     caller's session.
+
+    ``classifier_ran`` distinguishes "skipped" (user comment, oversized
+    body, caller caught an exception from the builder) from "ran and
+    found nothing". The caller stamps ``event.classifier_flags`` as
+    ``[]`` when ran=True + flags=[] (observable "clean") and leaves it
+    ``None`` otherwise (unclassified).
     """
 
     flags: list[ClassifierFlag]
     shadow_events: list[ShadowMetricEvent]
+    classifier_ran: bool
 
 
 async def build_shadow_events_for_comment(
@@ -196,13 +203,13 @@ async def build_shadow_events_for_comment(
       append-only observability table.
     """
 
-    empty = CommentClassifierResult(flags=[], shadow_events=[])
+    skipped = CommentClassifierResult(flags=[], shadow_events=[], classifier_ran=False)
 
     # User-authored comments (no agent_id) are exempt from ack-theater
     # classification. The observability surface measures agent noise;
     # treating operator acks as data points pollutes the histogram.
     if agent_id is None:
-        return empty
+        return skipped
 
     # Defensive cap on pathological payloads — see MESSAGE_CLASSIFY_MAX_CHARS.
     if len(message) > MESSAGE_CLASSIFY_MAX_CHARS:
@@ -212,7 +219,7 @@ async def build_shadow_events_for_comment(
             agent_id,
             len(message),
         )
-        return empty
+        return skipped
 
     reference = now if now is not None else utcnow()
     window_start = reference - timedelta(seconds=NEAR_DUPLICATE_WINDOW_SECONDS)
@@ -245,10 +252,10 @@ async def build_shadow_events_for_comment(
             task_id,
             agent_id,
         )
-        return empty
+        return skipped
 
     if not flags:
-        return empty
+        return CommentClassifierResult(flags=[], shadow_events=[], classifier_ran=True)
 
     shadow_events = [
         ShadowMetricEvent(
@@ -264,4 +271,8 @@ async def build_shadow_events_for_comment(
         )
         for flag in flags
     ]
-    return CommentClassifierResult(flags=list(flags), shadow_events=shadow_events)
+    return CommentClassifierResult(
+        flags=list(flags),
+        shadow_events=shadow_events,
+        classifier_ran=True,
+    )

@@ -30,8 +30,10 @@ ROLLOUT_FLAG_ALLOWLIST = frozenset(
 )
 
 # Phase I classifier filter modes. See amendments §1 for graduation rules.
+# The Pydantic Literal enforces the allowlist at the API layer; the
+# migration adds a CHECK constraint so raw-SQL paths can't smuggle in
+# invalid values either.
 CommentSignalFilter = Literal["off", "default_hidden", "hidden_strict"]
-COMMENT_SIGNAL_FILTER_VALUES = frozenset({"off", "default_hidden", "hidden_strict"})
 
 
 def partition_rollout_flags(

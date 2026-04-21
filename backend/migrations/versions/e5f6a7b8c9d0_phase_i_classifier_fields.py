@@ -53,8 +53,21 @@ def upgrade() -> None:
     # single source of truth for new rows — same pattern as the
     # rollout_flags migration (b2c3d4e5f6a7).
     op.alter_column("boards", "comment_signal_filter", server_default=None)
+    # Defense-in-depth: the Pydantic Literal validates API writes, but
+    # raw SQL, data fixtures, and external tools bypass that layer.
+    # A CHECK constraint makes the 3-value enum DB-enforced.
+    op.create_check_constraint(
+        "ck_boards_comment_signal_filter_values",
+        "boards",
+        "comment_signal_filter IN ('off', 'default_hidden', 'hidden_strict')",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint(
+        "ck_boards_comment_signal_filter_values",
+        "boards",
+        type_="check",
+    )
     op.drop_column("boards", "comment_signal_filter")
     op.drop_column("activity_events", "classifier_flags")
