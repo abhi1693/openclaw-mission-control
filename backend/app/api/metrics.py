@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,13 +14,19 @@ from sqlalchemy import func
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import require_org_member
+from app.db.pagination import paginate
+
+if TYPE_CHECKING:
+    from fastapi_pagination.limit_offset import LimitOffsetPage
+
+from app.api.deps import require_org_admin, require_org_member
 from app.core.time import utcnow
 from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.approvals import Approval
 from app.models.boards import Board
+from app.models.shadow_metric_events import ShadowMetricEvent
 from app.models.tasks import Task
 from app.schemas.metrics import (
     DashboardBucketKey,
@@ -35,6 +42,8 @@ from app.schemas.metrics import (
     DashboardWipRangeSeries,
     DashboardWipSeriesSet,
 )
+from app.schemas.pagination import DefaultLimitOffsetPage
+from app.schemas.shadow_metrics import ShadowMetricEventRead
 from app.services.organizations import OrganizationContext, list_accessible_board_ids
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -44,8 +53,14 @@ _RUNTIME_TYPE_REFERENCES = (UUID, AsyncSession)
 RANGE_QUERY = Query(default="24h")
 BOARD_ID_QUERY = Query(default=None)
 GROUP_ID_QUERY = Query(default=None)
+SHADOW_EVENT_TYPE_QUERY = Query(default=None)
+SHADOW_TASK_ID_QUERY = Query(default=None)
+SHADOW_AGENT_ID_QUERY = Query(default=None)
+SHADOW_SINCE_QUERY = Query(default=None)
+SHADOW_UNTIL_QUERY = Query(default=None)
 SESSION_DEP = Depends(get_session)
 ORG_MEMBER_DEP = Depends(require_org_member)
+ORG_ADMIN_DEP = Depends(require_org_admin)
 
 
 @dataclass(frozen=True)
@@ -549,3 +564,47 @@ async def dashboard_metrics(
         wip=wip,
         pending_approvals=pending_approvals,
     )
+
+
+@router.get("/shadow", response_model=DefaultLimitOffsetPage[ShadowMetricEventRead])
+async def list_shadow_metric_events(
+    event_type: str | None = SHADOW_EVENT_TYPE_QUERY,
+    board_id: UUID | None = BOARD_ID_QUERY,
+    task_id: UUID | None = SHADOW_TASK_ID_QUERY,
+    agent_id: UUID | None = SHADOW_AGENT_ID_QUERY,
+    since: datetime | None = SHADOW_SINCE_QUERY,
+    until: datetime | None = SHADOW_UNTIL_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> LimitOffsetPage[ShadowMetricEventRead]:
+    """List Phase 0 shadow-metric events visible to the requesting org admin.
+
+    Operator-scope only (amendment §A.7). Events without a board_id
+    (orphaned after task deletion + cascade) are omitted from results —
+    without board attribution there's no way to scope them to the
+    admin's organization safely.
+    """
+
+    accessible_board_ids = await list_accessible_board_ids(
+        session, member=ctx.member, write=False
+    )
+    statement = (
+        select(ShadowMetricEvent)
+        .where(col(ShadowMetricEvent.board_id).in_(accessible_board_ids))
+    )
+    if event_type is not None:
+        statement = statement.where(col(ShadowMetricEvent.event_type) == event_type)
+    if board_id is not None:
+        if board_id not in accessible_board_ids:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        statement = statement.where(col(ShadowMetricEvent.board_id) == board_id)
+    if task_id is not None:
+        statement = statement.where(col(ShadowMetricEvent.task_id) == task_id)
+    if agent_id is not None:
+        statement = statement.where(col(ShadowMetricEvent.agent_id) == agent_id)
+    if since is not None:
+        statement = statement.where(col(ShadowMetricEvent.created_at) >= since)
+    if until is not None:
+        statement = statement.where(col(ShadowMetricEvent.created_at) < until)
+    statement = statement.order_by(col(ShadowMetricEvent.created_at).desc())
+    return await paginate(session, statement)
