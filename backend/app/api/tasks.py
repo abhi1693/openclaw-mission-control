@@ -83,7 +83,10 @@ from app.services.tags import (
     replace_tags,
     validate_tag_ids,
 )
-from app.services.blockers import task_ids_with_open_blocker
+from app.services.blockers import (
+    task_has_open_blocker,
+    task_ids_with_open_blocker,
+)
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_ids_by_task_id,
@@ -2295,10 +2298,8 @@ async def _task_read_response(
     )
     if _status_clears_blockers(task.status):
         blocked_ids = []
-    has_open_blocker = bool(
-        await task_ids_with_open_blocker(
-            session, board_id=board_id, task_ids=[task.id]
-        )
+    has_open_blocker = await task_has_open_blocker(
+        session, board_id=board_id, task_id=task.id
     )
     return TaskRead.model_validate(task, from_attributes=True).model_copy(
         update={

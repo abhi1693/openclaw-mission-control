@@ -8,7 +8,9 @@ schema layer (422); the handler owns the atomic write.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 from sqlmodel import col, select
@@ -29,7 +31,7 @@ from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.reviews import ReviewBlockerRead, ReviewCreate, ReviewRead
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from fastapi_pagination.limit_offset import LimitOffsetPage
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -45,18 +47,44 @@ BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 TASK_DEP = Depends(get_task_or_404)
 
 
-async def _hydrate_review(
-    session: "AsyncSession", review: Review
-) -> ReviewRead:
-    """Load the review's linked blockers and build a ReviewRead."""
+def _to_review_blocker_read(
+    link: ReviewBlocker, blocker: Blocker
+) -> ReviewBlockerRead:
+    return ReviewBlockerRead(
+        id=link.id,
+        blocker_id=blocker.id,
+        category=blocker.category,  # type: ignore[arg-type]
+        owner_role=blocker.owner_role,
+        required_artifact=blocker.required_artifact,
+        target_env=blocker.target_env,
+        reopen_condition=blocker.reopen_condition,
+        citation=blocker.citation,
+    )
 
+
+async def _blockers_by_review(
+    session: "AsyncSession", review_ids: "Iterable[UUID]"
+) -> dict[UUID, list[ReviewBlockerRead]]:
+    """One SELECT + JOIN for all reviews on a page — avoids per-row N+1."""
+
+    ids = list(review_ids)
+    if not ids:
+        return {}
     stmt = (
         select(ReviewBlocker, Blocker)
         .join(Blocker, col(ReviewBlocker.blocker_id) == col(Blocker.id))
-        .where(col(ReviewBlocker.review_id) == review.id)
-        .order_by(col(ReviewBlocker.created_at).asc())
+        .where(col(ReviewBlocker.review_id).in_(ids))
+        .order_by(col(ReviewBlocker.review_id), col(ReviewBlocker.created_at).asc())
     )
-    rows = (await session.exec(stmt)).all()
+    grouped: dict[UUID, list[ReviewBlockerRead]] = defaultdict(list)
+    for link, blocker in (await session.exec(stmt)).all():
+        grouped[link.review_id].append(_to_review_blocker_read(link, blocker))
+    return grouped
+
+
+def _review_read(
+    review: Review, blockers: list[ReviewBlockerRead]
+) -> ReviewRead:
     return ReviewRead(
         id=review.id,
         board_id=review.board_id,
@@ -65,18 +93,7 @@ async def _hydrate_review(
         citation=review.citation,
         reviewer_agent_id=review.reviewer_agent_id,
         created_at=review.created_at,
-        blockers=[
-            ReviewBlockerRead(
-                id=link.id,
-                blocker_id=blocker.id,
-                category=blocker.category,  # type: ignore[arg-type]
-                owner_role=blocker.owner_role,
-                required_artifact=blocker.required_artifact,
-                target_env=blocker.target_env,
-                reopen_condition=blocker.reopen_condition,
-            )
-            for link, blocker in rows
-        ],
+        blockers=blockers,
     )
 
 
@@ -87,8 +104,7 @@ async def list_task_reviews(
     _board: "Board" = BOARD_READ_DEP,
     _actor: ActorContext = ACTOR_DEP,
 ) -> "LimitOffsetPage[ReviewRead]":
-    """List reviews on the task, newest first. Blockers are hydrated
-    per row — at pagination-default limits this is bounded."""
+    """List reviews on the task, newest first."""
 
     async def _transform(rows: "Sequence[object]") -> list[ReviewRead]:
         reviews: list[Review] = []
@@ -97,7 +113,13 @@ async def list_task_reviews(
                 msg = "Expected Review rows from reviews pagination query."
                 raise TypeError(msg)
             reviews.append(row)
-        return [await _hydrate_review(session, review) for review in reviews]
+        blockers_by_id = await _blockers_by_review(
+            session, (r.id for r in reviews)
+        )
+        return [
+            _review_read(review, blockers_by_id.get(review.id, []))
+            for review in reviews
+        ]
 
     statement = (
         Review.objects.filter_by(task_id=task.id)
@@ -126,10 +148,12 @@ async def create_task_review(
         reviewer_agent_id=actor.agent.id if actor.agent is not None else None,
     )
     session.add(review)
-    # Flush so review.id is allocated without committing — the linked
-    # blocker + join rows go in the same transaction.
-    await session.flush()
 
+    # Blocker.id and ReviewBlocker.id are Python-side uuid4 defaults,
+    # so we can add the whole graph without intermediate flushes and
+    # commit once. Synthesise the response from in-memory objects —
+    # re-reading what we just wrote would be a wasted round trip.
+    blocker_reads: list[ReviewBlockerRead] = []
     for descriptor in payload.blockers:
         blocker = Blocker(
             board_id=board.id,
@@ -139,12 +163,13 @@ async def create_task_review(
             required_artifact=descriptor.required_artifact,
             target_env=descriptor.target_env,
             reopen_condition=descriptor.reopen_condition,
+            citation=descriptor.citation,
             created_by_agent_id=review.reviewer_agent_id,
         )
         session.add(blocker)
-        await session.flush()
-        session.add(ReviewBlocker(review_id=review.id, blocker_id=blocker.id))
+        link = ReviewBlocker(review_id=review.id, blocker_id=blocker.id)
+        session.add(link)
+        blocker_reads.append(_to_review_blocker_read(link, blocker))
 
     await session.commit()
-    await session.refresh(review)
-    return await _hydrate_review(session, review)
+    return _review_read(review, blocker_reads)

@@ -72,6 +72,7 @@ class ReviewBlockerRead(SQLModel):
     required_artifact: str | None
     target_env: str | None
     reopen_condition: str | None
+    citation: str | None = None
 
 
 class ReviewRead(SQLModel):

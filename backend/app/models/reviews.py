@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, UniqueConstraint
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -33,6 +33,14 @@ class Review(TenantScoped, table=True):
         CheckConstraint(
             "verdict IN ('pass', 'fail', 'needs_changes')",
             name="ck_reviews_verdict_values",
+        ),
+        # list_task_reviews orders newest-first under a task_id
+        # filter; a composite keeps that scan index-only instead of
+        # a filesort when a task accumulates rework-cycle reviews.
+        Index(
+            "ix_reviews_task_id_created_at",
+            "task_id",
+            "created_at",
         ),
     )
 

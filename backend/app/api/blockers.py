@@ -104,6 +104,7 @@ async def create_task_blocker(
         required_artifact=payload.required_artifact,
         target_env=payload.target_env,
         reopen_condition=payload.reopen_condition,
+        citation=payload.citation,
         supersedes_blocker_id=payload.supersedes_blocker_id,
         created_by_agent_id=actor.agent.id if actor.agent is not None else None,
     )
@@ -162,7 +163,7 @@ async def update_task_blocker(
         blocker.resolved_at = utcnow()
         mutated = True
 
-    for field in ("required_artifact", "target_env", "reopen_condition"):
+    for field in ("required_artifact", "target_env", "reopen_condition", "citation"):
         if field in payload.model_fields_set:
             setattr(blocker, field, getattr(payload, field))
             mutated = True

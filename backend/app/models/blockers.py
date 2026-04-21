@@ -62,6 +62,11 @@ class Blocker(TenantScoped, table=True):
     required_artifact: str | None = None
     target_env: str | None = None
     reopen_condition: str | None = None
+    # Plan §I4: review-emitted blockers may carry a per-row citation
+    # (quote / link / evidence). Null for ad-hoc blockers filed
+    # through POST /blockers where the review-level narrative is
+    # irrelevant.
+    citation: str | None = None
     created_by_agent_id: UUID | None = Field(
         default=None, foreign_key="agents.id", index=True
     )

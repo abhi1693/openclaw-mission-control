@@ -64,6 +64,13 @@ def upgrade() -> None:
             name="ck_reviews_verdict_values",
         ),
     )
+    # list_task_reviews orders newest-first under a task filter; keep
+    # that scan index-only for rework-heavy tasks.
+    op.create_index(
+        "ix_reviews_task_id_created_at",
+        "reviews",
+        ["task_id", "created_at"],
+    )
     op.create_table(
         "review_blockers",
         sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
@@ -93,4 +100,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("review_blockers")
+    op.drop_index("ix_reviews_task_id_created_at", table_name="reviews")
     op.drop_table("reviews")

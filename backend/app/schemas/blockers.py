@@ -31,6 +31,7 @@ class BlockerBase(SQLModel):
     required_artifact: str | None = None
     target_env: str | None = None
     reopen_condition: str | None = None
+    citation: str | None = None
     supersedes_blocker_id: UUID | None = None
 
 
@@ -49,6 +50,7 @@ class BlockerUpdate(SQLModel):
     required_artifact: str | None = None
     target_env: str | None = None
     reopen_condition: str | None = None
+    citation: str | None = None
     status_transition: Literal["acknowledge", "resolve"] | None = None
 
     @model_validator(mode="after")

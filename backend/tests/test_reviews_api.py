@@ -18,7 +18,11 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.reviews import _hydrate_review, create_task_review
+from app.api.reviews import (
+    _blockers_by_review,
+    _review_read,
+    create_task_review,
+)
 from app.models.agents import Agent
 from app.models.blockers import Blocker
 from app.models.boards import Board
@@ -199,9 +203,67 @@ async def test_list_reviews_hydrates_blockers(
         )
     ).all()
     assert len(reviews) == 1
-    hydrated = await _hydrate_review(session, reviews[0])
+    blockers_by_id = await _blockers_by_review(session, [reviews[0].id])
+    hydrated = _review_read(reviews[0], blockers_by_id[reviews[0].id])
     assert len(hydrated.blockers) == 1
     assert hydrated.blockers[0].category == "runtime"
+
+
+@pytest.mark.asyncio
+async def test_per_blocker_citation_persists(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """Per-blocker ``citation`` from ReviewBlockerDescriptor must land
+    on the Blocker row AND surface in the response — it was silently
+    dropped before the fix."""
+
+    session, board, task, actor = seeded
+    read = await create_task_review(
+        payload=ReviewCreate(
+            verdict="fail",
+            blockers=[
+                _descriptor(
+                    category="deploy",
+                    owner_role="platform-dev",
+                    citation="see deploy log line 42",
+                ),
+            ],
+        ),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    assert read.blockers[0].citation == "see deploy log line 42"
+    persisted = (
+        await session.exec(
+            select(Blocker).where(col(Blocker.id) == read.blockers[0].blocker_id)
+        )
+    ).first()
+    assert persisted is not None
+    assert persisted.citation == "see deploy log line 42"
+
+
+@pytest.mark.asyncio
+async def test_orm_path_can_bypass_fail_requires_blocker(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """The FAIL-requires-blocker guard is a Pydantic validator, so
+    direct ORM writes bypass it. This test documents the gap — a
+    deferred DB trigger (or an SQLAlchemy before_flush hook) would
+    close it in a later pass."""
+
+    session, board, task, _actor = seeded
+    session.add(
+        Review(
+            board_id=board.id,
+            task_id=task.id,
+            verdict="fail",
+        ),
+    )
+    # Commits without error today. Trigger-level guard would raise
+    # here instead.
+    await session.commit()
 
 
 @pytest.mark.asyncio
