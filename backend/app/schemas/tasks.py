@@ -212,3 +212,6 @@ class TaskCommentRead(SQLModel):
     agent_id: UUID | None
     task_id: UUID | None
     created_at: datetime
+    # Phase I: classifier flags stamped at write time. None = not
+    # classified; [] = classified, no flags; [str, ...] = flagged.
+    classifier_flags: list[str] | None = None

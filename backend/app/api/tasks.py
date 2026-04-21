@@ -69,6 +69,7 @@ from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConf
 from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.core.logging import get_logger
+from app.services.comment_policy import apply_comment_signal_filter
 from app.services.organizations import require_board_access
 from app.services.shadow_metrics import (
     build_shadow_events_for_comment,
@@ -1980,6 +1981,9 @@ async def delete_task(
     return OkResponse()
 
 
+INCLUDE_FLAGGED_QUERY = Query(default=False)
+
+
 @router.get(
     "/{task_id}/comments",
     response_model=DefaultLimitOffsetPage[TaskCommentRead],
@@ -1987,13 +1991,28 @@ async def delete_task(
 async def list_task_comments(
     task: Task = TASK_DEP,
     session: AsyncSession = SESSION_DEP,
+    actor: ActorContext = ACTOR_DEP,
+    include_flagged: bool = INCLUDE_FLAGGED_QUERY,
 ) -> LimitOffsetPage[TaskCommentRead]:
-    """List comments for a task in chronological order."""
+    """List comments for a task in chronological order.
+
+    Applies the board's ``comment_signal_filter`` policy. See
+    ``app/services/comment_policy.py`` for filter semantics.
+    """
+
+    board = await Board.objects.by_id(task.board_id).first(session)
+    filter_mode = board.comment_signal_filter if board is not None else "off"
     statement = (
         select(ActivityEvent)
         .where(col(ActivityEvent.task_id) == task.id)
         .where(col(ActivityEvent.event_type) == "task.comment")
         .order_by(asc(col(ActivityEvent.created_at)))
+    )
+    statement = apply_comment_signal_filter(
+        statement,
+        filter_mode=filter_mode,
+        actor_is_agent=actor.actor_type == "agent",
+        include_flagged=include_flagged,
     )
     return await paginate(session, statement)
 
