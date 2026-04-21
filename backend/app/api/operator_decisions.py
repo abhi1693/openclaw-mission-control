@@ -28,6 +28,7 @@ from app.models.operator_decisions import (
     OperatorDecision,
     OperatorDecisionTaskLink,
 )
+from app.models.tasks import Task
 from app.schemas.operator_decisions import (
     OperatorDecisionCreate,
     OperatorDecisionRead,
@@ -167,6 +168,35 @@ async def create_operator_decision(
     link management endpoint covers post-creation updates.
     """
 
+    if payload.dependent_task_ids:
+        # Tenant-isolation guard: every linked task_id must belong to
+        # this board. The FK on ``operator_decision_task_links.task_id``
+        # points at ``tasks.id`` globally, so without this check a
+        # write-scoped caller could link cross-board tasks and both
+        # leak their UUIDs back in reads and (post-§I6) silently merge
+        # blocking signal across tenants.
+        resolved = (
+            await session.exec(
+                select(col(Task.id))
+                .where(col(Task.board_id) == board.id)
+                .where(col(Task.id).in_(list(payload.dependent_task_ids)))
+            )
+        ).all()
+        resolved_set = set(resolved)
+        missing = [
+            str(task_id)
+            for task_id in payload.dependent_task_ids
+            if task_id not in resolved_set
+        ]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "message": "dependent_task_ids must reference tasks on this board",
+                    "unknown_task_ids": missing,
+                },
+            )
+
     decision = OperatorDecision(
         board_id=board.id,
         question=payload.question,
@@ -200,19 +230,18 @@ async def update_operator_decision(
     decision = await _load_decision(
         session, board_id=board.id, decision_id=decision_id
     )
+    # Preload the task-id list in the same pass so the response can
+    # be synthesised without a post-commit refetch. PATCH never
+    # mutates the link set today, so the list is invariant across the
+    # handler's body.
+    task_ids_by_decision = await _task_ids_by_decision(session, [decision.id])
+    task_ids = task_ids_by_decision.get(decision.id, [])
 
-    if decision.status != "pending" and payload.status_transition is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"cannot transition a {decision.status} decision",
-        )
-    if (
-        decision.status != "pending"
-        and payload.model_fields_set - {"status_transition"}
-    ):
-        # A closed row's content is audit material; rewriting
-        # ``unblock_rule`` or ``resolved_value`` post-close would
-        # silently alter history.
+    # Closed decisions are audit material: any PATCH — transition or
+    # metadata — would either double-transition or silently rewrite
+    # history. ``reject_noop_update`` on the schema already 422s the
+    # empty-payload case, so every non-pending PATCH here is an edit.
+    if decision.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"cannot update a {decision.status} decision",
@@ -227,6 +256,10 @@ async def update_operator_decision(
     elif payload.status_transition == "cancel":
         decision.status = "cancelled"
         decision.resolved_at = utcnow()
+        # Clear any draft answer so the audit trail doesn't read
+        # "answered yes then cancelled" — cancel means "moot", not
+        # "resolved with <stale draft>".
+        decision.resolved_value = None
         mutated = True
     elif "resolved_value" in payload.model_fields_set:
         # Allow sharpening the pre-resolve value while still pending —
@@ -242,6 +275,4 @@ async def update_operator_decision(
     if mutated:
         session.add(decision)
         await session.commit()
-
-    task_ids_by_decision = await _task_ids_by_decision(session, [decision.id])
-    return _decision_read(decision, task_ids_by_decision.get(decision.id, []))
+    return _decision_read(decision, task_ids)

@@ -135,6 +135,14 @@ async def test_resolve_transition_requires_resolved_value() -> None:
         OperatorDecisionUpdate(status_transition="resolve")
 
 
+def test_resolve_transition_rejects_explicit_null_resolved_value() -> None:
+    """Explicit ``resolved_value: None`` used to satisfy model_fields_set
+    and silently persist a null answer. Guard now checks the value too."""
+
+    with pytest.raises(ValidationError):
+        OperatorDecisionUpdate(status_transition="resolve", resolved_value=None)
+
+
 @pytest.mark.asyncio
 async def test_resolve_sets_value_and_stamps_resolved_at(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
@@ -256,6 +264,76 @@ async def test_update_resolved_decision_metadata_conflicts(
 async def test_noop_payload_rejected() -> None:
     with pytest.raises(ValidationError):
         OperatorDecisionUpdate()
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_cross_board_dependent_task_id(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """Tenant-isolation guard: dependent_task_ids must all belong to
+    the board being POST'd against. Without this check an attacker
+    with write access to board A could link a foreign task from
+    board B — leaking its UUID and merging blocking signal across
+    tenants post-§I6."""
+
+    session, board, _task, actor = seeded
+    other_board_id = uuid4()
+    session.add(
+        Task(
+            id=(foreign_task_id := uuid4()),
+            board_id=other_board_id,
+            title="Foreign",
+            status="in_progress",
+        ),
+    )
+    await session.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        await create_operator_decision(
+            payload=OperatorDecisionCreate(
+                question="Ship?",
+                dependent_task_ids=[foreign_task_id],
+            ),
+            board=board,
+            session=session,
+            actor=actor,  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 422
+    assert "unknown_task_ids" in exc.value.detail  # type: ignore[operator]
+
+
+@pytest.mark.asyncio
+async def test_cancel_clears_draft_resolved_value(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """Pending decisions allow drafting ``resolved_value`` before
+    committing; cancelling must erase the draft so the audit trail
+    reads "cancelled", not "answered <stale draft> then cancelled"."""
+
+    session, board, _task, actor = seeded
+    created = await create_operator_decision(
+        payload=OperatorDecisionCreate(question="Ship?"),
+        board=board,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    drafted = await update_operator_decision(
+        decision_id=created.id,
+        payload=OperatorDecisionUpdate(resolved_value="yes, ship"),
+        board=board,
+        session=session,
+        _actor=actor,  # type: ignore[arg-type]
+    )
+    assert drafted.resolved_value == "yes, ship"
+    cancelled = await update_operator_decision(
+        decision_id=created.id,
+        payload=OperatorDecisionUpdate(status_transition="cancel"),
+        board=board,
+        session=session,
+        _actor=actor,  # type: ignore[arg-type]
+    )
+    assert cancelled.status == "cancelled"
+    assert cancelled.resolved_value is None
 
 
 @pytest.mark.asyncio

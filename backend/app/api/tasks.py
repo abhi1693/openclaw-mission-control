@@ -281,12 +281,31 @@ def _task_is_blocked(
     )
 
 
-def _require_operator_decision_task_not_active(task: Task) -> None:
-    if not task.operator_decision_required:
+async def _require_operator_decision_task_not_active(
+    session: AsyncSession, task: Task
+) -> None:
+    """Transition guard for operator-decision-blocked tasks.
+
+    Honours both the legacy ``Task.operator_decision_required`` flag
+    AND the Phase III first-class ``OperatorDecision`` entity — any
+    pending decision linked to the task has the same veto power as
+    the legacy flag. Without this, the compatibility bridge would
+    render ``is_blocked=true`` on reads while letting the PATCH path
+    silently advance the task (advisory-only enforcement).
+    """
+
+    exempt_via_status = (
+        task.assigned_agent_id is None
+        and task.status in {"inbox", "done", "cancelled"}
+    )
+    if exempt_via_status:
         return
-    if task.assigned_agent_id is None and task.status in {"inbox", "done", "cancelled"}:
-        return
-    raise _operator_decision_block_error(task.operator_decision_summary)
+    if task.operator_decision_required:
+        raise _operator_decision_block_error(task.operator_decision_summary)
+    if task.board_id is not None and await task_has_pending_operator_decision(
+        session, board_id=task.board_id, task_id=task.id
+    ):
+        raise _operator_decision_block_error()
 
 
 def _delivery_contract_missing_fields_for_task(task: Task) -> list[str]:
@@ -3163,7 +3182,7 @@ async def _finalize_updated_task(
         "operator_decision_required",
         "operator_decision_summary",
     }.intersection(update.updates):
-        _require_operator_decision_task_not_active(update.task)
+        await _require_operator_decision_task_not_active(session, update.task)
     if {
         "status",
         "review_packet_type",

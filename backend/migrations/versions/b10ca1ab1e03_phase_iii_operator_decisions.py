@@ -88,11 +88,6 @@ def upgrade() -> None:
         postgresql_where=sa.text("status = 'pending'"),
         sqlite_where=sa.text("status = 'pending'"),
     )
-    op.create_index(
-        "ix_operator_decisions_status",
-        "operator_decisions",
-        ["status"],
-    )
 
     op.create_table(
         "operator_decision_task_links",
@@ -122,9 +117,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("operator_decision_task_links")
-    op.drop_index(
-        "ix_operator_decisions_status", table_name="operator_decisions"
-    )
     op.drop_index(
         "ix_operator_decisions_board_id_pending",
         table_name="operator_decisions",
