@@ -244,14 +244,20 @@ async def test_per_blocker_citation_persists(
     assert persisted.citation == "see deploy log line 42"
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="Phase III: before_flush hook will reject FAIL reviews with zero linked blockers",
+)
 @pytest.mark.asyncio
-async def test_orm_path_can_bypass_fail_requires_blocker(
+async def test_orm_path_rejects_fail_without_blocker(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
 ) -> None:
-    """The FAIL-requires-blocker guard is a Pydantic validator, so
-    direct ORM writes bypass it. This test documents the gap — a
-    deferred DB trigger (or an SQLAlchemy before_flush hook) would
-    close it in a later pass."""
+    """FAIL reviews with no blockers must be rejected at flush time,
+    not just at the Pydantic layer. Today this XFAILS — direct ORM
+    writes commit cleanly. When the hook lands, this flips green and
+    becomes the regression guard for the invariant."""
+
+    from sqlalchemy.exc import IntegrityError
 
     session, board, task, _actor = seeded
     session.add(
@@ -261,21 +267,26 @@ async def test_orm_path_can_bypass_fail_requires_blocker(
             verdict="fail",
         ),
     )
-    # Commits without error today. Trigger-level guard would raise
-    # here instead.
-    await session.commit()
+    with pytest.raises(IntegrityError):
+        await session.commit()
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="Phase III: before_flush hook will reject cross-task review↔blocker links",
+)
 @pytest.mark.asyncio
-async def test_orm_path_can_attach_cross_task_blocker_to_review(
+async def test_orm_path_rejects_cross_task_review_blocker_link(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
 ) -> None:
-    """``ReviewBlocker`` has no FK-level invariant tying the blocker to
-    the review's task/board. Direct ORM writes can cross-link rows.
+    """``ReviewBlocker`` must enforce review.task_id == blocker.task_id
+    at flush time. Today this XFAILS — direct ORM writes commit cleanly.
     ``create_task_review`` never triggers this path (it creates
     same-task blockers inline), but the gap is visible to anyone who
-    reaches for ``session.add(ReviewBlocker(...))`` directly. A
-    ``before_flush`` validator is the next closure."""
+    reaches for ``session.add(ReviewBlocker(...))`` directly. When the
+    hook lands, this flips green and becomes the regression guard."""
+
+    from sqlalchemy.exc import IntegrityError
 
     session, board, task, _actor = seeded
     other_task_id = uuid4()
@@ -302,8 +313,8 @@ async def test_orm_path_can_attach_cross_task_blocker_to_review(
     session.add(review)
     await session.flush()
     session.add(ReviewBlocker(review_id=review.id, blocker_id=other_blocker.id))
-    # Commits without error today.
-    await session.commit()
+    with pytest.raises(IntegrityError):
+        await session.commit()
 
 
 @pytest.mark.asyncio

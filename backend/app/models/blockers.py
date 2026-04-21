@@ -33,15 +33,15 @@ class Blocker(TenantScoped, table=True):
             "category IN ('source', 'deploy', 'runtime', 'contract', 'operator')",
             name="ck_blockers_category_values",
         ),
+        # Single composite partial: board_id is always known at query
+        # time (every endpoint is nested under /boards/{board_id}) so
+        # both the per-task and board-wide "any open blocker" scans can
+        # seek through this one index instead of BitmapAnd'ing two
+        # separate partials.
         Index(
-            "ix_blockers_task_id_open",
-            "task_id",
-            sqlite_where=text("resolved_at IS NULL"),
-            postgresql_where=text("resolved_at IS NULL"),
-        ),
-        Index(
-            "ix_blockers_board_id_open",
+            "ix_blockers_board_id_task_id_open",
             "board_id",
+            "task_id",
             sqlite_where=text("resolved_at IS NULL"),
             postgresql_where=text("resolved_at IS NULL"),
         ),

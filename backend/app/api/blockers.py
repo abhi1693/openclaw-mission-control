@@ -120,7 +120,9 @@ async def create_task_blocker(
             status_code=status.HTTP_409_CONFLICT,
             detail="blocker already superseded",
         ) from exc
-    await session.refresh(blocker)
+    # Blocker columns are all Python-side defaults or payload copies
+    # — no server-side defaults, no triggers — so ``refresh()`` would
+    # just burn a round trip reading back what we already know.
     return BlockerRead.model_validate(blocker, from_attributes=True)
 
 
@@ -136,6 +138,15 @@ async def update_task_blocker(
     """Acknowledge, resolve, or sharpen an open blocker."""
 
     blocker = await _load_blocker(session, task=task, blocker_id=blocker_id)
+    if blocker.resolved_at is not None and payload.status_transition is None:
+        # Sharpening a resolved row would silently rewrite audit
+        # material. A transition is the only legitimate PATCH against
+        # a closed blocker, and the transition cases below already
+        # reject both status_transition values on a resolved row.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="cannot update a resolved blocker",
+        )
     mutated = False
 
     if payload.status_transition == "acknowledge":
@@ -171,5 +182,4 @@ async def update_task_blocker(
     if mutated:
         session.add(blocker)
         await session.commit()
-        await session.refresh(blocker)
     return BlockerRead.model_validate(blocker, from_attributes=True)

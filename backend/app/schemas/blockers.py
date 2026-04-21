@@ -16,8 +16,9 @@ from sqlmodel import SQLModel
 
 from app.schemas.common import NonEmptyStr
 
-# Mirror ``Blocker.BLOCKER_CATEGORIES`` in the model. The Pydantic
-# Literal validates API writes; the DB CHECK validates raw-SQL paths.
+# Mirror the ``ck_blockers_category_values`` CHECK string on the
+# Blocker model. The Pydantic Literal validates API writes; the DB
+# CHECK validates raw-SQL paths.
 BlockerCategory = Literal["source", "deploy", "runtime", "contract", "operator"]
 
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID, NonEmptyStr)

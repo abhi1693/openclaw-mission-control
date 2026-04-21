@@ -21,7 +21,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.api.tasks import _task_is_blocked
 from app.models.blockers import Blocker
 from app.models.tasks import Task
-from app.services.blockers import task_ids_with_open_blocker
+from app.services.blockers import task_has_open_blocker, task_ids_with_open_blocker
 
 
 @pytest_asyncio.fixture
@@ -61,6 +61,55 @@ def test_terminal_status_still_clears_open_blocker() -> None:
     for status in ("done", "cancelled"):
         task = _task(status=status)
         assert not _task_is_blocked(task, [], has_open_blocker=True)
+
+
+@pytest.mark.asyncio
+async def test_scalar_exists_returns_false_on_empty_table(
+    db_session: AsyncSession,
+) -> None:
+    """task_has_open_blocker on a task with no rows must be False —
+    guards against a ``Row``-truthiness false positive."""
+
+    assert not await task_has_open_blocker(
+        db_session, board_id=uuid4(), task_id=uuid4()
+    )
+
+
+@pytest.mark.asyncio
+async def test_scalar_exists_honors_resolved_at(
+    db_session: AsyncSession,
+) -> None:
+    """Resolved blockers must not satisfy the EXISTS clause."""
+
+    board_id = uuid4()
+    open_task_id = uuid4()
+    resolved_task_id = uuid4()
+    db_session.add(
+        Blocker(
+            board_id=board_id,
+            task_id=open_task_id,
+            category="source",
+            owner_role="dev",
+        ),
+    )
+    resolved = Blocker(
+        board_id=board_id,
+        task_id=resolved_task_id,
+        category="source",
+        owner_role="dev",
+    )
+    db_session.add(resolved)
+    await db_session.commit()
+    resolved.resolved_at = resolved.created_at
+    db_session.add(resolved)
+    await db_session.commit()
+
+    assert await task_has_open_blocker(
+        db_session, board_id=board_id, task_id=open_task_id
+    )
+    assert not await task_has_open_blocker(
+        db_session, board_id=board_id, task_id=resolved_task_id
+    )
 
 
 @pytest.mark.asyncio

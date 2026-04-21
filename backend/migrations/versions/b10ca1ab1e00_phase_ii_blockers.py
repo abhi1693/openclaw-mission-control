@@ -79,22 +79,15 @@ def upgrade() -> None:
             name="ck_blockers_category_values",
         ),
     )
-    # Fast "does this task have any open blocker?" lookup powers the
-    # is_blocked derivation that lands in a follow-up commit.
+    # Single composite partial covers every open-blocker access
+    # pattern Phase II + VI care about: per-task "any open blocker?",
+    # board-wide "list open blockers", and the is_blocked batch
+    # preload. board_id is always known at query time because every
+    # endpoint is nested under /boards/{board_id}.
     op.create_index(
-        "ix_blockers_task_id_open",
+        "ix_blockers_board_id_task_id_open",
         "blockers",
-        ["task_id"],
-        postgresql_where=sa.text("resolved_at IS NULL"),
-        sqlite_where=sa.text("resolved_at IS NULL"),
-    )
-    # Phase VI lane-quieting + the Supervisor dashboard both scan for
-    # open blockers at board scope. Partial keeps the index tiny vs.
-    # the full board_id index that would cover every historical row.
-    op.create_index(
-        "ix_blockers_board_id_open",
-        "blockers",
-        ["board_id"],
+        ["board_id", "task_id"],
         postgresql_where=sa.text("resolved_at IS NULL"),
         sqlite_where=sa.text("resolved_at IS NULL"),
     )
@@ -115,6 +108,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("uq_blockers_supersedes_blocker_id_open", table_name="blockers")
-    op.drop_index("ix_blockers_board_id_open", table_name="blockers")
-    op.drop_index("ix_blockers_task_id_open", table_name="blockers")
+    op.drop_index("ix_blockers_board_id_task_id_open", table_name="blockers")
     op.drop_table("blockers")
