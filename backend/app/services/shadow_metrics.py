@@ -89,6 +89,59 @@ EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP = (
 )
 
 
+async def _emit_shadow_metric(
+    *,
+    event_type: str,
+    log_prefix: str,
+    log_context: str,
+    board_id: UUID | None = None,
+    agent_id: UUID | None = None,
+    task_id: UUID | None = None,
+    source_event_id: UUID | None = None,
+    classifier_metadata: dict[str, object] | None = None,
+) -> None:
+    """Fire-and-forget shadow-metric write.
+
+    Opens a dedicated short-lived session so the row survives the
+    caller's transaction rollback (most emitters fire alongside a 422
+    raise or from a sweep that doesn't own a session). CancelledError
+    propagates so lifespan drain sees the correct gather() status;
+    every other exception is logged and swallowed — observability must
+    never fail the caller's write.
+
+    ``log_prefix`` keeps the historical per-emitter grep keys operators
+    may have alerts on (``shadow_metrics.actionability_emit_failed``,
+    etc.); ``log_context`` is the rendered ``key=value`` suffix per
+    call.
+    """
+
+    try:
+        async with async_session_maker() as session:
+            event = ShadowMetricEvent(
+                event_type=event_type,
+                board_id=board_id,
+                agent_id=agent_id,
+                task_id=task_id,
+                source_event_id=source_event_id,
+                classifier_metadata=classifier_metadata,
+            )
+            session.add(event)
+            await session.commit()
+    except asyncio.CancelledError:
+        logger.info(
+            "shadow_metrics.%s_emit_cancelled %s",
+            log_prefix,
+            log_context,
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "shadow_metrics.%s_emit_failed %s",
+            log_prefix,
+            log_context,
+        )
+
+
 async def emit_supervisor_heartbeat_scoring_bootstrap(
     *,
     agent_id: UUID,
@@ -100,29 +153,14 @@ async def emit_supervisor_heartbeat_scoring_bootstrap(
     noop-streak detection. Prevents boot-time spurious alerts.
     """
 
-    try:
-        async with async_session_maker() as session:
-            event = ShadowMetricEvent(
-                event_type=EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP,
-                board_id=board_id,
-                agent_id=agent_id,
-                classifier_metadata={
-                    "evaluated_at": evaluated_at.isoformat(),
-                },
-            )
-            session.add(event)
-            await session.commit()
-    except asyncio.CancelledError:
-        logger.info(
-            "shadow_metrics.supervisor_bootstrap_emit_cancelled agent_id=%s",
-            agent_id,
-        )
-        raise
-    except Exception:
-        logger.exception(
-            "shadow_metrics.supervisor_bootstrap_emit_failed agent_id=%s",
-            agent_id,
-        )
+    await _emit_shadow_metric(
+        event_type=EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP,
+        log_prefix="supervisor_bootstrap",
+        log_context=f"agent_id={agent_id}",
+        board_id=board_id,
+        agent_id=agent_id,
+        classifier_metadata={"evaluated_at": evaluated_at.isoformat()},
+    )
 
 
 async def emit_supervisor_heartbeat_noop_candidate(
@@ -133,29 +171,14 @@ async def emit_supervisor_heartbeat_noop_candidate(
 ) -> None:
     """Record a lead heartbeat window that scored zero real actions."""
 
-    try:
-        async with async_session_maker() as session:
-            event = ShadowMetricEvent(
-                event_type=EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE,
-                board_id=board_id,
-                agent_id=agent_id,
-                classifier_metadata={
-                    "window_started_at": window_started_at.isoformat(),
-                },
-            )
-            session.add(event)
-            await session.commit()
-    except asyncio.CancelledError:
-        logger.info(
-            "shadow_metrics.supervisor_noop_candidate_emit_cancelled agent_id=%s",
-            agent_id,
-        )
-        raise
-    except Exception:
-        logger.exception(
-            "shadow_metrics.supervisor_noop_candidate_emit_failed agent_id=%s",
-            agent_id,
-        )
+    await _emit_shadow_metric(
+        event_type=EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE,
+        log_prefix="supervisor_noop_candidate",
+        log_context=f"agent_id={agent_id}",
+        board_id=board_id,
+        agent_id=agent_id,
+        classifier_metadata={"window_started_at": window_started_at.isoformat()},
+    )
 
 
 async def emit_supervisor_heartbeat_noop_streak_alert(
@@ -167,29 +190,16 @@ async def emit_supervisor_heartbeat_noop_streak_alert(
     """Fire when a lead produces two consecutive no-op candidates —
     the operator-alert signal §I5 requires."""
 
-    try:
-        async with async_session_maker() as session:
-            event = ShadowMetricEvent(
-                event_type=EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT,
-                board_id=board_id,
-                agent_id=agent_id,
-                classifier_metadata={
-                    "previous_candidate_at": previous_candidate_at.isoformat(),
-                },
-            )
-            session.add(event)
-            await session.commit()
-    except asyncio.CancelledError:
-        logger.info(
-            "shadow_metrics.supervisor_noop_streak_emit_cancelled agent_id=%s",
-            agent_id,
-        )
-        raise
-    except Exception:
-        logger.exception(
-            "shadow_metrics.supervisor_noop_streak_emit_failed agent_id=%s",
-            agent_id,
-        )
+    await _emit_shadow_metric(
+        event_type=EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT,
+        log_prefix="supervisor_noop_streak",
+        log_context=f"agent_id={agent_id}",
+        board_id=board_id,
+        agent_id=agent_id,
+        classifier_metadata={
+            "previous_candidate_at": previous_candidate_at.isoformat()
+        },
+    )
 
 
 async def emit_actionability_violation_metric(
@@ -200,52 +210,28 @@ async def emit_actionability_violation_metric(
     status_value: str,
     missing_fields: list[str],
 ) -> None:
-    """Record a delivery-contract violation that the validator is about to raise.
-
-    Uses a dedicated short-lived session rather than the caller's so the
-    row survives the caller's transaction rollback (the 422 raise aborts
-    whatever write the caller was attempting, but the observability
-    signal must persist).
-
-    Fire-and-forget semantics: errors are logged, never propagated. The
-    caller's 422 response must not be delayed by this hook.
+    """Record a delivery-contract violation that the validator is about
+    to raise. The 422 raise aborts the caller's write — the short-lived
+    session inside ``_emit_shadow_metric`` keeps the observability
+    signal on a separate transaction so rollback can't take it out.
     """
 
-    try:
-        async with async_session_maker() as session:
-            event = ShadowMetricEvent(
-                event_type=EVENT_TASK_ACTIONABILITY_VIOLATION,
-                task_id=task_id,
-                board_id=board_id,
-                agent_id=agent_id,
-                classifier_metadata={
-                    "status_value": status_value,
-                    # Defensive copy: the caller may hand us the same list
-                    # that will be handed to the raise's error detail; a
-                    # background task reading from a mutated reference
-                    # would record a different value than the raise.
-                    "missing_fields": list(missing_fields),
-                },
-            )
-            session.add(event)
-            await session.commit()
-    except asyncio.CancelledError:
-        # Shutdown or explicit cancellation. Log separately so operators
-        # can distinguish "shadow backlog dropped at shutdown" from a
-        # real emitter bug, then propagate so the caller's gather()
-        # at lifespan drain sees the correct status.
-        logger.info(
-            "shadow_metrics.actionability_emit_cancelled task_id=%s status=%s",
-            task_id,
-            status_value,
-        )
-        raise
-    except Exception:
-        logger.exception(
-            "shadow_metrics.actionability_emit_failed task_id=%s status=%s",
-            task_id,
-            status_value,
-        )
+    await _emit_shadow_metric(
+        event_type=EVENT_TASK_ACTIONABILITY_VIOLATION,
+        log_prefix="actionability",
+        log_context=f"task_id={task_id} status={status_value}",
+        task_id=task_id,
+        board_id=board_id,
+        agent_id=agent_id,
+        classifier_metadata={
+            "status_value": status_value,
+            # Defensive copy: the caller may hand us the same list
+            # that becomes the raise's error detail; a background task
+            # reading from a mutated reference would record a
+            # different value than the raise.
+            "missing_fields": list(missing_fields),
+        },
+    )
 
 
 async def emit_lane_quieting_suppressed_metric(
@@ -255,31 +241,16 @@ async def emit_lane_quieting_suppressed_metric(
     agent_id: UUID | None,
 ) -> None:
     """Record a non-owner comment rejected by the §I6 lane-quieting
-    gate. Same fire-and-forget contract as the actionability +
-    deploy-degraded emitters.
-    """
+    gate."""
 
-    try:
-        async with async_session_maker() as session:
-            event = ShadowMetricEvent(
-                event_type=EVENT_COMMENT_LANE_QUIETING_SUPPRESSED,
-                task_id=task_id,
-                board_id=board_id,
-                agent_id=agent_id,
-            )
-            session.add(event)
-            await session.commit()
-    except asyncio.CancelledError:
-        logger.info(
-            "shadow_metrics.lane_quieting_emit_cancelled task_id=%s",
-            task_id,
-        )
-        raise
-    except Exception:
-        logger.exception(
-            "shadow_metrics.lane_quieting_emit_failed task_id=%s",
-            task_id,
-        )
+    await _emit_shadow_metric(
+        event_type=EVENT_COMMENT_LANE_QUIETING_SUPPRESSED,
+        log_prefix="lane_quieting",
+        log_context=f"task_id={task_id}",
+        task_id=task_id,
+        board_id=board_id,
+        agent_id=agent_id,
+    )
 
 
 async def emit_deploy_validation_degraded_metric(
@@ -291,37 +262,17 @@ async def emit_deploy_validation_degraded_metric(
     reason: str,
 ) -> None:
     """Record that a ``review``/``done`` transition ran without live
-    SHA verification. Same fire-and-forget contract as the
-    actionability emitter — errors logged, never propagated.
-    """
+    SHA verification."""
 
-    try:
-        async with async_session_maker() as session:
-            event = ShadowMetricEvent(
-                event_type=EVENT_TASK_DEPLOY_VALIDATION_DEGRADED,
-                task_id=task_id,
-                board_id=board_id,
-                agent_id=agent_id,
-                classifier_metadata={
-                    "status_value": status_value,
-                    "reason": reason,
-                },
-            )
-            session.add(event)
-            await session.commit()
-    except asyncio.CancelledError:
-        logger.info(
-            "shadow_metrics.deploy_degraded_emit_cancelled task_id=%s status=%s",
-            task_id,
-            status_value,
-        )
-        raise
-    except Exception:
-        logger.exception(
-            "shadow_metrics.deploy_degraded_emit_failed task_id=%s status=%s",
-            task_id,
-            status_value,
-        )
+    await _emit_shadow_metric(
+        event_type=EVENT_TASK_DEPLOY_VALIDATION_DEGRADED,
+        log_prefix="deploy_degraded",
+        log_context=f"task_id={task_id} status={status_value}",
+        task_id=task_id,
+        board_id=board_id,
+        agent_id=agent_id,
+        classifier_metadata={"status_value": status_value, "reason": reason},
+    )
 
 
 def _flag_to_event_type(flag: ClassifierFlag) -> str:
