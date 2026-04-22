@@ -15,6 +15,7 @@ Part D.2 for the plan.
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from uuid import UUID
 
@@ -37,7 +38,12 @@ class StaleAgentGatewayReason(StrEnum):
     STALE_SESSION = "stale_session"
 
 
-_PAIRING_MARKERS = ("pairing_required", "pairing required")
+# Regex so minor gateway-wording drift (space/dash/underscore
+# separators, CamelCase → lowercase via the ``.lower()`` pre-match)
+# doesn't silently defeat the hook. Tested against
+# ``PAIRING_REQUIRED``, ``pairing required``, ``pairing-required``,
+# ``PairingRequired``.
+_PAIRING_PATTERN = re.compile(r"pairing[ _\-]*required|pairingrequired")
 _STALE_SESSION_MARKERS = (
     # Keep these narrow so the classifier doesn't false-positive on
     # unrelated failures (a typo in a dispatch payload, a deleted-
@@ -59,7 +65,7 @@ def classify_gateway_error(
     error is something else (e.g. transient network failure)."""
 
     msg = str(exc).lower()
-    if any(marker in msg for marker in _PAIRING_MARKERS):
+    if _PAIRING_PATTERN.search(msg):
         return StaleAgentGatewayReason.PAIRING_REQUIRED
     if any(marker in msg for marker in _STALE_SESSION_MARKERS):
         return StaleAgentGatewayReason.STALE_SESSION

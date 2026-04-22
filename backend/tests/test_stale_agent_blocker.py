@@ -104,6 +104,22 @@ def test_classifier_case_insensitive() -> None:
     )
 
 
+def test_classifier_matches_pairing_separator_variants() -> None:
+    """Gateway wording drifts across releases — space, underscore,
+    dash, and CamelCase variants all resolve to the same signal."""
+
+    for msg in (
+        "PAIRING_REQUIRED",
+        "pairing required",
+        "pairing-required",
+        "PairingRequired",
+    ):
+        assert (
+            classify_gateway_error(OpenClawGatewayError(msg))
+            == StaleAgentGatewayReason.PAIRING_REQUIRED
+        ), msg
+
+
 # --------------------------------------------------------------------
 # file_stale_agent_blocker_if_configured
 # --------------------------------------------------------------------
