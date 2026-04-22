@@ -39,13 +39,15 @@ class StaleAgentGatewayReason(StrEnum):
 
 _PAIRING_MARKERS = ("pairing_required", "pairing required")
 _STALE_SESSION_MARKERS = (
+    # Keep these narrow so the classifier doesn't false-positive on
+    # unrelated failures (a typo in a dispatch payload, a deleted-
+    # mid-request row, etc.). The markers here are all gateway-
+    # authored phrasings that specifically identify "this agent's
+    # session/pairing is no longer valid because config changed."
     "stale agent session",
     "agent session is stale",
     "session no longer valid",
     "unknown agent",
-    "agent not found",
-    # 4.20 phrasing — operator wording may evolve on gateway side; keep
-    # the check substring-based so minor rewordings still trip the hook.
     "agent removed from config",
 )
 
@@ -75,15 +77,6 @@ def _citation_for(reason: StaleAgentGatewayReason, raw_message: str) -> str:
     return truncated or f"Gateway returned {reason.value} without a remediation hint."
 
 
-async def _board_has_structured_blockers_enabled(
-    session: AsyncSession, *, board_id: UUID
-) -> bool:
-    flags = await session.scalar(
-        select(Board.rollout_flags).where(Board.id == board_id)
-    )
-    return bool(flags and flags.get(STRUCTURED_BLOCKERS_V1_FLAG))
-
-
 async def _open_stale_agent_blocker_exists(
     session: AsyncSession,
     *,
@@ -92,7 +85,10 @@ async def _open_stale_agent_blocker_exists(
     agent_name: str,
 ) -> bool:
     """Dedupe: if there's already an open stale-agent Blocker for this
-    (task, agent) the retry-loop should not stamp another one."""
+    (task, agent) the retry-loop should not stamp another one. The
+    key deliberately uses the ``required_artifact`` string — whoever
+    mutates :func:`_required_artifact_for` must update the dedupe
+    test alongside the template."""
 
     required_artifact = _required_artifact_for(agent_name)
     existing = await session.scalar(
@@ -114,7 +110,7 @@ def _required_artifact_for(agent_name: str) -> str:
 async def file_stale_agent_blocker_if_configured(
     session: AsyncSession,
     *,
-    board_id: UUID,
+    board: Board,
     task_id: UUID,
     agent_name: str,
     exc: OpenClawGatewayError,
@@ -124,30 +120,33 @@ async def file_stale_agent_blocker_if_configured(
     this (task, agent) pair.
 
     Returns the Blocker id on a fresh file, None if gated out, already
-    open, or the error isn't a stale-agent flavour. Swallows nothing
-    that the caller should know about — the original gateway error is
-    still the caller's responsibility to surface.
+    open, or the error isn't a stale-agent flavour.
+
+    **Commits the session.** The caller must not invoke this inside
+    an outer transaction with other uncommitted state — the embedded
+    commit would prematurely persist it. Today's callers in
+    ``_notify_agent_on_task_assign`` / ``_rework`` commit their own
+    state first, so nothing is at risk.
     """
 
     reason = classify_gateway_error(exc)
     if reason is None:
         return None
 
-    if not await _board_has_structured_blockers_enabled(
-        session, board_id=board_id
-    ):
+    flags = board.rollout_flags or {}
+    if not flags.get(STRUCTURED_BLOCKERS_V1_FLAG):
         return None
 
     if await _open_stale_agent_blocker_exists(
         session,
-        board_id=board_id,
+        board_id=board.id,
         task_id=task_id,
         agent_name=agent_name,
     ):
         return None
 
     blocker = Blocker(
-        board_id=board_id,
+        board_id=board.id,
         task_id=task_id,
         category="operator",
         owner_role="operator",
@@ -157,9 +156,11 @@ async def file_stale_agent_blocker_if_configured(
         ),
         citation=_citation_for(reason, str(exc)),
     )
+    # Blocker.id is a Python-side ``default_factory=uuid4``, so it's
+    # populated on construction. No server-computed fields need a
+    # refresh-round-trip before the caller reads ``blocker.id``.
     session.add(blocker)
     await session.commit()
-    await session.refresh(blocker)
     logger.info(
         "stale_agent_blocker.filed task_id=%s agent=%s reason=%s blocker_id=%s",
         task_id,

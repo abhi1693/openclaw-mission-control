@@ -1299,14 +1299,13 @@ async def _notify_agent_on_task_assign(
         # ``structured_blockers_v1`` rollout flag). The ambient
         # activity event above still records the failure; this adds
         # the routable structured state §I1 wants.
-        if task.board_id is not None:
-            await file_stale_agent_blocker_if_configured(
-                session,
-                board_id=task.board_id,
-                task_id=task.id,
-                agent_name=agent.name,
-                exc=error,
-            )
+        await file_stale_agent_blocker_if_configured(
+            session,
+            board=board,
+            task_id=task.id,
+            agent_name=agent.name,
+            exc=error,
+        )
 
 
 async def _notify_agent_on_task_rework(
@@ -1360,6 +1359,17 @@ async def _notify_agent_on_task_rework(
             board_id=board.id,
         )
         await session.commit()
+        # Part D.2 parity with _notify_agent_on_task_assign: rework
+        # notification hits the same ``_send_agent_task_message``
+        # surface, so a stale-agent-session error here also routes
+        # into a structured operator Blocker.
+        await file_stale_agent_blocker_if_configured(
+            session,
+            board=board,
+            task_id=task.id,
+            agent_name=agent.name,
+            exc=error,
+        )
 
 
 async def notify_agent_on_task_assign(

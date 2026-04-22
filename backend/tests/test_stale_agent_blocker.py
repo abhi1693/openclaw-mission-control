@@ -75,7 +75,6 @@ def test_classifier_matches_stale_session_variants() -> None:
     for msg in (
         "Stale agent session — re-provision required",
         "Unknown agent 'frontend-dev'",
-        "Agent not found in gateway config",
         "Agent removed from config",
     ):
         assert (
@@ -85,10 +84,17 @@ def test_classifier_matches_stale_session_variants() -> None:
 
 
 def test_classifier_returns_none_for_transient_errors() -> None:
-    assert (
-        classify_gateway_error(OpenClawGatewayError("connection reset by peer"))
-        is None
-    )
+    """Transient network / non-stale phrasings must not fire the
+    hook. The bare ``agent not found`` substring collides with too
+    many unrelated failure modes (dispatch typos, deleted rows,
+    transient race) so the classifier intentionally excludes it."""
+
+    for msg in (
+        "connection reset by peer",
+        "Agent not found in gateway config",  # too broad — false-positive guard
+        "gateway temporarily unavailable",
+    ):
+        assert classify_gateway_error(OpenClawGatewayError(msg)) is None
 
 
 def test_classifier_case_insensitive() -> None:
@@ -110,7 +116,7 @@ async def test_files_blocker_on_stale_session_when_flag_enabled(
     session, board, task = seeded
     blocker_id = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("Stale agent session"),
@@ -138,7 +144,7 @@ async def test_skips_when_board_flag_off(
     await session.commit()
     blocker_id = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("PAIRING_REQUIRED"),
@@ -153,7 +159,7 @@ async def test_skips_when_error_is_not_stale_session(
     session, board, task = seeded
     blocker_id = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("Gateway temporarily unavailable"),
@@ -172,14 +178,14 @@ async def test_dedupes_on_same_task_agent(
     session, board, task = seeded
     first = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("Stale agent session"),
     )
     second = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("PAIRING_REQUIRED"),
@@ -207,7 +213,7 @@ async def test_resolved_blocker_does_not_block_new_file(
     session, board, task = seeded
     first = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("Stale agent session"),
@@ -221,7 +227,7 @@ async def test_resolved_blocker_does_not_block_new_file(
 
     second = await file_stale_agent_blocker_if_configured(
         session,
-        board_id=board.id,
+        board=board,
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError("Stale agent session"),
