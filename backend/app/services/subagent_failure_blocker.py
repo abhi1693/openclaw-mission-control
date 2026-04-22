@@ -1,10 +1,16 @@
 """Auto-file a ``runtime``-category ``Blocker`` from a 4.20+
 subagent-failure payload (Part D.1).
 
-Dedupe is check-then-insert; relies on MC's single-worker ingest.
-Concurrent failure events for the same (task, role) can double-
-insert — Phase VI follow-up: partial unique index + IntegrityError
-handling. Same constraint the Part D.2 stale-agent filer inherits.
+Dedupe is enforced in two layers:
+
+1. ``_open_subagent_runtime_blocker_exists`` EXISTS pre-check — the
+   common-case fast path that avoids the INSERT when a row is already
+   open.
+2. Partial unique index ``uq_blockers_runtime_owner_open`` — closes
+   the race window between EXISTS and INSERT. If two workers race
+   past step 1, the second INSERT fails with ``IntegrityError`` and
+   the filer rolls back + returns None so the caller sees the same
+   "already filed" answer the pre-check would have produced.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import exists as sql_exists
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -204,7 +211,20 @@ async def file_subagent_failure_blocker_if_configured(
         created_by_agent_id=parent_agent_id,
     )
     session.add(blocker)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Lost the race against another worker — the unique index
+        # ``uq_blockers_runtime_owner_open`` caught it. Roll back the
+        # failed insert and return None: the other worker's row is
+        # already the open state the caller wanted.
+        await session.rollback()
+        logger.info(
+            "subagent_failure_blocker.dedupe_lost_race task_id=%s role=%s",
+            task_id,
+            payload.requested_role,
+        )
+        return None
     logger.info(
         "subagent_failure_blocker.filed task_id=%s role=%s runtime_ms=%d "
         "error=%s blocker_id=%s",

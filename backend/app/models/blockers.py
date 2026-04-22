@@ -52,6 +52,40 @@ class Blocker(TenantScoped, table=True):
             sqlite_where=text("supersedes_blocker_id IS NOT NULL"),
             postgresql_where=text("supersedes_blocker_id IS NOT NULL"),
         ),
+        # Part D.1 feeder dedupe: closes the check-then-insert race on
+        # subagent-failure ingest. Keyed on owner_role (the requested
+        # child-agent role); covers (board_id, task_id) for partial-
+        # index selection.
+        Index(
+            "uq_blockers_runtime_owner_open",
+            "board_id",
+            "task_id",
+            "owner_role",
+            unique=True,
+            sqlite_where=text("category = 'runtime' AND resolved_at IS NULL"),
+            postgresql_where=text("category = 'runtime' AND resolved_at IS NULL"),
+        ),
+        # Part D.2 feeder dedupe: closes the check-then-insert race on
+        # stale-agent-session ingest. Keyed on required_artifact (the
+        # operator-routing string); filters out NULL so ad-hoc operator
+        # blockers without an artifact stay unconstrained.
+        Index(
+            "uq_blockers_operator_artifact_open",
+            "board_id",
+            "task_id",
+            "required_artifact",
+            unique=True,
+            sqlite_where=text(
+                "category = 'operator' "
+                "AND resolved_at IS NULL "
+                "AND required_artifact IS NOT NULL"
+            ),
+            postgresql_where=text(
+                "category = 'operator' "
+                "AND resolved_at IS NULL "
+                "AND required_artifact IS NOT NULL"
+            ),
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

@@ -19,6 +19,7 @@ import re
 from enum import StrEnum
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -173,7 +174,20 @@ async def file_stale_agent_blocker_if_configured(
     # populated on construction. No server-computed fields need a
     # refresh-round-trip before the caller reads ``blocker.id``.
     session.add(blocker)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Lost the race against another worker — the unique index
+        # ``uq_blockers_operator_artifact_open`` caught it. Roll back
+        # and return None: the other worker's row is already the open
+        # state the caller wanted.
+        await session.rollback()
+        logger.info(
+            "stale_agent_blocker.dedupe_lost_race task_id=%s agent=%s",
+            task_id,
+            agent_name,
+        )
+        return None
     logger.info(
         "stale_agent_blocker.filed task_id=%s agent=%s reason=%s blocker_id=%s",
         task_id,

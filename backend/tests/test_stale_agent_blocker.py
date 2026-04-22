@@ -209,6 +209,50 @@ async def test_dedupes_on_same_task_agent(
 
 
 @pytest.mark.asyncio
+async def test_integrity_error_from_partial_unique_index_returns_none(
+    seeded: tuple[AsyncSession, Board, Task],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forces the check-then-insert race by monkey-patching the EXISTS
+    pre-check to False. The second INSERT must fail cleanly on
+    ``uq_blockers_operator_artifact_open`` and return None."""
+
+    from app.services import stale_agent_blocker as module
+
+    session, board, task = seeded
+    first = await file_stale_agent_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        agent_name="frontend-dev",
+        exc=OpenClawGatewayError("Stale agent session"),
+    )
+    assert first is not None
+    baseline = (
+        await session.exec(
+            select(Blocker).where(col(Blocker.task_id) == task.id)
+        )
+    ).all()
+    assert len(baseline) == 1
+
+    async def _always_false(*_args: object, **_kwargs: object) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        module, "_open_stale_agent_blocker_exists", _always_false
+    )
+
+    second = await file_stale_agent_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        agent_name="frontend-dev",
+        exc=OpenClawGatewayError("PAIRING_REQUIRED"),
+    )
+    assert second is None
+
+
+@pytest.mark.asyncio
 async def test_resolved_blocker_does_not_block_new_file(
     seeded: tuple[AsyncSession, Board, Task],
 ) -> None:

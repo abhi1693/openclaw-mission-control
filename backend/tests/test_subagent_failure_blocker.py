@@ -413,6 +413,62 @@ async def test_resolved_blocker_does_not_block_new_file(
 
 
 @pytest.mark.asyncio
+async def test_integrity_error_from_partial_unique_index_returns_none(
+    seeded: tuple[AsyncSession, Board, Task],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Simulates the check-then-insert race: monkey-patch the EXISTS
+    pre-check to always return False so both the first and the
+    would-be-racing second filer call reach the INSERT. The second
+    INSERT must hit ``uq_blockers_runtime_owner_open`` and come back
+    as None — not crash, not double-insert."""
+
+    from app.services import subagent_failure_blocker as module
+
+    session, board, task = seeded
+    payload = SubagentFailurePayload(
+        requested_role="codex",
+        runtime_ms=1,
+        error_class="E",
+    )
+
+    # Verify the open-row count BEFORE triggering the race so the
+    # post-race session (which aiosqlite leaves in a fragile state
+    # after an IntegrityError + rollback) doesn't need to be queried
+    # for the assertion.
+    first = await file_subagent_failure_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        parent_agent_id=None,
+        payload=payload,
+    )
+    assert first is not None
+    baseline = (
+        await session.exec(
+            select(Blocker).where(col(Blocker.task_id) == task.id)
+        )
+    ).all()
+    assert len(baseline) == 1
+
+    async def _always_false(*_args: object, **_kwargs: object) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        module, "_open_subagent_runtime_blocker_exists", _always_false
+    )
+
+    second = await file_subagent_failure_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        parent_agent_id=None,
+        payload=payload,
+    )
+    assert second is None
+
+
+@pytest.mark.asyncio
 async def test_citation_is_truncated_at_max_length(
     seeded: tuple[AsyncSession, Board, Task],
 ) -> None:
