@@ -223,9 +223,18 @@ async def test_actions_by_other_agents_dont_count(
 
 
 @pytest.mark.asyncio
-async def test_score_lead_once_emits_noop_candidate(
+async def test_first_sweep_emits_bootstrap_not_candidate(
     seeded: tuple[AsyncSession, Board, Agent],
 ) -> None:
+    """Warmup grace: the very first sweep for a lead writes a
+    bootstrap marker so subsequent sweeps have a bookmark, but
+    doesn't emit a real no-op candidate — that would attribute
+    the deploy-downtime window as a lead failure."""
+
+    from app.services.shadow_metrics import (
+        EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP,
+    )
+
     session, board, lead = seeded
     fired = await score_lead_once(
         session,
@@ -233,17 +242,51 @@ async def test_score_lead_once_emits_noop_candidate(
         board_id=board.id,
         sweep_interval=timedelta(minutes=5),
     )
+    assert fired is False
+    events = (
+        await session.exec(
+            select(ShadowMetricEvent).where(
+                col(ShadowMetricEvent.agent_id) == lead.id
+            )
+        )
+    ).all()
+    assert len(events) == 1
+    assert events[0].event_type == EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP
+
+
+@pytest.mark.asyncio
+async def test_second_sweep_after_bootstrap_emits_noop_candidate(
+    seeded: tuple[AsyncSession, Board, Agent],
+) -> None:
+    """Second sweep has a bookmark from the bootstrap; now a silent
+    window produces a real candidate."""
+
+    session, board, lead = seeded
+    # First: bootstrap
+    await score_lead_once(
+        session,
+        agent=lead,
+        board_id=board.id,
+        sweep_interval=timedelta(minutes=5),
+    )
+    # Second: real scoring
+    fired = await score_lead_once(
+        session,
+        agent=lead,
+        board_id=board.id,
+        sweep_interval=timedelta(minutes=5),
+    )
     assert fired is True
-    event = (
+    candidates = (
         await session.exec(
             select(ShadowMetricEvent).where(
                 col(ShadowMetricEvent.event_type)
                 == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE
             )
         )
-    ).first()
-    assert event is not None
-    assert event.agent_id == lead.id
+    ).all()
+    assert len(candidates) == 1
+    assert candidates[0].agent_id == lead.id
 
 
 @pytest.mark.asyncio
@@ -273,18 +316,27 @@ async def test_score_lead_once_skips_active_window(
 async def test_consecutive_noops_emit_streak_alert(
     seeded: tuple[AsyncSession, Board, Agent],
 ) -> None:
-    """Two consecutive no-op scorings within the streak window
-    fire the operator-alert event."""
+    """Three sweeps required: bootstrap (warmup), first real
+    candidate, second real candidate (+ streak alert). Warmup
+    intentionally doesn't count toward the streak so a boot-time
+    idle window can't alert."""
 
     session, board, lead = seeded
-    # First sweep: candidate emitted.
+    # 1st: bootstrap
     await score_lead_once(
         session,
         agent=lead,
         board_id=board.id,
         sweep_interval=timedelta(minutes=5),
     )
-    # Second sweep: another candidate + streak alert.
+    # 2nd: first real no-op candidate (no streak yet)
+    await score_lead_once(
+        session,
+        agent=lead,
+        board_id=board.id,
+        sweep_interval=timedelta(minutes=5),
+    )
+    # 3rd: second candidate + streak alert
     await score_lead_once(
         session,
         agent=lead,
@@ -346,11 +398,16 @@ async def test_score_all_leads_only_scores_board_leads(
         ),
     )
     await session.commit()
-    emitted = await score_all_leads_once(
+    # First pass: warmup — bootstrap, no candidate.
+    emitted_first = await score_all_leads_once(
         session, sweep_interval=timedelta(minutes=5)
     )
-    # Exactly one lead, so at most one candidate.
-    assert emitted == 1
+    assert emitted_first == 0
+    # Second pass: real scoring — exactly one lead, one candidate.
+    emitted_second = await score_all_leads_once(
+        session, sweep_interval=timedelta(minutes=5)
+    )
+    assert emitted_second == 1
 
 
 @pytest.mark.asyncio

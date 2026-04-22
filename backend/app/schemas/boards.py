@@ -19,14 +19,24 @@ RUNTIME_ANNOTATION_TYPES = (datetime, UUID)
 # for why this is an allowlist (F4) rather than open-ended. Unknown keys land
 # in Board.rollout_flags_unknown so that operator attempts to enable new flags
 # are observable without requiring a code change to unblock them.
+# Named constants so service-layer callers don't hand-roll the flag
+# key as a string literal. A typo in a local constant silently
+# disables the gate — the allowlist only catches writes, not reads.
+COMMENT_POLICY_V1_FLAG = "comment_policy_v1"
+STRUCTURED_BLOCKERS_V1_FLAG = "structured_blockers_v1"
+OPERATOR_DECISIONS_V1_FLAG = "operator_decisions_v1"
+DEPLOY_TRUTH_V1_FLAG = "deploy_truth_v1"
+HEARTBEAT_WATCHDOG_V1_FLAG = "heartbeat_watchdog_v1"
+LEAD_SCORING_V1_FLAG = "lead_scoring_v1"
+
 ROLLOUT_FLAG_ALLOWLIST = frozenset(
     {
-        "comment_policy_v1",
-        "structured_blockers_v1",
-        "operator_decisions_v1",
-        "deploy_truth_v1",
-        "heartbeat_watchdog_v1",
-        "lead_scoring_v1",
+        COMMENT_POLICY_V1_FLAG,
+        STRUCTURED_BLOCKERS_V1_FLAG,
+        OPERATOR_DECISIONS_V1_FLAG,
+        DEPLOY_TRUTH_V1_FLAG,
+        HEARTBEAT_WATCHDOG_V1_FLAG,
+        LEAD_SCORING_V1_FLAG,
     }
 )
 

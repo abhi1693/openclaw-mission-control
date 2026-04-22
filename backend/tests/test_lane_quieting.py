@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -54,7 +54,7 @@ async def seeded() -> AsyncIterator[
         task_id=task.id,
         category="source",
         owner_role="frontend-dev",
-        acknowledged_at=datetime.utcnow(),
+        acknowledged_at=datetime.now(timezone.utc),
     )
     session.add(blocker)
     await session.commit()
@@ -150,7 +150,7 @@ async def test_resolved_blocker_does_not_suppress(
     """Once a blocker is resolved the lane re-opens."""
 
     session, _board, task, blocker = seeded
-    blocker.resolved_at = datetime.utcnow()
+    blocker.resolved_at = datetime.now(timezone.utc)
     session.add(blocker)
     await session.commit()
     assert not await should_suppress_comment_for_blocked_lane(

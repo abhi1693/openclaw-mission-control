@@ -81,6 +81,48 @@ EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE = "supervisor.heartbeat_noop_candidate
 EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT = (
     "supervisor.heartbeat_noop_streak_alert"
 )
+# First-ever scoring for a lead: emit a bootstrap marker so subsequent
+# sweeps have a bookmark, without counting the boot-window as a real
+# no-op observation (which would falsely chain into a streak alert).
+EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP = (
+    "supervisor.heartbeat_scoring_bootstrap"
+)
+
+
+async def emit_supervisor_heartbeat_scoring_bootstrap(
+    *,
+    agent_id: UUID,
+    board_id: UUID | None,
+    evaluated_at: datetime,
+) -> None:
+    """First-ever scoring for a lead — writes a bootstrap row so the
+    bookmark exists for the next sweep, WITHOUT participating in the
+    noop-streak detection. Prevents boot-time spurious alerts.
+    """
+
+    try:
+        async with async_session_maker() as session:
+            event = ShadowMetricEvent(
+                event_type=EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP,
+                board_id=board_id,
+                agent_id=agent_id,
+                classifier_metadata={
+                    "evaluated_at": evaluated_at.isoformat(),
+                },
+            )
+            session.add(event)
+            await session.commit()
+    except asyncio.CancelledError:
+        logger.info(
+            "shadow_metrics.supervisor_bootstrap_emit_cancelled agent_id=%s",
+            agent_id,
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "shadow_metrics.supervisor_bootstrap_emit_failed agent_id=%s",
+            agent_id,
+        )
 
 
 async def emit_supervisor_heartbeat_noop_candidate(

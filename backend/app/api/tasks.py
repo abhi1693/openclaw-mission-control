@@ -203,8 +203,11 @@ ERROR_CODE_COMMENT_SUPPRESSED_BLOCKED_LANE = "comment_suppressed_blocked_lane"
 
 
 def _lane_quieting_suppressed_error() -> HTTPException:
+    # 403 — not 409 — because the comment is *forbidden* for this
+    # actor, not a state conflict the caller can resolve by retrying.
+    # Clients auto-retrying on 409 would loop.
     return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
+        status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "message": (
                 "Task has an acknowledged blocker; only the owner or a "

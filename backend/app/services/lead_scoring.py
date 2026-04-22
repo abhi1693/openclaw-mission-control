@@ -32,6 +32,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
+from sqlalchemy import exists
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -42,11 +43,14 @@ from app.models.blockers import Blocker
 from app.models.boards import Board
 from app.models.activity_events import ActivityEvent
 from app.models.shadow_metric_events import ShadowMetricEvent
+from app.schemas.boards import LEAD_SCORING_V1_FLAG
 from app.services.shadow_metrics import (
     EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE,
     EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT,
+    EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP,
     emit_supervisor_heartbeat_noop_candidate,
     emit_supervisor_heartbeat_noop_streak_alert,
+    emit_supervisor_heartbeat_scoring_bootstrap,
 )
 
 logger = get_logger(__name__)
@@ -57,13 +61,50 @@ logger = get_logger(__name__)
 # types (those are byproducts, not lead-authored actions).
 _LEAD_ACTION_EVENT_TYPES: frozenset[str] = frozenset(
     {
-        "task.created",
+        # ``task.created`` is omitted because ``create_task`` is a
+        # USER_AUTH_DEP path — the agent_id on those events is always
+        # NULL, so counting them would credit no lead anyway. Leads
+        # act by PATCHing existing tasks, which emits task.updated
+        # and task.status_changed.
         "task.updated",
         "task.status_changed",
     }
 )
 
-_LEAD_SCORING_FLAG = "lead_scoring_v1"
+
+
+async def lead_has_any_action_since(
+    session: AsyncSession,
+    *,
+    agent_id: UUID,
+    board_id: UUID,
+    bookmark: datetime,
+) -> bool:
+    """True if the lead has any blocker- or task-mutation activity
+    since ``bookmark``. EXISTS short-circuits at the first match so we
+    don't pay a full COUNT on a chatty lane.
+    """
+
+    has_blocker = await session.scalar(
+        select(
+            exists()
+            .where(col(Blocker.board_id) == board_id)
+            .where(col(Blocker.created_by_agent_id) == agent_id)
+            .where(col(Blocker.created_at) > bookmark)
+        )
+    )
+    if has_blocker:
+        return True
+    has_activity = await session.scalar(
+        select(
+            exists()
+            .where(col(ActivityEvent.board_id) == board_id)
+            .where(col(ActivityEvent.agent_id) == agent_id)
+            .where(col(ActivityEvent.event_type).in_(_LEAD_ACTION_EVENT_TYPES))
+            .where(col(ActivityEvent.created_at) > bookmark)
+        )
+    )
+    return bool(has_activity)
 
 
 async def count_lead_actions_since(
@@ -73,30 +114,27 @@ async def count_lead_actions_since(
     board_id: UUID,
     bookmark: datetime,
 ) -> int:
-    """Count real actions by the lead since ``bookmark``.
+    """Legacy test-helper shape. Returns 0 or 1 based on EXISTS."""
 
-    Returns the sum of:
-    - open blockers the lead filed
-    - task activity events in the mutation set above, authored by
-      the lead on this board
-    """
+    return (
+        1
+        if await lead_has_any_action_since(
+            session,
+            agent_id=agent_id,
+            board_id=board_id,
+            bookmark=bookmark,
+        )
+        else 0
+    )
 
-    blocker_count = await session.scalar(
-        select(func.count(col(Blocker.id)))
-        .where(col(Blocker.board_id) == board_id)
-        .where(col(Blocker.created_by_agent_id) == agent_id)
-        .where(col(Blocker.created_at) > bookmark)
-    ) or 0
 
-    activity_count = await session.scalar(
-        select(func.count(col(ActivityEvent.id)))
-        .where(col(ActivityEvent.board_id) == board_id)
-        .where(col(ActivityEvent.agent_id) == agent_id)
-        .where(col(ActivityEvent.event_type).in_(_LEAD_ACTION_EVENT_TYPES))
-        .where(col(ActivityEvent.created_at) > bookmark)
-    ) or 0
-
-    return int(blocker_count) + int(activity_count)
+_SCORING_EVENT_TYPES = frozenset(
+    {
+        EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE,
+        EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT,
+        EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP,
+    }
+)
 
 
 async def last_scoring_bookmark(
@@ -105,19 +143,13 @@ async def last_scoring_bookmark(
     """Return the most-recent scoring timestamp for the lead, or None
     if they've never been scored. Reads from shadow_metric_events so
     no new state columns are needed — the event table is the truth.
+    Includes the bootstrap-event type so warmup counts as a bookmark.
     """
 
     return await session.scalar(
         select(func.max(col(ShadowMetricEvent.created_at)))
         .where(col(ShadowMetricEvent.agent_id) == agent_id)
-        .where(
-            col(ShadowMetricEvent.event_type).in_(
-                {
-                    EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE,
-                    EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT,
-                }
-            )
-        )
+        .where(col(ShadowMetricEvent.event_type).in_(_SCORING_EVENT_TYPES))
     )
 
 
@@ -161,6 +193,21 @@ async def score_lead_once(
     evaluated_at = now or utcnow()
     bookmark = await last_scoring_bookmark(session, agent_id=agent.id)
 
+    # Warmup grace: the very first scoring for a lead writes a
+    # bootstrap marker so the bookmark exists for the next sweep
+    # WITHOUT participating in streak detection. This prevents a
+    # boot-time deploy-downtime window from chaining into a spurious
+    # streak alert. Bootstrap events are included in
+    # ``last_scoring_bookmark`` but excluded from
+    # ``_previous_noop_candidate_at``.
+    if bookmark is None:
+        await emit_supervisor_heartbeat_scoring_bootstrap(
+            agent_id=agent.id,
+            board_id=board_id,
+            evaluated_at=evaluated_at,
+        )
+        return False
+
     # Capture the prior-candidate timestamp BEFORE emitting this
     # sweep's candidate — otherwise the streak lookup would find its
     # own freshly-written row and fire an alert on the first sweep.
@@ -172,23 +219,18 @@ async def score_lead_once(
         cutoff=streak_cutoff,
     )
 
-    # First-ever evaluation: window starts at (now - sweep_interval)
-    # so we don't over-count actions from the distant past on boot.
-    window_start = bookmark if bookmark is not None else evaluated_at - sweep_interval
-
-    action_count = await count_lead_actions_since(
+    if await lead_has_any_action_since(
         session,
         agent_id=agent.id,
         board_id=board_id,
-        bookmark=window_start,
-    )
-    if action_count > 0:
+        bookmark=bookmark,
+    ):
         return False
 
     await emit_supervisor_heartbeat_noop_candidate(
         agent_id=agent.id,
         board_id=board_id,
-        window_started_at=window_start,
+        window_started_at=bookmark,
     )
 
     if previous_candidate_at is not None:
@@ -210,19 +252,17 @@ async def score_all_leads_once(
     is enabled. Returns the number of no-op candidates emitted."""
 
     evaluated_at = now or utcnow()
-    # Join leads to their boards, filter on the rollout flag.
+    # Join leads to their boards + pull rollout_flags in the same
+    # query so we don't N+1 a per-lead SELECT for the flag check.
     stmt = (
-        select(Agent, col(Board.id))
+        select(Agent, col(Board.id), col(Board.rollout_flags))
         .join(Board, col(Agent.board_id) == col(Board.id))
         .where(col(Agent.is_board_lead).is_(True))
     )
     rows = (await session.exec(stmt)).all()
     emitted = 0
-    for agent, board_id in rows:
-        board_flags = await session.scalar(
-            select(Board.rollout_flags).where(Board.id == board_id)
-        )
-        if not board_flags or not board_flags.get(_LEAD_SCORING_FLAG):
+    for agent, board_id, board_flags in rows:
+        if not board_flags or not board_flags.get(LEAD_SCORING_V1_FLAG):
             continue
         try:
             fired = await score_lead_once(

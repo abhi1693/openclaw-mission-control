@@ -30,8 +30,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.blockers import Blocker
 from app.models.boards import Board
 from app.models.tasks import Task
-
-_LANE_QUIETING_FLAG = "structured_blockers_v1"
+from app.schemas.boards import STRUCTURED_BLOCKERS_V1_FLAG
 
 
 async def should_suppress_comment_for_blocked_lane(
@@ -64,7 +63,7 @@ async def should_suppress_comment_for_blocked_lane(
     board_flags = await session.scalar(
         select(Board.rollout_flags).where(Board.id == task.board_id)
     )
-    if not board_flags or not board_flags.get(_LANE_QUIETING_FLAG):
+    if not board_flags or not board_flags.get(STRUCTURED_BLOCKERS_V1_FLAG):
         return False
 
     if author_agent_id is None:
