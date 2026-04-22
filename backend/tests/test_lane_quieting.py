@@ -9,8 +9,6 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.blockers import Blocker
@@ -21,16 +19,11 @@ from app.services.lane_quieting import should_suppress_comment_for_blocked_lane
 
 
 @pytest_asyncio.fixture
-async def seeded() -> AsyncIterator[
-    tuple[AsyncSession, Board, Task, Blocker]
-]:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    session = AsyncSession(engine, expire_on_commit=False)
-
+async def seeded(
+    sqlite_session: AsyncSession,
+) -> AsyncIterator[tuple[AsyncSession, Board, Task, Blocker]]:
     org = Organization(id=uuid4(), name="org")
-    session.add(org)
+    sqlite_session.add(org)
     board = Board(
         id=uuid4(),
         organization_id=org.id,
@@ -39,7 +32,7 @@ async def seeded() -> AsyncIterator[
         description="x",
         rollout_flags={"structured_blockers_v1": True},
     )
-    session.add(board)
+    sqlite_session.add(board)
     task = Task(
         id=uuid4(),
         board_id=board.id,
@@ -47,7 +40,7 @@ async def seeded() -> AsyncIterator[
         status="in_progress",
         assigned_agent_id=uuid4(),
     )
-    session.add(task)
+    sqlite_session.add(task)
     blocker = Blocker(
         id=uuid4(),
         board_id=board.id,
@@ -56,13 +49,9 @@ async def seeded() -> AsyncIterator[
         owner_role="frontend-dev",
         acknowledged_at=datetime.now(timezone.utc),
     )
-    session.add(blocker)
-    await session.commit()
-    try:
-        yield session, board, task, blocker
-    finally:
-        await session.close()
-        await engine.dispose()
+    sqlite_session.add(blocker)
+    await sqlite_session.commit()
+    yield sqlite_session, board, task, blocker
 
 
 @pytest.mark.asyncio

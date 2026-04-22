@@ -9,8 +9,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel, col, select
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.activity_events import ActivityEvent
@@ -34,11 +34,10 @@ from app.services.shadow_metrics import (
 
 @pytest_asyncio.fixture
 async def seeded(
+    sqlite_engine: AsyncEngine,
+    sqlite_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncIterator[tuple[AsyncSession, Board, Agent]]:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
     # Redirect the emit helpers' dedicated-session factory at the
     # test engine so ``score_lead_once`` writes land in the same DB
     # the assertions read from.
@@ -47,16 +46,14 @@ async def seeded(
     from app.services import shadow_metrics as shadow_metrics_module
 
     test_session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
+        sqlite_engine, class_=AsyncSession, expire_on_commit=False
     )
     monkeypatch.setattr(
         shadow_metrics_module, "async_session_maker", test_session_maker
     )
 
-    session = AsyncSession(engine, expire_on_commit=False)
-
     org = Organization(id=uuid4(), name="org")
-    session.add(org)
+    sqlite_session.add(org)
     gateway = Gateway(
         id=uuid4(),
         organization_id=org.id,
@@ -64,7 +61,7 @@ async def seeded(
         url="https://gw.local",
         workspace_root="/tmp/w",
     )
-    session.add(gateway)
+    sqlite_session.add(gateway)
     board = Board(
         id=uuid4(),
         organization_id=org.id,
@@ -74,7 +71,7 @@ async def seeded(
         description="x",
         rollout_flags={"lead_scoring_v1": True},
     )
-    session.add(board)
+    sqlite_session.add(board)
     lead = Agent(
         id=uuid4(),
         board_id=board.id,
@@ -84,13 +81,9 @@ async def seeded(
         openclaw_session_id="lead-session",
         is_board_lead=True,
     )
-    session.add(lead)
-    await session.commit()
-    try:
-        yield session, board, lead
-    finally:
-        await session.close()
-        await engine.dispose()
+    sqlite_session.add(lead)
+    await sqlite_session.commit()
+    yield sqlite_session, board, lead
 
 
 @pytest.mark.asyncio
