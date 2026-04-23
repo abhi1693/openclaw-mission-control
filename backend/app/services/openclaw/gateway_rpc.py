@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import platform as _platform
+import re
 import ssl
 from dataclasses import dataclass
 from time import perf_counter, time
@@ -243,6 +244,44 @@ def _build_gateway_url(config: GatewayConfig) -> str:
 def _redacted_url_for_log(raw_url: str) -> str:
     parsed = urlparse(raw_url)
     return str(urlunparse(parsed._replace(query="", fragment="")))
+
+
+# Error messages flow from ``OpenClawGatewayError.__str__`` into
+# operator-facing surfaces (Part D stale-agent Blocker citations). The
+# gateway URL embeds ``?token=<shared-secret>`` via
+# :func:`_build_gateway_url`, so any transport error that stringifies
+# the URL (``ConnectionError``, ``OSError``, ``WebSocketException``)
+# leaks the token into the Blocker row. Downstream callers must run
+# this redactor before stamping the error message anywhere persisted
+# or rendered to users.
+#
+# Patterns covered:
+#   * ``?token=...`` / ``&token=...`` URL query params (any case)
+#   * bare ``access_token=...`` / ``authorization: ...`` key=value
+#   * JWT-shape tokens (``eyJ...`` three base64url segments)
+#
+# The redaction is intentionally conservative — leaves the rest of the
+# message (URL host/path, errno, reason codes, request_id) intact so
+# operators keep the signal they need.
+_TOKEN_QUERY_RE = re.compile(
+    r"([?&](?:token|access_token|apikey|auth|authorization)=)[^&\s]+",
+    re.IGNORECASE,
+)
+_BARE_TOKEN_KV_RE = re.compile(
+    r"\b((?:access_token|bearer|authorization)\s*[:=]\s*)[\w\-._+/]+",
+    re.IGNORECASE,
+)
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]+")
+
+
+def redact_gateway_error_message(message: str) -> str:
+    """Strip token-bearing substrings from a gateway error message so
+    it's safe to persist in operator-facing surfaces."""
+
+    redacted = _TOKEN_QUERY_RE.sub(r"\1<redacted>", message)
+    redacted = _BARE_TOKEN_KV_RE.sub(r"\1<redacted>", redacted)
+    redacted = _JWT_RE.sub("<redacted-jwt>", redacted)
+    return redacted
 
 
 def _create_ssl_context(config: GatewayConfig) -> ssl.SSLContext | None:

@@ -253,6 +253,37 @@ async def test_integrity_error_from_partial_unique_index_returns_none(
 
 
 @pytest.mark.asyncio
+async def test_citation_redacts_token_from_transport_error(
+    seeded: tuple[AsyncSession, Board, Task],
+) -> None:
+    """Transport-layer errors (``ConnectionError``/``WebSocketException``)
+    stringify to include the gateway URL whose query is ``?token=<shared>``.
+    The Blocker citation must not persist that token verbatim — it's
+    operator-facing and gets written to a row any board member can read."""
+
+    session, board, task = seeded
+    leaky_message = (
+        "Stale agent session reached via "
+        "wss://gateway.local/ws?token=super-secret-123 (request_id=req-999)"
+    )
+    blocker_id = await file_stale_agent_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        agent_name="frontend-dev",
+        exc=OpenClawGatewayError(leaky_message),
+    )
+    assert blocker_id is not None
+    blocker = await session.get(Blocker, blocker_id)
+    assert blocker is not None
+    citation = blocker.citation or ""
+    assert "super-secret-123" not in citation
+    assert "token=<redacted>" in citation
+    # request_id stays — 4.20 operators want it for log correlation.
+    assert "request_id=req-999" in citation
+
+
+@pytest.mark.asyncio
 async def test_non_dedupe_integrity_error_reraises(
     seeded: tuple[AsyncSession, Board, Task],
     monkeypatch: pytest.MonkeyPatch,

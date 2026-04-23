@@ -16,6 +16,7 @@ from app.services.openclaw.gateway_rpc import (
     _build_connect_params,
     _build_control_ui_origin,
     openclaw_call,
+    redact_gateway_error_message,
 )
 
 
@@ -412,3 +413,64 @@ async def test_openclaw_call_once_passes_ssl_context_for_insecure_wss(
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)
     assert kwargs.get("ssl") is not None
+
+
+# --------------------------------------------------------------------
+# redact_gateway_error_message (Part D.3 defence-in-depth)
+#
+# ``OpenClawGatewayError`` wraps gateway + transport errors whose
+# ``__str__`` may embed the gateway URL (with its ``?token=`` query)
+# or token-bearing headers. Errors flow into operator-facing Blocker
+# citations via the stale-agent filer, so the redactor must scrub
+# token substrings before anything persists.
+# --------------------------------------------------------------------
+
+
+def test_redact_strips_token_query_param() -> None:
+    msg = (
+        "ConnectionError: failed to reach "
+        "wss://gateway.local/ws?token=super-secret-shared-key"
+    )
+    cleaned = redact_gateway_error_message(msg)
+    assert "super-secret-shared-key" not in cleaned
+    assert "token=<redacted>" in cleaned
+    # Host + path preserved — operators still need the signal.
+    assert "gateway.local/ws" in cleaned
+
+
+def test_redact_handles_mixed_case_and_aliases() -> None:
+    msg = "GET /foo?ACCESS_TOKEN=abc123&token=xyz789 returned 401"
+    cleaned = redact_gateway_error_message(msg)
+    assert "abc123" not in cleaned
+    assert "xyz789" not in cleaned
+    assert "=<redacted>" in cleaned
+
+
+def test_redact_scrubs_bare_bearer_header() -> None:
+    msg = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig failed"
+    cleaned = redact_gateway_error_message(msg)
+    # Both the bearer kv and the JWT shape get caught — the result
+    # must contain neither the original token nor the JWT payload.
+    assert "eyJhbGciOiJIUzI1NiJ9" not in cleaned
+    assert "<redacted" in cleaned
+
+
+def test_redact_scrubs_jwt_shape_outside_query() -> None:
+    msg = "gateway returned 403 for eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.Xb2r1WcUQh"
+    cleaned = redact_gateway_error_message(msg)
+    assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in cleaned
+    assert "<redacted-jwt>" in cleaned
+
+
+def test_redact_leaves_token_free_messages_intact() -> None:
+    msg = "Stale agent session: agent `frontend-dev` not found in config"
+    assert redact_gateway_error_message(msg) == msg
+
+
+def test_redact_preserves_request_id() -> None:
+    """4.20 gateway errors include request_ids for operator correlation
+    — those must survive the redactor."""
+
+    msg = "PAIRING_REQUIRED: scope upgrade needed (request_id=req-abc-123)"
+    cleaned = redact_gateway_error_message(msg)
+    assert "request_id=req-abc-123" in cleaned

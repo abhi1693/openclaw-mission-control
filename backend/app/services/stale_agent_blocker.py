@@ -31,7 +31,10 @@ from app.schemas.boards import (
     STRUCTURED_BLOCKERS_V1_FLAG,
     board_rollout_flag_enabled,
 )
-from app.services.openclaw.gateway_rpc import OpenClawGatewayError
+from app.services.openclaw.gateway_rpc import (
+    OpenClawGatewayError,
+    redact_gateway_error_message,
+)
 
 logger = get_logger(__name__)
 
@@ -94,12 +97,14 @@ def classify_gateway_error(
 def _citation_for(reason: StaleAgentGatewayReason, raw_message: str) -> str:
     # 4.20+ gateways emit reason-specific remediation hints; 4.19 and
     # below return a generic message. Preserve whatever the gateway
-    # said so operators see the most-specific text available without
-    # needing to cross-reference logs.
-    truncated = raw_message.strip()
-    if len(truncated) > 512:
-        truncated = truncated[:512] + "…"
-    return truncated or f"Gateway returned {reason.value} without a remediation hint."
+    # said so operators see the most-specific text available — but
+    # redact token-bearing substrings first: transport-error paths
+    # stringify the gateway URL (including ``?token=<shared-secret>``),
+    # and this citation lands in operator dashboards + Blocker rows.
+    redacted = redact_gateway_error_message(raw_message).strip()
+    if len(redacted) > 512:
+        redacted = redacted[:512] + "…"
+    return redacted or f"Gateway returned {reason.value} without a remediation hint."
 
 
 async def _open_stale_agent_blocker_exists(
