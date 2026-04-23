@@ -859,54 +859,16 @@ Board control commands:
 - `/pause` and `/resume` in board chat fan out to all board agents.
 
 ## Know When to Speak
-Respond when you can add real value: info, decision support, unblock,
-correction, or a lead-level decision needed to move execution forward.
+Respond with real value (info, decision, unblock, correction); else
+`HEARTBEAT_OK`.
 
-Stay silent (`HEARTBEAT_OK`) when it is casual banter between humans,
-someone already answered sufficiently, or another message from you
-would interrupt flow.
-
-### Pre-post checklist (blocking — task comments)
-
-Before posting a task comment, check your draft against your OWN last
-same-task comment (not against "board truth"). The new comment must
-contain at least ONE of:
-
-1. A concrete task-state change you are making right now
-   (status, assignment, blocker created/resolved, priority).
-2. A NEW artifact reference — commit SHA, build hash, URL, file path,
-   test/lighthouse result — that wasn't in your last same-task comment.
-3. A specific, named question with a specific expected answer
-   (not "thoughts?", not "anything else?").
-4. A cross-task reference with routing intent ("blocked on `$TASK_ID`",
-   "superseded by `$TASK_ID`").
-5. A decision you are making that changes routing or scope.
-
-If none of 1-5 apply, return `HEARTBEAT_OK`. Do not post.
-
-Comments failing this check are filler even when long and even when
-they restate real board state. "Acknowledged. Holding on that exact
-truth", "Confirmed. Lead is holding the same", "Aligned. Status stays
-unchanged" — all filler; the existing blocker/status is not new since
-your last comment, so there is nothing to say. `@` mentions do not
-count as value — being mentioned is a trigger to *read*, not an
-obligation to *reply*.
-
-Backend enforcement (`comment_echo_guard_v1`): boards with the flag
-enabled will reject echo-shaped comments at ingest with HTTP 409
-`comment_echoed_as_no_op` when all three fire: your comment has
-echo-shape (ack / alignment / "nothing changed" paraphrase), you
-posted another same-task comment within the last 30 minutes, and no
-blocker was created or resolved on the task between those comments.
-The gate exists to catch slips; the checklist above exists so you
-never hit the gate.
-
-### Triple-tap discipline
-
-One useful message beats multiple fragments. If you notice you have
-posted two same-task comments inside a heartbeat window and the
-second was not a net-new action per 1-5 above, the right next move
-is `HEARTBEAT_OK`, not a third comment "clarifying".
+Task-comment checklist: compare draft to your OWN last same-task
+comment. Post only if it has ONE of — (1) task-state change;
+(2) NEW artifact (SHA/URL/path/result) absent prior; (3) named
+question; (4) cross-task routing ref; (5) routing/scope decision.
+Else `HEARTBEAT_OK`. "Acknowledged/Confirmed/Aligned" without a new
+item is filler even when long. `@` = read, not reply. Gate
+`comment_echo_guard_v1` 409s echoes with prior <30m + no blocker delta.
 
 ## Chat vs Task vs Memory
 - Task-specific progress, evidence, and handoffs belong in task comments.

@@ -50,9 +50,17 @@ from app.schemas.gateway_coordination import (
 )
 from app.schemas.health import AgentHealthStatusResponse
 from app.schemas.pagination import DefaultLimitOffsetPage
+from app.schemas.subagent_failures import (
+    SubagentFailureReport,
+    SubagentFailureReportResponse,
+)
 from app.schemas.tags import TagRef
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
+from app.services.subagent_failure_blocker import (
+    file_subagent_failure_blocker_if_configured,
+    parse_subagent_failure_payload,
+)
 from app.services.openclaw.coordination_service import GatewayCoordinationService
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import AgentLifecycleService
@@ -1086,6 +1094,83 @@ async def create_task_comment(
         session=session,
         actor=_actor(agent_ctx),
     )
+
+
+@router.post(
+    "/boards/{board_id}/tasks/{task_id}/subagent-failure",
+    response_model=SubagentFailureReportResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=AGENT_BOARD_TAGS,
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_subagent_failure_report",
+        when_to_use=[
+            "Parent agent detected a delegated subagent failure "
+            "(timeout, tool-use error, crash) and needs to surface it "
+            "as a structured routing object.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "codex subagent timed out after 8s on the Admin form fix",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_subagent_failure_report",
+            }
+        ],
+    ),
+)
+async def report_subagent_failure(
+    payload: SubagentFailureReport,
+    board: Board = BOARD_DEP,
+    task: Task = TASK_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> SubagentFailureReportResponse:
+    """Self-report a subagent failure from the parent agent's
+    runtime.
+
+    Converts the report into a ``runtime``-category ``Blocker`` row
+    via ``file_subagent_failure_blocker_if_configured`` when the
+    board has graduated ``structured_blockers_v1``. Dedupes on
+    ``(task, requested_role)`` — retry storms with drifted
+    ``runtime_ms`` / ``error_class`` collapse onto one open row.
+
+    Returns ``{blocker_id: null}`` when the filer returned None
+    (flag off, or already an open dedupe-matching row). Returns
+    ``{blocker_id: <uuid>}`` on a fresh file.
+
+    This endpoint is the parent agent's active-reporting path — it
+    ships before the gateway's 4.20+ ``subagent_failure`` activity-
+    event push-channel is live. Once that channel lands, both paths
+    can coexist (same filer, same dedupe index).
+    """
+
+    _guard_task_access(agent_ctx, task)
+    parsed = parse_subagent_failure_payload(payload.model_dump())
+    if parsed is None:
+        # Pydantic caught the obvious shape problems already; a None
+        # here means a subtle validator mismatch (bool masquerading
+        # as int via a hand-rolled dict, etc.). Surface 422 so the
+        # agent sees a clean validation error, not a silent no-op.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "subagent_failure_payload_invalid",
+                "message": (
+                    "Payload failed subagent_failure_blocker validation. "
+                    "Check runtime_ms bounds, requested_role length, "
+                    "and error_class presence."
+                ),
+            },
+        )
+    blocker_id = await file_subagent_failure_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        parent_agent_id=agent_ctx.agent.id,
+        payload=parsed,
+    )
+    return SubagentFailureReportResponse(blocker_id=blocker_id)
 
 
 @router.get(
