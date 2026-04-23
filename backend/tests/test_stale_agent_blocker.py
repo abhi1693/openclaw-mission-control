@@ -19,6 +19,7 @@ from app.services.openclaw.gateway_rpc import OpenClawGatewayError
 from app.services.stale_agent_blocker import (
     StaleAgentGatewayReason,
     classify_gateway_error,
+    extract_request_id,
     file_stale_agent_blocker_if_configured,
 )
 
@@ -341,3 +342,94 @@ async def test_resolved_blocker_does_not_block_new_file(
     )
     assert second is not None
     assert second != first
+
+
+# --------------------------------------------------------------------
+# Part E.4: request_id extraction into Blocker.citation_request_id
+# --------------------------------------------------------------------
+
+
+def test_extract_request_id_handles_paren_equals_format() -> None:
+    """Canonical 4.20+ shape: ``... (request_id=req-abc-123)``."""
+
+    assert (
+        extract_request_id(
+            "PAIRING_REQUIRED: scope upgrade needed (request_id=req-abc-123)"
+        )
+        == "req-abc-123"
+    )
+
+
+def test_extract_request_id_handles_colon_format() -> None:
+    """Also accept ``request_id: <val>`` for gateway builds that drop
+    the equals in favor of key-value style."""
+
+    assert (
+        extract_request_id(
+            "Stale agent session. request_id: req-xyz-789"
+        )
+        == "req-xyz-789"
+    )
+
+
+def test_extract_request_id_handles_camel_case() -> None:
+    """Some gateway builds emit ``requestId`` (camelCase). Accept both."""
+
+    assert (
+        extract_request_id("PAIRING_REQUIRED (requestId=req-CAM-1)")
+        == "req-CAM-1"
+    )
+
+
+def test_extract_request_id_returns_none_on_absence() -> None:
+    """4.19 and earlier don't embed the id — extractor must return None."""
+
+    assert extract_request_id("Stale agent session — no hint") is None
+
+
+@pytest.mark.asyncio
+async def test_filer_stamps_request_id_on_blocker(
+    seeded: tuple[AsyncSession, Board, Task],
+) -> None:
+    """End-to-end: 4.20+ error message → filer → Blocker row with the
+    structured column populated AND the id preserved in the citation."""
+
+    session, board, task = seeded
+    blocker_id = await file_stale_agent_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        agent_name="frontend-dev",
+        exc=OpenClawGatewayError(
+            "PAIRING_REQUIRED: re-pair required for frontend-dev "
+            "(request_id=req-live-001)"
+        ),
+    )
+    assert blocker_id is not None
+    blocker = await session.get(Blocker, blocker_id)
+    assert blocker is not None
+    assert blocker.citation_request_id == "req-live-001"
+    # Citation retains the id too — structured field is additive.
+    assert "req-live-001" in (blocker.citation or "")
+
+
+@pytest.mark.asyncio
+async def test_filer_leaves_request_id_null_on_4_19_error(
+    seeded: tuple[AsyncSession, Board, Task],
+) -> None:
+    """Older-gateway message without the id must produce a Blocker with
+    ``citation_request_id=None`` — NULL is the signal "no id available"
+    for operator triage."""
+
+    session, board, task = seeded
+    blocker_id = await file_stale_agent_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        agent_name="frontend-dev",
+        exc=OpenClawGatewayError("Stale agent session"),
+    )
+    assert blocker_id is not None
+    blocker = await session.get(Blocker, blocker_id)
+    assert blocker is not None
+    assert blocker.citation_request_id is None

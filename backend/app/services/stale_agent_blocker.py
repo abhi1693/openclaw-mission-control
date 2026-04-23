@@ -107,6 +107,35 @@ def _citation_for(reason: StaleAgentGatewayReason, raw_message: str) -> str:
     return redacted or f"Gateway returned {reason.value} without a remediation hint."
 
 
+# Part E.4: 4.20+ PAIRING_REQUIRED responses embed a ``request_id``
+# in the message for gateway-log correlation. Format observed across
+# 4.20 → 4.22: ``request_id=<value>`` or ``request_id: <value>``,
+# typically in parens at message tail, e.g.
+# ``PAIRING_REQUIRED: scope upgrade needed (request_id=req-abc-123)``.
+# Value charset matches gateway request ids: ``[A-Za-z0-9_-]+``.
+# Column is VARCHAR(128) so we cap here too.
+_REQUEST_ID_RE = re.compile(
+    r"\brequest[_-]?id\s*[:=]\s*([A-Za-z0-9_\-]{1,128})",
+    re.IGNORECASE,
+)
+
+
+def extract_request_id(raw_message: str) -> str | None:
+    """Pull the structured request_id out of a gateway error message.
+
+    Returns the id on match, None on absence or empty id. The regex
+    runs against the raw message (pre-redaction) because the redactor
+    intentionally preserves request_ids — either path works, but
+    pre-redaction is one substring pass cheaper.
+    """
+
+    match = _REQUEST_ID_RE.search(raw_message)
+    if match is None:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
 async def _open_stale_agent_blocker_exists(
     session: AsyncSession,
     *,
@@ -176,6 +205,7 @@ async def file_stale_agent_blocker_if_configured(
     ):
         return None
 
+    raw_message = str(exc)
     blocker = Blocker(
         board_id=board.id,
         task_id=task_id,
@@ -185,7 +215,8 @@ async def file_stale_agent_blocker_if_configured(
         reopen_condition=(
             "re-add agent to openclaw.json and confirm provision"
         ),
-        citation=_citation_for(reason, str(exc)),
+        citation=_citation_for(reason, raw_message),
+        citation_request_id=extract_request_id(raw_message),
     )
     # Blocker.id is a Python-side ``default_factory=uuid4``, so it's
     # populated on construction. No server-computed fields need a

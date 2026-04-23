@@ -72,3 +72,6 @@ class BlockerRead(BlockerBase):
     acknowledged_at: datetime | None
     acknowledged_by_agent_id: UUID | None
     resolved_at: datetime | None
+    # Part E.4: structured request_id extracted from 4.20+
+    # PAIRING_REQUIRED remediation. Null for non-stale-agent filings.
+    citation_request_id: str | None = None

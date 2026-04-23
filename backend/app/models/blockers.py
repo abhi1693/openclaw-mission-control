@@ -101,6 +101,12 @@ class Blocker(TenantScoped, table=True):
     # through POST /blockers where the review-level narrative is
     # irrelevant.
     citation: str | None = None
+    # Part E.4: structured request_id extracted from 4.20+
+    # PAIRING_REQUIRED remediation messages. Promotion from the
+    # free-form citation text makes the id searchable/sortable even
+    # when the 512-char citation truncation clips it; the citation
+    # itself retains the id verbatim for human readability.
+    citation_request_id: str | None = Field(default=None, max_length=128)
     created_by_agent_id: UUID | None = Field(
         default=None, foreign_key="agents.id", index=True
     )
