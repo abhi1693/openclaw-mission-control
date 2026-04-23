@@ -438,11 +438,15 @@ All three are **additive and deferred** — none blocks Phase III (operator-deci
 
 **Why cancelled.** Inspecting the PR (`openclaw/openclaw#70595`, files: ``CHANGELOG.md``, ``src/auto-reply/status.test.ts``, ``src/status/status-message.ts``) showed the change only touches the chat-rendered ``/status`` command output — a human-readable label in a chat message, NOT a structured field on any RPC response (``status``, ``sessions.list``, ``sessions.preview`` all confirmed empty of ``runner`` on a live 4.22 gateway probe). MC has no hook to a chat-formatted label; parsing the human-readable string back into a structured column would be fragile and gives nothing the existing ``config.get`` agent listing doesn't already imply.
 
-### E.3 Use server-side ``sessions.list`` filters (4.22) — **CANCELLED 2026-04-23**
+### E.3 Use server-side ``sessions.list`` filters (4.22) — **RE-OPENED 2026-04-23 (codex correction)**
 
 **Original rationale.** 4.22 `#69839` was read as adding ``label`` / ``agent`` / ``search`` server-side filter params to the ``sessions.list`` gateway RPC.
 
-**Why cancelled.** Inspecting the PR (`openclaw/openclaw#69839` "Expose mailbox discovery via sessions_list", files: ``src/agents/tools/sessions-list-tool.ts`` + ``src/agents/tools/sessions-helpers.ts``) showed the change adds the filter parameters to the **agent-tool** (``sessions_list`` the Codex/ACP agent tool), not to the gateway RPC method (``sessions.list``). The gateway RPC method signature is unchanged. MC is a gateway client, not an agent consumer of agent tools, so this PR has no integration point on the MC side.
+**First cancellation (WITHDRAWN).** I originally cancelled E.3 after seeing the PR #69839 file list only under ``src/agents/tools/``. Codex gpt-5.5/high review on 2026-04-23 caught the error: the gateway RPC schema at ``src/gateway/protocol/schema/sessions.ts``'s ``SessionsListParamsSchema`` explicitly accepts ``label``, ``agentId``, ``search``, ``spawnedBy`` as ``Type.Optional`` params. The RPC absolutely was updated — PR #69839 changed the agent-tool wrapper AS WELL, but the underlying schema / handler in ``src/gateway/server-methods/sessions.ts`` validates and forwards these params.
+
+**Amendment.** MC's ``session_service.py`` currently fetches the full list via ``openclaw_call("sessions.list", None, config=cfg)`` and filters client-side. Switch to server-side filtering by passing the params dict. Priority stays L — Dev Squad session volume doesn't need it today — but it's real integration work, not a ghost PR.
+
+**Lesson for future audits.** Checking the PR file list is necessary but not sufficient — a single PR can touch multiple surfaces, and the upstream schema ``.ts`` file may be in a separate path the PR didn't directly modify. The durable check is: grep the upstream gateway RPC schema for the new param names BEFORE scoring the integration as "not on the MC surface".
 
 ### E.4 Promote ``request_id`` from ``PAIRING_REQUIRED`` into structured Blocker field
 
@@ -479,8 +483,18 @@ All three are **additive and deferred** — none blocks Phase III (operator-deci
 | E.1a authStatus capture on repair rows | M | shipped (``13314e4b``) |
 | E.1b authStatus-based alert-gate suppression | M | deferred — needs real snapshot samples from prod before the predicate can be tuned |
 | E.2 ``Runner:`` field parse | L | **cancelled** (chat-label only, not RPC) |
-| E.3 server-side ``sessions.list`` filters | L | **cancelled** (agent-tool, not RPC) |
+| E.3 server-side ``sessions.list`` filters | L | **re-opened 2026-04-23** — codex review confirmed gateway RPC schema accepts ``label``/``agentId``/``search``/``spawnedBy``; implementation deferred |
 | E.4 Blocker ``citation_request_id`` | M | shipped (``780982a6``) |
 | E.5 ``config.patch`` operator-auth smoke test | ops | ready per upgrade; one curl |
 
 **Lesson for future changelog audits.** When a changelog entry mentions a feature added to ``/command``, ``$tool``, or ``src/agents/*``, resolve the PR file list BEFORE scoring MC integration priority. Chat-command surfaces, agent tools, and gateway RPCs are three different wire contracts. The audit that produced Part E pre-cancellation conflated them.
+
+**Follow-up correction (2026-04-23):** the above lesson was right but incomplete. Codex gpt-5.5/high review of the cancellations caught that PR #69839 touched BOTH the agent tool AND the gateway RPC schema (separate file paths). A single PR file list can be misleading when the schema ``.ts`` file is updated in a parallel path the PR didn't include explicitly. Harden the audit by also grepping the upstream gateway protocol schema (``src/gateway/protocol/schema/*.ts``) for the new param names BEFORE concluding "not on the MC surface". This is what caused the premature E.3 cancellation. E.3 has been re-opened.
+
+### E.9 Implementation corrections from codex review (2026-04-23)
+
+Two corrections applied to already-shipped code after a gpt-5.5/high review:
+
+**E.1a watchdog RPC timeout.** Codex caught that ``openclaw_call`` has no end-to-end response timeout after connect+send (the 2s ``wait_for`` at ``gateway_rpc.py:486`` only covers the connect-handshake read). A hung or slow gateway could stall the 60s watchdog sweep indefinitely. Wrapped each per-gateway ``models_auth_status`` call in ``asyncio.wait_for`` with a 5s cap; timeout maps to ``None`` snapshot, repair still persists. New regression test ``test_auth_status_fetch_timeout_survives_to_null`` locks the behaviour.
+
+**E.4 request_id surface.** Codex caught that parsing the human-readable error message is the wrong surface. The gateway's ``PairingConnectErrorDetails`` at ``src/gateway/protocol/connect-error-details.ts`` carries structured ``requestId`` / ``reason`` / ``code`` fields, and MC was discarding everything except ``.message`` at ``gateway_rpc.py:380``. Extended ``OpenClawGatewayError`` with an optional ``details`` dict populated from ``data["error"]`` + ``.request_id`` / ``.code`` property accessors. New ``request_id_from_exc()`` helper in ``stale_agent_blocker.py`` prefers the structured field with regex fallback for pre-4.20 gateways. Four new regression tests cover structured-preference, regex-fallback, absent-in-both, and the ship-case where a citation's structured id wins over a different id in the message text.

@@ -451,6 +451,63 @@ async def test_repair_event_captures_auth_status_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_auth_status_fetch_timeout_survives_to_null(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hung gateway must not stall the sweep. Patching the real
+    ``models_auth_status`` helper to sleep longer than the watchdog's
+    5s timeout should cause ``_fetch_auth_status_by_gateway`` to
+    record ``None`` and let the repair still happen."""
+
+    import asyncio
+
+    from app.services.openclaw.gateway_rpc import GatewayConfig
+    from app.services.openclaw.heartbeat_watchdog import (
+        _fetch_auth_status_by_gateway,
+    )
+
+    async def _hang_auth_status(*, config: GatewayConfig) -> Any:
+        await asyncio.sleep(30)
+        return {}
+
+    monkeypatch.setattr(
+        "app.services.openclaw.heartbeat_watchdog.models_auth_status",
+        _hang_auth_status,
+    )
+    # Tight timeout so the test doesn't actually wait 5s.
+    monkeypatch.setattr(
+        "app.services.openclaw.heartbeat_watchdog._AUTH_STATUS_FETCH_TIMEOUT_SECONDS",
+        0.05,
+    )
+
+    # Build a fake session that returns one Gateway row for the id.
+    from dataclasses import dataclass as _dc
+
+    @_dc
+    class _GatewayRowSession:
+        gateway_id: UUID
+
+        async def exec(self, _stmt: Any) -> Any:
+            from app.models.gateways import Gateway
+            gw = Gateway(
+                id=self.gateway_id,
+                organization_id=uuid4(),
+                name="g",
+                url="ws://198.18.0.1:1",  # unreachable
+                workspace_root="/tmp/w",
+            )
+            return _FakeExecResult(rows=[gw], rowcount=0)
+
+    gw_id = uuid4()
+    session = _GatewayRowSession(gateway_id=gw_id)
+    result = await _fetch_auth_status_by_gateway(
+        session,  # type: ignore[arg-type]
+        gateway_ids={gw_id},
+    )
+    assert result == {gw_id: None}
+
+
+@pytest.mark.asyncio
 async def test_repair_event_survives_null_auth_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

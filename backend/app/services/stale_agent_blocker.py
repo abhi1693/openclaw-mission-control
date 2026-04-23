@@ -121,12 +121,15 @@ _REQUEST_ID_RE = re.compile(
 
 
 def extract_request_id(raw_message: str) -> str | None:
-    """Pull the structured request_id out of a gateway error message.
+    """Extract the request_id from an error's free-form message.
 
-    Returns the id on match, None on absence or empty id. The regex
-    runs against the raw message (pre-redaction) because the redactor
-    intentionally preserves request_ids — either path works, but
-    pre-redaction is one substring pass cheaper.
+    Fallback surface for gateways that don't populate the structured
+    ``data["error"]`` frame (pre-4.20 builds). Callers that already
+    have the ``OpenClawGatewayError`` object should prefer
+    :func:`request_id_from_exc` — it reads the structured
+    ``requestId`` field directly without regex parsing.
+
+    Returns the id on regex match, None on absence or empty id.
     """
 
     match = _REQUEST_ID_RE.search(raw_message)
@@ -134,6 +137,22 @@ def extract_request_id(raw_message: str) -> str | None:
         return None
     value = match.group(1).strip()
     return value or None
+
+
+def request_id_from_exc(exc: OpenClawGatewayError) -> str | None:
+    """Preferred: read the gateway's structured ``requestId`` from the
+    error details (4.20+ protocol, ``data["error"]["requestId"]``).
+    Fall back to regex-parsing the human message when the structured
+    path is absent (older gateway or non-PAIRING_REQUIRED classes).
+
+    Codex review 2026-04-23 surfaced that the free-form message
+    extraction alone rots the day the gateway tightens its message
+    format; the structured field at
+    ``src/gateway/protocol/connect-error-details.ts`` is the
+    durable surface.
+    """
+
+    return exc.request_id or extract_request_id(str(exc))
 
 
 async def _open_stale_agent_blocker_exists(
@@ -216,7 +235,7 @@ async def file_stale_agent_blocker_if_configured(
             "re-add agent to openclaw.json and confirm provision"
         ),
         citation=_citation_for(reason, raw_message),
-        citation_request_id=extract_request_id(raw_message),
+        citation_request_id=request_id_from_exc(exc),
     )
     # Blocker.id is a Python-side ``default_factory=uuid4``, so it's
     # populated on construction. No server-computed fields need a

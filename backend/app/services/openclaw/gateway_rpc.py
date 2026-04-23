@@ -212,7 +212,54 @@ def is_known_gateway_method(method: str) -> bool:
 
 
 class OpenClawGatewayError(RuntimeError):
-    """Raised when OpenClaw gateway calls fail."""
+    """Raised when OpenClaw gateway calls fail.
+
+    Carries an optional ``details`` dict captured from the gateway's
+    structured ``data["error"]`` frame. The protocol shape is defined
+    at ``src/gateway/protocol/connect-error-details.ts`` upstream and
+    typically includes ``code`` (e.g. ``PAIRING_REQUIRED``),
+    ``requestId`` (correlation id operators use to cross-reference
+    gateway logs), and reason-specific fields (``reason``,
+    ``recommendedNextStep``, etc.). Consumers prefer structured
+    fields — falling back to the human-readable message only when
+    older gateways (pre-4.20) don't populate the structured path.
+
+    ``str(exc)`` keeps returning the raw message for backward
+    compatibility with existing log lines and the citation path.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.details: dict[str, Any] | None = details
+
+    @property
+    def code(self) -> str | None:
+        """Structured error code from ``data["error"]["code"]`` (e.g.
+        ``PAIRING_REQUIRED``), or ``None`` when the gateway didn't
+        populate it."""
+
+        if not isinstance(self.details, dict):
+            return None
+        code = self.details.get("code")
+        return code if isinstance(code, str) and code else None
+
+    @property
+    def request_id(self) -> str | None:
+        """Structured correlation id from ``data["error"]["requestId"]``
+        (or ``request_id`` in older gateway builds), or ``None``."""
+
+        if not isinstance(self.details, dict):
+            return None
+        for key in ("requestId", "request_id"):
+            value = self.details.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return None
 
 
 @dataclass(frozen=True)
@@ -377,14 +424,17 @@ async def _await_response(
         if data.get("type") == "res" and data.get("id") == request_id:
             ok = data.get("ok")
             if ok is not None and not ok:
-                error = data.get("error", {}).get("message", "Gateway error")
-                raise OpenClawGatewayError(error)
+                error_obj = data.get("error") if isinstance(data.get("error"), dict) else {}
+                message = error_obj.get("message", "Gateway error")
+                raise OpenClawGatewayError(message, details=error_obj or None)
             return data.get("payload")
 
         if data.get("id") == request_id:
-            if data.get("error"):
-                message = data["error"].get("message", "Gateway error")
-                raise OpenClawGatewayError(message)
+            error_obj = data.get("error")
+            if error_obj:
+                error_dict = error_obj if isinstance(error_obj, dict) else {}
+                message = error_dict.get("message", "Gateway error")
+                raise OpenClawGatewayError(message, details=error_dict or None)
             return data.get("result")
 
 

@@ -21,6 +21,7 @@ from app.services.stale_agent_blocker import (
     classify_gateway_error,
     extract_request_id,
     file_stale_agent_blocker_if_configured,
+    request_id_from_exc,
 )
 
 
@@ -433,3 +434,65 @@ async def test_filer_leaves_request_id_null_on_4_19_error(
     blocker = await session.get(Blocker, blocker_id)
     assert blocker is not None
     assert blocker.citation_request_id is None
+
+
+def test_request_id_from_exc_prefers_structured_details() -> None:
+    """The 4.20+ gateway protocol carries ``requestId`` in
+    ``data["error"]``. ``request_id_from_exc`` must read that
+    structured field ahead of any regex parse — the message string
+    is a fallback surface only."""
+
+    exc = OpenClawGatewayError(
+        "PAIRING_REQUIRED: re-pair needed",
+        details={
+            "code": "PAIRING_REQUIRED",
+            "requestId": "req-structured-999",
+            "reason": "scope-upgrade",
+        },
+    )
+    assert request_id_from_exc(exc) == "req-structured-999"
+
+
+def test_request_id_from_exc_falls_back_to_regex_when_no_details() -> None:
+    """Pre-4.20 errors arrive with no structured ``details``; the
+    regex-over-message path still wins the id for old builds."""
+
+    exc = OpenClawGatewayError(
+        "PAIRING_REQUIRED: scope upgrade needed (request_id=req-old-1)"
+    )
+    assert request_id_from_exc(exc) == "req-old-1"
+
+
+def test_request_id_from_exc_returns_none_when_absent_in_both_paths() -> None:
+    exc = OpenClawGatewayError("Stale agent session — no remediation hint")
+    assert request_id_from_exc(exc) is None
+
+
+@pytest.mark.asyncio
+async def test_filer_prefers_structured_request_id_over_message_parse(
+    seeded: tuple[AsyncSession, Board, Task],
+) -> None:
+    """When ``OpenClawGatewayError.details`` carries ``requestId``, the
+    filer must stamp that verbatim — never re-parse the human message
+    (which might have been redacted, truncated, or rewritten)."""
+
+    session, board, task = seeded
+    exc = OpenClawGatewayError(
+        # Message deliberately carries a DIFFERENT id than structured.
+        "PAIRING_REQUIRED: scope upgrade (request_id=req-FROM-MSG)",
+        details={
+            "code": "PAIRING_REQUIRED",
+            "requestId": "req-FROM-STRUCTURED",
+        },
+    )
+    blocker_id = await file_stale_agent_blocker_if_configured(
+        session,
+        board=board,
+        task_id=task.id,
+        agent_name="frontend-dev",
+        exc=exc,
+    )
+    assert blocker_id is not None
+    blocker = await session.get(Blocker, blocker_id)
+    assert blocker is not None
+    assert blocker.citation_request_id == "req-FROM-STRUCTURED"

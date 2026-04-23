@@ -58,6 +58,12 @@ logger = get_logger(__name__)
 WATCHDOG_INTERVAL_SECONDS = 60
 REPEAT_REPAIR_ALERT_WINDOW = timedelta(hours=1)
 REPEAT_REPAIR_ALERT_THRESHOLD = 3
+# Part E.1 safety cap: ``openclaw_call`` has no end-to-end RPC timeout
+# (only a 2s connect handshake), so an unresponsive gateway would
+# otherwise block the 60s sweep forever. Auth-status is purely
+# observability — 5s is plenty for any healthy gateway and keeps the
+# sweep on schedule when one isn't.
+_AUTH_STATUS_FETCH_TIMEOUT_SECONDS = 5
 
 
 class RepairReason(StrEnum):
@@ -177,10 +183,18 @@ async def _fetch_auth_status_by_gateway(
     """Part E.1: fetch ``models.authStatus`` once per gateway per sweep.
 
     Best-effort. Any gateway whose RPC call fails (4.14 and earlier
-    don't support the method; transport errors, permission issues)
-    maps to ``None``; the repair path still persists. Shared across
-    the sweep's repair rows so a burst of same-gateway repairs pays
-    the round-trip once.
+    don't support the method; transport errors, permission issues,
+    hung WS) maps to ``None``; the repair path still persists. Shared
+    across the sweep's repair rows so a burst of same-gateway repairs
+    pays the round-trip once.
+
+    Each per-gateway RPC is wrapped in ``asyncio.wait_for`` — the
+    underlying ``openclaw_call`` has no end-to-end response timeout
+    after connect+send (only a 2s connect-handshake timeout), so a
+    non-responsive gateway could otherwise stall the 60s watchdog
+    sweep indefinitely. The cap is short (5s) because this is pure
+    observability; an unreachable gateway reduces to ``None`` and
+    repair still happens immediately.
     """
 
     if not gateway_ids:
@@ -196,7 +210,17 @@ async def _fetch_auth_status_by_gateway(
         if config is None:
             snapshots[gateway.id] = None
             continue
-        snapshots[gateway.id] = await models_auth_status(config=config)
+        try:
+            snapshots[gateway.id] = await asyncio.wait_for(
+                models_auth_status(config=config),
+                timeout=_AUTH_STATUS_FETCH_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            logger.info(
+                "heartbeat_watchdog.auth_status_fetch_timeout gateway_id=%s",
+                gateway.id,
+            )
+            snapshots[gateway.id] = None
     return snapshots
 
 
