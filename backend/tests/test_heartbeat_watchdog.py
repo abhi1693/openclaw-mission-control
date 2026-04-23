@@ -392,3 +392,101 @@ async def test_sweep_skips_on_concurrent_write(
     assert session.commits == 0
     assert report.outcomes[0].action == "skipped"
     assert report.outcomes[0].reason == "concurrent-write-won"
+
+
+# --------------------------------------------------------------------
+# Part E.1: models.authStatus snapshot capture on repair rows
+# --------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_repair_event_captures_auth_status_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the gateway responds to ``models.authStatus``, the snapshot
+    is stamped verbatim on the repair event row."""
+
+    now = utcnow()
+    gateway_id = uuid4()
+    agent = Agent(
+        id=uuid4(),
+        name="DevOps",
+        status="online",
+        gateway_id=gateway_id,
+        heartbeat_config={"every": "5m"},
+        checkin_deadline_at=None,
+        last_seen_at=now - timedelta(minutes=40),
+    )
+    session = _FakeSweepSession(agents=[agent])
+    snapshot = {
+        "providers": [
+            {"name": "anthropic", "oauth": {"expired": False}, "rate_limit": "ok"},
+            {"name": "openai", "oauth": {"expired": True}},
+        ],
+        "generated_at": now.isoformat(),
+    }
+
+    async def _fake_auth_status_fetch(
+        session: Any,  # noqa: ARG001 — matches signature
+        *,
+        gateway_ids: set[UUID],
+    ) -> dict[UUID, dict[str, Any] | None]:
+        assert gateway_ids == {gateway_id}
+        return {gateway_id: snapshot}
+
+    monkeypatch.setattr(
+        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs_by_agent",
+        _fake_count_by_agent,
+    )
+    monkeypatch.setattr(
+        "app.services.openclaw.heartbeat_watchdog._fetch_auth_status_by_gateway",
+        _fake_auth_status_fetch,
+    )
+
+    report = await sweep_null_deadlines_once(session)  # type: ignore[arg-type]
+    assert report.repaired == 1
+    assert len(session.repair_events) == 1
+    event = session.repair_events[0]
+    assert event.auth_status_snapshot == snapshot
+
+
+@pytest.mark.asyncio
+async def test_repair_event_survives_null_auth_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Older gateways (<4.15) don't expose ``models.authStatus``; the
+    helper returns ``None`` for those. Repair must still succeed — the
+    snapshot is forensic, not a gate."""
+
+    now = utcnow()
+    gateway_id = uuid4()
+    agent = Agent(
+        id=uuid4(),
+        name="DevOps",
+        status="online",
+        gateway_id=gateway_id,
+        heartbeat_config={"every": "5m"},
+        checkin_deadline_at=None,
+        last_seen_at=now - timedelta(minutes=40),
+    )
+    session = _FakeSweepSession(agents=[agent])
+
+    async def _fake_auth_status_fetch(
+        session: Any,  # noqa: ARG001
+        *,
+        gateway_ids: set[UUID],  # noqa: ARG001
+    ) -> dict[UUID, dict[str, Any] | None]:
+        return {gateway_id: None}
+
+    monkeypatch.setattr(
+        "app.services.openclaw.heartbeat_watchdog._count_recent_repairs_by_agent",
+        _fake_count_by_agent,
+    )
+    monkeypatch.setattr(
+        "app.services.openclaw.heartbeat_watchdog._fetch_auth_status_by_gateway",
+        _fake_auth_status_fetch,
+    )
+
+    report = await sweep_null_deadlines_once(session)  # type: ignore[arg-type]
+    assert report.repaired == 1
+    assert session.repair_events[0].auth_status_snapshot is None

@@ -85,6 +85,10 @@ GATEWAY_METHODS = [
     "talk.config",
     "talk.speak",
     "models.list",
+    # Added 4.15 — Part E.1: strips credentials, caches 60s. Used by
+    # the heartbeat watchdog to correlate repair events with provider
+    # auth/rate-limit state.
+    "models.authStatus",
     "agents.list",
     "agents.create",
     "agents.update",
@@ -620,6 +624,38 @@ async def openclaw_connect_metadata(*, config: GatewayConfig) -> object:
             exc.__class__.__name__,
         )
         raise OpenClawGatewayError(str(exc)) from exc
+
+
+async def models_auth_status(
+    *, config: GatewayConfig
+) -> dict[str, Any] | None:
+    """Call ``models.authStatus`` on the gateway (4.15+).
+
+    Returns the raw snapshot dict on success, ``None`` on any failure
+    — unknown-method, transport error, unexpected payload shape. The
+    watchdog's repair-event forensics path is the main consumer; a
+    missing snapshot is acceptable (older gateway / degraded transport)
+    and must not block repair itself.
+    """
+
+    try:
+        result = await openclaw_call(
+            "models.authStatus",
+            None,
+            config=config,
+        )
+    except OpenClawGatewayError:
+        logger.debug(
+            "gateway.rpc.models_auth_status.gateway_error",
+            exc_info=False,
+        )
+        return None
+    except Exception:  # pragma: no cover - defensive catch-all
+        logger.exception("gateway.rpc.models_auth_status.unexpected_error")
+        return None
+    if not isinstance(result, dict):
+        return None
+    return result
 
 
 async def send_message(

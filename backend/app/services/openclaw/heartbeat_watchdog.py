@@ -43,11 +43,14 @@ from app.core.time import utcnow
 from app.db.session import async_session_maker
 from app.models.agent_heartbeat_repair_events import AgentHeartbeatRepairEvent
 from app.models.agents import Agent
+from app.models.gateways import Gateway
 from app.services.openclaw.constants import (
     CHECKIN_DEADLINE_AFTER_WAKE,
     HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
     OFFLINE_AFTER,
 )
+from app.services.openclaw.gateway_resolver import optional_gateway_client_config
+from app.services.openclaw.gateway_rpc import models_auth_status
 from app.services.openclaw.provisioning import _is_disabled_heartbeat_every
 
 logger = get_logger(__name__)
@@ -168,6 +171,35 @@ async def _count_recent_repairs_by_agent(
     return {row[0]: int(row[1]) for row in result.all()}
 
 
+async def _fetch_auth_status_by_gateway(
+    session: AsyncSession, *, gateway_ids: set[UUID]
+) -> dict[UUID, dict[str, Any] | None]:
+    """Part E.1: fetch ``models.authStatus`` once per gateway per sweep.
+
+    Best-effort. Any gateway whose RPC call fails (4.14 and earlier
+    don't support the method; transport errors, permission issues)
+    maps to ``None``; the repair path still persists. Shared across
+    the sweep's repair rows so a burst of same-gateway repairs pays
+    the round-trip once.
+    """
+
+    if not gateway_ids:
+        return {}
+    gateways = (
+        await session.exec(
+            select(Gateway).where(col(Gateway.id).in_(gateway_ids))
+        )
+    ).all()
+    snapshots: dict[UUID, dict[str, Any] | None] = {}
+    for gateway in gateways:
+        config = optional_gateway_client_config(gateway)
+        if config is None:
+            snapshots[gateway.id] = None
+            continue
+        snapshots[gateway.id] = await models_auth_status(config=config)
+    return snapshots
+
+
 async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
     """Run one watchdog pass against the given session.
 
@@ -203,6 +235,15 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
         return report
 
     prior_counts = await _count_recent_repairs_by_agent(session, since=alert_since)
+    # Part E.1: one authStatus fetch per unique gateway in this sweep,
+    # cached here and stamped on every repair row. Older gateways
+    # (pre-4.15) return None via the helper's best-effort wrapper.
+    gateway_ids = {
+        agent.gateway_id for agent in candidates if agent.gateway_id is not None
+    }
+    auth_status_by_gateway = await _fetch_auth_status_by_gateway(
+        session, gateway_ids=gateway_ids
+    )
     pending_logs: list[tuple[RepairOutcome, bool]] = []
     new_this_sweep: dict[UUID, int] = {}
 
@@ -265,6 +306,11 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             elapsed_since_last_seen_seconds=elapsed,
             repair_reason=RepairReason.NULL_DEADLINE_ON_ONLINE,
             new_deadline=new_deadline,
+            auth_status_snapshot=(
+                auth_status_by_gateway.get(agent.gateway_id)
+                if agent.gateway_id is not None
+                else None
+            ),
         )
         session.add(event)
 

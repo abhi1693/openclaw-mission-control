@@ -15,7 +15,9 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, ForeignKey, Index, Uuid
+from typing import Any
+
+from sqlalchemy import JSON, Column, ForeignKey, Index, Uuid
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -59,3 +61,14 @@ class AgentHeartbeatRepairEvent(QueryModel, table=True):
     # Do not re-add ``index=True`` here; it would drift against the
     # migration which intentionally doesn't create ``ix_created_at``.
     created_at: datetime = Field(default_factory=utcnow)
+    # Part E.1: raw ``models.authStatus`` snapshot captured at repair
+    # time. Populated best-effort — ``None`` when the gateway doesn't
+    # support the method (4.14 and earlier) or the transport degrades.
+    # Operator-visible for manual correlation today; a follow-up
+    # commit lands the alert-gate that suppresses "3× repair / 1h"
+    # WARNs when any snapshot in the window reports provider-side
+    # degradation.
+    auth_status_snapshot: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
