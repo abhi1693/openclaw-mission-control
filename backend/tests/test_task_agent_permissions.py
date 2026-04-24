@@ -1510,6 +1510,13 @@ async def test_lead_assignment_and_in_progress_wakes_assignee_once(
                     description="",
                     status="inbox",
                     assigned_agent_id=None,
+                    # Phase IV §I2: now that the lead path also enforces
+                    # delivery-contract after setattr (parity with
+                    # ``_finalize_updated_task``), a PATCH to
+                    # ``in_progress`` without ``review_packet_type`` 409s
+                    # on the contract gate. Seed the field so this test
+                    # exercises the wake behaviour, not the contract.
+                    review_packet_type="review_only",
                 ),
             )
             await session.commit()

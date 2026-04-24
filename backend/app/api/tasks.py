@@ -3034,8 +3034,61 @@ async def _apply_lead_task_update(
     ):
         raise _operator_decision_block_error()
 
+    # Phase V §I8 parity: the non-lead path enforces deploy-truth
+    # PRE-mutation via a projected task (``_finalize_updated_task`` at
+    # ``_require_deploy_truth`` call-site). The lead path must run the
+    # same pre-apply gate — lead PATCHes that change ``status`` /
+    # ``validation_target`` / ``packet_commit_sha`` /
+    # ``supports_build_metadata`` would otherwise skip SHA comparison
+    # entirely. Same projection pattern keeps the 5s /__build fetch
+    # outside any open ORM flush.
+    if {
+        "status",
+        "validation_target",
+        "packet_commit_sha",
+        "supports_build_metadata",
+    }.intersection(update.updates):
+        projected = _projected_task(update.task, update.updates)
+        await _require_deploy_truth(
+            projected,
+            actor_agent_id=_comment_actor_id(update.actor),
+        )
+
     await _lead_apply_assignment(session, update=update)
     await _lead_apply_status(session, update=update)
+
+    # Non-status / non-assignment fields (``review_packet_type``,
+    # ``validation_target*``, ``operator_decision_*``,
+    # ``packet_commit_sha``, ``packet_build_sha``,
+    # ``supports_build_metadata``) are accepted by the lead validator
+    # at ``_validate_lead_update_request`` but were silently dropped on
+    # the lead path — ``_lead_apply_assignment`` + ``_lead_apply_status``
+    # only handle those two scalars. Mirror the non-lead setattr loop
+    # at ``_finalize_updated_task`` so the PATCH's intended fields
+    # land on the Task before commit.
+    for key, value in update.updates.items():
+        if key in {"assigned_agent_id", "status"}:
+            continue
+        setattr(update.task, key, value)
+
+    # Phase IV §I2 parity: delivery-contract revalidation after the
+    # setattr loop. ``assigned_agent_id`` is in the trigger set so a
+    # lead PATCH that clears the owner on an already-``in_progress``
+    # or ``done`` task re-validates and 409s — same contract the
+    # non-lead path enforces at ``_finalize_updated_task``.
+    if {
+        "status",
+        "assigned_agent_id",
+        "review_packet_type",
+        "validation_target",
+        "validation_target_kind",
+        "validation_target_scope",
+    }.intersection(update.updates):
+        _require_delivery_contract_with_metric(
+            task=update.task,
+            actor_agent_id=_comment_actor_id(update.actor),
+        )
+
     await _require_no_pending_approval_for_status_change_when_enabled(
         session,
         board_id=update.board_id,
