@@ -1651,3 +1651,322 @@ async def test_entering_in_progress_with_existing_assignee_wakes_assignee(
             assert "(status_in_progress)" in wake_events[0].message
     finally:
         await engine.dispose()
+
+
+# --- Transition state machine (codex-found bugs, fixed 2026-04-24) --------
+
+
+@pytest.mark.asyncio
+async def test_non_lead_agent_inbox_to_review_is_refused() -> None:
+    """Regression for the cycle-1 bug: an agent PATCHing ``status=review``
+    on an inbox task used to succeed, wiping ``in_progress_at`` and
+    ``previous_in_progress_at`` both null. Now it must 403."""
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="inbox task",
+                    description="",
+                    status="inbox",
+                    assigned_agent_id=worker_id,
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            actor = (await session.exec(select(Agent).where(col(Agent.id) == worker_id))).first()
+            assert actor is not None
+
+            with pytest.raises(HTTPException) as exc:
+                await tasks_api.update_task(
+                    payload=TaskUpdate(status="review", comment="skip in_progress"),
+                    task=task,
+                    session=session,
+                    actor=ActorContext(actor_type="agent", agent=actor),
+                )
+
+            assert exc.value.status_code == 403
+            assert "Invalid status transition" in str(exc.value.detail)
+
+            refreshed = (
+                await session.exec(select(Task).where(col(Task.id) == task_id))
+            ).first()
+            assert refreshed is not None
+            assert refreshed.status == "inbox"
+            assert refreshed.in_progress_at is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_non_lead_agent_rework_to_review_is_refused() -> None:
+    """Codex finding D: ``rework → review`` was the same class of bug as
+    inbox→review. Agents must re-enter ``in_progress`` before review."""
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="rework task",
+                    description="",
+                    status="rework",
+                    assigned_agent_id=worker_id,
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            actor = (await session.exec(select(Agent).where(col(Agent.id) == worker_id))).first()
+            assert actor is not None
+
+            with pytest.raises(HTTPException) as exc:
+                await tasks_api.update_task(
+                    payload=TaskUpdate(status="review", comment="skip in_progress again"),
+                    task=task,
+                    session=session,
+                    actor=ActorContext(actor_type="agent", agent=actor),
+                )
+
+            assert exc.value.status_code == 403
+            assert "Invalid status transition" in str(exc.value.detail)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_admin_noop_review_preserves_previous_in_progress_at() -> None:
+    """Codex finding B: a no-op ``status=review`` PATCH on a task already
+    in review used to wipe ``previous_in_progress_at`` by unconditionally
+    running the branch's side effects. Tests the admin/user path, where
+    any-from-any-to transitions are possible, including no-ops."""
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            task_id = uuid4()
+
+            original_in_progress = utcnow()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="review-status task",
+                    description="",
+                    status="review",
+                    in_progress_at=None,
+                    previous_in_progress_at=original_in_progress,
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+
+            # User actor (admin path) — no-op same-status PATCH must not wipe
+            # previous_in_progress_at.
+            await tasks_api.update_task(
+                payload=TaskUpdate(status="review"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="user", agent=None),
+            )
+
+            refreshed = (
+                await session.exec(select(Task).where(col(Task.id) == task_id))
+            ).first()
+            assert refreshed is not None
+            assert refreshed.previous_in_progress_at == original_in_progress
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_lead_inbox_to_in_progress_shortcut_stamps_in_progress_at() -> None:
+    """Codex finding A: when a lead uses the assignment-and-start
+    shortcut (``status=in_progress`` + ``assigned_agent_id`` on an inbox
+    task), the code used to set the status without stamping
+    ``in_progress_at``. Cycle-time truth downstream was then lost."""
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            lead_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id,
+                    name="Lead",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="Worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="fresh inbox task",
+                    description="",
+                    status="inbox",
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
+            assert lead is not None
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(
+                    status="in_progress",
+                    assigned_agent_id=worker_id,
+                ),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=lead),
+            )
+
+            assert updated.status == "in_progress"
+            assert updated.assigned_agent_id == worker_id
+            assert updated.in_progress_at is not None
+    finally:
+        await engine.dispose()

@@ -421,3 +421,78 @@ def test_validation_target_url_guard_skipped_for_other_kind() -> None:
         validation_target_scope="deploy",
     )
     assert model.validation_target == "prod-cluster-v2"
+
+
+# --- Agent-path transition state machine ---------------------------------
+#
+# Codex review 2026-04-24 found that the non-lead agent path accepted
+# any target status without checking the source state, which let
+# ``inbox → review``, ``rework → review``, ``rework → done``, and
+# ``in_progress → done`` slip through. The allow-list and validator
+# below now refuse those.
+
+
+@pytest.mark.parametrize(
+    ("from_status", "to_status"),
+    [
+        ("inbox", "in_progress"),
+        ("rework", "in_progress"),
+        ("in_progress", "review"),
+        # completion — subject to downstream gates
+        ("in_progress", "done"),
+        ("review", "done"),
+        # backward / abandon
+        ("in_progress", "inbox"),
+        ("rework", "inbox"),
+        ("in_progress", "rework"),
+        # no-op self-moves
+        ("inbox", "inbox"),
+        ("in_progress", "in_progress"),
+        ("review", "review"),
+        ("rework", "rework"),
+        ("done", "done"),
+    ],
+)
+def test_agent_transition_allows_legitimate_moves(
+    from_status: str,
+    to_status: str,
+) -> None:
+    # Should not raise.
+    tasks_api._validate_agent_transition(
+        from_status=from_status,
+        to_status=to_status,
+    )
+
+
+@pytest.mark.parametrize(
+    ("from_status", "to_status"),
+    [
+        # cycle-1 bug class: inbox skipping in_progress
+        ("inbox", "review"),
+        ("inbox", "done"),
+        # codex finding D: rework skipping in_progress
+        ("rework", "review"),
+        ("rework", "done"),
+        # agents cannot unilaterally move backward out of review;
+        # rework / inbox / in_progress from review is lead-only
+        ("review", "inbox"),
+        ("review", "rework"),
+        ("review", "in_progress"),
+        # terminal: done never exits on the agent path
+        ("done", "in_progress"),
+        ("done", "review"),
+        ("done", "inbox"),
+    ],
+)
+def test_agent_transition_rejects_illegal_moves(
+    from_status: str,
+    to_status: str,
+) -> None:
+    with pytest.raises(HTTPException) as exc:
+        tasks_api._validate_agent_transition(
+            from_status=from_status,
+            to_status=to_status,
+        )
+
+    assert exc.value.status_code == 403
+    assert "Invalid status transition" in str(exc.value.detail)

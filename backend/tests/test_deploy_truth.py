@@ -344,3 +344,104 @@ def test_projected_task_preserves_unmentioned_fields() -> None:
     assert projected.validation_target == "https://example.test"
     assert projected.supports_build_metadata is True
     assert projected.packet_commit_sha == "abcdef1"
+
+
+# --------------------------------------------------------------------
+# deploy_truth_v1 rollout flag (codex finding E, 2026-04-24)
+# --------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_deploy_truth_skipped_when_flag_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When ``rollout_flags["deploy_truth_v1"]`` is False, the gate must
+    emit a degraded-shadow metric and return without raising — even if
+    the task would otherwise fail (missing packet_commit_sha)."""
+
+    shadow_calls: list[dict[str, object]] = []
+
+    def _fake_emit(**kwargs: object) -> None:
+        shadow_calls.append(kwargs)
+
+    monkeypatch.setattr(
+        "app.api.tasks._schedule_deploy_degraded_emit",
+        _fake_emit,
+    )
+
+    task = Task(
+        id=uuid4(),
+        board_id=uuid4(),
+        title="t",
+        status="review",
+        validation_target="https://example.test",
+        supports_build_metadata=True,
+        packet_commit_sha=None,  # would normally raise
+    )
+    await _require_deploy_truth(
+        task,
+        actor_agent_id=None,
+        rollout_flags={"deploy_truth_v1": False},
+    )
+    assert len(shadow_calls) == 1
+    assert shadow_calls[0]["reason"] == "deploy_truth_v1_disabled"
+
+
+@pytest.mark.asyncio
+async def test_deploy_truth_enforces_when_flag_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When ``rollout_flags["deploy_truth_v1"]`` is True, the gate must
+    raise on missing packet_commit_sha (pre-existing enforcement path)."""
+
+    monkeypatch.setattr(
+        "app.api.tasks._schedule_deploy_degraded_emit",
+        lambda **_: None,
+    )
+
+    task = Task(
+        id=uuid4(),
+        board_id=uuid4(),
+        title="t",
+        status="review",
+        validation_target="https://example.test",
+        supports_build_metadata=True,
+        packet_commit_sha=None,
+    )
+    with pytest.raises(HTTPException) as exc:
+        await _require_deploy_truth(
+            task,
+            actor_agent_id=None,
+            rollout_flags={"deploy_truth_v1": True},
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == ERROR_CODE_DEPLOY_TRUTH_MISSING_PACKET_SHA
+
+
+@pytest.mark.asyncio
+async def test_deploy_truth_unchanged_when_flag_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backward-compat: when the caller passes ``rollout_flags=None``
+    (i.e. doesn't know about the flag), the gate behaves as before —
+    enforced. This preserves admin-path / create-path behavior for
+    callers that haven't been updated to resolve flags yet."""
+
+    monkeypatch.setattr(
+        "app.api.tasks._schedule_deploy_degraded_emit",
+        lambda **_: None,
+    )
+
+    task = Task(
+        id=uuid4(),
+        board_id=uuid4(),
+        title="t",
+        status="review",
+        validation_target="https://example.test",
+        supports_build_metadata=True,
+        packet_commit_sha=None,
+    )
+    with pytest.raises(HTTPException) as exc:
+        await _require_deploy_truth(task, actor_agent_id=None)
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == ERROR_CODE_DEPLOY_TRUTH_MISSING_PACKET_SHA

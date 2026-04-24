@@ -127,6 +127,38 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/boards/{board_id}/tasks", tags=["tasks"])
 
 ALLOWED_STATUSES = {"inbox", "in_progress", "review", "rework", "done", "cancelled"}
+
+# Non-lead agent-path state machine. Only these (from, to) pairs are
+# legitimate for an agent-token PATCH that changes status. The table
+# enforces that workers go through `in_progress` before `review` — a
+# task whose `in_progress_at` is null because it jumped inbox→review
+# leaves the delivery-contract gate unable to compute cycle time or
+# deploy-truth ordering downstream. Codex review 2026-04-24 confirmed
+# the prior code accepted any target status without from-state checks,
+# which created the cycle-1 inbox→review hole and the rework→review
+# shortcut. ``(x, x)`` entries are no-op self-moves the caller may
+# send when echoing current state — they're accepted but the
+# side-effect branches below must not run.
+_AGENT_PATH_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset({
+    # forward progress
+    ("inbox", "in_progress"),
+    ("rework", "in_progress"),
+    ("in_progress", "review"),
+    # completion — subject to downstream gates (require_review_before_done,
+    # approval linkage, deploy-truth) that run AFTER this transition check
+    ("in_progress", "done"),
+    ("review", "done"),
+    # agent-initiated backward / abandon
+    ("in_progress", "inbox"),
+    ("rework", "inbox"),
+    ("in_progress", "rework"),
+    # no-op self-moves
+    ("inbox", "inbox"),
+    ("in_progress", "in_progress"),
+    ("review", "review"),
+    ("rework", "rework"),
+    ("done", "done"),
+})
 TASK_EVENT_TYPES = {
     "task.created",
     "task.updated",
@@ -537,10 +569,54 @@ def _projected_task(task: Task, updates: dict[str, object]) -> Task:
     return projected
 
 
+def _validate_agent_transition(*, from_status: str, to_status: str) -> None:
+    """Reject illegal source→target status moves on the non-lead agent path.
+
+    Called before the branching side-effect logic so a 403 lands at the
+    outer boundary with a clear message, rather than letting the code
+    silently accept (say) ``inbox → review`` and stamp ``in_progress_at
+    = null`` on a review-status task. See ``_AGENT_PATH_VALID_TRANSITIONS``
+    for the full allow-list.
+    """
+
+    if (from_status, to_status) in _AGENT_PATH_VALID_TRANSITIONS:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            f"Invalid status transition on agent path: `{from_status}` → "
+            f"`{to_status}`. Use the proper predecessor status first "
+            "(e.g. `in_progress` before `review`)."
+        ),
+    )
+
+
+async def _resolve_rollout_flags(
+    session: AsyncSession,
+    *,
+    board_id: UUID | None,
+) -> dict[str, Any] | None:
+    """Fetch ``Board.rollout_flags`` for gate decisions. Returns None when
+    the task has no board (admin-only, out of board scope) so callers
+    can fall through to the default-enforced path."""
+
+    if board_id is None:
+        return None
+    flags = (
+        await session.exec(
+            select(col(Board.rollout_flags)).where(col(Board.id) == board_id),
+        )
+    ).first()
+    if flags is None:
+        return None
+    return dict(flags) if isinstance(flags, dict) else None
+
+
 async def _require_deploy_truth(
     task: Task,
     *,
     actor_agent_id: UUID | None,
+    rollout_flags: dict[str, Any] | None = None,
 ) -> None:
     """Phase V §I8: enforce SHA comparison on review/done transitions.
 
@@ -566,6 +642,23 @@ async def _require_deploy_truth(
         # already rejected this for kinds that require a target. For
         # ``content_copy``/``review_only`` kinds the target is legit
         # null; deploy-truth has nothing to verify.
+        return
+
+    # Phase V §I8: honor the ``deploy_truth_v1`` rollout flag. When
+    # the caller passed rollout_flags (i.e. we're operating inside a
+    # board scope) and the flag is explicitly disabled, emit a
+    # degraded-shadow metric and skip enforcement. Prior behaviour
+    # was to unconditionally run the gate whether the board had
+    # opted in or not — the flag existed in the schema allowlist
+    # (schemas/boards.py) but no transition code read it.
+    if rollout_flags is not None and not bool(rollout_flags.get("deploy_truth_v1", False)):
+        _schedule_deploy_degraded_emit(
+            task_id=task.id,
+            board_id=task.board_id,
+            agent_id=actor_agent_id,
+            status_value=task.status,
+            reason="deploy_truth_v1_disabled",
+        )
         return
 
     if task.supports_build_metadata is not True:
@@ -2197,7 +2290,12 @@ async def create_task(
         task=task,
         actor_agent_id=None,  # create_task is user-initiated (USER_AUTH_DEP)
     )
-    await _require_deploy_truth(task, actor_agent_id=None)
+    rollout_flags = await _resolve_rollout_flags(session, board_id=task.board_id)
+    await _require_deploy_truth(
+        task,
+        actor_agent_id=None,
+        rollout_flags=rollout_flags,
+    )
     session.add(task)
     # Ensure the task exists in the DB before inserting dependency rows.
     await session.flush()
@@ -2891,6 +2989,12 @@ async def _lead_apply_status(
         )
         if update.task.status == "inbox" and target_status == "in_progress" and assigning_agent:
             update.task.status = target_status
+            # Stamp ``in_progress_at`` on the lead shortcut the same way the
+            # non-lead path does at its ``in_progress`` branch. Without
+            # this, a later ``review`` transition clears a null
+            # ``in_progress_at`` into ``previous_in_progress_at``, losing
+            # cycle-time truth.
+            update.task.in_progress_at = utcnow()
             return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -2908,8 +3012,9 @@ async def _lead_apply_status(
             ),
         )
     if target_status == "rework":
-        update.task.previous_in_progress_at = update.task.in_progress_at
-        update.task.in_progress_at = None
+        if update.task.status != target_status:
+            update.task.previous_in_progress_at = update.task.in_progress_at
+            update.task.in_progress_at = None
         if "assigned_agent_id" not in update.updates:
             update.task.assigned_agent_id = await _last_worker_who_moved_task_to_review(
                 session,
@@ -2920,8 +3025,9 @@ async def _lead_apply_status(
         update.task.status = target_status
         return
     if target_status == "inbox":
-        update.task.previous_in_progress_at = update.task.in_progress_at
-        update.task.in_progress_at = None
+        if update.task.status != target_status:
+            update.task.previous_in_progress_at = update.task.in_progress_at
+            update.task.in_progress_at = None
         if "assigned_agent_id" not in update.updates:
             update.task.assigned_agent_id = None
         update.task.status = target_status
@@ -3049,9 +3155,11 @@ async def _apply_lead_task_update(
         "supports_build_metadata",
     }.intersection(update.updates):
         projected = _projected_task(update.task, update.updates)
+        rollout_flags = await _resolve_rollout_flags(session, board_id=update.board_id)
         await _require_deploy_truth(
             projected,
             actor_agent_id=_comment_actor_id(update.actor),
+            rollout_flags=rollout_flags,
         )
 
     await _lead_apply_assignment(session, update=update)
@@ -3215,6 +3323,10 @@ async def _apply_non_lead_agent_task_rules(
         status_value = _required_status_value(update.updates["status"])
         if status_value == "cancelled" or update.task.status == "cancelled":
             raise _operator_only_cancel_error()
+        _validate_agent_transition(
+            from_status=update.task.status,
+            to_status=status_value,
+        )
         if status_value != "inbox":
             dep_ids = await _task_dep_ids(
                 session,
@@ -3245,6 +3357,11 @@ async def _apply_non_lead_agent_task_rules(
                     or effective_operator_decision_summary is None
                     else None
                 )
+        # Side effects run only on an actual status CHANGE. A no-op
+        # ``status=X`` PATCH on a task already at status X must not
+        # overwrite ``previous_in_progress_at`` with null (data loss).
+        if status_value == update.task.status:
+            return
         if status_value == "inbox":
             update.task.assigned_agent_id = None
             update.task.previous_in_progress_at = update.task.in_progress_at
@@ -3312,31 +3429,39 @@ async def _apply_admin_task_rules(
 
     if "status" in update.updates:
         status_value = _required_status_value(update.updates["status"])
+        # Admin-path side effects run only on an actual status CHANGE so
+        # a no-op ``status=X`` PATCH cannot wipe ``previous_in_progress_at``.
+        # The ``cancelled_at`` branches still need to run when toggling
+        # in/out of cancelled, and are therefore checked explicitly below.
+        status_changing = status_value != update.task.status
         if status_value == "inbox":
-            update.task.previous_in_progress_at = update.task.in_progress_at
-            update.task.assigned_agent_id = None
-            update.task.in_progress_at = None
+            if status_changing:
+                update.task.previous_in_progress_at = update.task.in_progress_at
+                update.task.assigned_agent_id = None
+                update.task.in_progress_at = None
             if update.task.status == "cancelled":
                 update.task.cancelled_at = None
         elif status_value == "cancelled":
-            update.task.previous_in_progress_at = update.task.in_progress_at
-            update.task.assigned_agent_id = None
-            update.task.in_progress_at = None
-            if update.task.status != "cancelled":
+            if status_changing:
+                update.task.previous_in_progress_at = update.task.in_progress_at
+                update.task.assigned_agent_id = None
+                update.task.in_progress_at = None
                 update.task.cancelled_at = utcnow()
-            await _reject_pending_move_to_done_approvals_for_task(
-                session,
-                board_id=update.board_id,
-                task_id=update.task.id,
-            )
+                await _reject_pending_move_to_done_approvals_for_task(
+                    session,
+                    board_id=update.board_id,
+                    task_id=update.task.id,
+                )
         elif status_value == "review":
-            update.task.previous_in_progress_at = update.task.in_progress_at
-            update.task.assigned_agent_id = None
-            update.task.in_progress_at = None
+            if status_changing:
+                update.task.previous_in_progress_at = update.task.in_progress_at
+                update.task.assigned_agent_id = None
+                update.task.in_progress_at = None
             if update.task.status == "cancelled":
                 update.task.cancelled_at = None
         elif status_value == "in_progress":
-            update.task.in_progress_at = utcnow()
+            if status_changing:
+                update.task.in_progress_at = utcnow()
             if update.task.status == "cancelled":
                 update.task.cancelled_at = None
 
@@ -3576,9 +3701,11 @@ async def _finalize_updated_task(
         "supports_build_metadata",
     }.intersection(update.updates):
         projected = _projected_task(update.task, update.updates)
+        rollout_flags = await _resolve_rollout_flags(session, board_id=update.board_id)
         await _require_deploy_truth(
             projected,
             actor_agent_id=_comment_actor_id(update.actor),
+            rollout_flags=rollout_flags,
         )
 
     # Phase VI §I6: the inline-comment path (PATCH with ``comment``)
