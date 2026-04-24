@@ -162,3 +162,151 @@ partial-index + structured-error + prior-relative-classifier paths all
 have regression tests but only synthetic samples — the production echo
 storm we're trying to prevent is exactly the regime where synthetic
 tests miss edge cases.
+
+---
+
+## Self-audit addendum (2026-04-24, post-brief)
+
+After writing the brief above, three skeptic sub-agents (verification /
+gap-hunting / prod-state) reviewed it against the actual code + live
+systems. Scoping this addendum honestly because the original brief
+overstated coverage on several axes.
+
+### Claim-verification results
+
+All 5 "What to validate" priorities **VERIFIED** as-described against
+the code. One caveat: the Postgres `IntegrityError` regression tests
+(stale-agent-blocker, subagent-failure-blocker) all run against SQLite
+in-memory fixtures. No production-shape Postgres IntegrityError round-
+trip test exists; the `_is_dedupe_integrity_error` substring match is
+protected by the *current* Postgres + asyncpg behaviour (server-side
+message text includes the quoted `uq_blockers_*_open` identifier) but
+would silently regress under asyncpg driver or `lc_messages` drift.
+
+### Wording corrections
+
+- **"6 of 7 rollout flags on"** — actually 6 keys present and true;
+  `deploy_truth_v1` is *absent from the JSON blob*, not stored as
+  `false`. Functionally equivalent under the allowlist helper but
+  the brief's phrasing implied a stored false value.
+- **"All 4 tasks is_blocked=true"** — `is_blocked` is a runtime-derived
+  property, not a persisted column. The column `operator_decision_required`
+  stays False on the 4 parked tasks; the `is_blocked=true` signal comes
+  from the `task_has_pending_operator_decision` bridge at read time.
+- **"Templates synced to 7 agent workspaces"** — accurate, but a naive
+  grep for the lead-branch phrase ("Escalate Persistent Blockers")
+  shows it on the Supervisor workspace only; worker workspaces carry
+  the worker-branch phrase ("Parked tasks: ... DO NOT TOUCH") — 6/7
+  worker workspaces have it. The 7th (`mc-3c920c2a`) is Supervisor's
+  secondary alias workspace and intentionally has no HEARTBEAT.md.
+
+### Unstated issues surfaced in the gap-hunt
+
+The gap-hunting agent found 10 findings the brief didn't call out.
+Priority-ordered, with the concrete repro / attack.
+
+#### H-priority (ship-blocking)
+
+**H1 — Task DELETE 500s on any task with a linked
+Blocker / Review / ReviewBlocker / OperatorDecisionTaskLink row.**
+Migrations `b10ca1ab1e00` / `01` / `03` declare FKs without
+`ondelete=`, which Postgres defaults to `NO ACTION` (RESTRICT).
+`delete_task_and_related_records` at `app/api/tasks.py:2322-2382`
+cleans activity_events / approvals / dependencies / tags / custom
+fields but NOT the four Phase II/III sidecar tables. Every task ever
+touched by Phase II or III enforcement is now undeletable. Repro:
+`POST /boards/{b}/blockers` filing a blocker on task T, then
+`DELETE /boards/{b}/tasks/{T}` → IntegrityError 500.
+
+**H2 — SSRF guard bypassable via alternate IP literal encodings.**
+`_VALIDATION_TARGET_BLOCKED_PREFIXES` in `app/schemas/tasks.py:77-86`
+matches raw `str.startswith`. Decimal IPv4 (`http://2130706433/` =
+127.0.0.1), hex (`http://0x7f000001/`), octal (`http://0177.0.0.1/`),
+expanded IPv6 (`http://[0:0:0:0:0:0:0:1]/`) all bypass the prefix
+list. No DNS resolution: an attacker-controlled domain that
+A-records to 127.0.0.1 or 169.254.169.254 (AWS IMDS) bypasses too.
+The private-LAN deployment limits blast radius but the gap is real.
+Fix: parse via `ipaddress.ip_address` after resolving the hostname
+once, not string-prefix matching.
+
+**H3 — Echo gate returns HTTP 409, triggering exactly the auto-retry
+storm the gate is supposed to prevent.**
+`_echo_guard_suppressed_error` at `app/api/tasks.py:211-222` returns
+`409 comment_echoed_as_no_op`. Compare the sibling
+`_lane_quieting_suppressed_error` at `:250-263` whose comment block
+explicitly says *"403 — not 409 — because Clients auto-retrying on
+409 would loop"*. Agent HTTP middleware (httpx Retry, aiohttp retry)
+commonly treats 409 as transient. Same anti-pattern the brief
+claimed the gate closed; an agent in a retry storm will hammer the
+gate with the same echoed comment until its retry budget exhausts.
+Fix: 403 with `Retry-After: never` or a structured `retry: false`
+signal in the body.
+
+#### M-priority (latent risk)
+
+- **M4 — Main-agent tokens unscoped on `POST /boards/{b}/tasks/{t}/
+  subagent-failure`.** `_guard_task_access` short-circuits
+  "allowed" when `agent_ctx.agent.board_id` is falsy (main tokens);
+  combined with no rate limit, a compromised main token is a cross-
+  tenant blocker-flood vector. `app/api/agent.py:241-245`.
+- **M5 — D.1 citation not redacted.** `subagent_failure_blocker._citation_for`
+  at `:158-165` interpolates `payload.error_class` raw into the
+  citation. D.2 (sibling stale-agent path) redacts via
+  `redact_gateway_error_message`. Stack traces carrying
+  `Authorization: Bearer …` or `?token=…` would land in Blocker rows
+  visible on operator dashboards.
+- **M6 — Shadow-metric double-count.** A comment firing both
+  `ACK_ONLY` and `ECHO_SHAPE` produces two `ShadowMetricEvent` rows
+  with identical `source_event_id`. Dashboards running
+  `COUNT(*) WHERE event_type LIKE 'comment.%_candidate'` overstate
+  flagged-comment volume ~1.5-2x once ECHO_SHAPE rollout tuning
+  begins. `shadow_metrics.py:284-290, 433-440`.
+- **M7 — OperatorDecision `pending` rows never age out.**
+  `app/services/retention.py:57-74` purges only shadow_metric_events
+  and agent_heartbeat_repair_events. An abandoned decision keeps
+  linked tasks `is_blocked=true` forever via the Phase III bridge —
+  silent board rot. The live `6f4792f1` is a canary.
+- **M8 — `_is_dedupe_integrity_error` doesn't fall back to
+  `constraint_name`.** Current substring match on `f"{exc} {exc.orig}"`
+  works on current Postgres but not guaranteed across asyncpg
+  version drift. Trivial fix: also check
+  `getattr(exc.orig, "constraint_name", None)` before falling back
+  to the substring match.
+
+#### L-priority
+
+- **L9 — Echo-guard query ordering.** The expensive `EXISTS` over
+  blockers runs BEFORE the rollout_flags read at
+  `app/services/echo_guard.py:185-196`. If the flag is off, that
+  query was wasted. Under H3's retry amplification, this becomes
+  10+ wasted queries/sec per amplifying agent. Reorder the
+  rollout_flags read to short-circuit first.
+
+### Revised "What to validate" for any further review
+
+Add these five probes to the original five:
+
+6. **DELETE test coverage** — is there a test anywhere that deletes
+   a task carrying a Blocker / Review / OperatorDecisionTaskLink?
+7. **SSRF evasion** — do the negative tests on `validation_target`
+   cover alternate IP encodings or only the obvious `localhost` /
+   `127.0.0.1` forms?
+8. **Ingress retry behaviour** — what status codes does each gate
+   return, and would agent retry middleware amplify?
+9. **Redaction coverage** — which citation paths run
+   `redact_gateway_error_message`, which don't? Asymmetry = leak.
+10. **Retention coverage** — which append-only tables does
+    `retention.py` purge, and which rot? OperatorDecisions are one;
+    are there others?
+
+### Honest reflection
+
+The original brief was accurate on what it covered. But it was
+**calibration-biased toward "did I implement what I said"** rather
+than "did I implement everything that should exist." The gap-hunting
+agent's 10 findings are the shape of issue an external reviewer
+would naturally find by probing adversarial rather than confirming
+narrative. Future review briefs should include that second lens as
+explicit probe categories (DELETE, retry-safety, evasion, asymmetry,
+retention) rather than trusting the implementer to surface their
+own omissions.
