@@ -139,6 +139,17 @@ ALLOWED_STATUSES = {"inbox", "in_progress", "review", "rework", "done", "cancell
 # shortcut. ``(x, x)`` entries are no-op self-moves the caller may
 # send when echoing current state — they're accepted but the
 # side-effect branches below must not run.
+#
+# Why no equivalent ``_LEAD_PATH_VALID_TRANSITIONS`` / admin table:
+# the lead path's inbox→in_progress shortcut is conditional on
+# ``assigning_agent``, a side condition a pure allow-list table
+# can't express. The lead path's inline validation in
+# ``_lead_apply_status`` is already explicit, status-scoped, and
+# covered by its own tests. The admin path is intentionally
+# permissive (cancel/uncancel, migration scripts). A uniform table
+# across all three roles would either lose information (drop the
+# side conditions) or recreate the per-role logic anyway. Codex
+# finding C (2026-04-24) considered and deferred on those grounds.
 _AGENT_PATH_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset({
     # forward progress
     ("inbox", "in_progress"),
@@ -2828,6 +2839,15 @@ def _validate_lead_update_request(update: _TaskUpdateInput) -> None:
         "validation_target_scope",
         "operator_decision_required",
         "operator_decision_summary",
+        # Phase V §I8 deploy-truth metadata. Previously omitted —
+        # codex review 2026-04-24 (finding G) flagged that leads
+        # couldn't stamp a SHA on a review task before approving
+        # done, which defeated the purpose of the gate. The
+        # deploy-truth pre-apply gate at _apply_lead_task_update
+        # already runs a projected check when these fields change.
+        "packet_commit_sha",
+        "packet_build_sha",
+        "supports_build_metadata",
     }
     requested_fields = _lead_requested_fields(update)
     if update.comment is not None:
