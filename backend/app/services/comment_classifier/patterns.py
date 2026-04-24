@@ -92,6 +92,63 @@ _NEG_EVIDENCE_PARTS: tuple[re.Pattern[str], ...] = (
     ),
 )
 
+# Phase VII refinement (2026-04-24): extract the *actual* evidence
+# tokens from a message so the classifier can distinguish "new
+# evidence" from "same evidence as last time." The 2026-04-23 echo
+# storm bypass used hourly "Sweep response: http://.64:3000/docs →
+# 404" posts — the URL + HTTP code tripped ``has_negative_evidence``
+# every time even though neither had changed since the prior same-
+# author comment. These extractors produce a canonical set so the
+# caller can compute ``evidence(new) − evidence(prior) = ∅`` and
+# re-classify as echo despite apparent negative evidence.
+_EVIDENCE_URL_RE = re.compile(r"https?://\S+")
+_EVIDENCE_SHA_RE = re.compile(r"\b[a-f0-9]{7,40}\b")
+_EVIDENCE_HTTP_CODE_RE = re.compile(r"\bHTTP\s*\d{3}\b", re.IGNORECASE)
+_EVIDENCE_TEST_TOKEN_RE = re.compile(
+    r"\b(PASS|FAIL|running tests?|lighthouse|playwright|vitest|build PASS)\b"
+)
+_EVIDENCE_FILE_RE = re.compile(
+    r"\b\w+\.(py|ts|tsx|jsx|js|json5?|md|sql|yml|yaml|sh|toml|lock)\b",
+    re.IGNORECASE,
+)
+
+
+def evidence_markers(message: str) -> frozenset[str]:
+    """Canonical set of evidence tokens in ``message``.
+
+    Normalises URL trailing punctuation (``http://x)`` → ``http://x``)
+    and lowercases HTTP codes so "HTTP 404" and "http 404" compare
+    equal. SHAs are already lowercase-hex per their regex.
+    """
+
+    markers: set[str] = set()
+    for url in _EVIDENCE_URL_RE.findall(message):
+        markers.add(url.rstrip(".,;:)]}`\"'"))
+    markers.update(_EVIDENCE_SHA_RE.findall(message))
+    markers.update(code.upper() for code in _EVIDENCE_HTTP_CODE_RE.findall(message))
+    markers.update(_EVIDENCE_TEST_TOKEN_RE.findall(message))
+    markers.update(f".{ext}" for ext in _EVIDENCE_FILE_RE.findall(message))
+    return frozenset(markers)
+
+
+def has_new_negative_evidence(message: str, prior: str | None) -> bool:
+    """Return True when ``message`` carries at least one evidence
+    marker that isn't present in ``prior``.
+
+    ``prior=None`` means no comparable baseline — default to True so
+    a first-ever message with evidence is never treated as echo. An
+    empty-marker message (no URLs, no SHAs, no HTTP codes) trivially
+    has no new markers — returns False, lets the echo classifier
+    decide on shape alone.
+    """
+
+    current = evidence_markers(message)
+    if not current:
+        return False
+    if prior is None:
+        return True
+    return bool(current - evidence_markers(prior))
+
 # Routing/hand-off verbs. The verb alone is sufficient signal — requiring
 # a specific follower (to|back|this|it|up|over) missed bare "reassigning"
 # and complements like "sending the patch" / "routing through Architect".
