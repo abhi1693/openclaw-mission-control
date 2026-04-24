@@ -310,3 +310,152 @@ narrative. Future review briefs should include that second lens as
 explicit probe categories (DELETE, retry-safety, evasion, asymmetry,
 retention) rather than trusting the implementer to surface their
 own omissions.
+
+---
+
+## Codex skeptic pass (2026-04-24, gpt-5.5 / high / read-only)
+
+The brief (self-audit addendum included) was handed to Codex
+gpt-5.5/high in read-only mode with the instruction "confront, do not
+validate." Findings below are verbatim severities + paraphrased
+evidence from that run. They re-frame several load-bearing claims and
+are **unresolved** — treat the self-audit as one lens, this pass as a
+second.
+
+### Re-framings of prior claims
+
+- **C1 (Critical) — Phase V "live deploy truth" is operationally
+  hollow.** `deploy_truth_v1` is OFF on Dev Squad due to backfill;
+  review/done still pass without live SHA check. Calling Phase V
+  "shipped" is technically true but operationally misleading.
+  Unknown `packet_commit_sha` should block affected transitions or
+  require an explicit operator exception, not disable the invariant
+  globally.
+- **C2 (Critical) — H2 SSRF fix is incomplete.** `ipaddress.ip_address`
+  after a single DNS resolve still leaves open: redirect-hop SSRF,
+  DNS rebinding / TOCTOU between validate-time and connect-time,
+  IPv4-mapped IPv6, link-local / private ranges, proxy behavior,
+  "validated host ≠ connected address" failure modes. Fix must
+  validate every redirect hop *and* the actual connect target
+  (address pinning, or policy check on every hop).
+- **H2 (High) — "VERIFIED as-described" is confirmation testing.**
+  The self-audit verified the implementer's narrative, not the
+  production-risk surface. `VERIFIED` should be scoped to "matches
+  narrative," not "safe to ship." The addendum's gap-hunt is
+  exactly what a real audit produces, which is the tell that the
+  first pass was too narrow.
+- **H3 (High) — 867 passing is partially theatrical** for the
+  enforcement paths. Synthetic IntegrityError + SQLite do not
+  exercise asyncpg, migration FK cascade, live rollout-flag state,
+  or retrying agent clients. The risk-bearing paths are the ones
+  least exercised.
+- **H5 (High) — D.1 citation asymmetry is a category error, not a
+  per-feature bug.** M5 in the self-audit says "D.1 interpolates
+  raw `payload.error_class`". Correct fix is sink-level redaction
+  (every citation path runs through `redact_gateway_error_message`),
+  not per-call hardening. Any new citation path re-opens the leak.
+- **H6 (High) — M4 (main-agent token unscoped) is under-severed.**
+  Not "medium latent"; a compromised main token that can cross-board
+  or cross-tenant file blockers with no rate limit is a blocker-
+  integrity incident that directly defeats the routable-blocker
+  promise. Raise to high.
+- **H7 (High) — D.1 "auto-file runtime Blocker" is overstated.**
+  Because gateway push is not wired, the system depends on the same
+  loop-posting agents to call the self-report endpoint correctly.
+  It adds a structured path, but not reliable capture. Net effect
+  is optional, not automatic.
+- **H8 (High) — H3 root-cause model under-evidenced.** The retry-
+  amplification claim rests on unverified HTTP middleware behavior.
+  The stronger evidence is that templates explicitly teach agents
+  that `comment_echo_guard_v1` "409s echoes," so LLM clients may
+  treat 409 as a workflow conflict to resolve by rephrasing and
+  retrying. Switch to 403/422 with `retryable:false` for terminal-
+  refuse semantics, and fix the model we use to justify it.
+- **H9 (High) — Wake-on-resolve listed as non-goal contradicts the
+  delivery goal.** If `OperatorDecision` resolution changes
+  `is_blocked` only at read time with no wake/notification, agents
+  may never resume and dashboards may silently look clear while
+  throughput stalls. Promote to high.
+- **H10 (High) — "SSRF guard on `validation_target`" in A/B/E
+  sections is overconfident.** A string-prefix URL parser is a
+  denylist with known bypasses, not an SSRF guard. And this fetch
+  runs during review/done — privileged workflow, not harmless
+  metadata.
+
+### Medium re-framings
+
+- **M1 — M7 retention framing is wrong.** Auto-purging pending
+  `OperatorDecision` rows would silently unblock tasks and lose
+  audit history. The missing mechanism is SLA / expiry /
+  escalation plus wake-on-resolve, *not* retention deletion.
+- **M2 — Flag helper not proven fail-closed on unknown flags.**
+  Correction that "`deploy_truth_v1` is absent, not false" is not
+  operationally equivalent: absent can mean migration omission,
+  typo, stale rollout state, or intentional off. Needs auditable
+  flag state with explicit disabled-reason per board, not
+  "missing = off."
+- **M3 — Echo-classifier regression matrix is too thin.** URL +
+  HTTP code + SHA deltas miss real progress evidence: command
+  output, timestamps, PR IDs, test names, error classes, stack
+  traces, screenshots, build IDs, request IDs, changed repro
+  steps. Expect false negatives on productive long-form comments
+  and false positives on fresh-but-useless markers.
+- **M4 — H1 blast radius likely wider than task DELETE.** Any new
+  sidecar FK without `ondelete` will also affect board DELETE,
+  agent DELETE, org cleanup, fixture teardown, admin remediation
+  scripts. Audit every parent lifecycle that touches Phase II/III
+  tables, not just Task.
+- **M5 — D.3 WS scope is not verified.** "No-op for shared-secret
+  deployment" means the protection is unexercised in the prod
+  shape that exists today. Honest claim: "code path exists for a
+  future auth model; current shared-secret deployment gets no
+  effective WS scope isolation."
+
+### Calibration pushback
+
+- **L1 (Low) — The calibration-bias reflection is itself too soft.**
+  Real failure wasn't just "did what I said vs. everything that
+  should exist" — it was **confusing implementation completeness
+  with operational control**. Partially disabled, synthetically
+  tested, non-prod-shaped enforcement was described in
+  production-sounding language. Future briefs should distinguish
+  "code path exists" from "invariant is enforced under the
+  deployment's current flag state and client behavior."
+
+### Cross-cutting theme
+
+Every high-severity finding traces to one of three patterns:
+
+1. **Implementation completeness ≠ operational control.** Phase V
+   off, D.3 no-op, D.1 depends on agent cooperation — all "shipped"
+   but not enforcing.
+2. **Sink-level invariants implemented per-feature.** Redaction,
+   fail-closed flag reads, URL safety, token scoping should each
+   be single-chokepoint with no opt-in. Current surface has
+   multiple call sites that must each remember to do the safe
+   thing.
+3. **Test shape ≠ prod shape.** SQLite unit tests, synthetic
+   IntegrityError, no live flag state, no retry client, no
+   redirect chains. The very paths the brief claims are hardened
+   are the ones least exercised.
+
+### Next-step hotfix queue (prioritised by this pass)
+
+1. **C1** — scope Phase V fail-closed on missing SHA (operator
+   exception or transition block), stop gating on `deploy_truth_v1`
+   being globally on.
+2. **C2** — SSRF redirect-hop validation + address pinning (not
+   just single-resolve IP check).
+3. **H5** — sink-level redaction in one `format_citation()` helper,
+   remove per-feature interpolation.
+4. **H6** — scope main-agent tokens by board_id; rate-limit blocker
+   filing per agent.
+5. **H9** — wake-on-resolve notification path for OperatorDecision
+   state transitions; parked tasks must get an explicit unpark
+   signal, not lazy read-time derivation.
+6. **H3 / H8** — switch echo gate to 403/422 with `retryable:false`;
+   update templates so agents treat it as terminal, not conflict.
+7. **H1** — ondelete audit across Phase II/III FKs for all parent
+   entities, not just Task.
+8. **M2** — explicit flag-state audit endpoint + disabled-reason per
+   board; treat absent as error, not off.
