@@ -55,6 +55,7 @@ missing, stop and request reprovisioning.
 - Post to task comments for task work; use board chat only for real routing or coordination.
 - Use `$BOARD_TIMEZONE` for date displays when it exists.
 - If heartbeat pre-flight fails, stop. Do not write task or memory updates.
+- **Do NOT post "hold unchanged" / "still fail-closed" / "no status change" loops.** If the blocker is persistent, file an `OperatorDecision` (see below) and stop commenting on the dependent tasks until it resolves.
 
 ## This Heartbeat
 1. **Check in.**
@@ -73,11 +74,42 @@ If this fails (5xx/network), stop. Do not continue.
 3. **Board Rule Snapshot**
 `require_approval_for_done={{ board_rule_require_approval_for_done | default(false) }}` `block_status_with_pending_approval={{ board_rule_block_status_changes_with_pending_approval | default(false) }}` `only_lead_can_change_status={{ board_rule_only_lead_can_change_status | default(false) }}`
 
-4. **HEARTBEAT_OK Gate.** Return `HEARTBEAT_OK` only when all are true:
-   - check-in succeeded
-   - health scan ran and findings were acted on
-   - no blocked/review work was left unattended
-   - synthesis ran if the board is fully complete
+## Escalate Persistent Blockers — file an OperatorDecision
+
+When two or more agents report the SAME blocker across two or more consecutive heartbeats (e.g. "live target unreachable", "external dependency not deployed", "credentials not rotated"), the correct action is **file an OperatorDecision, not post another hold comment**. Hold comments with no new URL/SHA/HTTP-code delta vs the prior are echo — the backend gate will 409 them.
+
+Fire-once recipe (agent token, not operator token):
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/boards/$BOARD_ID/operator_decisions" \
+  -H "X-Agent-Token: $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "<one-sentence description of the external decision the operator must make>",
+    "unblock_rule": "<concrete condition the operator checks to resolve — URL + HTTP code, commit SHA, target name, artifact path>",
+    "dependent_task_ids": ["<uuid>", "<uuid>", ...]
+  }'
+```
+
+After filing:
+- `is_blocked=true` flips automatically on every dependent task via the Phase III bridge. No further action needed to park them.
+- **Do not post any more "still blocked" comments on those tasks.** That is exactly the loop the gate catches.
+- On each heartbeat, `GET /api/v1/boards/$BOARD_ID/operator_decisions?status=pending` to see if the operator resolved it. When resolved, route dependent tasks to workers with the unblock evidence (URL + SHA + HTTP 200 result).
+- Do NOT file a second OperatorDecision covering the same blocker. Check for an existing pending one first.
+
+When NOT to file:
+- Single-agent one-tick blocker → just post one concrete blocker comment naming the evidence.
+- Task-internal bug (code issue, missing spec, test failure) → that is rework routing, not an operator decision.
+- Anything already covered by an open pending decision → do not duplicate.
+
+## HEARTBEAT_OK Gate
+Return `HEARTBEAT_OK` when all are true:
+- check-in succeeded
+- health scan ran and findings were acted on
+- no blocked/review work was left unattended
+- any persistent multi-agent blocker has been escalated as OperatorDecision (or an existing pending one already covers it)
+- synthesis ran if the board is fully complete
+
+Do NOT return `HEARTBEAT_OK` while continuing to post "hold unchanged" cycles. Either you have net-new routing to do, or the tick is `HEARTBEAT_OK`.
 {% else %}
 # HEARTBEAT.md
 
@@ -101,6 +133,7 @@ missing, stop and request reprovisioning.
 - Post only high-signal task comments. Never use chat as a keepalive channel.
 - Use `$BOARD_TIMEZONE` for date displays when it exists.
 - If heartbeat pre-flight fails, stop. Do not write task or memory updates.
+- **Parked tasks: `is_blocked=true` means DO NOT TOUCH.** An assigned `is_blocked=true` task is waiting on an external operator decision — not on you. Do not post progress, do not post "still blocked", do not move status. Return `HEARTBEAT_OK` for that task and pick a different one (or idle).
 
 ## This Heartbeat
 1. **Check in.**
@@ -124,7 +157,8 @@ Before self-picking any unassigned `Inbox` task, confirm all of the following:
 1. the task is fully within your role scope,
 2. it is unambiguous enough to execute directly,
 3. it requires no cross-role input, approval, handoff, or dependency work before execution,
-4. it has `4` acceptance criteria or fewer.
+4. it has `4` acceptance criteria or fewer,
+5. `task.is_blocked == false` — GET the task and check the field. If `is_blocked=true`, **do not self-pick**. It's parked on an OperatorDecision waiting for the operator. Supervisor routes it when the decision resolves.
 
 If any check fails:
 - do not self-pick it,
@@ -173,11 +207,15 @@ If the task passes the gate, claim it atomically:
 {% endif %}
 {% else %}
 3. **When blocked or idle.**
-   - Post one precise blocker or handoff comment, or one concrete assist update if there is no active task.
+   - If any of your assigned tasks has `is_blocked=true`: return `HEARTBEAT_OK` for that task. The upstream is on the operator's side. Do not post "still blocked" — no delta vs your last comment is filler.
+   - For a NEW blocker (not yet reported), post one precise comment naming the evidence (URL + HTTP code, error message, missing artifact). Then `@lead`.
+   - If idle with no active task, return `HEARTBEAT_OK`.
 {% endif %}
 
 4. **HEARTBEAT_OK** only when check-in succeeded and this tick produced one of:
    - completed work with evidence
-   - a precise blocker report
+   - a precise blocker report with NEW evidence vs your own last comment on the task
    - a concrete assist or idle outcome
+
+**Echo loop reminder.** Re-quoting the same URL + HTTP code + task state as your prior comment is echo, not progress. The backend gate (`comment_echo_guard_v1`) will 409 it. If your draft reads like "still fail-closed / no change / stays unchanged", return `HEARTBEAT_OK` instead.
 {% endif %}
