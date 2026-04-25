@@ -29,6 +29,7 @@ from app.models.task_dependencies import TaskDependency
 from app.models.task_fingerprints import TaskFingerprint
 from app.models.tasks import Task
 from app.models.users import User
+from app.models.workflows import WorkflowDefinition, WorkflowRun, WorkflowStep, WorkflowStepEvent
 
 __all__ = [
     "ActivityEvent",
@@ -60,4 +61,8 @@ __all__ = [
     "Tag",
     "TagAssignment",
     "User",
+    "WorkflowDefinition",
+    "WorkflowRun",
+    "WorkflowStep",
+    "WorkflowStepEvent",
 ]

@@ -31,6 +31,7 @@ from app.api.tags import router as tags_router
 from app.api.task_custom_fields import router as task_custom_fields_router
 from app.api.tasks import router as tasks_router
 from app.api.users import router as users_router
+from app.api.workflows import router as workflows_router
 from app.core.config import settings
 from app.core.error_handling import install_error_handling
 from app.core.logging import configure_logging, get_logger
@@ -125,6 +126,10 @@ OPENAPI_TAGS = [
     {
         "name": "tags",
         "description": "Tag catalog and task-tag association management endpoints.",
+    },
+    {
+        "name": "workflows",
+        "description": "Workflow definitions, runs, steps, and lifecycle tracking endpoints.",
     },
     {
         "name": "users",
@@ -555,6 +560,7 @@ api_v1.include_router(board_webhooks_router)
 api_v1.include_router(board_onboarding_router)
 api_v1.include_router(approvals_router)
 api_v1.include_router(tasks_router)
+api_v1.include_router(workflows_router)
 api_v1.include_router(task_custom_fields_router)
 api_v1.include_router(tags_router)
 api_v1.include_router(users_router)

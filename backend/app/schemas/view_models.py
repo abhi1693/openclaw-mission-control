@@ -14,6 +14,7 @@ from app.schemas.board_memory import BoardMemoryRead
 from app.schemas.boards import BoardRead
 from app.schemas.tags import TagRef
 from app.schemas.tasks import TaskRead
+from app.schemas.workflows import WorkflowRunSummary
 
 RUNTIME_ANNOTATION_TYPES = (
     datetime,
@@ -24,6 +25,7 @@ RUNTIME_ANNOTATION_TYPES = (
     BoardMemoryRead,
     BoardRead,
     TagRef,
+    WorkflowRunSummary,
 )
 
 
@@ -44,6 +46,7 @@ class BoardSnapshot(SQLModel):
     approvals: list[ApprovalRead]
     chat_messages: list[BoardMemoryRead]
     pending_approvals_count: int = 0
+    workflow_runs: list[WorkflowRunSummary] = Field(default_factory=list)
 
 
 class BoardGroupTaskSummary(SQLModel):
