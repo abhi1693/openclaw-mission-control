@@ -17,6 +17,7 @@ from app.db.session import async_session_maker
 from app.models.agents import Agent
 from app.models.board_memory import BoardMemory
 from app.models.boards import Board
+from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.tasks import Task
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 
@@ -128,6 +129,23 @@ async def api_deploy_notify(payload: DeployNotifyPayload = Body(...)) -> DeployN
             "trigger_source": "mission-control.deploy_notify",
             "triggered_at": utcnow().isoformat(),
         }
+        for state in ("built", "deployed"):
+            session.add(
+                TaskPipelineEvent(
+                    board_id=board.id,
+                    task_id=task.id,
+                    agent_id=None,
+                    state=state,
+                    source="deploy_notify",
+                    commit_sha=payload.commit_sha,
+                    artifact_hash=payload.build_hash,
+                    deploy_target=payload.deploy_target,
+                    evidence={
+                        "trigger_source": "mission-control.deploy_notify",
+                        "build_hash": payload.build_hash,
+                    },
+                ),
+            )
 
         dispatch = GatewayDispatchService(session)
         config = await dispatch.optional_gateway_config_for_board(board)

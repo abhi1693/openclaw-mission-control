@@ -28,6 +28,7 @@ class Task(TenantScoped, table=True):
     due_at: datetime | None = None
     in_progress_at: datetime | None = None
     previous_in_progress_at: datetime | None = None
+    rework_started_at: datetime | None = Field(default=None, index=True)
     cancelled_at: datetime | None = None
     review_packet_type: str | None = None
     validation_target: str | None = None
@@ -43,6 +44,7 @@ class Task(TenantScoped, table=True):
     # marked degraded; None means unknown (pre-migration rows or
     # targets operators haven't classified yet).
     packet_commit_sha: str | None = None
+    rework_entry_commit_sha: str | None = None
     packet_build_sha: str | None = None
     supports_build_metadata: bool | None = None
     operator_decision_required: bool = Field(default=False, index=True)

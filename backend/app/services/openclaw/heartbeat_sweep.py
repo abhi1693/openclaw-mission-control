@@ -18,8 +18,10 @@ from app.models.tasks import Task
 from app.services.openclaw.constants import MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+from app.services.openclaw.gateway_rpc import OpenClawGatewayError, openclaw_call
 from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
 from app.services.openclaw.provisioning import reconcile_agent_heartbeat_enabled_flags
+from app.services.task_dependencies import blocked_by_for_task
 
 logger = get_logger(__name__)
 SWEEP_INTERVAL_SECONDS = 300
@@ -35,6 +37,48 @@ STUCK_TASK_THRESHOLD = timedelta(minutes=60)
 NUDGE_COOLDOWN = timedelta(minutes=60)
 from datetime import datetime as _datetime_type
 _recently_nudged_tasks: dict[str, _datetime_type] = {}
+
+
+def _stuck_task_nudge_candidate(
+    task: Task,
+    *,
+    attempted_agent_ids: set[str],
+    blocked_by_task_ids: list[object],
+) -> bool:
+    if task.operator_decision_required:
+        return False
+    if blocked_by_task_ids:
+        return False
+    if task.assigned_agent_id is None:
+        return False
+    return str(task.assigned_agent_id) not in attempted_agent_ids
+
+
+async def _send_stuck_task_execution_nudge(
+    *,
+    dispatch: GatewayDispatchService,
+    session_key: str,
+    config: GatewayClientConfig,
+    agent_name: str,
+    message: str,
+) -> OpenClawGatewayError | None:
+    """Reset stale context before delivering the stuck-task nudge."""
+    try:
+        await openclaw_call("sessions.reset", {"key": session_key}, config=config)
+    except OpenClawGatewayError as exc:
+        return exc
+    logger.info(
+        "heartbeat_sweep.stuck_task_session_reset session_key=%s agent_name=%s",
+        session_key,
+        agent_name,
+    )
+    return await dispatch.try_send_agent_message(
+        session_key=session_key,
+        config=config,
+        agent_name=agent_name,
+        message=message,
+        deliver=True,
+    )
 
 
 def _heartbeat_enabled(agent: Agent) -> bool:
@@ -157,6 +201,7 @@ async def sweep_stuck_tasks() -> dict[str, int]:
     cutoff = now - STUCK_TASK_THRESHOLD
     scanned = 0
     nudged = 0
+    attempted_agent_ids: set[str] = set()
 
     async with async_session_maker() as session:
         stuck_tasks = (
@@ -165,6 +210,7 @@ async def sweep_stuck_tasks() -> dict[str, int]:
                 .where(col(Task.status) == "in_progress")
                 .where(col(Task.updated_at) < cutoff)
                 .where(col(Task.assigned_agent_id).is_not(None))
+                .where(col(Task.operator_decision_required).is_(False))
             )
         ).all()
 
@@ -176,6 +222,20 @@ async def sweep_stuck_tasks() -> dict[str, int]:
             last_nudge = _recently_nudged_tasks.get(task_key)
             if last_nudge and (now - last_nudge) < NUDGE_COOLDOWN:
                 continue
+            blocked_by_task_ids = []
+            if task.board_id is not None:
+                blocked_by_task_ids = await blocked_by_for_task(
+                    session,
+                    board_id=task.board_id,
+                    task_id=task.id,
+                )
+            if not _stuck_task_nudge_candidate(
+                task,
+                attempted_agent_ids=attempted_agent_ids,
+                blocked_by_task_ids=blocked_by_task_ids,
+            ):
+                continue
+            attempted_agent_ids.add(str(task.assigned_agent_id))
 
             agent = await session.get(Agent, task.assigned_agent_id)
             if agent is None or agent.status != "online":
@@ -204,12 +264,12 @@ async def sweep_stuck_tasks() -> dict[str, int]:
                 disable_device_pairing=gateway.disable_device_pairing,
             )
             dispatch = GatewayDispatchService(session)
-            error = await dispatch.try_send_agent_message(
+            error = await _send_stuck_task_execution_nudge(
+                dispatch=dispatch,
                 session_key=agent.openclaw_session_id,
                 config=config,
                 agent_name=agent.name,
                 message=nudge_message,
-                deliver=True,
             )
             if error is None:
                 nudged += 1

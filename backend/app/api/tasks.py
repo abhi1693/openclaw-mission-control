@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -40,6 +41,7 @@ from app.models.task_custom_fields import (
 )
 from app.models.task_dependencies import TaskDependency
 from app.models.task_fingerprints import TaskFingerprint
+from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.tasks import Task
 from app.schemas.activity_events import ActivityEventRead
 from app.schemas.common import OkResponse
@@ -50,8 +52,12 @@ from app.schemas.task_custom_fields import (
     TaskCustomFieldValues,
     validate_custom_field_value,
 )
+from app.schemas.task_pipeline_events import (
+    TaskPipelineEventCreate,
+    TaskPipelineEventRead,
+    TaskPipelineStateRead,
+)
 from app.schemas.tasks import (
-    REVIEW_PACKET_TYPES_REQUIRING_VALIDATION_TARGET,
     STATUS_GATES,
     TaskCommentCreate,
     TaskCommentRead,
@@ -113,6 +119,14 @@ from app.services.task_dependencies import (
     dependent_task_ids,
     replace_task_dependencies,
     validate_dependency_update,
+)
+from app.services.task_pipeline import (
+    FRONTEND_REVIEW_PIPELINE_STATES,
+    frontend_pipeline_required,
+    list_task_pipeline_events,
+    pipeline_missing_states,
+    pipeline_present_states,
+    require_frontend_pipeline_ready_for_review,
 )
 
 if TYPE_CHECKING:
@@ -181,6 +195,44 @@ SSE_SEEN_MAX = 2000
 TASK_SNIPPET_MAX_LEN = 500
 TASK_SNIPPET_TRUNCATED_LEN = 497
 TASK_EVENT_ROW_LEN = 2
+QA_VERDICT_PREFIX_RE = re.compile(r"^VERDICT:\s*(PASS|FAIL|INCONCLUSIVE|INFRA BLOCKED)\b")
+REVIEW_PASS_VERDICT_RE = re.compile(
+    r"^\s*(?:VERDICT|Verdict|Corrected verdict):\s*PASS\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+SOURCE_OR_BUNDLE_EVIDENCE_RE = re.compile(
+    r"\b(?:bundle[- ]grep|source[- ]grep|source[- ]level|grep found|"
+    r"found in (?:the )?(?:deployed )?bundle|bundle contains|source contains|"
+    r"local code presence)\b",
+    re.IGNORECASE,
+)
+BROWSER_RENDERED_EVIDENCE_RE = re.compile(
+    r"\b(?:browser snapshot|dom snapshot|rendered dom|dom text dump|"
+    r"getcomputedstyle|computed style|computed background-image|document\.querySelector|"
+    r"playwright locator|locator\(|screenshot|pixel|visual diff)\b",
+    re.IGNORECASE,
+)
+REWORK_ROUTING_CLAIM_RE = re.compile(
+    r"\b(?:routing|route|return(?:ing)?|send(?:ing)?|move|moved)\s+(?:[^.!?\n]{0,40}\s+)?(?:to|into|for|back to)\s+rework\b"
+    r"|"
+    r"\breturn(?:ing)?\s+(?:to\s+)?PF\s+rework\b"
+    r"|"
+    r"\brework\s+(?:route|routing|return|handoff)\b",
+    re.IGNORECASE,
+)
+REWORK_ROUTING_NEGATION_RE = re.compile(
+    r"\b(?:do not|don't|dont|not|never|no)\s+"
+    r"(?:routing|route|return(?:ing)?|send(?:ing)?|move|moved)\s+"
+    r"(?:[^.!?\n]{0,40}\s+)?(?:to|into|for|back to)\s+rework\b",
+    re.IGNORECASE,
+)
+FINAL_EVIDENCE_PACKET_RE = re.compile(r"^\s*FINAL_EVIDENCE_PACKET\b")
+ACTIVE_BLOCKER_CLEARED_RE = re.compile(r"^\s*Active blocker cleared:\s*\S", re.IGNORECASE)
+GIT_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+TASK_STATUS_CHANGED_RE = re.compile(r"^Task moved to ([a-z_]+):")
+REVIEW_EVIDENCE_REQUIRED_PACKET_TYPES = frozenset(
+    {"frontend_ui", "backend_api", "infra_ops", "mixed"},
+)
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 ACTOR_DEP = Depends(require_user_or_agent)
 SINCE_QUERY = Query(default=None)
@@ -206,6 +258,115 @@ def _comment_validation_error() -> HTTPException:
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="Comment is required.",
     )
+
+
+def _qa_verdict_prefix_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "message": (
+                "QA validation comments must start with "
+                "`VERDICT: PASS`, `VERDICT: FAIL`, `VERDICT: INCONCLUSIVE`, "
+                "or `VERDICT: INFRA BLOCKED`."
+            ),
+            "code": "qa_verdict_prefix_required",
+        },
+    )
+
+
+def _rework_routing_comment_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": (
+                "A lead comment cannot claim rework routing while the task remains in review. "
+                "PATCH the task to `status=rework` with the rework note so durable routing, "
+                "assignment, and rework gates are applied."
+            ),
+            "code": "rework_routing_comment_requires_status_transition",
+        },
+    )
+
+
+def _rendered_live_evidence_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": (
+                "PASS cannot cite source grep or bundle grep as rendered/live evidence. "
+                "Use browser-rendered evidence such as DOM snapshot/text, computed styles "
+                "or computed background-image for CSS data-URL SVGs, Playwright locator "
+                "output, screenshot/pixel evidence, or an equivalent live browser observation."
+            ),
+            "code": "rendered_live_evidence_required",
+        },
+    )
+
+
+def _review_evidence_packet_error(*, code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": message,
+            "code": code,
+        },
+    )
+
+
+def _actor_is_qa_validation_agent(actor: ActorContext) -> bool:
+    if actor.actor_type != "agent" or actor.agent is None:
+        return False
+    profile = actor.agent.identity_profile or {}
+    return profile.get("validation_flow") == "qa_validation"
+
+
+def _actor_is_review_only_agent(actor: ActorContext) -> bool:
+    if actor.actor_type != "agent" or actor.agent is None:
+        return False
+    profile = actor.agent.identity_profile or {}
+    return profile.get("dev_acp_flow") == "review_only"
+
+
+def _actor_is_implementation_agent(actor: ActorContext) -> bool:
+    if actor.actor_type != "agent" or actor.agent is None:
+        return False
+    if actor.agent.is_board_lead:
+        return False
+    return not _actor_is_qa_validation_agent(actor) and not _actor_is_review_only_agent(actor)
+
+
+def _validate_task_comment_format_for_actor(message: str, actor: ActorContext) -> None:
+    if not _actor_is_qa_validation_agent(actor):
+        return
+    stripped = message.lstrip()
+    if not QA_VERDICT_PREFIX_RE.match(stripped):
+        raise _qa_verdict_prefix_error()
+
+
+def _require_rendered_live_pass_has_browser_evidence(message: str, actor: ActorContext) -> None:
+    if not (_actor_is_qa_validation_agent(actor) or _actor_is_review_only_agent(actor)):
+        return
+    if not REVIEW_PASS_VERDICT_RE.search(message):
+        return
+    if not SOURCE_OR_BUNDLE_EVIDENCE_RE.search(message):
+        return
+    if BROWSER_RENDERED_EVIDENCE_RE.search(message):
+        return
+    raise _rendered_live_evidence_error()
+
+
+def _require_comment_not_claim_unapplied_rework_routing(
+    *,
+    task: Task,
+    message: str,
+    actor: ActorContext,
+) -> None:
+    if actor.actor_type != "agent" or actor.agent is None or not actor.agent.is_board_lead:
+        return
+    if task.status != "review":
+        return
+    if REWORK_ROUTING_CLAIM_RE.search(message) and not REWORK_ROUTING_NEGATION_RE.search(message):
+        raise _rework_routing_comment_error()
 
 
 def _task_update_forbidden_error(*, code: str, message: str) -> HTTPException:
@@ -581,52 +742,6 @@ def _projected_task(task: Task, updates: dict[str, object]) -> Task:
     return projected
 
 
-def _require_commit_sha_for_review(
-    task: Task,
-    updates: dict[str, object],
-) -> None:
-    """Reject review transitions without ``packet_commit_sha`` for deployable tasks.
-
-    Phase 1 of pipeline-transition-gates (2026-04-25).  Fires when the
-    projected target status is ``review`` and the task either has a
-    ``validation_target`` or a deployable ``review_packet_type``.  Pure
-    review-only tasks without a live target are exempt.
-
-    Uses the projected/intended SHA (from ``updates``) so agents can set
-    ``packet_commit_sha`` in the same PATCH that moves to ``review``.
-    """
-
-    projected_status = updates.get("status", task.status)
-    if projected_status != "review":
-        return
-
-    # Check whether this task requires a commit SHA.  Tasks without a
-    # validation target AND with a non-deployable packet type are exempt
-    # (e.g. locale quality review, spec review).
-    projected_target = updates.get("validation_target", task.validation_target)
-    packet_type = task.review_packet_type  # static — not changed in the PATCH
-    if (
-        projected_target is None
-        and packet_type not in REVIEW_PACKET_TYPES_REQUIRING_VALIDATION_TARGET
-    ):
-        return
-
-    projected_sha = updates.get("packet_commit_sha", task.packet_commit_sha)
-    if not projected_sha:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": (
-                    "Cannot move to review without packet_commit_sha. "
-                    "Commit your changes, then include packet_commit_sha "
-                    "in the PATCH: "
-                    '{\"status\": \"review\", \"packet_commit_sha\": \"<SHA>\"}'
-                ),
-                "code": "review_missing_commit",
-            },
-        )
-
-
 def _validate_agent_transition(*, from_status: str, to_status: str) -> None:
     """Reject illegal source→target status moves on the non-lead agent path.
 
@@ -646,6 +761,30 @@ def _validate_agent_transition(*, from_status: str, to_status: str) -> None:
             f"`{to_status}`. Use the proper predecessor status first "
             "(e.g. `in_progress` before `review`)."
         ),
+    )
+
+
+def _require_commit_sha_for_review(task: Task, updates: dict[str, object]) -> None:
+    if updates.get("status", task.status) != "review":
+        return
+    projected_target = updates.get("validation_target", task.validation_target)
+    if projected_target is not None:
+        return
+    if task.review_packet_type not in {"frontend_ui", "mixed"}:
+        return
+    projected_sha = updates.get("packet_commit_sha", task.packet_commit_sha)
+    if projected_sha:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": (
+                "Cannot move to review without packet_commit_sha. "
+                "Commit your changes, then include packet_commit_sha in the PATCH: "
+                '{"status": "review", "packet_commit_sha": "<SHA>"}'
+            ),
+            "code": "review_missing_commit",
+        },
     )
 
 
@@ -1074,6 +1213,78 @@ async def has_valid_recent_comment(
     if event is None or event.message is None:
         return False
     return bool(event.message.strip())
+
+
+async def _has_recent_task_comment_matching(
+    session: AsyncSession,
+    *,
+    task: Task,
+    agent_id: UUID | None,
+    since: datetime | None,
+    pattern: re.Pattern[str],
+) -> bool:
+    if agent_id is None or since is None:
+        return False
+    statement = (
+        select(col(ActivityEvent.message))
+        .where(col(ActivityEvent.task_id) == task.id)
+        .where(col(ActivityEvent.event_type) == "task.comment")
+        .where(col(ActivityEvent.agent_id) == agent_id)
+        .where(col(ActivityEvent.created_at) >= since)
+        .order_by(desc(col(ActivityEvent.created_at)))
+    )
+    for message in await session.exec(statement):
+        if message and pattern.match(message):
+            return True
+    return False
+
+
+async def _latest_recent_task_comment_matching(
+    session: AsyncSession,
+    *,
+    task: Task,
+    agent_id: UUID | None,
+    since: datetime | None,
+    pattern: re.Pattern[str],
+) -> str | None:
+    if agent_id is None or since is None:
+        return None
+    statement = (
+        select(col(ActivityEvent.message))
+        .where(col(ActivityEvent.task_id) == task.id)
+        .where(col(ActivityEvent.event_type) == "task.comment")
+        .where(col(ActivityEvent.agent_id) == agent_id)
+        .where(col(ActivityEvent.created_at) >= since)
+        .order_by(desc(col(ActivityEvent.created_at)))
+    )
+    for message in await session.exec(statement):
+        if message and pattern.match(message):
+            return message
+    return None
+
+
+async def _task_has_unresolved_rework_marker(
+    session: AsyncSession,
+    *,
+    task_id: UUID,
+) -> bool:
+    statement = (
+        select(col(ActivityEvent.message))
+        .where(col(ActivityEvent.task_id) == task_id)
+        .where(col(ActivityEvent.event_type) == "task.status_changed")
+        .where(col(ActivityEvent.message).like("Task moved to %:%"))
+        .order_by(desc(col(ActivityEvent.created_at)))
+    )
+    for message in await session.exec(statement):
+        if not message:
+            continue
+        match = TASK_STATUS_CHANGED_RE.match(message)
+        if match is None:
+            continue
+        status_value = match.group(1)
+        if status_value in ALLOWED_STATUSES:
+            return status_value == "rework"
+    return False
 
 
 def _parse_since(value: str | None) -> datetime | None:
@@ -2410,6 +2621,103 @@ async def create_task(
     )
 
 
+def _task_pipeline_event_read(event: TaskPipelineEvent) -> TaskPipelineEventRead:
+    return TaskPipelineEventRead(
+        id=event.id,
+        board_id=event.board_id,
+        task_id=event.task_id,
+        agent_id=event.agent_id,
+        state=event.state,
+        source=event.source,
+        commit_sha=event.commit_sha,
+        artifact_hash=event.artifact_hash,
+        deploy_target=event.deploy_target,
+        live_sha=event.live_sha,
+        evidence=event.evidence,
+        created_at=event.created_at,
+    )
+
+
+async def _require_task_pipeline_write_access(
+    session: AsyncSession,
+    *,
+    task: Task,
+    actor: ActorContext,
+) -> UUID | None:
+    if actor.actor_type == "agent":
+        if actor.agent is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        if actor.agent.board_id and actor.agent.board_id != task.board_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        return actor.agent.id
+    if actor.user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if task.board_id is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
+    board = await Board.objects.by_id(task.board_id).first(session)
+    if board is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await require_board_access(session, user=actor.user, board=board, write=True)
+    return None
+
+
+@router.get("/{task_id}/pipeline", response_model=TaskPipelineStateRead)
+async def get_task_pipeline_state(
+    task: Task = TASK_DEP,
+    session: AsyncSession = SESSION_DEP,
+) -> TaskPipelineStateRead:
+    """Return structured pipeline readiness for the current task cycle."""
+    cycle_since = task.in_progress_at or task.previous_in_progress_at
+    events = await list_task_pipeline_events(
+        session,
+        task_id=task.id,
+        since=cycle_since,
+    )
+    present_states = pipeline_present_states(events)
+    missing_states = pipeline_missing_states(events)
+    return TaskPipelineStateRead(
+        task_id=task.id,
+        required_states=list(FRONTEND_REVIEW_PIPELINE_STATES),
+        present_states=present_states,
+        missing_states=missing_states,
+        ready=not missing_states,
+        events=[_task_pipeline_event_read(event) for event in events],
+    )
+
+
+@router.post("/{task_id}/pipeline/events", response_model=TaskPipelineEventRead)
+async def record_task_pipeline_event(
+    payload: TaskPipelineEventCreate,
+    task: Task = TASK_DEP,
+    session: AsyncSession = SESSION_DEP,
+    actor: ActorContext = ACTOR_DEP,
+) -> TaskPipelineEventRead:
+    """Record an append-only structured pipeline event for a task."""
+    if task.board_id is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
+    agent_id = await _require_task_pipeline_write_access(
+        session,
+        task=task,
+        actor=actor,
+    )
+    event = TaskPipelineEvent(
+        board_id=task.board_id,
+        task_id=task.id,
+        agent_id=agent_id,
+        state=payload.state,
+        source=payload.source or "api",
+        commit_sha=payload.commit_sha,
+        artifact_hash=payload.artifact_hash,
+        deploy_target=payload.deploy_target,
+        live_sha=payload.live_sha,
+        evidence=payload.evidence,
+    )
+    session.add(event)
+    await session.commit()
+    await session.refresh(event)
+    return _task_pipeline_event_read(event)
+
+
 @router.patch(
     "/{task_id}",
     response_model=TaskRead,
@@ -2495,6 +2803,12 @@ async def delete_task_and_related_records(
         session,
         TaskFingerprint,
         col(TaskFingerprint.task_id) == task.id,
+        commit=False,
+    )
+    await crud.delete_where(
+        session,
+        TaskPipelineEvent,
+        col(TaskPipelineEvent.task_id) == task.id,
         commit=False,
     )
 
@@ -3086,6 +3400,8 @@ async def _lead_apply_status(
         if update.task.status != target_status:
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.in_progress_at = None
+            update.task.rework_started_at = utcnow()
+            update.task.rework_entry_commit_sha = update.task.packet_commit_sha
         if "assigned_agent_id" not in update.updates:
             update.task.assigned_agent_id = await _last_worker_who_moved_task_to_review(
                 session,
@@ -3099,10 +3415,13 @@ async def _lead_apply_status(
         if update.task.status != target_status:
             update.task.previous_in_progress_at = update.task.in_progress_at
             update.task.in_progress_at = None
+            update.task.rework_started_at = None
         if "assigned_agent_id" not in update.updates:
             update.task.assigned_agent_id = None
         update.task.status = target_status
         return
+    if target_status == "done":
+        update.task.rework_started_at = None
     update.task.status = target_status
 
 
@@ -3212,13 +3531,6 @@ async def _apply_lead_task_update(
         raise _operator_decision_block_error()
 
     # Phase V §I8 parity: the non-lead path enforces deploy-truth
-    # Pipeline gate: require packet_commit_sha for review transitions
-    # on deployable tasks.  Lead path must run this too — agents reach
-    # it via _finalize_updated_task, but leads bypass that function.
-    # (Phase 1 of pipeline-transition-gates, 2026-04-25.)
-    if "status" in update.updates:
-        _require_commit_sha_for_review(update.task, update.updates)
-
     # PRE-mutation via a projected task (``_finalize_updated_task`` at
     # ``_require_deploy_truth`` call-site). The lead path must run the
     # same pre-apply gate — lead PATCHes that change ``status`` /
@@ -3357,33 +3669,23 @@ async def _apply_non_lead_agent_task_rules(
             message="Agent can only update tasks for their assigned board.",
         )
     # Allow agents to claim unassigned tasks by updating status (when permitted by board rules).
-    # Also block SHA metadata changes on tasks owned by other agents.
     if (
         update.actor.agent
         and update.task.assigned_agent_id is not None
         and update.task.assigned_agent_id != update.actor.agent.id
-        and (
-            "status" in update.updates
-            or "packet_commit_sha" in update.updates
-            or "packet_build_sha" in update.updates
-        )
+        and "status" in update.updates
     ):
         raise _task_update_forbidden_error(
             code="task_assignee_mismatch",
             message="Agents can only change status or commit metadata on tasks assigned to them.",
         )
-    # Agents are limited to status/comment updates + commit SHA fields.
-    # Non-inbox status moves must pass dependency checks before they can
-    # proceed.  ``packet_commit_sha`` and ``packet_build_sha`` are allowed
-    # so agents can stamp their fix commit when moving to review, without
-    # needing the lead to relay the SHA.  (Phase 1 of pipeline-transition-
-    # gates design, 2026-04-25.)
+    # Agents are limited to status/comment updates, and non-inbox status moves
+    # must pass dependency checks before they can proceed.
     allowed_fields = {
         "status",
         "comment",
         "custom_field_values",
         "packet_commit_sha",
-        "packet_build_sha",
     }
     if (
         update.depends_on_task_ids is not None
@@ -3394,10 +3696,7 @@ async def _apply_non_lead_agent_task_rules(
     ):
         raise _task_update_forbidden_error(
             code="task_update_field_forbidden",
-            message=(
-                "Agents may only update status, comment, custom field values, "
-                "packet_commit_sha, and packet_build_sha."
-            ),
+            message="Agents may only update status, comment, packet_commit_sha, and custom field values.",
         )
     if "status" in update.updates:
         only_lead_can_change_status = (
@@ -3469,6 +3768,7 @@ async def _apply_non_lead_agent_task_rules(
                 update.task.assigned_agent_id = None
                 update.task.previous_in_progress_at = update.task.in_progress_at
                 update.task.in_progress_at = None
+                update.task.rework_started_at = None
         elif status_value == "review":
             if status_changing:
                 update.task.previous_in_progress_at = update.task.in_progress_at
@@ -3528,6 +3828,7 @@ async def _apply_admin_task_rules(
         update.task.status = "inbox"
         update.task.assigned_agent_id = None
         update.task.in_progress_at = None
+        update.task.rework_started_at = None
         update.updates["status"] = "inbox"
         update.updates["assigned_agent_id"] = None
 
@@ -3543,6 +3844,7 @@ async def _apply_admin_task_rules(
                 update.task.previous_in_progress_at = update.task.in_progress_at
                 update.task.assigned_agent_id = None
                 update.task.in_progress_at = None
+                update.task.rework_started_at = None
             if update.task.status == "cancelled":
                 update.task.cancelled_at = None
         elif status_value == "cancelled":
@@ -3550,6 +3852,7 @@ async def _apply_admin_task_rules(
                 update.task.previous_in_progress_at = update.task.in_progress_at
                 update.task.assigned_agent_id = None
                 update.task.in_progress_at = None
+                update.task.rework_started_at = None
                 update.task.cancelled_at = utcnow()
                 await _reject_pending_move_to_done_approvals_for_task(
                     session,
@@ -3563,11 +3866,17 @@ async def _apply_admin_task_rules(
                 update.task.in_progress_at = None
             if update.task.status == "cancelled":
                 update.task.cancelled_at = None
+        elif status_value == "rework":
+            if status_changing:
+                update.task.rework_started_at = utcnow()
+                update.task.rework_entry_commit_sha = update.task.packet_commit_sha
         elif status_value == "in_progress":
             if status_changing:
                 update.task.in_progress_at = utcnow()
             if update.task.status == "cancelled":
                 update.task.cancelled_at = None
+        elif status_value == "done" and status_changing:
+            update.task.rework_started_at = None
 
     assigned_agent_id = _optional_assigned_agent_id(
         update.updates.get("assigned_agent_id"),
@@ -3702,6 +4011,111 @@ async def _assign_review_task_to_lead(
     update.task.assigned_agent_id = lead.id
 
 
+async def _require_worker_review_evidence_packet(
+    session: AsyncSession,
+    *,
+    update: _TaskUpdateInput,
+) -> None:
+    if update.updates.get("status") != "review":
+        return
+    if not _actor_is_implementation_agent(update.actor):
+        return
+
+    review_comment_author = update.previous_assigned
+    review_comment_since = (
+        update.task.previous_in_progress_at
+        if update.task.previous_in_progress_at is not None
+        else update.previous_in_progress_at
+    )
+    is_rework_resubmission = update.task.rework_started_at is not None or (
+        await _task_has_unresolved_rework_marker(
+            session,
+            task_id=update.task.id,
+        )
+    )
+    if is_rework_resubmission and update.task.review_packet_type == "review_only":
+        raise _review_evidence_packet_error(
+            code="review_only_rework_requires_packet_type_change",
+            message=(
+                "Implementation agents cannot resubmit a `review_only` task from rework. "
+                "The lead must convert `review_packet_type` to the implementation packet type "
+                "or create a separate implementation task."
+            ),
+        )
+    if is_rework_resubmission:
+        if update.task.packet_commit_sha is None:
+            raise _review_evidence_packet_error(
+                code="rework_no_commit",
+                message=(
+                    "Cannot move rework to review without `packet_commit_sha`. "
+                    "Set it to the fix commit SHA."
+                ),
+            )
+        if not GIT_COMMIT_SHA_RE.fullmatch(update.task.packet_commit_sha):
+            raise _review_evidence_packet_error(
+                code="rework_invalid_commit_sha",
+                message=(
+                    "`packet_commit_sha` must be a Git commit SHA "
+                    "(7 to 40 lowercase hexadecimal characters)."
+                ),
+            )
+    if is_rework_resubmission and update.task.rework_entry_commit_sha is not None:
+        if update.task.packet_commit_sha == update.task.rework_entry_commit_sha:
+            raise _review_evidence_packet_error(
+                code="rework_same_commit",
+                message=(
+                    f"`packet_commit_sha` ({update.task.packet_commit_sha}) is unchanged "
+                    "since rework entry. Commit a fix before moving to review."
+                ),
+            )
+    if update.task.review_packet_type not in REVIEW_EVIDENCE_REQUIRED_PACKET_TYPES:
+        return
+    required_pattern = (
+        ACTIVE_BLOCKER_CLEARED_RE if is_rework_resubmission else FINAL_EVIDENCE_PACKET_RE
+    )
+    packet = update.comment if update.comment and required_pattern.match(update.comment) else None
+    if packet is None:
+        packet = await _latest_recent_task_comment_matching(
+            session,
+            task=update.task,
+            agent_id=review_comment_author,
+            since=review_comment_since,
+            pattern=required_pattern,
+        )
+    if frontend_pipeline_required(update.task.review_packet_type):
+        if is_rework_resubmission and packet is None:
+            raise _review_evidence_packet_error(
+                code="task_active_blocker_clearance_required",
+                message=(
+                    "Rework resubmission must include a parent-owned comment starting with "
+                    "`Active blocker cleared:` and evidence that clears the reviewer blocker."
+                ),
+            )
+        await require_frontend_pipeline_ready_for_review(
+            session,
+            task=update.task,
+            since=review_comment_since,
+        )
+        return
+    if packet is not None:
+        return
+    if is_rework_resubmission:
+        raise _review_evidence_packet_error(
+            code="task_active_blocker_clearance_required",
+            message=(
+                "Rework resubmission must include a parent-owned comment starting with "
+                "`Active blocker cleared:` and evidence that clears the reviewer blocker."
+            ),
+        )
+    raise _review_evidence_packet_error(
+        code="task_final_evidence_packet_required",
+        message=(
+            "Moving this task to review requires a parent-owned comment starting with "
+            "`FINAL_EVIDENCE_PACKET`; source-only or child-section evidence is not enough."
+        ),
+    )
+
+
 async def _notify_task_update_assignment_changes(
     session: AsyncSession,
     *,
@@ -3791,13 +4205,6 @@ async def _finalize_updated_task(
     *,
     update: _TaskUpdateInput,
 ) -> TaskRead:
-    # Pipeline gate: require packet_commit_sha for review transitions
-    # on deployable tasks.  Runs against pre-update state + intended
-    # updates so the agent can set the SHA in the same PATCH.
-    # (Phase 1 of pipeline-transition-gates, 2026-04-25.)
-    if "status" in update.updates:
-        _require_commit_sha_for_review(update.task, update.updates)
-
     # Phase V §I8: run the deploy-truth gate FIRST, before any ORM
     # mutation or autoflushing DB query. The /__build fetch blocks
     # for up to 5s; holding that wall-clock window inside an open
@@ -3830,6 +4237,14 @@ async def _finalize_updated_task(
         update.comment is not None
         and update.comment.strip()
     ):
+        _validate_task_comment_format_for_actor(update.comment, update.actor)
+        _require_rendered_live_pass_has_browser_evidence(update.comment, update.actor)
+        if update.updates.get("status") != "rework":
+            _require_comment_not_claim_unapplied_rework_routing(
+                task=update.task,
+                message=update.comment,
+                actor=update.actor,
+            )
         await _require_lane_quieting_allows_comment(
             session, task=update.task, actor=update.actor
         )
@@ -3849,6 +4264,7 @@ async def _finalize_updated_task(
         "operator_decision_summary",
     }.intersection(update.updates):
         await _require_operator_decision_task_not_active(session, update.task)
+    _require_commit_sha_for_review(update.task, update.updates)
     if {
         "status",
         "assigned_agent_id",
@@ -3910,6 +4326,9 @@ async def _finalize_updated_task(
             review_comment_since,
         ):
             raise _comment_validation_error()
+    await _require_worker_review_evidence_packet(session, update=update)
+    if status_raw == "review" and _actor_is_implementation_agent(update.actor):
+        update.task.rework_started_at = None
     await _assign_review_task_to_lead(session, update=update)
 
     if update.tag_ids is not None:
@@ -3938,37 +4357,6 @@ async def _finalize_updated_task(
     session.add(update.task)
     await session.commit()
     await session.refresh(update.task)
-
-    # Phase 2 pipeline gate: enqueue async deploy parity check AFTER
-    # DB commit.  Only for review transitions on tasks with a
-    # validation target + supports_build_metadata=True.
-    if (
-        update.task.status == "review"
-        and update.previous_status != "review"
-        and update.task.validation_target is not None
-        and update.task.supports_build_metadata is True
-        and update.task.packet_commit_sha is not None
-    ):
-        from app.services.deploy_parity import enqueue_deploy_parity_check
-
-        try:
-            enqueue_deploy_parity_check(
-                task_id=update.task.id,
-                board_id=update.board_id,
-                packet_commit_sha=update.task.packet_commit_sha,
-                validation_target=update.task.validation_target,
-                expected_updated_at=update.task.updated_at.isoformat()
-                if update.task.updated_at
-                else "",
-                prior_agent_id=update.previous_assigned,
-            )
-        except Exception:
-            logger.warning(
-                "deploy_parity.enqueue_failed",
-                extra={"task_id": str(update.task.id)},
-                exc_info=True,
-            )
-
     await _record_task_comment_from_update(session, update=update)
     await _record_task_update_activity(session, update=update)
     await _notify_task_update_assignment_changes(session, update=update)
@@ -3989,6 +4377,13 @@ async def create_task_comment(
 ) -> ActivityEvent:
     """Create a task comment and notify relevant agents."""
     await _validate_task_comment_access(session, task=task, actor=actor)
+    _validate_task_comment_format_for_actor(payload.message, actor)
+    _require_rendered_live_pass_has_browser_evidence(payload.message, actor)
+    _require_comment_not_claim_unapplied_rework_routing(
+        task=task,
+        message=payload.message,
+        actor=actor,
+    )
     await _require_lane_quieting_allows_comment(
         session, task=task, actor=actor
     )
