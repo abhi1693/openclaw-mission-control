@@ -11,10 +11,12 @@ from app.models.agents import Agent
 from app.models.approvals import Approval
 from app.models.board_memory import BoardMemory
 from app.models.tasks import Task
+from app.models.workflows import WorkflowRun, WorkflowStep
 from app.schemas.approvals import ApprovalRead
 from app.schemas.board_memory import BoardMemoryRead
 from app.schemas.boards import BoardRead
 from app.schemas.view_models import BoardSnapshot, TaskCardRead
+from app.schemas.workflows import WorkflowRunSummary
 from app.services.approval_task_links import load_task_ids_by_approval, task_counts_for_board
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.tags import TagState, load_tag_state
@@ -73,18 +75,55 @@ def _task_to_card(
     )
     if task.status == "done":
         blocked_by_task_ids = []
-    return card.model_copy(
-        update={
-            "assignee": assignee,
-            "approvals_count": approvals_count,
-            "approvals_pending_count": approvals_pending_count,
-            "depends_on_task_ids": depends_on_task_ids,
-            "tag_ids": tag_state.tag_ids,
-            "tags": tag_state.tags,
-            "blocked_by_task_ids": blocked_by_task_ids,
-            "is_blocked": bool(blocked_by_task_ids),
-        },
+    payload = card.model_dump()
+    payload.pop("assignee", None)
+    payload.pop("approvals_count", None)
+    payload.pop("approvals_pending_count", None)
+    payload.pop("depends_on_task_ids", None)
+    payload.pop("tag_ids", None)
+    payload.pop("tags", None)
+    payload.pop("blocked_by_task_ids", None)
+    payload.pop("is_blocked", None)
+    return TaskCardRead(
+        **payload,
+        assignee=assignee,
+        approvals_count=approvals_count,
+        approvals_pending_count=approvals_pending_count,
+        depends_on_task_ids=depends_on_task_ids,
+        tag_ids=tag_state.tag_ids,
+        tags=tag_state.tags,
+        blocked_by_task_ids=blocked_by_task_ids,
+        is_blocked=bool(blocked_by_task_ids),
     )
+
+
+async def _workflow_run_summaries(session: AsyncSession, *, board_id: UUID) -> list[WorkflowRunSummary]:
+    runs = (
+        await WorkflowRun.objects.filter_by(board_id=board_id)
+        .order_by(col(WorkflowRun.created_at).desc())
+        .limit(50)
+        .all(session)
+    )
+    summaries: list[WorkflowRunSummary] = []
+    for run in runs:
+        steps = await WorkflowStep.objects.filter_by(workflow_run_id=run.id).all(session)
+        summaries.append(
+            WorkflowRunSummary(
+                id=run.id,
+                title=run.title,
+                status=run.status,
+                current_step_key=run.current_step_key,
+                source_task_id=run.source_task_id,
+                waiting_step_count=sum(
+                    1 for step in steps if step.status in {"waiting_human", "waiting_approval"}
+                ),
+                approval_step_count=sum(1 for step in steps if step.step_type == "approval"),
+                human_step_count=sum(1 for step in steps if step.step_type == "human_task"),
+                created_at=run.created_at,
+                updated_at=run.updated_at,
+            )
+        )
+    return summaries
 
 
 async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnapshot:
@@ -195,6 +234,7 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
     )
     chat_messages.sort(key=lambda item: item.created_at)
     chat_reads = [_memory_to_read(memory) for memory in chat_messages]
+    workflow_runs = await _workflow_run_summaries(session, board_id=board.id)
 
     return BoardSnapshot(
         board=board_read,
@@ -203,4 +243,5 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
         approvals=approval_reads,
         chat_messages=chat_reads,
         pending_approvals_count=pending_approvals_count,
+        workflow_runs=workflow_runs,
     )
