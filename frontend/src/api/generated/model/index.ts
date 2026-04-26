@@ -233,3 +233,4 @@ export * from "./userRead";
 export * from "./userUpdate";
 export * from "./validationError";
 export * from "./validationErrorCtx";
+export * from "./workflowRunSummary";

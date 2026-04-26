@@ -9,6 +9,7 @@ import type { ApprovalRead } from "./approvalRead";
 import type { BoardMemoryRead } from "./boardMemoryRead";
 import type { BoardRead } from "./boardRead";
 import type { TaskCardRead } from "./taskCardRead";
+import type { WorkflowRunSummary } from "./workflowRunSummary";
 
 /**
  * Aggregated board payload used by board snapshot endpoints.
@@ -20,4 +21,5 @@ export interface BoardSnapshot {
   chat_messages: BoardMemoryRead[];
   pending_approvals_count?: number;
   tasks: TaskCardRead[];
+  workflow_runs?: WorkflowRunSummary[];
 }

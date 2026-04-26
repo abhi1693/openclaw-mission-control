@@ -29,6 +29,7 @@ import { Markdown } from "@/components/atoms/Markdown";
 import { StatusDot } from "@/components/atoms/StatusDot";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { TaskBoard } from "@/components/organisms/TaskBoard";
+import { WorkflowRunsPanel } from "@/components/boards/WorkflowRunsPanel";
 import {
   DependencyBanner,
   type DependencyBannerDependency,
@@ -105,6 +106,7 @@ import type {
   TaskCustomFieldDefinitionRead,
   TagRead,
   TaskRead,
+  WorkflowRunSummary,
 } from "@/api/generated/model";
 import { createExponentialBackoff } from "@/lib/backoff";
 import {
@@ -886,6 +888,7 @@ export default function BoardDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
   const [isApprovalsLoading, setIsApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState<string | null>(null);
   const [approvalsUpdatingId, setApprovalsUpdatingId] = useState<string | null>(
@@ -1267,6 +1270,7 @@ export default function BoardDetailPage() {
       setAgents((snapshot.agents ?? []).map(normalizeAgent));
       setApprovals((snapshot.approvals ?? []).map(normalizeApproval));
       setChatMessages(snapshot.chat_messages ?? []);
+      setWorkflowRuns(snapshot.workflow_runs ?? []);
 
       try {
         const groupResult =
@@ -3316,6 +3320,8 @@ export default function BoardDetailPage() {
                 <>
                   {viewMode === "list" ? (
                     <>
+                      <WorkflowRunsPanel runs={workflowRuns} />
+
                       {groupSnapshotError ? (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-sm">
                           {groupSnapshotError}
@@ -3537,12 +3543,15 @@ export default function BoardDetailPage() {
                   ) : null}
 
                   {viewMode === "board" ? (
-                    <TaskBoard
-                      tasks={tasks}
-                      onTaskSelect={openComments}
-                      onTaskMove={canWrite ? handleTaskMove : undefined}
-                      readOnly={!canWrite}
-                    />
+                    <div className="space-y-6">
+                      <WorkflowRunsPanel runs={workflowRuns} />
+                      <TaskBoard
+                        tasks={tasks}
+                        onTaskSelect={openComments}
+                        onTaskMove={canWrite ? handleTaskMove : undefined}
+                        readOnly={!canWrite}
+                      />
+                    </div>
                   ) : (
                     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
                       <div className="border-b border-slate-200 px-5 py-4">
