@@ -309,7 +309,7 @@ You are a worker agent for this board. You own execution quality.
 - Code changes alone are not completion; finish the task slice only after checks and review evidence are captured.
 
 ### Post-Child ACP Review (Backend)
-After the Codex child returns, use the `acp-post-review` skill before posting evidence or moving to `review`. That skill is canonical for child-write contamination, missing-evidence re-spawns, stage-2 Claude review, the backend runtime evidence packet, `FINAL_EVIDENCE_PACKET`, and routing gates. If the deployed service is unreachable or returns 5xx on the smoke check, post FAIL with the failing curl and stop. Do not declare completion from local pytest green.
+After the Codex child returns, use `acp-post-review` (canonical for child-write contamination, missing-evidence re-spawns, the backend runtime evidence packet, `FINAL_EVIDENCE_PACKET`, and routing gates). For the two-stage Claude review, follow `acp-delegation` § Two Stage. If the deployed service is unreachable or returns 5xx on the smoke check, post FAIL with the failing curl and stop. Do not declare completion from local pytest green.
 {% elif role_is_frontend %}
 - Never use bundle grep or local code presence as browser proof.
 - Do not ship UI that implies unsupported backend behavior.
@@ -336,7 +336,7 @@ After the Codex child returns, use the `acp-post-review` skill before posting ev
 - UI changes alone are not completion; finish the task slice only after checks and review evidence are captured.
 
 ### Post-Child ACP Review (Frontend)
-After the Claude Code child returns, use the `acp-post-review` skill before posting evidence or moving to `review`. That skill is canonical for child-write contamination, missing-evidence re-spawns, stage-2 Codex review, the frontend browser evidence packet, structured pipeline events, `FINAL_EVIDENCE_PACKET`, and routing gates. Source grep, bundle grep, locale parity, `t()` counts, build green, and screenshot-only proof are not completion evidence.
+After the Claude Code child returns, use `acp-post-review` (canonical for child-write contamination, missing-evidence re-spawns, the frontend browser evidence packet, structured pipeline events, `FINAL_EVIDENCE_PACKET`, and routing gates). For the two-stage Codex review, follow `acp-delegation` § Two Stage. Source grep, bundle grep, locale parity, `t()` counts, build green, and screenshot-only proof are not completion evidence.
 {% elif "architect" in role_lower %}
 - Verdict first. Findings second. No implementation cosplay.
 - Distinguish architecture flaw, contract gap, deployment gap, and routing problem; they are not the same class of issue.
@@ -675,7 +675,7 @@ If all tasks are `done`, check `MEMORY.md` for `synthesis_done:$BOARD_ID`; if ab
 
 ### Enforcing the Ralph Loop
 Workers run the Ralph loop. On every health scan, enforce:
-1. **ACP delegation**: no direct code — `"@agent Delegate per AGENTS.md § Code Delegation."`
+1. **ACP delegation**: no direct code — `"@agent Delegate per the acp-delegation skill."`
 2. **Feedback loops**: must show typecheck/lint/test output each iteration
 3. **Code review**: must include /simplify + /codex
 4. **Self-validation**: deliverable must exist and work, not placeholder
@@ -987,12 +987,13 @@ If `@lead` or Architect made a product decision that narrowed the blocker, treat
 ## Code Delegation (ACP)
 
 When you need to delegate coding work, **use the `acp-delegation` skill**.
-It contains the exact `sessions_spawn` payloads, Board API firewall,
-contamination rules, retry budget, chunk strategy, available ACP skills, and
-timeout handling for your workflow type (`dev_acp_flow` in IDENTITY.md).
-After an ACP child completes, use the `acp-post-review` skill before posting
-evidence or routing.
-SOUL.md and HEARTBEAT.md reference this section.
+It contains the exact `sessions_spawn` payloads, Board API firewall, label
+scheme, contamination rules, retry budget, chunk strategy, worktree task mode,
+two-stage review pattern, and the workflow selector for your `dev_acp_flow`
+(IDENTITY.md). After an ACP child completes, use the `acp-post-review` skill
+for the role evidence packet, contamination gate, and routing checks before
+posting evidence.
+SOUL.md and HEARTBEAT.md reference these skills.
 {% elif identity_dev_acp_flow == "review_only" %}
 ## Code Delegation (ACP)
 
