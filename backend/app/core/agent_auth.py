@@ -91,6 +91,9 @@ async def _touch_agent_presence(
     calls (task comments, memory updates, etc). Touch presence so the UI reflects
     real activity even if the heartbeat loop isn't running.
     """
+    if request.method.upper() in _SAFE_METHODS:
+        return
+
     now = utcnow()
     if agent.last_seen_at is not None and now - agent.last_seen_at < _LAST_SEEN_TOUCH_INTERVAL:
         return
@@ -110,10 +113,6 @@ async def _touch_agent_presence(
         agent.checkin_deadline_at = next_deadline
     session.add(agent)
 
-    # For safe HTTP methods, endpoints typically do not commit. Persist the touch
-    # so agents that only poll/read still show as online.
-    if request.method.upper() in _SAFE_METHODS:
-        await session.commit()
 
 
 async def get_agent_auth_context(

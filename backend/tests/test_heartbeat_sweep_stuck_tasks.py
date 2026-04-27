@@ -12,6 +12,66 @@ from app.services.openclaw.gateway_rpc import GatewayConfig
 
 
 @pytest.mark.asyncio
+async def test_heartbeat_wake_uses_non_raising_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    class _FakeOrchestrator:
+        def __init__(self, session: object) -> None:
+            self.session = session
+
+        async def run_lifecycle(self, **kwargs: object) -> object:
+            calls.append(kwargs)
+            return SimpleNamespace()
+
+    monkeypatch.setattr(
+        heartbeat_sweep,
+        "AgentLifecycleOrchestrator",
+        _FakeOrchestrator,
+    )
+
+    delivered = await heartbeat_sweep._try_deliver_heartbeat_wake(
+        session=SimpleNamespace(),
+        gateway=SimpleNamespace(),
+        agent=SimpleNamespace(id=uuid4(), name="Supervisor"),
+        board=SimpleNamespace(),
+    )
+
+    assert delivered is True
+    assert calls
+    assert calls[0]["raise_gateway_errors"] is False
+    assert calls[0]["reset_session"] is True
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_wake_gateway_error_does_not_escape_sweep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeOrchestrator:
+        def __init__(self, session: object) -> None:
+            self.session = session
+
+        async def run_lifecycle(self, **_: object) -> object:
+            raise RuntimeError("gateway session still active")
+
+    monkeypatch.setattr(
+        heartbeat_sweep,
+        "AgentLifecycleOrchestrator",
+        _FakeOrchestrator,
+    )
+
+    delivered = await heartbeat_sweep._try_deliver_heartbeat_wake(
+        session=SimpleNamespace(),
+        gateway=SimpleNamespace(),
+        agent=SimpleNamespace(id=uuid4(), name="Supervisor"),
+        board=SimpleNamespace(),
+    )
+
+    assert delivered is False
+
+
+@pytest.mark.asyncio
 async def test_stuck_task_nudge_resets_worker_session_before_delivery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

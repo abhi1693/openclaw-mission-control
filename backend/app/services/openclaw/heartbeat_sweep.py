@@ -87,6 +87,53 @@ def _heartbeat_enabled(agent: Agent) -> bool:
     return bool(every and every != "0m")
 
 
+async def _try_deliver_heartbeat_wake(
+    *,
+    session,
+    gateway: Gateway,
+    agent: Agent,
+    board: Board | None,
+) -> bool:
+    orchestrator = AgentLifecycleOrchestrator(session)
+    try:
+        result = await asyncio.wait_for(
+            orchestrator.run_lifecycle(
+                gateway=gateway,
+                agent_id=agent.id,
+                board=board,
+                user=None,
+                action="update",
+                auth_token=None,
+                force_bootstrap=False,
+                reset_session=True,
+                wake=True,
+                deliver_wakeup=True,
+                wakeup_verb="updated",
+                clear_confirm_token=True,
+                raise_gateway_errors=False,
+            ),
+            timeout=_RECONCILE_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        logger.warning(
+            "heartbeat_sweep.wake_failed agent_id=%s name=%s error=%s",
+            agent.id,
+            agent.name,
+            exc,
+        )
+        return False
+
+    if getattr(result, "last_provision_error", None):
+        logger.warning(
+            "heartbeat_sweep.wake_not_delivered agent_id=%s name=%s error=%s",
+            agent.id,
+            agent.name,
+            result.last_provision_error,
+        )
+        return False
+    return True
+
+
 async def sweep_once() -> dict[str, int]:
     now = utcnow()
     scanned = 0
@@ -156,26 +203,13 @@ async def sweep_once() -> dict[str, int]:
                 deadline.isoformat(),
                 agent.wake_attempts,
             )
-            orchestrator = AgentLifecycleOrchestrator(session)
-            await asyncio.wait_for(
-                orchestrator.run_lifecycle(
-                    gateway=gateway,
-                    agent_id=agent.id,
-                    board=board,
-                    user=None,
-                    action="update",
-                    auth_token=None,
-                    force_bootstrap=False,
-                    reset_session=True,
-                    wake=True,
-                    deliver_wakeup=True,
-                    wakeup_verb="updated",
-                    clear_confirm_token=True,
-                    raise_gateway_errors=True,
-                ),
-                timeout=_RECONCILE_TIMEOUT_SECONDS,
-            )
-            woke += 1
+            if await _try_deliver_heartbeat_wake(
+                session=session,
+                gateway=gateway,
+                agent=agent,
+                board=board,
+            ):
+                woke += 1
 
     logger.info(
         "heartbeat_sweep.summary scanned=%s overdue=%s woke=%s offline=%s",

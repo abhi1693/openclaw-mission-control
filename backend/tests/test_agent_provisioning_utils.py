@@ -1568,6 +1568,18 @@ def test_default_heartbeat_config_has_isolation():
     assert DEFAULT_HEARTBEAT_CONFIG["lightContext"] is False
 
 
+def test_board_lead_heartbeat_config_preserves_isolated_session():
+    agent = _AgentStub(
+        name="Supervisor",
+        heartbeat_config={"isolatedSession": True, "lightContext": False},
+        is_board_lead=True,
+    )
+
+    heartbeat = agent_provisioning._heartbeat_config(agent)  # type: ignore[arg-type]
+
+    assert heartbeat["isolatedSession"] is True
+
+
 def test_offline_threshold_exceeds_max_heartbeat():
     from app.core.durations import parse_every_to_seconds
     from app.services.openclaw.constants import (

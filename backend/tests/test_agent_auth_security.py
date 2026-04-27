@@ -181,11 +181,43 @@ class _RecordingSession:
 
 
 @pytest.mark.asyncio
-async def test_touch_agent_presence_rearms_deadline_for_enabled_heartbeat_agent(
+async def test_touch_agent_presence_does_not_refresh_deadline_for_safe_methods(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     now = agent_auth.utcnow()
     request = SimpleNamespace(method="GET")
+    session = _RecordingSession()
+    agent = Agent(
+        id=uuid4(),
+        name="worker",
+        gateway_id=uuid4(),
+        board_id=uuid4(),
+        status="online",
+        wake_attempts=2,
+        heartbeat_config={"every": "20m"},
+        checkin_deadline_at=now - timedelta(minutes=1),
+    )
+
+    monkeypatch.setattr(agent_auth, "utcnow", lambda: now)
+
+    await agent_auth._touch_agent_presence(
+        request=request,  # type: ignore[arg-type]
+        session=session,  # type: ignore[arg-type]
+        agent=agent,
+    )
+
+    assert agent.last_seen_at is None
+    assert agent.wake_attempts == 2
+    assert agent.checkin_deadline_at == now - timedelta(minutes=1)
+    assert session.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_touch_agent_presence_rearms_deadline_for_mutating_agent_activity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = agent_auth.utcnow()
+    request = SimpleNamespace(method="POST")
     session = _RecordingSession()
     agent = Agent(
         id=uuid4(),
@@ -208,4 +240,4 @@ async def test_touch_agent_presence_rearms_deadline_for_enabled_heartbeat_agent(
     assert agent.last_seen_at == now
     assert agent.wake_attempts == 0
     assert agent.checkin_deadline_at == now + timedelta(minutes=21)
-    assert session.commits == 1
+    assert session.commits == 0
