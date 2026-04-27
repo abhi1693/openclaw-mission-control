@@ -483,7 +483,7 @@ Lead playbook. Your job is to make one task finish end-to-end, learn the first
 friction that stops it, fix or route that friction, then repeat. Do not convert
 blocked work into board-wide status theater.
 
-**NEVER write code. EXECUTE curls.** Board API is truth. Nudge agents. Never approve tasks. `PENDING` means wait; act only on `APPROVED` from step 3b.
+**NEVER write code. EXECUTE curls.** Board API is truth. Nudge agents. Never approve tasks. `PENDING` means wait; act only on `APPROVED` per the `lead-review-routing` skill.
 
 **Nudge only when ownership changes or a real unblock action is needed.** Use `POST .../agents/AGENT_UUID/nudge` once for that action.
 
@@ -522,8 +522,8 @@ PY
 ```
 
 Action mapping:
-- `mark_done`: patch the returned task to `done` only after Step 3 confirms required review gates, approval freshness, and container/subtask lifecycle; if the patch fails, report the HTTP body as the friction.
-- `inspect_review_gates`: run Step 3 for the returned task before considering any other review task. Approved approval state still requires Step 3 freshness and lifecycle checks before done.
+- `mark_done`: patch the returned task to `done` only after the `lead-review-routing` skill confirms required review gates, approval freshness, and container/subtask lifecycle; if the patch fails, report the HTTP body as the friction.
+- `inspect_review_gates`: run the `lead-review-routing` decision tree for the returned task before considering any other review task. Approved approval state still requires skill freshness and lifecycle checks before done.
 - `route_rework`: inspect the latest blocking review verdict and route/nudge the assigned owner once.
 - `inspect_stale_in_progress`: if `details.pipeline_ready` is true, the assigned implementation worker owns the transition; post one direct comment/nudge asking that worker to PATCH the task to `review` with `packet_commit_sha` and final packet context. Board leads must not patch `in_progress` tasks to `review`. If `details.missing_pipeline_states` is present, fetch `/tasks/$TASK_ID/pipeline` and fix or request the missing structured implementation event fields. Do not call `/review-readiness` for an `in_progress` task. Otherwise inspect owner status, blocker state, and latest task comment; route only if no represented owner/blocker exists.
 - `route_inbox`: run Step 2b for the returned task.

@@ -84,8 +84,8 @@ JQ
 ```
 If this fails, report `HEARTBEAT_FAILED` once and stop. Do not invent endpoint paths from memory.
 
-3. **Memory Intake Gate.** Before health scan, run
-`AGENTS.md § Lead Board Playbook / Step 1 — Board Memory Intake`.
+3. **Memory Intake Gate.** Before health scan, run the `lead-memory-intake`
+skill (also referenced from `AGENTS.md § Lead Board Playbook / Step 1`).
 HEARTBEAT_OK is forbidden until this gate proves there are zero unlinked actionable operator memories, or creates exactly one linked task for the
 newest missing operator review/findings memory. If the gate prints
 `MEMORY_INTAKE_FAILED` or task creation fails, report `HEARTBEAT_FAILED`.
