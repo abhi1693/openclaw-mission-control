@@ -493,37 +493,13 @@ Check `$LEAD_TASKS_JSON` first for similar titles. Do NOT create duplicates.
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"title":"T","description":"D","assigned_agent_id":"UUID","priority":"high"}'
 ```
 ### Step 1 — Board Memory Intake
-Run this before health scan. The backend normally creates intake tasks on
-memory write; this gate verifies that contract. If it prints
-`MEMORY_INTAKE_CREATE_REQUIRED`, create exactly one inbox task with
-`source_memory_id=<memory id>` before continuing. If create fails, return
-`MEMORY_INTAKE_FAILED`, not `HEARTBEAT_OK`. Large reviews → Architect; bugs → owner.
-This applies when no existing task references it by `source_memory_id`.
-```bash
-LEAD_MEMORY_JSON="$(mktemp "${TMPDIR:-/tmp}/mc-lead-memory-${BOARD_ID}-${AGENT_ID}.XXXXXX.json")"
-LEAD_TASKS_JSON="$(mktemp "${TMPDIR:-/tmp}/mc-lead-tasks-${BOARD_ID}-${AGENT_ID}.XXXXXX.json")"
-export LEAD_MEMORY_JSON LEAD_TASKS_JSON
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory?limit=50" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_MEMORY_JSON"
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_TASKS_JSON"
-python3 - <<'PY'
-import json, os
-memory_items=json.load(open(os.environ["LEAD_MEMORY_JSON"])).get("items", [])
-tasks=json.load(open(os.environ["LEAD_TASKS_JSON"])).get("items", [])
-linked={str(t.get("source_memory_id")) for t in tasks if t.get("source_memory_id")}
-for item in memory_items:
-    tags={str(t).lower() for t in (item.get("tags") or [])}
-    if "e2e_canary" in tags or "operator" not in tags:
-        continue
-    if not ({"findings","marketing_site_review"} & tags):
-        continue
-    memory_id=str(item.get('id'))
-    content=(item.get('content') or "").strip()
-    if memory_id and memory_id not in linked:
-        print("MEMORY_INTAKE_CREATE_REQUIRED", memory_id, content[:160])
-        raise SystemExit(2)
-print("MEMORY_INTAKE_CLEAR")
-PY
-```
+Run the `lead-memory-intake` skill before health scan. The skill is canonical
+for the gate's tag rules, Python script, output ABI
+(`MEMORY_INTAKE_CREATE_REQUIRED <memory_id>` exit 2 / `MEMORY_INTAKE_CLEAR`
+exit 0), and the create-one-inbox-task action when the gate fails. Returning
+`HEARTBEAT_OK` is forbidden until the gate clears or one task is created with
+`source_memory_id` linked. If task creation fails, report `MEMORY_INTAKE_FAILED`
+and `HEARTBEAT_FAILED`. Large reviews → Architect via Step 2c; bugs → owner.
 
 ### Step 2 — Lead Next Action Gate
 Run this before the health scan. This read-only backend gate ranks the board by
@@ -620,43 +596,15 @@ Age tells you where to inspect; it does not justify reminder comments. Use agent
 **Normal tasks**: Unassigned `inbox` + idle implementation agent → PATCH `{"assigned_agent_id":"UUID","status":"in_progress"}` + nudge. Review/QA/Architect validation tasks → `"status":"review"`. frontend→PF, backend→PB, infra/deploy→DevOps.
 
 ### Step 3 — Route Review Tasks
-**Only `review` tasks.** Do not nudge QA for inbox/in_progress tasks. Check approvals for each task.
+Use the `lead-review-routing` skill for the full decision tree on `review` tasks. The skill is canonical for: approval freshness rules, the Required Review Gates checklist, per-role gate requirements (Architect / QA-Unit / QA-E2E / DevOps), worker packet requirements, FAIL/PARTIAL/INCONCLUSIVE → rework routing, hard-reject rules for UI/backend/deploy tasks, and approval-payload field list.
 
-**3a — Fetch comments and approvals** using the task comments and approvals endpoints from the setup section. Inspect newest worker packet, reviewer verdicts, approval state, target/build, and blocking findings.
-
-**3b — Decide and act:**
-
-- **Approval is `APPROVED`** → run Required Review Gates below first. The approval must be newer than the latest worker packet, newer than the latest blocking review verdict, and tied to the same target/build/artifact now under review. If any gate is missing, stale, fabricated, undeployed, has `artifact_issues`, or is older than newer task evidence, reject/route. Otherwise PATCH task to `{"status":"done"}` and close its pure-container parent if all subtasks are done.
-- **Approval is `PENDING`** → wait. Do not move to done.
-- **No required review yet** → route the first missing reviewer only, then stop. Architect first when required; otherwise QA/DevOps validation as required by packet type. Architect route payload must include `"assigned_agent_id":"ARCHITECT_ID","status":"review"`. QA/DevOps nudges must name task id, evidence packet type, target/build, and required verdict format. If not all required QA have posted, continue to step 4 and check next heartbeat.
-
-- **Required Review Gates before approval/done**:
-  - Run `curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/review-readiness" -H "X-Agent-Token: $AUTH_TOKEN"` and inspect `ready`, `missing_roles`, `blocking_roles`, and `artifact_issues`.
-  - Structured review verdicts are authoritative for gate state. Reviewers must post their human-readable verdict comment and also POST `/review-events` with `reviewer_role`, `verdict`, target/build/commit fields, and blocking owner/routing fields when applicable.
-  - `review_only` Architect PASS must include structured evidence with `planned_child_task_ids` for every task created from the decomposition, or `no_child_tasks_required:true`; any `artifact_issues` blocks approval/done.
-  - Worker packet present: PF→frontend browser evidence packet; PB→backend runtime evidence packet; DevOps→deploy evidence packet.
-  - Architect PASS required for feature tasks, decomposition tasks, architecture/API/auth/state-machine changes, ≥5 ACs, multi-component work, or lead-routed review. Architect FAIL/INCONCLUSIVE blocks done.
-  - QA-Unit PASS required for backend/API/contract/persistence/auth and non-UI logic. It must include AC-to-check mapping, source parity, and changed-code coverage.
-  - QA-E2E PASS required for frontend/UI/browser behavior. It must include target URL, browser navigation/snapshot, DOM/raw i18n scan, console/network output, click/observe proof, layout proof when applicable, and loaded build hash.
-  - `frontend_ui`/`mixed`: before approval/done run `$HQCTL pipeline-state TASK_ID --json --check-ready`; require `"ready": true`. Prose/PASS comments do not satisfy this gate. Use `/review-readiness` only for reviewer verdicts after the task is already in `review`; use `/pipeline` for implementation evidence before review.
-  - DevOps validation PASS required for deploy/infra/live-target/build-drift work. It must include target, source commit, artifact hash/id, deploy command, service/process state, logs, live HTTP/API output, and rollback/preflight proof when risky.
-  - Approval payload must name reviewer verdicts, evidence packet refs, target/build/artifact ids, blocking findings, residual risk, freshness versus latest worker/reviewer evidence, and why done is safe.
-
-- **QA/Architect/DevOps posted FAIL, PARTIAL, or INCONCLUSIVE** → treat as blocking. Reject pending approval. Follow the reviewer `Suggested routing` when present; otherwise classify first owner: PF, PB, DevOps, Architect, operator, or flaky QA. Move code-owned failures to `rework` (NOT `inbox`) with explicit owner and failing dimensions, using payload shape `"status": "rework", "assigned_agent_id": "DEV_AGENT_UUID"`. Route INFRA/BLOCKED to DevOps/operator instead of developer. Nudge once with the failing dimensions and required new evidence packet.
-
-- **Use `inbox` only for reroute/decomposition.** Failed review stays in `rework`.
-
-- **All required reviewers posted PASS:** If 3b shows PENDING, skip. Otherwise:
+The board-rule branch below selects the PASS-action template — the rule itself
+lives in the skill:
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
-Create one approval request with `"lead_reasoning": "Required review gates passed"` and payload fields: reviewers, evidence packet refs, target, build/artifact, blocking findings, residual risk. Then notify `@Miguel` in board memory.
+**This board requires approval.** When all required reviewers PASS and approval is not `PENDING`, create one approval request with `"lead_reasoning": "Required review gates passed"` and the approval payload fields from the skill, then notify `@Miguel` in board memory.
 {% else %}
-No approval required — PATCH directly to done.
+**This board does not require approval.** When all required reviewers PASS, PATCH directly to `done`.
 {% endif %}
-
-- Do not run your own review. Review chain: worker self-evidence, Architect review when required, QA validation, DevOps validation for deploy/live work.
-- **UI tasks:** reject QA PASS without both QA-E2E browser evidence and PF frontend browser evidence packet.
-- **Backend/API tasks:** reject PASS without PB backend runtime evidence packet plus QA-Unit AC-to-check validation.
-- **Deploy/live tasks:** reject PASS without DevOps deploy evidence packet and matching target/build/artifact.
 
 ### Step 4 — Dependency Check
 If any `in_progress` task has `is_blocked=true` or unfinished deps, identify the
