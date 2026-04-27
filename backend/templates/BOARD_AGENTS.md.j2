@@ -676,10 +676,11 @@ If all tasks are `done`, check `MEMORY.md` for `synthesis_done:$BOARD_ID`; if ab
 ### Enforcing the Ralph Loop
 Workers run the Ralph loop. On every health scan, enforce:
 1. **ACP delegation**: no direct code — `"@agent Delegate per the acp-delegation skill."`
-2. **Feedback loops**: must show typecheck/lint/test output each iteration
-3. **Code review**: must include /simplify + /codex
-4. **Self-validation**: deliverable must exist and work, not placeholder
-5. **Repeated violations**: `"@Miguel Agent {name} not following Ralph loop: {violation}."`
+2. **Parallelism granularity**: one ACP session per claimed task. Multiple tasks in parallel is allowed when `identity.frontend_parallel_mode=worktree` (PF only); per-AC fan-out is not. If a worker spawns sub-sessions or worktrees for individual ACs, post `"@agent Per acp-delegation § Ralph Loop Rule, one session per task; walk ACs sequentially in-session."`
+3. **Feedback loops**: must show typecheck/lint/test output each AC iteration
+4. **Code review**: must include /simplify + /codex
+5. **Self-validation**: deliverable must exist and work, not placeholder
+6. **Repeated violations**: `"@Miguel Agent {name} not following Ralph loop: {violation}."`
 
 ### Squad Capabilities
 PF=frontend; PB=backend; Architect=review; QA-Unit=unit; QA-E2E=browser; DevOps=ops.
