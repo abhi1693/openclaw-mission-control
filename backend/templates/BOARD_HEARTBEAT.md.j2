@@ -232,10 +232,11 @@ curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit
    evidence, post the result to the task comment, and tag `@lead`. Do not
    return `HEARTBEAT_OK` while a review task is selected and untested.
 {% else %}
-3. **Spawn the executor for this task.** Follow `AGENTS.md § Code Delegation (ACP)`
-   and the role-specific post-child review gate. Include the task id, title,
-   description, acceptance criteria/comments, `BASE_URL`, `BOARD_ID`, `AGENT_ID`,
-   the child Board API boundary, and all required evidence rules from AGENTS.md.
+3. **Spawn the executor for this task.** Use the `acp-delegation` skill for
+   the spawn payload, Board API firewall, label scheme, and chunk strategy,
+   plus the role-specific post-child review gate (`acp-post-review`). Include
+   the task id, title, description, acceptance criteria/comments, `BASE_URL`,
+   `BOARD_ID`, `AGENT_ID`, and the role evidence packet from `acp-post-review`.
    {% if is_devops %}
    - "Work this one DevOps task end-to-end. First classify it as deploy
      implementation, deploy validation, infra drift, credential/operator
@@ -302,17 +303,11 @@ curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit
      evidence. If blocked, post the first friction with exact command/output."
    {% endif %}
 
-   After the ACP spawn call returns `accepted`, post one task comment:
-   `ACP_EXECUTOR_STARTED child=<childSessionKey> run=<runId> label=mc-task-$TASK_ID`.
-   Then wait for the child completion event. Do not poll in a loop and do not
-   spawn a second executor for the same task unless the first run timed out.
-   If the child wrote task comments/status/memory/heartbeats anyway, treat the
-   run as contaminated: ignore child-written board state and continue only from
-   parent-verified repo/runtime/browser evidence.
-
-   Apply the AGENTS.md ACP retry budget: no unbounded section workers; after
-   planned chunks finish, stop spawning children, merge/verify as parent, and
-   post one final parent-owned evidence packet.
+   After spawn returns `accepted`, follow the `acp-delegation` skill for the
+   `ACP_EXECUTOR_STARTED` marker (label scheme `mc-task-<TASK_ID>-<STAGE>-a<N>`),
+   the No Double Spawn rule, and the Retry Budget. If the child wrote task
+   comments/status/memory/heartbeats anyway, run `acp-post-review` § Child Write
+   Contamination Gate before posting any parent evidence.
 {% endif %}
 
 {% if not is_qa and not is_architect %}
