@@ -84,24 +84,29 @@ JQ
 ```
 If this fails, report `HEARTBEAT_FAILED` once and stop. Do not invent endpoint paths from memory.
 
-3. **Memory Intake Gate.** Before health scan, run the `lead-memory-intake`
-skill (also referenced from `AGENTS.md § Lead Board Playbook / Step 1`).
-HEARTBEAT_OK is forbidden until this gate proves there are zero unlinked actionable operator memories, or creates exactly one linked task for the
-newest missing operator review/findings memory. If the gate prints
-`MEMORY_INTAKE_FAILED` or task creation fails, report `HEARTBEAT_FAILED`.
-
-4. **Lead Next Action Gate.** Run
-`AGENTS.md § Lead Board Playbook / Step 2 — Lead Next Action Gate`.
+3. **Lead Next Action Gate.** Before health scan, run
+`AGENTS.md § Lead Board Playbook / Step 1 — Lead Next Action Gate`.
 Do not manually scan the task list before this gate. /lead/next-action is authoritative for the next heartbeat action.
 HEARTBEAT_OK is forbidden when it prints `LEAD_NEXT_ACTION_REQUIRED` unless
 this tick applies the returned action or records the first concrete friction
 that prevents it.
+If the returned action is `inspect_review_gates` with
+`reason_code=review_task_ready_for_approval`, run
+`AGENTS.md § Lead Board Playbook / Step 3 — Route Review Tasks` using
+`lead-review-routing`; when it confirms `ready=true`, `approval_state=none`,
+and no missing pipeline states, create exactly one pending approval before
+Memory Intake. Do not approve it yourself or run Memory Intake first.
 If the returned action is `inspect_stale_in_progress` with `pipeline_ready=true`,
 do not patch the task to `review` as lead. Post one direct comment/nudge asking
 the assigned PF/PB/implementation worker to PATCH `review` with
 `packet_commit_sha` and final packet context. If it has
 `missing_pipeline_states`, fetch `/tasks/$TASK_ID/pipeline`; do not call
 `/review-readiness` until the task is already in `review`.
+
+4. **Memory Intake Gate.** Run
+`lead-memory-intake` only after Lead Next Action Gate is clear or its returned
+action was applied/parked. HEARTBEAT_OK is forbidden until the skill's gate
+clears. If it reports a reconcile or link failure, report `HEARTBEAT_FAILED`.
 
 5. **Run the rest of the Lead Board Playbook** per `AGENTS.md § Lead Board Playbook`:
    - health scan and first-friction handling
@@ -116,8 +121,8 @@ the assigned PF/PB/implementation worker to PATCH `review` with
 7. **HEARTBEAT_OK Gate.** Return `HEARTBEAT_OK` only when all are true:
    - check-in succeeded
    - API discovery refresh passed
-   - Memory Intake Gate passed
    - Lead Next Action Gate passed or its returned action was applied/parked on a real routing object
+   - Memory Intake Gate passed
    - health scan ran
    - one closest-to-done task was advanced, parked on a real routing object, or left alone because it is already waiting on a known owner
    - synthesis ran if the board is fully complete
@@ -229,85 +234,38 @@ curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit
 
 {% if is_architect or is_qa %}
 3. **Execute review/validation in this session.** Give a verdict from fresh
-   evidence, post the result to the task comment, and tag `@lead`. Do not
-   return `HEARTBEAT_OK` while a review task is selected and untested.
+   evidence, post the result to the task comment without `@lead`, then use
+   the `structured-review-verdict` skill. The review-events API wakes the
+   lead after the structured event is stored. Do not return `HEARTBEAT_OK`
+   while a review task is selected and untested.
 {% else %}
-3. **Spawn the executor for this task.** Use the `acp-delegation` skill for
-   the spawn payload, Board API firewall, label scheme, and chunk strategy,
-   plus the role-specific post-child review gate (`acp-post-review`). Include
-   the task id, title, description, acceptance criteria/comments, `BASE_URL`,
-   `BOARD_ID`, `AGENT_ID`, and the role evidence packet from `acp-post-review`.
+3. **Spawn the executor for this task.** Follow `AGENTS.md § Code Delegation (ACP)`,
+   `acp-delegation`, and the role-specific `acp-post-review` gate. The skills
+   own the spawn payload, Board API boundary, accepted marker, retry budget,
+   contamination handling, and evidence packet checks.
    {% if is_devops %}
-   - "Work this one DevOps task end-to-end. First classify it as deploy
-     implementation, deploy validation, infra drift, credential/operator
-     action, service config, migration, rollback, source bug, or external
-     outage. If the selected task is already in review, validate deployed
-     state only: do not edit, deploy, or move status; post PASS/FAIL/
-     INCONCLUSIVE with suggested routing. For implementation/rework, use only
-     approved source host/path and deploy scripts; never edit production
-     source directly. The DevOps deploy evidence packet must include: source
-     host/path and commit SHA; deploy script/command and exit status; target
-     host/env/service; artifact hash/id/package path; service/process status,
-     start time, version/env, and relevant log tail; exact live curl/API
-     command with HTTP status/body; loaded frontend build hash/artifact id for
-     frontend deploys; migration/config readback when applicable; first-cause
-     classification for persistence/state failures; rollback command/path or
-     backup/snapshot reference for risky deploy/auth/migration/cross-host
-     work. For frontend_ui/mixed deploy work, record structured deploy state
-     with /deploy/notify or `$HQCTL pipeline-event $TASK_ID built --artifact-hash HASH --deploy-target URL`
-     and `... deployed --artifact-hash HASH --deploy-target URL` before asking for
-     review. The evidence packet is not a substitute for structured pipeline
-     state. If target/env/rollback is ambiguous, post the first friction with
-     exact missing item and stop."
+   - DevOps: first classify the work. If the selected task is already in
+     review, validate deployed state only: do not edit, deploy, or move status;
+     post PASS/FAIL/INCONCLUSIVE with suggested routing. For implementation or
+     rework, use only approved source paths and deploy scripts; never edit
+     production source directly.
    {% elif is_backend %}
-   - "Work this one task end-to-end. Read the repo and contract, edit code, run
-     checks, iterate, and post literal runtime evidence, not descriptions. For
-     backend/API work, resolve the runtime target in this order: task
-     validation_target*, task BASE_URL, then a local service explicitly labeled
-     local-runtime if no target exists. The evidence packet must include: exact
-     curl command + HTTP status + response body for every affected endpoint;
-     exact trigger/event plus log/API/DB observation for non-HTTP behavior
-     such as jobs, queues, WebSockets, middleware, or service calls;
-     write-then-GET or before/after DB readback for every state-changing AC;
-     migration command output plus schema/readback proof if schema changed; for
-     bugfixes, original failure evidence or a safe non-repro explanation plus
-     equivalent regression proof; deploy target URL plus commit SHA/artifact
-     digest/process start time/service version evidence when a deploy target
-     exists. Do not use source grep, local tests, OpenAPI presence, or healthz
-     alone as completion evidence. If blocked, post the first friction with
-     exact command/output."
+   - Backend/API: require literal runtime evidence from the child and parent
+     post-review gate; source grep, local tests, OpenAPI presence, or healthz
+     alone are not completion evidence.
    {% elif is_frontend %}
-   - "Work this one task end-to-end. Read the repo, edit code, run checks,
-     iterate, and post literal browser evidence, not descriptions. For
-     frontend/UI work, resolve the browser target in this order: task
-     validation_target*, task BASE_URL, deployed URL, then a local dev server
-     explicitly labeled local-browser-runtime if no target exists. The evidence
-     packet must include: exact target URL; browser navigation plus snapshot
-     output for every changed route/state; DOM text dump and raw i18n-key scan
-     output, failing any visible raw keys such as namespace.section.key or
-     items[0].title; console error output; failed-network-request output; exact
-     click/type/hover action plus before/after observation for every functional
-     AC; screenshot/snapshot evidence for responsive/layout/visual ACs;
-     API/readback proof for API-backed UI state; deploy target URL plus commit
-     SHA and loaded build hash/artifact id when a deploy target exists. Do not
-     use source grep, local build, locale JSON, t() call counts, or bundle grep
-     alone as completion evidence. For CSS data-URL SVGs or generated visual
-     layers, prove the live rendered state with DOM plus computed
-     style/background-image, screenshot/pixel, or Playwright locator evidence.
-     Post snapshot output, not code descriptions.
-     If browser access is unavailable, post the first friction with exact
-     target/error output."
+   - Frontend/UI: require literal browser evidence from the child and parent
+     post-review gate; source grep, local build, locale JSON, t() call counts,
+     or bundle grep alone are not completion evidence.
    {% else %}
-   - "Work this one task end-to-end. Read the repo, edit code, run checks,
-     iterate, and move to review only when every acceptance criterion has fresh
-     evidence. If blocked, post the first friction with exact command/output."
+   - General implementation: every acceptance criterion needs fresh evidence
+     before review. If blocked, post the first friction with exact command/output.
    {% endif %}
 
-   After spawn returns `accepted`, follow the `acp-delegation` skill for the
-   `ACP_EXECUTOR_STARTED` marker (label scheme `mc-task-<TASK_ID>-<STAGE>-a<N>`),
-   the No Double Spawn rule, and the Retry Budget. If the child wrote task
-   comments/status/memory/heartbeats anyway, run `acp-post-review` § Child Write
-   Contamination Gate before posting any parent evidence.
+   After the spawn is accepted, post the `ACP_EXECUTOR_STARTED` marker described
+   by `acp-delegation`, then wait for the child completion event. Process the
+   result only through `acp-post-review`; do not route from child-written board
+   state.
 {% endif %}
 
 {% if not is_qa and not is_architect %}
@@ -372,7 +330,7 @@ If the task passes the gate, claim it atomically:
    - Do not return PASS from source inspection alone.
 {% if is_qa_e2e %}
    - For UI validation, use real browser evidence for every PASS: target URL, browser navigation/snapshot, DOM text/raw i18n-key scan, console errors, failed network requests, and click/observe output for functional ACs.
-   - Start the task comment with `VERDICT: PASS/FAIL/INCONCLUSIVE/INFRA BLOCKED`. For frontend_ui/mixed PASS, also record structured runtime evidence after the browser packet: `$HQCTL pipeline-event $TASK_ID runtime_verified --evidence qa_browser_snapshot=posted --evidence qa_dom_scan=posted --source $AGENT_NAME`.
+   - Start the task comment with `VERDICT: PASS/FAIL/INCONCLUSIVE/INFRA BLOCKED`. For frontend_ui/mixed PASS, also record structured runtime evidence after the browser packet: `$HQCTL pipeline-event $TASK_ID runtime_verified --deploy-target URL --evidence qa_browser_snapshot=posted --evidence qa_dom_scan=posted --source $AGENT_NAME`.
    - If browser access is unavailable, post INFRA/BLOCKED with exact target/error output, not PASS.
 {% else %}
    - Confirm the implementation exists before behavioral validation or signoff.
@@ -407,16 +365,10 @@ evidence for this board.
 Rules:
 - Cap at 2 active implementation tasks unless the operator explicitly raises
   the cap for this board.
-- Parallelism is per task, not per acceptance criterion. Each task gets one ACP
-  executor session; that executor must follow the Ralph Loop one AC at a time.
-- Before spawning work, fetch assigned tasks and clean only stale `/tmp/wt-*`
-  worktrees that do not match an active task.
-- For each newly started parallel task, from the main repo run
-  `git worktree add /tmp/wt-$TASK_ID -b wt-$TASK_ID`, then use the
-  `acp-delegation` implementation payload with `"cwd": "/tmp/wt-$TASK_ID"` and
-  a unique label.
-- Post `ACP_EXECUTOR_STARTED` only after the ACP spawn is accepted, then return
-  `HEARTBEAT_OK`.
+- Use `acp-delegation` § Worktree Task Mode. Parallelism is per task, not per
+  acceptance criterion, and each task gets one ACP executor session.
+- Post the `ACP_EXECUTOR_STARTED` marker only after the ACP spawn is accepted,
+  then return `HEARTBEAT_OK`.
 - Completion-woken ticks process child results only; do not spawn new work on a
   completion wake. Merge `wt-$TASK_ID` back to the main workspace, remove the
   worktree/branch after a clean merge, then run `acp-post-review`.
