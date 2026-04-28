@@ -3,6 +3,34 @@ Review the tasks waiting for approval, use Chome MCP, the expected behavior is f
 
 Investigate why the agents aren't nudging each other as instructed
 
+## 2026-04-28 — Pipeline event validation, structured review verdict skill, VP-05/VP-10 approval
+
+### Pipeline event server-side validation (prod .64)
+- **Reject incomplete events at creation time** — `POST /pipeline/events` now returns 422 with `task_pipeline_event_missing_required_fields` error when required fields are missing per `PIPELINE_REQUIRED_FIELDS_BY_STATE`. Applies to ALL task types (not just `frontend_ui`).
+- **Merge flag** (`"overwrite": true`) — finds the most recent event for the same task+state and fills in null fields from the new payload. Existing non-null values are preserved. Falls through to insert if no merge target exists.
+- Root cause of VP-05 pipeline block: not "null-commit ghost states" — the backend already filters incomplete events at query time via `pipeline_event_has_required_fields()`. The real issue was partial per-state fields (deployed with `deploy_target` but no `artifact_hash`). Fixed by appending corrective events, not deleting.
+
+### Structured review verdict skill (gateway .60)
+- **New skill** at `/root/.openclaw/skills/structured-review-verdict/SKILL.md` — teaches reviewing agents to call `POST /review-events` after posting verdict comments. Single source of truth for the structured review event API, field reference, role mapping, and nudge mechanism.
+- **Gap found**: QA-E2E, QA-Unit, and Architect had inline review-event curls in `BOARD_AGENTS.md.j2`, but DevOps had none. DevOps posted verdict comments but never called the structured API, causing `review-readiness` to show `missing_roles=["devops"]`.
+- **Template updated**: DevOps identity section (line 383), Architect section (line 768), and QA section header now reference the skill.
+- **Nudge mechanism fix**: skill initially used `tags=["chat"]` for board memory nudge — `is_chat` field is read-only and cannot be set via create payload. Changed to `@lead` task comment (deliver=True).
+- **E2E tested** with real agent tokens (DevOps, QA-E2E): 6/6 tests pass including auth, role enforcement, validation rejection, agent_id attribution, and nudge delivery.
+
+### deliver=True on @lead mentions (prod .64, committed locally)
+- `_notify_task_comment_targets` now uses `deliver=mentioned` — True for @-mentioned agents, False for passive updates. Supervisor immediately woken when agents include @lead in comments.
+- Logs notification failures as `task.comment_notify_failed` activity events.
+- **Known gap**: operator-posted comments go through the same `create_task_comment` route but `@supervisor` mentions may not match the agent name mapping. System event (`openclaw system event --mode now`) is the reliable workaround for operator-to-Supervisor wakes.
+
+### VP task pipeline
+- VP-05 (Hero trust line + background texture): Chrome MCP verified at 375/768/1440, approved, moved to done
+- VP-10 (Deploy visual-polish batch): Chrome MCP verified (build hash match, 149ms load, 0 errors), approved, moved to done
+- VP-06: In progress with PF (header language selector accessibility)
+- VP-11: In progress with QA-E2E (visual regression sweep)
+
+### hqctl client-side validation (gateway .60)
+- Operator hardened `workspace/hqctl.py:245` to reject missing required fields before POST. 10 tests pass at `workspace/test_hqctl_pipeline.py`.
+
 The HEARTBEAT.md order is:
 
 Check in
