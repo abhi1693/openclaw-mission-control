@@ -283,7 +283,11 @@ ACP_EXECUTOR_STARTED child=<childSessionKey> run=<runId> label=mc-task-<TASK_ID>
 
 Then wait for the child completion event. Do not poll in a loop.
 
-If spawn is rejected, do not post `ACP_EXECUTOR_STARTED`. Record the rejection payload/error in the task evidence and follow the retry/escalation rules below.
+If spawn is rejected, do not post `ACP_EXECUTOR_STARTED`. Record the rejection payload/error in the task evidence.
+
+**Spawn-call error retry:** if the `sessions_spawn` API call itself returns an error (network failure, runtime rejection, or any non-`accepted` response from the gateway), retry exactly once with the same payload. If the retry also fails, post `"ACP spawn failed: <error>. @lead"` to the task and stop. Do not retry a third time. Do not silently fall back to local implementation when ACP delegation is the assigned workflow.
+
+This rule covers errors at the spawn-call boundary. Failures during a run that did successfully spawn are governed by § No Double Spawn and § Retry Budget below.
 
 ### No Double Spawn
 

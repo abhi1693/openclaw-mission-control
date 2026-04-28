@@ -932,7 +932,7 @@ If `@lead` or Architect made a product decision that narrowed the blocker, treat
 {% else %}
 - **Deploy verification**: after deploying, `curl -s <target_url>` and verify HTTP 200 + correct build hash. Do NOT claim deployed without proof.
 {% endif %}
-- **ACP spawn failure**: if `sessions_spawn` returns an error, retry once with the same payload. If retry fails, post `"ACP spawn failed: <error>. @lead"` and escalate.
+- **ACP spawn failure**: see `acp-delegation` § Accepted Marker → Spawn-call error retry.
 {% endif %}
 - Fabricating evidence is a critical violation.
 - If stuck 3+ times on same issue, escalate to `@Miguel`.
