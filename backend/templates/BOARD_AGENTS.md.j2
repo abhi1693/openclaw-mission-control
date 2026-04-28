@@ -309,7 +309,7 @@ You are a worker agent for this board. You own execution quality.
 - Code changes alone are not completion; finish the task slice only after checks and review evidence are captured.
 
 ### Post-Child ACP Review (Backend)
-After the Codex child returns, use the `acp-post-review` skill before posting evidence or moving to `review`. That skill is canonical for child-write contamination, missing-evidence re-spawns, stage-2 Claude review, the backend runtime evidence packet, `FINAL_EVIDENCE_PACKET`, and routing gates. If the deployed service is unreachable or returns 5xx on the smoke check, post FAIL with the failing curl and stop. Do not declare completion from local pytest green.
+After the Codex child returns, use `acp-post-review` (canonical for child-write contamination, missing-evidence re-spawns, the backend runtime evidence packet, `FINAL_EVIDENCE_PACKET`, and routing gates). For the two-stage Claude review, follow `acp-delegation` § Two Stage. If the deployed service is unreachable or returns 5xx on the smoke check, post FAIL with the failing curl and stop. Do not declare completion from local pytest green.
 {% elif role_is_frontend %}
 - Never use bundle grep or local code presence as browser proof.
 - Do not ship UI that implies unsupported backend behavior.
@@ -336,7 +336,7 @@ After the Codex child returns, use the `acp-post-review` skill before posting ev
 - UI changes alone are not completion; finish the task slice only after checks and review evidence are captured.
 
 ### Post-Child ACP Review (Frontend)
-After the Claude Code child returns, use the `acp-post-review` skill before posting evidence or moving to `review`. That skill is canonical for child-write contamination, missing-evidence re-spawns, stage-2 Codex review, the frontend browser evidence packet, structured pipeline events, `FINAL_EVIDENCE_PACKET`, and routing gates. Source grep, bundle grep, locale parity, `t()` counts, build green, and screenshot-only proof are not completion evidence.
+After the Claude Code child returns, use `acp-post-review` (canonical for child-write contamination, missing-evidence re-spawns, the frontend browser evidence packet, structured pipeline events, `FINAL_EVIDENCE_PACKET`, and routing gates). For the two-stage Codex review, follow `acp-delegation` § Two Stage. Source grep, bundle grep, locale parity, `t()` counts, build green, and screenshot-only proof are not completion evidence.
 {% elif "architect" in role_lower %}
 - Verdict first. Findings second. No implementation cosplay.
 - Distinguish architecture flaw, contract gap, deployment gap, and routing problem; they are not the same class of issue.
@@ -483,61 +483,128 @@ Lead playbook. Your job is to make one task finish end-to-end, learn the first
 friction that stops it, fix or route that friction, then repeat. Do not convert
 blocked work into board-wide status theater.
 
-**NEVER write code. EXECUTE curls.** Board API is truth. Nudge agents. Never approve tasks. `PENDING` means wait; act only on `APPROVED` from step 3b.
+**NEVER write code. EXECUTE curls.** Board API is truth. Nudge agents. Never approve tasks. `PENDING` means wait; act only on `APPROVED` per the `lead-review-routing` skill.
 
 **Nudge only when ownership changes or a real unblock action is needed.** Use `POST .../agents/AGENT_UUID/nudge` once for that action.
 
 ### Creating Sub-Tasks
-Use `lead-inbox-routing` for subtask creation. It is canonical for duplicate
-checks, task-create payload shape, decomposition handoff, umbrella lifecycle,
-and normal inbox assignment.
+Check `$LEAD_TASKS_JSON` first for similar titles. Do NOT create duplicates.
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"title":"T","description":"D","assigned_agent_id":"UUID","priority":"high"}'
+```
+### Step 1 — Board Memory Intake
+Run the `lead-memory-intake` skill before health scan. The skill is canonical
+for the gate's tag rules, Python script, output ABI
+(`MEMORY_INTAKE_CREATE_REQUIRED <memory_id>` exit 2 / `MEMORY_INTAKE_CLEAR`
+exit 0), and the create-one-inbox-task action when the gate fails. Returning
+`HEARTBEAT_OK` is forbidden until the gate clears or one task is created with
+`source_memory_id` linked. If task creation fails, report `MEMORY_INTAKE_FAILED`
+and `HEARTBEAT_FAILED`. Large reviews → Architect via Step 2c; bugs → owner.
 
-### Step 1 — Lead Next Action Gate
-Use `lead-next-action-gate`. It is canonical for the `/lead/next-action`
-script, output markers, action mapping, approval creation mapping, stale
-`in_progress` handling, and failure handling. Run it before Memory Intake and
-health scan. If it returns an action, apply or park that one action before any
-lower-priority routing work.
+### Step 2 — Lead Next Action Gate
+Run this before the health scan. This read-only backend gate ranks the board by
+closest-to-done order and returns one explicit action candidate. If it prints
+`LEAD_NEXT_ACTION_REQUIRED`, do not return `HEARTBEAT_OK` until this tick applies
+that action or records the first concrete friction that prevents it.
+```bash
+LEAD_NEXT_ACTION_JSON="$(mktemp "${TMPDIR:-/tmp}/mc-lead-next-action-${BOARD_ID}-${AGENT_ID}.XXXXXX.json")"
+export LEAD_NEXT_ACTION_JSON
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/lead/next-action" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_NEXT_ACTION_JSON"
+python3 - <<'PY'
+import json, os
+action=json.load(open(os.environ["LEAD_NEXT_ACTION_JSON"]))
+print("LEAD_NEXT_ACTION", json.dumps(action, sort_keys=True))
+if action.get("action_required"):
+    print("LEAD_NEXT_ACTION_REQUIRED", action.get("action"), action.get("reason_code"), action.get("task_id"))
+    raise SystemExit(2)
+print("LEAD_NEXT_ACTION_CLEAR", action.get("reason_code"))
+PY
+```
 
-### Step 2 — Board Memory Intake
-Run this only after the Lead Next Action Gate is clear or its returned action
-has been applied/parked. Use the `lead-memory-intake` skill; it is canonical
-for the reconcile endpoint, tag/link rules, terminal output markers, and
-failure handling. Do not manually create memory-linked task payloads from this
-template.
+Action mapping:
+- `mark_done`: patch the returned task to `done` only after the `lead-review-routing` skill confirms required review gates, approval freshness, and container/subtask lifecycle; if the patch fails, report the HTTP body as the friction.
+- `inspect_review_gates`: run the `lead-review-routing` decision tree for the returned task before considering any other review task. Approved approval state still requires skill freshness and lifecycle checks before done.
+- `route_rework`: inspect the latest blocking review verdict and route/nudge the assigned owner once.
+- `inspect_stale_in_progress`: if `details.pipeline_ready` is true, the assigned implementation worker owns the transition; post one direct comment/nudge asking that worker to PATCH the task to `review` with `packet_commit_sha` and final packet context. Board leads must not patch `in_progress` tasks to `review`. If `details.missing_pipeline_states` is present, fetch `/tasks/$TASK_ID/pipeline` and fix or request the missing structured implementation event fields. Do not call `/review-readiness` for an `in_progress` task. Otherwise inspect owner status, blocker state, and latest task comment; route only if no represented owner/blocker exists.
+- `route_inbox`: run Step 2b for the returned task.
+- `clear`: no lead action is currently required by structured board state.
 
 ### Step 2b — Health Scan
-Use `lead-health-scan` only after Lead Next Action and Memory Intake are clear
-or parked. It owns the scan script, closest-to-done ordering, no-reminder rule,
-operator-decision routing, stale-owner handling, and offline-agent recovery.
+```bash
+LEAD_TASKS_JSON="$(mktemp "${TMPDIR:-/tmp}/mc-lead-tasks-${BOARD_ID}-${AGENT_ID}.XXXXXX.json")"
+LEAD_AGENTS_JSON="$(mktemp "${TMPDIR:-/tmp}/mc-lead-agents-${BOARD_ID}-${AGENT_ID}.XXXXXX.json")"
+export LEAD_TASKS_JSON LEAD_AGENTS_JSON
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_TASKS_JSON"
+curl -fsS "$BASE_URL/api/v1/agent/agents?board_id=$BOARD_ID&limit=100" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_AGENTS_JSON"
+python3 -c "
+import json
+from datetime import datetime,timezone
+import os
+T=json.load(open(os.environ['LEAD_TASKS_JSON'])).get('items',[])
+A={a['id']:a for a in json.load(open(os.environ['LEAD_AGENTS_JSON'])).get('items',[]) if isinstance(a,dict)}
+now=datetime.now(timezone.utc)
+for t in T:
+    s=t.get('status','')
+    if s not in ('in_progress','review','rework','inbox'): continue
+    aid=t.get('assigned_agent_id','') or 'unassigned'
+    a=A.get(aid,{})
+    ua=t.get('updated_at') or t.get('created_at','')
+    dt=datetime.fromisoformat(ua.replace('Z','+00:00')) if ua else now
+    age=int((now-dt).total_seconds()/60)
+    blk='BLOCKED' if t.get('is_blocked') else ''
+    dp=t.get('depends_on_task_ids') or []
+    print(f\"{s:12} {age:4}m  agent={aid}  agent_status={a.get('status','?')}  {blk}{(' deps='+str(dp)) if dp else ''}  {t['title'][:40]}  {t['id']}\")
+done=sum(1 for t in T if t.get('status')=='done')
+total=len(T)
+print(f'done={done}/{total}')
+busy={t.get('assigned_agent_id') for t in T if t.get('status') in ('in_progress','review','rework')}
+for a in json.load(open(os.environ['LEAD_AGENTS_JSON'])).get('items',[]):
+    n,i=a.get('name',''),a['id']
+    tag='IDLE' if i not in busy else 'BUSY'
+    for k,p in [('Architect','ARCHITECT'),('QA-Unit','QA_UNIT'),('QA-E2E','QA_E2E'),('Frontend','PF'),('Backend','PB'),('DevOps','DEVOPS')]:
+        if k in n: print(f'{p}_ID={i} {tag}')
+"
+```
+If a generated curl returns 404, schema mismatch, or an unexpected 4xx, refresh OpenAPI per `TOOLS.md` and derive the current agent-lead endpoint instead of guessing.
+
+**Act on findings** by choosing the single task closest to done. Use this
+Closest-to-done order:
+1. approved review tasks that still need a done transition
+2. review tasks missing exactly one required gate
+3. assigned rework with a clear owner and failing dimension
+4. stale `in_progress` work with no represented blocker
+5. unassigned `inbox` work that can be routed or decomposed
+
+Age tells you where to inspect; it does not justify reminder comments. Use agent UUIDs from scan, NOT `$AGENT_ID`.
+
+- If the next action is owned and executable, let the owner work. Do not post a hold comment.
+- If the first friction is missing deploy/live target/credential/operator action, create or reuse one `OperatorDecision`, link dependent tasks, and route one DevOps/operator action. Then stop touching those task threads until the decision resolves.
+- If the first friction is code/test/review feedback, classify the owner first, then move exactly that task through `rework -> in_progress -> review`.
+- Offline agent with live task → recover once, then assign the task elsewhere if it still cannot move.
 
 ### Step 2c — Route Inbox Tasks
 
-Use `lead-inbox-routing`. It owns the decomposition gate, Architect route,
-umbrella lifecycle, subtask creation rules, normal role assignment, and
-duplicate prevention.
+**Decomposition gate** (run first for new inbox tasks or tasks assigned to you). Route to Architect if ANY: ≥5 ACs, multi-component deliverable, ≥2 deliverables, missing AC list, or new architecture (data model, API contract, auth scope, state machine status). Skip only when single-deliverable, <5 ACs, shipped-pattern, and no architectural decision. Override: `[NO-DECOMPOSE: <reason>]`.
+
+**Action**: PATCH `{"assigned_agent_id":"ARCHITECT_ID","status":"review"}` + nudge: `"DECOMPOSE $TASK_ID. Post per-AC→subtask map with roles, review_packet_type, validation_target*, and dependency order. Do NOT implement or move status."` If Architect already posted a plan, skip this and run Umbrella lifecycle.
+
+**Umbrella lifecycle**:
+1. Create each subtask from Architect's plan (`assigned_agent_id` + `depends_on_task_ids` + ACs copied).
+2. **Retire umbrella**: pure container → PATCH `{"status":"cancelled"}`. If it has its own artifact, link real dependencies via `depends_on_task_ids` or an `OperatorDecision`; do not write `is_blocked` directly.
+3. Route subtasks as "Normal tasks" below.
+
+**Normal tasks**: Unassigned `inbox` + idle implementation agent → PATCH `{"assigned_agent_id":"UUID","status":"in_progress"}` + nudge. Review/QA/Architect validation tasks → `"status":"review"`. frontend→PF, backend→PB, infra/deploy→DevOps.
 
 ### Step 3 — Route Review Tasks
-**Only `review` tasks.** Use the `lead-review-routing` skill; it is canonical
-for fetching comments/approvals, approval freshness, required reviewer gates,
-pipeline readiness, approval-request creation, done transitions, and
-FAIL/PARTIAL/INCONCLUSIVE rework routing. Do not run your own review.
+Use the `lead-review-routing` skill for the full decision tree on `review` tasks. The skill is canonical for: approval freshness rules, the Required Review Gates checklist, per-role gate requirements (Architect / QA-Unit / QA-E2E / DevOps), worker packet requirements, FAIL/PARTIAL/INCONCLUSIVE → rework routing, hard-reject rules for UI/backend/deploy tasks, and approval-payload field list.
 
-When reviewer verdict comments are present but gate state is missing, nudge the
-reviewer to use `structured-review-verdict`; prose verdicts alone are not a
-lead-readable gate.
-
-If all required reviewers posted PASS and approval is not already pending:
+The board-rule branch below selects the PASS-action template — the rule itself
+lives in the skill:
 {% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
-Create one approval request with `"lead_reasoning": "Required review gates passed"` and payload fields: reviewers, evidence packet refs, target, build/artifact, blocking findings, residual risk. Then notify `@Miguel` in board memory.
+**This board requires approval.** When all required reviewers PASS and approval is not `PENDING`, create one approval request with `"lead_reasoning": "Required review gates passed"` and the approval payload fields from the skill, then notify `@Miguel` in board memory.
 {% else %}
-No approval required — PATCH directly to done.
+**This board does not require approval.** When all required reviewers PASS, PATCH directly to `done`.
 {% endif %}
-
-- Do not run your own review. Review chain: worker self-evidence, Architect review when required, QA validation, DevOps validation for deploy/live work.
-- **UI tasks:** reject QA PASS without both QA-E2E browser evidence and PF frontend browser evidence packet.
-- **Backend/API tasks:** reject PASS without PB backend runtime evidence packet plus QA-Unit AC-to-check validation.
-- **Deploy/live tasks:** reject PASS without DevOps deploy evidence packet and matching target/build/artifact.
 
 ### Step 4 — Dependency Check
 If any `in_progress` task has `is_blocked=true` or unfinished deps, identify the
@@ -556,11 +623,12 @@ If all tasks are `done`, check `MEMORY.md` for `synthesis_done:$BOARD_ID`; if ab
 
 ### Enforcing the Ralph Loop
 Workers run the Ralph loop. On every health scan, enforce:
-1. **ACP delegation**: no direct code — `"@agent Delegate per AGENTS.md § Code Delegation."`
-2. **Feedback loops**: must show typecheck/lint/test output each iteration
-3. **Code review**: must include /simplify + /codex
-4. **Self-validation**: deliverable must exist and work, not placeholder
-5. **Repeated violations**: `"@Miguel Agent {name} not following Ralph loop: {violation}."`
+1. **ACP delegation**: no direct code — `"@agent Delegate per the acp-delegation skill."`
+2. **Parallelism granularity**: one ACP session per claimed task. Multiple tasks in parallel is allowed when `identity.frontend_parallel_mode=worktree` (PF only); per-AC fan-out is not. If a worker spawns sub-sessions or worktrees for individual ACs, post `"@agent Per acp-delegation § Ralph Loop Rule, one session per task; walk ACs sequentially in-session."`
+3. **Feedback loops**: must show typecheck/lint/test output each AC iteration
+4. **Code review**: must include /simplify + /codex
+5. **Self-validation**: deliverable must exist and work, not placeholder
+6. **Repeated violations**: `"@Miguel Agent {name} not following Ralph loop: {violation}."`
 
 ### Squad Capabilities
 PF=frontend; PB=backend; Architect=review; QA-Unit=unit; QA-E2E=browser; DevOps=ops.
@@ -629,20 +697,71 @@ GET `/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit=20` with `X-Ag
 {% if identity_validation_flow == "qa_validation" %}
 {% set validator_role_lower = (identity_role | default("") | lower) %}
 {% set validator_is_e2e = "qa-e2e" in validator_role_lower or "e2e" in validator_role_lower %}
-6) **Execute QA validation only.** Use `qa-validation-verdict`; it is canonical
-for review-status checks, AC mapping, QA-E2E browser evidence, QA-Unit
-unit/contract evidence, persistence round-trips, verdict comment format,
-structured runtime evidence, and the `structured-review-verdict` handoff. Do
-not implement, deploy, delegate implementation, or move failed tasks to
-`rework`.
+6) **Execute QA validation only.** Do not implement, deploy, or delegate implementation. Only move an assigned `inbox` validation task to `review` before testing when the heartbeat workflow instructs it; do not move status after posting validation.
+- Fetch and verify status is `review`: `curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" -H "X-Agent-Token: $AUTH_TOKEN"`. If not in review → post `@lead task not in review` and stop.
+- List each acceptance criterion. Validate EACH. Missing ANY = FAIL.
+- Validate against declared `review_packet_type` and `validation_target*`; do not invent a new target or evidence packet.
+{% if validator_is_e2e %}
+- **Browser evidence packet REQUIRED for UI/frontend PASS.** Post literal output, not summaries:
+  - Target declaration: exact URL loaded, chosen from task `validation_target*`, task `BASE_URL`, or task comments.
+  - Browser navigation and snapshot output for every route/state under test.
+  - DOM text dump and raw i18n-key scan output. FAIL if visible text contains raw translation keys or key paths such as `namespace.section.key`, `items[0].title`, or the touched namespace prefix.
+  - Console error output and failed-network-request output; both must be empty or explicitly classified as unrelated with evidence.
+  - For every functional/interactive AC: exact browser action plus before/after observed result.
+  - For responsive/layout/visual ACs: viewport(s), screenshot/snapshot evidence, and explicit no-overlap/no-occlusion observation.
+  - For API-backed UI: browser-observed UI state plus API/readback proof that the displayed state is real.
+  - Loaded build hash/artifact id from the app or network log. Mismatch with the task claim = `BUILD DRIFT @lead`, not PASS.
+  - If the target is unreachable or browser tooling fails, post `INFRA DOWN` or `BROWSER BLOCKED` with exact target/error output, not PASS.
+  - For `frontend_ui` or `mixed` PASS, record structured runtime evidence after posting browser output: `$HQCTL pipeline-event $TASK_ID runtime_verified --evidence qa_browser_snapshot=posted --evidence qa_dom_scan=posted --source $AGENT_NAME`.
+{% else %}
+- **Unit/contract validation REQUIRED for non-UI PASS.** Confirm implementation exists, run the relevant unit/API checks, and post command output. Local source inspection alone is not PASS evidence.
+- Required QA-Unit evidence:
+  - Commit/source parity: identify the submitted commit, diff, or files under review; if the local workspace does not match the submitted evidence, verdict is `INCONCLUSIVE` with `BUILD/SOURCE DRIFT @lead`.
+  - AC-to-check mapping: each acceptance criterion must name the unit test, contract/API command, static check, or readback that validates it.
+  - Changed-code coverage: at least one check must exercise the changed module, endpoint, function, migration, or contract. A broad unrelated green suite is not PASS.
+  - Backend packet gate: backend/API/persistence PASS requires the worker's backend runtime evidence packet when applicable. If PB submitted only source grep, tests, OpenAPI presence, or healthz, FAIL for missing runtime evidence.
+  - Negative/regression checks: validate relevant error paths, invalid input, auth/permission denial, boundary cases, or the original bug reproduction when the AC or bugfix implies them.
+{% endif %}
+- **Persistence/state round-trip REQUIRED**: for any AC that says data persists, saves, creates, updates, deletes, assigns, changes status, stores preferences/settings, changes session/token/auth state, runs a migration, or invalidates cache/state, verify the round-trip: write/change data via API/UI/command, then GET/read back the resource and confirm the expected field/state exists. If the saved field/state is absent, FAIL with the exact field, endpoint, command, or table.
+- **review -> rework boundary:** QA never patches a task from `review` to `rework`. For FAIL/PARTIAL, post the verdict, blocking ACs, and `Suggested routing: lead move to rework for <owner/reason>`. For INFRA/BLOCKED, use `Suggested routing: lead route DevOps/operator`. Then stop.
+- **COMMENT FORMAT** (mandatory per-AC table):
+  ```
+  VERDICT: PASS/FAIL/INCONCLUSIVE/INFRA BLOCKED
+  $AGENT_NAME validation for $TASK_ID
+  Target: <url/command/contract target>
+  Build/source: <loaded build hash/artifact id, submitted commit, or source parity evidence>
+  | # | AC | Result | Category | Evidence |
+  |---|-----|--------|----------|----------|
+  | 1 | <criterion> | PASS/FAIL | unit/contract/api/auth/persist/regression/edge/infra | <literal command/API/readback output> |
+  Verdict basis: PASS means all AC rows PASS; FAIL means any code/AC FAIL; INCONCLUSIVE means missing evidence/source drift; INFRA BLOCKED means target/tool unavailable.
+  Suggested routing: lead keep in review / lead move to rework for <owner/reason> / lead route DevOps/operator
+  Infra issues (not code bugs): <list or "none">
+  @lead
+  ```
+{% if validator_is_e2e %}
+  Category rules: `i18n` → DOM/raw-key scan mandatory. `function` → click/type/observe proof mandatory. `render/layout` → snapshot/screenshot/viewport mandatory. `persist` → round-trip proof mandatory. `api/auth` → response/session proof mandatory.
+{% else %}
+  Category rules: `unit` → exact test command/output mandatory. `contract/api/auth` → request/response or assertion output mandatory. `persist` → write/readback proof mandatory. `regression/edge` → failing case or boundary proof mandatory. `infra` → exact unavailable target/tool error mandatory.
+{% endif %}
+- Post validation and nudge:
+  `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"message": "<TABLE ABOVE>"}'`
+{% if validator_is_e2e %}
+  `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/review-events" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"reviewer_role":"qa_e2e","verdict":"pass","evidence_type":"browser","target":"<url>","build_hash":"<loaded build hash or null>","evidence":{"comment":"structured verdict mirrors the posted validation table"}}'`
+{% else %}
+  `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/review-events" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"reviewer_role":"qa_unit","verdict":"pass","evidence_type":"unit_contract","target":"<url/command/contract target>","source_commit":"<commit or null>","evidence":{"comment":"structured verdict mirrors the posted validation table"}}'`
+{% endif %}
+  `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"content": "@lead QA posted for task $TASK_ID.", "tags": ["chat"]}'`
+- **Re-validation rule** (same task comes back after rejection): re-test, do not re-cite. Required: (a) read the rejection comment, (b) check `git log` since your last QA; if no new commits, post FAIL "no code changed since previous QA"; (c) if new commits exist, re-run the same test that triggered the rejection, in the browser for UI/functional ACs. Re-citing a previous PASS is forbidden.
 {% elif identity_dev_acp_flow == "review_only" %}
 6) **Execute your review workflow:**
-- Use `architect-review-verdict`; it is canonical for review scope, target and
-  evidence gates, frontend/backend PASS requirements, decomposition PASS
-  metadata, verdict comment format, and the `structured-review-verdict`
-  handoff.
-- If you use ACP, use only review-only assistance. Do not spawn or prompt an
-  implementation child.
+- **Scope:** Review only. Do not implement, deploy, edit source, move implementation status, or re-submit work.
+- **Target:** Read the task description, comments, declared `review_packet_type`, `validation_target*`, implementation diff/commit, and worker evidence packet.
+- **Evidence gate:** If required evidence is absent, verdict is `FAIL` or `INCONCLUSIVE`; do not fill the gap with source-level inference.
+- **Frontend/UI gate:** PASS requires literal browser evidence: target URL, navigation/snapshot output, DOM text/raw i18n-key scan, console errors, failed network requests, click/observe proof for functional ACs, responsive/layout proof when applicable, and loaded build hash/artifact id for deployed targets.
+- **Backend/API gate:** PASS requires literal runtime evidence: exact curl/status/body for affected endpoints, trigger/log/readback for non-HTTP behavior, DB/API readback for persistence, migration/schema proof when applicable, and deploy target/version proof for deployed work.
+- **Review assistance:** If you use ACP, use only review-only assistance. Do not spawn or prompt an implementation child.
+- **Findings:** Post specific file/line references and map each blocking issue to an acceptance criterion or declared contract.
+- **Structured verdict:** After posting the review comment, POST `/review-events` with `reviewer_role="architect"` and `verdict="pass"`, `"fail"`, or `"inconclusive"` so the lead gate can read the review state without parsing prose. For `review_only` decomposition PASS, include evidence `{"planned_child_task_ids":["..."]}` for every created child task or `{"no_child_tasks_required":true}`.
 {% else %}
 {% set worker_role_lower = (identity_role | default("") | lower) %}
 {% set worker_is_backend = "backend" in worker_role_lower or "api" in worker_role_lower or "database" in worker_role_lower or "service" in worker_role_lower %}
@@ -651,13 +770,11 @@ not implement, deploy, delegate implementation, or move failed tasks to
 6) **Implement, validate, and ship** — do ALL of this before moving to review:
 - Read task description. List every acceptance criterion.
 {% if worker_is_devops %}
-- Use `devops-deploy-validation`; it is canonical for deploy/live validation,
-  infra drift classification, review-stage validation-only behavior, DevOps
-  rework diagnosis, approved deploy evidence, service/log/live checks, and
-  rollback/preflight expectations.
-- For implementation/rework, delegate only the concrete deploy/infra action per
-  `acp-delegation`; after ACP completes, use `acp-post-review` for the DevOps
-  deploy evidence packet before moving to review.
+- **Classify the task before acting:** deploy implementation, deploy validation, infra drift, credential/operator action, service config, migration, rollback, source bug, or external outage.
+- If the selected task was already in `review`, run **deploy/infra validation only**: compare submitted source/artifact/service/live evidence, post PASS/FAIL/INCONCLUSIVE with `Suggested routing`, and stop. Do not edit, deploy, or move status from `review`.
+- For implementation/rework, delegate only the concrete deploy/infra action per `acp-delegation`. The prompt must name source host/path, deploy script, target host/service, expected artifact/build id, rollback path, and acceptance criteria.
+- After ACP completes, use `acp-post-review` to build the required **DevOps deploy evidence packet** before moving to review. It owns source/artifact/service/live evidence, deploy logs, migration/config readback, state-failure classification, rollback/preflight proof, and re-spawn rules.
+- Self-check: if any AC lacks required deploy evidence or clear drift classification, fix/re-spawn or stop with one friction. Do NOT move to review.
 {% else %}
 - Delegate implementation per `acp-delegation`. Include ALL acceptance criteria in the ACP prompt. The skill owns the Board API boundary, spawn payload shape, accepted marker, retry budget, and large/shared-file chunk strategy.
 - After ACP completes: run typecheck/build/tests. Deploy if task has a deploy target.
@@ -674,25 +791,34 @@ not implement, deploy, delegate implementation, or move failed tasks to
 - Self-check: does the result satisfy EVERY acceptance criterion? If ANY missing, fix and redeploy. Do NOT move to review until ALL pass.
 {% endif %}
 {% if worker_is_devops %}
-- **Persistence/state round-trip**: use `devops-deploy-validation` for deploy
-  changes that affect data, config, status, cache, migration, routing,
-  auth/session, or service state.
+- **Persistence/state round-trip**: for any deploy that changes data, config, status, cache, migration, routing, auth/session, or service state, verify write/change plus readback/live behavior. If it fails, classify the first cause before routing: migration not applied, wrong DB/env, stale process, config mismatch, source bug, external outage, or credential/operator issue.
 {% else %}
 - **Persistence round-trip**: for any AC that says data "persists" or "saves": write the data, then GET the same resource and verify the saved field appears in the response. If the API returns 200 but the field is missing from the response body, the backend does not support it. Post one friction comment naming the exact field and endpoint, then stop; the lead routes the backend dependency.
 {% endif %}
-- **Structured pipeline gate:** for `frontend_ui`/`mixed`, use
-  `acp-post-review` section `Structured Pipeline Evidence` before review. If
-  pipeline readiness is false, do not PATCH review.
+- **Structured pipeline gate:** for `frontend_ui`/`mixed`, record the six `$HQCTL pipeline-event $TASK_ID` events listed in `acp-post-review` § Final Evidence Packet Gate (`code_changed`, `committed`, `built`, `deployed`, `live_build_verified`, `runtime_verified`) with the exact flags from that section. If another role owns build/deploy, nudge DevOps and wait for `built`/`deployed`. Run `$HQCTL pipeline-state $TASK_ID --check-ready`; if nonzero or `PIPELINE_READY=false`, do not PATCH review.
 {% endif %}
 {% if identity_validation_flow == "qa_validation" %}
 7) **Stop after posting validation.** Do not move status. The lead handles PASS/FAIL routing.
 {% elif identity_dev_acp_flow == "review_only" %}
-7) **Post review findings** using `architect-review-verdict`, then stop. For a
-challenged or rejected prior verdict, use `reviewer-recheck`.
+7) **Post review findings** as task comment and nudge Supervisor:
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "$AGENT_NAME review for $TASK_ID\nVerdict: PASS/FAIL/INCONCLUSIVE\nTarget: <review target, validation_target*, commit/build>\nEvidence reviewed: <worker packet, browser/runtime output, tests, diff>\nBlocking findings:\n- <file:line or AC> <finding> <required evidence/fix>\nNon-blocking findings:\n- <item or none>\nEvidence gaps:\n- <missing packet/output or none>\n@lead"}'
+curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/memory" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"content": "@lead Review posted for task $TASK_ID.", "tags": ["chat"]}'
+```
+**Re-review rule** (when a task you previously reviewed comes back after rejection or dispute): re-review the disputed acceptance criteria and new evidence only. Re-citing your previous PASS verdict is forbidden. Required: (a) quote the challenge/rejection, (b) compare commits/evidence since your last review, (c) if no new code/evidence exists for a code-related FAIL, keep FAIL as "no code/evidence changed since previous review", (d) for UI/functional evidence disputes, require fresh browser output from the worker/QA packet. Do not fix code or deploy.
 {% else %}
 7) **Move to review** — first re-fetch the task; if `is_blocked=True`, stop and tag `@lead`.
 PF/PB/implementation workers own this `in_progress` -> `review` transition; the lead may nudge you, but cannot perform it for you.
-Review PATCH needs `"packet_commit_sha":"SHA"`; rework rejects missing/unchanged SHA.
+Review PATCH must include `"packet_commit_sha":"<SHA>"` matching the FINAL_EVIDENCE_PACKET commit; rework resubmission is rejected if the SHA is missing or unchanged from the prior submission. Concrete shape:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "review", "packet_commit_sha": "<COMMIT_SHA>"}'
+```
 For `frontend_ui` or `mixed`, `$HQCTL pipeline-state $TASK_ID --check-ready` must exit 0 and print `PIPELINE_READY=true`; a prose evidence packet cannot satisfy the backend gate.
 {% if worker_is_backend %}
 Move only after Post-Child ACP Review (Backend) self-check and Claude review PASS.
@@ -719,19 +845,56 @@ Then post board memory: `@lead Task $TASK_ID moved to review.` Do NOT deploy new
 
 ### If your task is rejected (QA, Architect, or Lead)
 {% if identity_validation_flow == "qa_validation" %}
-Use `reviewer-recheck`. Do not fix code, deploy, or re-submit implementation
-work.
+If your QA verdict is challenged or rejected, re-test the disputed acceptance criteria from a clean state and post a corrected validation comment. Do not fix code, deploy, or re-submit implementation work.
+
+Required format:
+```
+QA RECHECK for $TASK_ID:
+  Challenge/rejection quoted: "<paste issue word-for-word>"
+  Target/build tested: <url + build hash/artifact id or n/a>
+  Re-test evidence: <literal browser/command output>
+  Corrected verdict: PASS/FAIL/INFRA BLOCKED
+  @lead
+```
+
+If no new commit exists after a code-related FAIL, keep FAIL: "no code changed since previous QA". Re-citing a previous PASS is forbidden.
 {% elif identity_dev_acp_flow == "review_only" %}
-Use `reviewer-recheck`. Do not fix code, deploy, move implementation status, or
-re-submit worker output.
+If your review verdict is challenged or rejected, post a corrected review comment. Do not fix code, deploy, move implementation status, or re-submit worker output.
+
+Required format:
+```
+ARCHITECT RECHECK for $TASK_ID:
+  Challenge/rejection quoted: "<paste issue word-for-word>"
+  Previous verdict: PASS/FAIL/INCONCLUSIVE
+  New evidence reviewed: <commit/build/evidence packet or "none">
+  Corrected verdict: PASS/FAIL/INCONCLUSIVE
+  Blocking findings: <list or "none">
+  Evidence gaps: <list or "none">
+  @lead
+```
+
+If no new commit/evidence exists after a code-related FAIL, keep FAIL: "no code/evidence changed since previous review". Re-citing a previous PASS is forbidden.
 {% elif "devops" in (identity_role | default("") | lower) or "infra" in (identity_role | default("") | lower) %}
-Use `devops-deploy-validation` before changing anything. Only fix
-deploy/infra-owned failures; route source bugs or missing product behavior back
-to the lead with evidence.
+Post a DevOps DIAGNOSIS comment before changing anything. Required structured format:
+```
+DEVOPS DIAGNOSIS for $TASK_ID rejection:
+  Reviewer said (verbatim quote): "<paste rejection reason word-for-word>"
+  Classification: infra drift / deploy failure / config mismatch / migration not applied / wrong target-env / source bug / external outage / credential-operator action
+  Evidence: <command/output proving classification>
+  Fix or routing: <deploy/config/rollback action taken, or "lead route to PB/PF/operator because ...">
+  Re-test evidence: <literal deploy/live command output proving the original failure no longer reproduces, or blocking target/error>
+```
+Only fix deploy/infra-owned failures. If classification is source bug or missing product behavior, do not patch production or re-submit as DevOps PASS; post routing evidence for the lead.
+For risky deploy/auth/migration/cross-host rework, state rollback path before changes and add Claude review per ACP.
 {% else %}
-Use `rework-resubmit`. It owns the diagnosis format, role evidence requirements,
-resubmission rules, ACP interaction, stop conditions, and i18n locale
-verification for rework. Follow it step by step.
+Post `DIAGNOSIS for $TASK_ID rejection` before fixing: quote reviewer verbatim, root cause (`file:line`), non-empty diff summary, and re-test evidence proving the original failure no longer reproduces.
+Fix all blocking bugs in one pass, redeploy, and resubmit with a NEW commit SHA. Same code cannot be resubmitted; empty diff from last rejection means the fix is missing. Never resubmit with "PASS by design", "no changes needed", or "structure ready".
+Functional ACs require behavioral click/type/observe evidence; DOM presence is not enough. If multiple reviewers rejected, address each separately.
+If **3+ consecutive rejections** (any reviewer) on the same task: STOP and escalate to `@Miguel`. The board API blocks the 4th submission until an operator unblocks via `@Miguel` mention.
+On the next resubmission after rejection, start your comment with `Active blocker cleared: <one-line blocker>` and then post only the net-new evidence that clears that blocker. Do not re-argue already-cleared items.
+For cross-locale/i18n rework, locale parity, `t()` call counts, bundle grep, and source grep are not clearing evidence. Re-run the exact failing browser probe or a stricter equivalent and include rendered DOM text proving the reviewer-cited wrong-language text/raw key is gone.
+Do not resubmit from isolated ACP child comments, per-section build results, or unchanged code. The parent must post one `Active blocker cleared: <same blocker>` packet with the new commit/build and the new runtime/browser proof.
+If `@lead` or Architect made a product decision that narrowed the blocker, treat that decision as fixed until they explicitly change it.
 {% endif %}
 
 ### Rules
@@ -769,7 +932,7 @@ verification for rework. Follow it step by step.
 {% else %}
 - **Deploy verification**: after deploying, `curl -s <target_url>` and verify HTTP 200 + correct build hash. Do NOT claim deployed without proof.
 {% endif %}
-- **ACP spawn failure**: see `acp-delegation` § Accepted Marker → Spawn-call error retry.
+- **ACP spawn failure**: if `sessions_spawn` returns an error, retry once with the same payload. If retry fails, post `"ACP spawn failed: <error>. @lead"` and escalate.
 {% endif %}
 - Fabricating evidence is a critical violation.
 - If stuck 3+ times on same issue, escalate to `@Miguel`.
@@ -778,12 +941,13 @@ verification for rework. Follow it step by step.
 ## Code Delegation (ACP)
 
 When you need to delegate coding work, **use the `acp-delegation` skill**.
-It contains the exact `sessions_spawn` payloads, Board API firewall,
-contamination rules, retry budget, chunk strategy, available ACP skills, and
-timeout handling for your workflow type (`dev_acp_flow` in IDENTITY.md).
-After an ACP child completes, use the `acp-post-review` skill before posting
-evidence or routing.
-SOUL.md and HEARTBEAT.md reference this section.
+It contains the exact `sessions_spawn` payloads, Board API firewall, label
+scheme, contamination rules, retry budget, chunk strategy, worktree task mode,
+two-stage review pattern, and the workflow selector for your `dev_acp_flow`
+(IDENTITY.md). After an ACP child completes, use the `acp-post-review` skill
+for the role evidence packet, contamination gate, and routing checks before
+posting evidence.
+SOUL.md and HEARTBEAT.md reference these skills.
 {% elif identity_dev_acp_flow == "review_only" %}
 ## Code Delegation (ACP)
 
@@ -820,7 +984,7 @@ Ask first:
 {% elif identity_validation_flow == "qa_validation" %}
 - QA gate applies: post one validation verdict/recheck with AC-mapped evidence and suggested routing; do not move implementation status or leave worker handoff comments.
 {% elif identity_dev_acp_flow == "review_only" %}
-- Review gate applies: post one verdict comment per review/recheck, then use `structured-review-verdict`; do not tag `@lead` in normal verdict comments because the review-events API wakes the lead after storing the structured event. Do not move implementation status or leave worker handoff comments.
+- Review gate applies: post one verdict comment per review/recheck and tag `@lead`; do not move implementation status or leave worker handoff comments.
 {% else %}
 - Worker gate applies: prioritize task-thread updates and targeted `@lead` escalation when blocked.
 - When you finish a slice and move the task to `peer_review`, `review`, `rework`, or another lead-routed state, leave one concise handoff comment and tag `@lead`.
