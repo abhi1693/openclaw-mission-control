@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { SignedIn, SignedOut, useAuth } from "@/auth/clerk";
 import { Activity as ActivityIcon } from "lucide-react";
 
-import { ApiError } from "@/api/mutator";
+import { ApiError, customFetch } from "@/api/mutator";
 import { streamAgentsApiV1AgentsStreamGet } from "@/api/generated/agents/agents";
 import { listActivityApiV1ActivityGet } from "@/api/generated/activity/activity";
 import {
@@ -57,6 +57,30 @@ const MAX_FEED_ITEMS = 300;
 const PAGED_LIMIT = 200;
 const PAGED_MAX = 1000;
 
+type ActivityStreamResponse = {
+  data: Response;
+  status: number;
+  headers: Headers;
+};
+
+const streamActivity = async (
+  params?: { since?: string },
+  options?: RequestInit,
+): Promise<ActivityStreamResponse> => {
+  const searchParams = new URLSearchParams();
+  if (params?.since) {
+    searchParams.set("since", params.since);
+  }
+  const query = searchParams.toString();
+  return customFetch<ActivityStreamResponse>(
+    `/api/v1/activity/stream${query ? `?${query}` : ""}`,
+    {
+      method: "GET",
+      ...options,
+    },
+  );
+};
+
 type Agent = AgentRead & { status: string };
 
 type TaskEventType =
@@ -65,18 +89,7 @@ type TaskEventType =
   | "task.updated"
   | "task.status_changed";
 
-type FeedEventType =
-  | TaskEventType
-  | "board.chat"
-  | "board.command"
-  | "agent.created"
-  | "agent.online"
-  | "agent.offline"
-  | "agent.updated"
-  | "approval.created"
-  | "approval.updated"
-  | "approval.approved"
-  | "approval.rejected";
+type FeedEventType = string;
 
 type FeedItem = {
   id: string;
@@ -114,6 +127,16 @@ const TASK_EVENT_TYPES = new Set<TaskEventType>([
 
 const isTaskEventType = (value: string): value is TaskEventType =>
   TASK_EVENT_TYPES.has(value as TaskEventType);
+
+const DEDICATED_ACTIVITY_EVENT_TYPES = new Set<string>([
+  "task.comment",
+  "task.created",
+  "task.updated",
+  "task.status_changed",
+]);
+
+const isDedicatedActivityEventType = (value: string): boolean =>
+  DEDICATED_ACTIVITY_EVENT_TYPES.has(value);
 
 const formatShortTimestamp = (value: string) => {
   const date = parseApiDatetime(value);
@@ -223,20 +246,71 @@ const roleFromAgent = (agent?: Agent | null): string | null => {
   return trimmed || null;
 };
 
+const humanizeActivityEventType = (eventType: string): string => {
+  const cleaned = eventType
+    .split(".")
+    .map((part) => part.replace(/_/g, " ").trim())
+    .filter(Boolean)
+    .join(" ");
+  if (!cleaned) return "Activity";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const activityTitle = (eventType: string): string => {
+  if (eventType.startsWith("agent.")) {
+    return `Agent · ${humanizeActivityEventType(eventType.replace(/^agent\./, ""))}`;
+  }
+  if (eventType.startsWith("task.")) {
+    return `Task · ${humanizeActivityEventType(eventType.replace(/^task\./, ""))}`;
+  }
+  if (eventType.startsWith("gateway.")) {
+    return `Gateway · ${humanizeActivityEventType(eventType.replace(/^gateway\./, ""))}`;
+  }
+  if (eventType.startsWith("board.group.")) {
+    return `Board group · ${humanizeActivityEventType(eventType.replace(/^board\.group\./, ""))}`;
+  }
+  if (eventType.startsWith("board.")) {
+    return `Board · ${humanizeActivityEventType(eventType.replace(/^board\./, ""))}`;
+  }
+  if (eventType.startsWith("review_event.")) {
+    return `Review · ${humanizeActivityEventType(eventType.replace(/^review_event\./, ""))}`;
+  }
+  if (eventType.startsWith("approval.")) {
+    return `Approval · ${humanizeActivityEventType(eventType.replace(/^approval\./, ""))}`;
+  }
+  return humanizeActivityEventType(eventType);
+};
+
 const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "task.comment") return "Comment";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
+  if (eventType === "task.updated") return "Task";
+  if (eventType.startsWith("task.assignee_")) return "Assignee";
+  if (eventType.startsWith("task.rework_")) return "Rework";
+  if (eventType.startsWith("task.lead_")) return "Lead";
+  if (eventType.startsWith("task.")) return "Task";
   if (eventType === "board.chat") return "Chat";
   if (eventType === "board.command") return "Command";
+  if (eventType.startsWith("board.group.")) return "Board group";
+  if (eventType.startsWith("board.")) return "Board";
+  if (eventType === "agent.heartbeat") return "Heartbeat";
+  if (eventType.startsWith("agent.nudge.")) return "Nudge";
+  if (eventType.startsWith("agent.wakeup.")) return "Wakeup";
+  if (eventType.startsWith("agent.recovery.")) return "Recovery";
+  if (eventType.startsWith("agent.soul.")) return "Soul";
   if (eventType === "agent.created") return "Agent";
   if (eventType === "agent.online") return "Online";
   if (eventType === "agent.offline") return "Offline";
   if (eventType === "agent.updated") return "Agent update";
+  if (eventType.startsWith("agent.")) return "Agent";
+  if (eventType.startsWith("gateway.")) return "Gateway";
+  if (eventType.startsWith("review_event.")) return "Review";
   if (eventType === "approval.created") return "Approval";
   if (eventType === "approval.updated") return "Approval update";
   if (eventType === "approval.approved") return "Approved";
   if (eventType === "approval.rejected") return "Rejected";
+  if (eventType.startsWith("approval.")) return "Approval";
   return "Updated";
 };
 
@@ -250,11 +324,38 @@ const eventPillClass = (eventType: FeedEventType): string => {
   if (eventType === "task.status_changed") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
+  if (eventType.startsWith("task.assignee_")) {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType.startsWith("task.rework_")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("task.lead_")) {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType.startsWith("task.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
   if (eventType === "board.chat") {
     return "border-teal-200 bg-teal-50 text-teal-700";
   }
   if (eventType === "board.command") {
     return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+  if (eventType.startsWith("board.group.")) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType.startsWith("board.")) {
+    return "border-teal-200 bg-teal-50 text-teal-700";
+  }
+  if (eventType === "agent.heartbeat") {
+    return "border-lime-200 bg-lime-50 text-lime-700";
+  }
+  if (eventType.startsWith("agent.nudge.")) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
   }
   if (eventType === "agent.created") {
     return "border-violet-200 bg-violet-50 text-violet-700";
@@ -268,6 +369,18 @@ const eventPillClass = (eventType: FeedEventType): string => {
   if (eventType === "agent.updated") {
     return "border-indigo-200 bg-indigo-50 text-indigo-700";
   }
+  if (eventType.startsWith("agent.")) {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (eventType.startsWith("gateway.") && eventType.endsWith(".failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("gateway.")) {
+    return "border-purple-200 bg-purple-50 text-purple-700";
+  }
+  if (eventType.startsWith("review_event.")) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
   if (eventType === "approval.created") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
@@ -279,6 +392,12 @@ const eventPillClass = (eventType: FeedEventType): string => {
   }
   if (eventType === "approval.rejected") {
     return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("approval.") && eventType.endsWith("_failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("approval.")) {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
   return "border-slate-200 bg-slate-100 text-slate-700";
 };
@@ -581,6 +700,62 @@ export default function ActivityPage() {
       };
     },
     [boardNameForId, currentUserDisplayName, resolveAuthor],
+  );
+
+  const mapActivityEvent = useCallback(
+    (
+      event: ActivityEventRead,
+      fallbackBoardId: string | null = null,
+    ): FeedItem | null => {
+      if (isTaskEventType(event.event_type)) {
+        return mapTaskActivity(event, fallbackBoardId);
+      }
+
+      const routeParams = normalizeRouteParams(event.route_params);
+      const taskId = event.task_id ?? routeParams.taskId ?? null;
+      const meta = taskId ? taskMetaByIdRef.current.get(taskId) : null;
+      const boardId =
+        meta?.boardId ??
+        event.board_id ??
+        routeParams.boardId ??
+        fallbackBoardId ??
+        null;
+      const fallbackRouteParams: ActivityRouteParams = {};
+      if (boardId) fallbackRouteParams.boardId = boardId;
+      if (taskId) fallbackRouteParams.taskId = taskId;
+      const effectiveRouteParams =
+        Object.keys(routeParams).length > 0 ? routeParams : fallbackRouteParams;
+      const effectiveRouteName =
+        event.route_name ?? (boardId ? "board" : "activity");
+      const author = resolveAuthor(
+        event.agent_id,
+        event.agent_id ? "Agent" : "Mission Control",
+      );
+
+      return {
+        id: `activity:${event.id}`,
+        created_at: event.created_at,
+        event_type: event.event_type,
+        message: event.message ?? null,
+        source_event_id: event.id,
+        agent_id: author.id,
+        actor_name: author.name,
+        actor_role: author.role,
+        board_id: boardId,
+        board_name: boardNameForId(boardId),
+        board_href: buildBoardHref(effectiveRouteParams, boardId),
+        task_id: taskId,
+        task_title: meta?.title ?? null,
+        title: meta?.title ?? activityTitle(event.event_type),
+        context_href: buildRouteHref(effectiveRouteName, effectiveRouteParams, {
+          eventId: event.id,
+          eventType: event.event_type,
+          createdAt: event.created_at,
+          taskId,
+        }),
+      };
+    },
+    [boardNameForId, mapTaskActivity, resolveAuthor],
   );
 
   const mapApprovalEvent = useCallback(
@@ -890,7 +1065,7 @@ export default function ActivityPage() {
           }
           const items = result.data.items ?? [];
           for (const event of items) {
-            const mapped = mapTaskActivity(event);
+            const mapped = mapActivityEvent(event);
             if (!mapped || seedSeen.has(mapped.id)) continue;
             seedSeen.add(mapped.id);
             seeded.push(mapped);
@@ -927,9 +1102,117 @@ export default function ActivityPage() {
   }, [
     isSignedIn,
     mapAgentEvent,
+    mapActivityEvent,
     mapApprovalEvent,
     mapBoardChat,
-    mapTaskActivity,
+  ]);
+
+  useEffect(() => {
+    if (!isPageActive) return;
+    if (!isSignedIn) return;
+    if (boardIds.length === 0) return;
+
+    let cancelled = false;
+    const abortController = new AbortController();
+    const backoff = createExponentialBackoff(SSE_RECONNECT_BACKOFF);
+    let reconnectTimeout: number | undefined;
+
+    const connect = async () => {
+      try {
+        const since = latestTimestamp((item) => item.source_event_id !== null);
+        const streamResult = await streamActivity(
+          since ? { since } : undefined,
+          {
+            headers: { Accept: "text/event-stream" },
+            signal: abortController.signal,
+          },
+        );
+        if (streamResult.status !== 200) {
+          throw new Error("Unable to connect activity stream.");
+        }
+        const response = streamResult.data as Response;
+        if (!(response instanceof Response) || !response.body) {
+          throw new Error("Unable to connect activity stream.");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!cancelled) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value && value.length) {
+            backoff.reset();
+          }
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const raw = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const lines = raw.split("\n");
+            let eventType = "message";
+            let data = "";
+            for (const line of lines) {
+              if (line.startsWith("event:")) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                data += line.slice(5).trim();
+              }
+            }
+            if (eventType === "activity" && data) {
+              try {
+                const payload = JSON.parse(data) as {
+                  activity?: ActivityEventRead;
+                };
+                const activity = payload.activity;
+                if (
+                  activity &&
+                  !isDedicatedActivityEventType(activity.event_type)
+                ) {
+                  const mapped = mapActivityEvent(activity);
+                  if (mapped) {
+                    pushFeedItem(mapped);
+                  }
+                }
+              } catch {
+                // Ignore malformed payloads.
+              }
+            }
+            boundary = buffer.indexOf("\n\n");
+          }
+        }
+      } catch {
+        // Reconnect handled below.
+      }
+
+      if (!cancelled) {
+        if (reconnectTimeout !== undefined) {
+          window.clearTimeout(reconnectTimeout);
+        }
+        const delay = backoff.nextDelayMs();
+        reconnectTimeout = window.setTimeout(() => {
+          reconnectTimeout = undefined;
+          void connect();
+        }, delay);
+      }
+    };
+
+    void connect();
+    return () => {
+      cancelled = true;
+      abortController.abort();
+      if (reconnectTimeout !== undefined) {
+        window.clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [
+    boardIds.length,
+    isPageActive,
+    isSignedIn,
+    latestTimestamp,
+    mapActivityEvent,
+    pushFeedItem,
   ]);
 
   useEffect(() => {

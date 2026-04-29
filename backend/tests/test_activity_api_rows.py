@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.activity import _build_activity_route, _coerce_activity_rows, _coerce_task_comment_rows
+from app.api.activity import (
+    _build_activity_route,
+    _coerce_activity_rows,
+    _coerce_task_comment_rows,
+    _fetch_activity_events,
+)
+from app.core.time import utcnow
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.boards import Board
+from app.models.organizations import Organization
 from app.models.tasks import Task
 
 
@@ -172,3 +181,69 @@ def test_build_activity_route_global_fallback():
     assert route_params["eventId"] == str(event.id)
     assert route_params["eventType"] == event.event_type
     assert route_params["createdAt"] == event.created_at.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_fetch_activity_events_includes_openclaw_rows_for_accessible_board(
+    sqlite_session: AsyncSession,
+) -> None:
+    org_id = uuid4()
+    board_id = uuid4()
+    other_board_id = uuid4()
+    agent_id = uuid4()
+    task_id = uuid4()
+    now = utcnow()
+
+    sqlite_session.add(Organization(id=org_id, name="Activity org"))
+    board = Board(id=board_id, organization_id=org_id, name="Board", slug="board")
+    other_board = Board(
+        id=other_board_id,
+        organization_id=org_id,
+        name="Other",
+        slug="other",
+    )
+    agent = Agent(id=agent_id, board_id=board_id, gateway_id=uuid4(), name="Agent")
+    task = Task(id=task_id, board_id=board_id, title="Task")
+    sqlite_session.add(board)
+    sqlite_session.add(other_board)
+    sqlite_session.add(agent)
+    sqlite_session.add(task)
+    sqlite_session.add(
+        ActivityEvent(
+            event_type="agent.heartbeat",
+            message="Heartbeat received from Agent.",
+            agent_id=agent_id,
+            board_id=board_id,
+            created_at=now,
+        ),
+    )
+    sqlite_session.add(
+        ActivityEvent(
+            event_type="task.assignee_woken",
+            message="Assignee heartbeat set online.",
+            agent_id=agent_id,
+            task_id=task_id,
+            board_id=board_id,
+            created_at=now + timedelta(seconds=1),
+        ),
+    )
+    sqlite_session.add(
+        ActivityEvent(
+            event_type="agent.heartbeat",
+            message="Inaccessible heartbeat.",
+            board_id=other_board_id,
+            created_at=now + timedelta(seconds=2),
+        ),
+    )
+    await sqlite_session.commit()
+
+    rows = await _fetch_activity_events(
+        sqlite_session,
+        now - timedelta(seconds=1),
+        board_ids={board_id},
+    )
+
+    assert [row[0].event_type for row in rows] == [
+        "agent.heartbeat",
+        "task.assignee_woken",
+    ]

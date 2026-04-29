@@ -33,6 +33,9 @@ describe("/activity feed", () => {
       "memoryStream",
     );
     cy.intercept("GET", `${apiBase}/agents/stream*`, emptySse).as("agentsStream");
+    cy.intercept("GET", `${apiBase}/activity/stream*`, emptySse).as(
+      "activityStream",
+    );
   }
 
   function stubBoardBootstrap() {
@@ -100,7 +103,7 @@ describe("/activity feed", () => {
   it("happy path: renders task comment cards", () => {
     stubBoardBootstrap();
 
-    cy.intercept("GET", "**/api/v1/activity**", {
+    cy.intercept("GET", "**/api/v1/activity?*", {
       statusCode: 200,
       body: {
         items: [
@@ -132,10 +135,88 @@ describe("/activity feed", () => {
     cy.contains(/hello world/i).should("be.visible");
   });
 
+  it("happy path: renders generic OpenClaw activity rows", () => {
+    stubBoardBootstrap();
+
+    cy.intercept("GET", "**/api/v1/activity?*", {
+      statusCode: 200,
+      body: {
+        items: [
+          {
+            id: "e-openclaw-heartbeat",
+            event_type: "agent.heartbeat",
+            message: "Heartbeat received from Programmer-Frontend.",
+            agent_id: "a1",
+            board_id: "b1",
+            route_name: "board",
+            route_params: { boardId: "b1" },
+            created_at: "2026-02-07T00:00:00Z",
+            task_id: null,
+          },
+        ],
+      },
+    }).as("activityList");
+
+    stubStreamsEmpty();
+
+    cy.loginWithLocalAuth();
+    cy.visit("/activity");
+    assertSignedInAndLanded();
+    cy.wait("@activityList", { timeout: 20_000 });
+
+    cy.contains(/heartbeat received from programmer-frontend/i).should(
+      "be.visible",
+    );
+    cy.contains(/heartbeat/i).should("be.visible");
+  });
+
+  it("live path: appends generic activity stream events", () => {
+    stubBoardBootstrap();
+
+    cy.intercept("GET", "**/api/v1/activity?*", {
+      statusCode: 200,
+      body: { items: [] },
+    }).as("activityList");
+
+    const emptySse = {
+      statusCode: 200,
+      headers: { "content-type": "text/event-stream" },
+      body: "",
+    };
+    cy.intercept("GET", `${apiBase}/boards/*/tasks/stream*`, emptySse).as(
+      "tasksStream",
+    );
+    cy.intercept("GET", `${apiBase}/boards/*/approvals/stream*`, emptySse).as(
+      "approvalsStream",
+    );
+    cy.intercept("GET", `${apiBase}/boards/*/memory/stream*`, emptySse).as(
+      "memoryStream",
+    );
+    cy.intercept("GET", `${apiBase}/agents/stream*`, emptySse).as("agentsStream");
+    cy.intercept("GET", `${apiBase}/activity/stream*`, {
+      statusCode: 200,
+      headers: { "content-type": "text/event-stream" },
+      body: [
+        "event: activity",
+        'data: {"activity":{"id":"e-openclaw-nudge","event_type":"agent.nudge.sent","message":"Nudge sent to Programmer-Frontend.","agent_id":"a1","board_id":"b1","route_name":"board","route_params":{"boardId":"b1"},"created_at":"2026-02-07T00:01:00Z","task_id":null}}',
+        "",
+        "",
+      ].join("\n"),
+    }).as("activityStream");
+
+    cy.loginWithLocalAuth();
+    cy.visit("/activity");
+    assertSignedInAndLanded();
+    cy.wait("@activityList", { timeout: 20_000 });
+    cy.wait("@activityStream", { timeout: 20_000 });
+
+    cy.contains(/nudge sent to programmer-frontend/i).should("be.visible");
+  });
+
   it("empty state: shows waiting message when no items", () => {
     stubBoardBootstrap();
 
-    cy.intercept("GET", "**/api/v1/activity**", {
+    cy.intercept("GET", "**/api/v1/activity?*", {
       statusCode: 200,
       body: { items: [] },
     }).as("activityList");
@@ -153,7 +234,7 @@ describe("/activity feed", () => {
   it("error state: shows failure UI when API errors", () => {
     stubBoardBootstrap();
 
-    cy.intercept("GET", "**/api/v1/activity**", {
+    cy.intercept("GET", "**/api/v1/activity?*", {
       statusCode: 500,
       body: { detail: "boom" },
     }).as("activityList");

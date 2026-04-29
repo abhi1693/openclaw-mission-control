@@ -242,6 +242,67 @@ async def _fetch_task_comment_events(
     return _coerce_task_comment_rows(list(await session.exec(statement)))
 
 
+async def _fetch_activity_events(
+    session: AsyncSession,
+    since: datetime,
+    *,
+    board_ids: set[UUID] | None = None,
+    agent_id: UUID | None = None,
+    board_id: UUID | None = None,
+) -> Sequence[tuple[ActivityEvent, UUID | None, UUID | None]]:
+    statement: Any = (
+        select(
+            ActivityEvent,
+            col(ActivityEvent.board_id).label("event_board_id"),
+            col(Task.board_id).label("task_board_id"),
+        )
+        .outerjoin(Task, col(ActivityEvent.task_id) == col(Task.id))
+        .where(col(ActivityEvent.created_at) >= since)
+    )
+    if agent_id is not None:
+        statement = statement.where(col(ActivityEvent.agent_id) == agent_id)
+    elif board_id is not None:
+        statement = statement.where(
+            or_(
+                col(ActivityEvent.board_id) == board_id,
+                and_(
+                    col(ActivityEvent.board_id).is_(None),
+                    col(Task.board_id) == board_id,
+                ),
+            ),
+        )
+    elif board_ids is not None:
+        if not board_ids:
+            statement = statement.where(col(ActivityEvent.id).is_(None))
+        else:
+            statement = statement.where(
+                or_(
+                    col(ActivityEvent.board_id).in_(board_ids),
+                    and_(
+                        col(ActivityEvent.board_id).is_(None),
+                        col(Task.board_id).in_(board_ids),
+                    ),
+                ),
+            )
+    statement = statement.order_by(asc(col(ActivityEvent.created_at)))
+    return _coerce_activity_rows(list(await session.exec(statement)))
+
+
+def _activity_event_payload(
+    event: ActivityEvent,
+    resolved_board_id: UUID | None,
+) -> ActivityEventRead:
+    payload = ActivityEventRead.model_validate(event, from_attributes=True)
+    payload.board_id = resolved_board_id
+    route_name, route_params = _build_activity_route(
+        event=event,
+        board_id=resolved_board_id,
+    )
+    payload.route_name = route_name
+    payload.route_params = route_params
+    return payload
+
+
 @router.get("", response_model=DefaultLimitOffsetPage[ActivityEventRead])
 async def list_activity(
     session: AsyncSession = SESSION_DEP,
@@ -278,19 +339,74 @@ async def list_activity(
         rows = _coerce_activity_rows(items)
         events: list[ActivityEventRead] = []
         for event, event_board_id, task_board_id in rows:
-            payload = ActivityEventRead.model_validate(event, from_attributes=True)
             resolved_board_id = event_board_id or task_board_id
-            payload.board_id = resolved_board_id
-            route_name, route_params = _build_activity_route(
-                event=event,
-                board_id=resolved_board_id,
-            )
-            payload.route_name = route_name
-            payload.route_params = route_params
-            events.append(payload)
+            events.append(_activity_event_payload(event, resolved_board_id))
         return events
 
     return await paginate(session, statement, transformer=_transform)
+
+
+@router.get("/stream")
+async def stream_activity(
+    request: Request,
+    board_id: UUID | None = BOARD_ID_QUERY,
+    since: str | None = SINCE_QUERY,
+    db_session: AsyncSession = SESSION_DEP,
+    actor: ActorContext = ACTOR_DEP,
+) -> EventSourceResponse:
+    """Stream activity events visible to the calling actor."""
+    since_dt = _parse_since(since) or utcnow()
+    agent_id: UUID | None = None
+    allowed_ids: set[UUID] | None = None
+
+    if actor.actor_type == "agent" and actor.agent:
+        agent_id = actor.agent.id
+    elif actor.actor_type == "user" and actor.user:
+        member = await get_active_membership(db_session, actor.user)
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        allowed_ids = set(
+            await list_accessible_board_ids(db_session, member=member, write=False),
+        )
+        if board_id is not None and board_id not in allowed_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    seen_ids: set[UUID] = set()
+    seen_queue: deque[UUID] = deque()
+
+    async def event_generator() -> AsyncIterator[dict[str, str]]:
+        last_seen = since_dt
+        while True:
+            if await request.is_disconnected():
+                break
+            async with async_session_maker() as stream_session:
+                rows = await _fetch_activity_events(
+                    stream_session,
+                    last_seen,
+                    board_ids=allowed_ids,
+                    agent_id=agent_id,
+                    board_id=board_id,
+                )
+            for event, event_board_id, task_board_id in rows:
+                event_id = event.id
+                if event_id in seen_ids:
+                    continue
+                seen_ids.add(event_id)
+                seen_queue.append(event_id)
+                if len(seen_queue) > SSE_SEEN_MAX:
+                    oldest = seen_queue.popleft()
+                    seen_ids.discard(oldest)
+                last_seen = max(event.created_at, last_seen)
+                payload = _activity_event_payload(event, event_board_id or task_board_id)
+                yield {
+                    "event": "activity",
+                    "data": json.dumps({"activity": payload.model_dump(mode="json")}),
+                }
+            await asyncio.sleep(STREAM_POLL_SECONDS)
+
+    return EventSourceResponse(event_generator(), ping=15)
 
 
 @router.get(
