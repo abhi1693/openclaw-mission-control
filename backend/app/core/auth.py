@@ -189,11 +189,12 @@ def _extract_clerk_profile(profile: ClerkUser | None) -> tuple[str | None, str |
         if profile_email is None:
             profile_email = fallback_email
 
+    # Prefer a complete name field, then compose from first+last, then fall
+    # back to username. Composing must come BEFORE falling back to first_name
+    # alone, otherwise users with both first and last names lose the last name.
     profile_name = (
         _non_empty_str(getattr(profile, "full_name", None))
         or _non_empty_str(getattr(profile, "name", None))
-        or _non_empty_str(getattr(profile, "first_name", None))
-        or _non_empty_str(getattr(profile, "username", None))
     )
     if not profile_name:
         first = _non_empty_str(getattr(profile, "first_name", None))
@@ -201,6 +202,8 @@ def _extract_clerk_profile(profile: ClerkUser | None) -> tuple[str | None, str |
         parts = [part for part in (first, last) if part]
         if parts:
             profile_name = " ".join(parts)
+    if not profile_name:
+        profile_name = _non_empty_str(getattr(profile, "username", None))
 
     return profile_email, profile_name
 

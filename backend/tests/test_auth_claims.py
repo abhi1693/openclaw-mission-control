@@ -77,7 +77,7 @@ def test_extract_clerk_profile_prefers_primary_email() -> None:
     )
     email, name = auth._extract_clerk_profile(profile)
     assert email == "primary@example.com"
-    assert name == "Asha"
+    assert name == "Asha Rao"
 
 
 @pytest.mark.asyncio
