@@ -2,10 +2,21 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-04-29
+
+### Fixed
+- **OpenClaw 2026.4.26 hardening follow-ups**: Treat boolean `runTimeoutSeconds` values as invalid during runtime guardrail merging, return `ok=false` for local `openclaw status --json` execution errors, and cover structured-review lead wake failures plus runtime-status admin auth wiring in tests.
+
 ## 2026-04-28
 
 ### Changed
 - **AGENTS skill extraction**: Moved lead next-action, lead health scan, inbox routing, QA verdict, Architect verdict, reviewer recheck, and DevOps deploy-validation procedures into dedicated skills, leaving AGENTS.md as the visible role/index layer.
+- **OpenClaw 2026.4.26 guardrails**: MC gateway provisioning now merges the 4.26 transcript byte-guard compaction settings, explicit subagent target policy, ACP run timeout/archive defaults, and disables automatic ACP dispatch while preserving explicit `sessions_spawn(runtime="acp")` flows.
+- **Gateway runtime visibility**: Added a local OpenClaw runtime status endpoint backed by `openclaw status --json`, with JSON extraction tolerant of config-warning prefixes.
+
+### Fixed
+- **Structured review wake**: `/review-events` now wakes the board lead with `deliver=True` after the structured verdict is committed, making the `structured-review-verdict` skill contract true.
+- **Gateway method catalog**: Updated the advertised OpenClaw RPC method list for 2026.4.26 by adding `node.pair.remove`.
 
 ## 2026-04-16
 

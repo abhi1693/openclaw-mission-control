@@ -48,7 +48,7 @@ GatewayConnectMode = Literal["device", "control_ui"]
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
-# Updated for OpenClaw 2026.4.5 (3e72c03).
+# Updated for OpenClaw 2026.4.26 (be8c246).
 GATEWAY_METHODS = [
     "health",
     "logs.tail",
@@ -134,6 +134,7 @@ GATEWAY_METHODS = [
     "node.pair.list",
     "node.pair.approve",
     "node.pair.reject",
+    "node.pair.remove",
     "node.pair.verify",
     "node.pending.drain",
     "node.pending.enqueue",
@@ -174,7 +175,7 @@ GATEWAY_METHODS = [
     "chat.send",
 ]
 
-# Updated for OpenClaw 2026.4.5 (3e72c03).
+# Updated for OpenClaw 2026.4.26 (be8c246).
 GATEWAY_EVENTS = [
     "connect.challenge",
     "agent",

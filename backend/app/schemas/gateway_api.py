@@ -77,3 +77,12 @@ class GatewayCommandsResponse(SQLModel):
     protocol_version: int
     methods: list[str]
     events: list[str]
+
+
+class OpenClawRuntimeStatusResponse(SQLModel):
+    """Local OpenClaw runtime status snapshot."""
+
+    ok: bool
+    status: object | None = None
+    error: str | None = None
+    return_code: int | None = None

@@ -8,7 +8,7 @@ import re
 from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -103,7 +103,6 @@ from app.services.shadow_metrics import (
     emit_lane_quieting_suppressed_metric,
 )
 
-logger = get_logger(__name__)
 from app.services.tags import (
     TagState,
     load_tag_state,
@@ -148,6 +147,9 @@ if TYPE_CHECKING:
 
     from app.core.auth import AuthContext
     from app.models.users import User
+
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/boards/{board_id}/tasks", tags=["tasks"])
 
@@ -914,7 +916,7 @@ async def _require_deploy_truth(
         raise _deploy_truth_error(
             code=ERROR_CODE_DEPLOY_TRUTH_UNREACHABLE,
             message=(
-                f"Target /__build responded without a SHA field. "
+                "Target /__build responded without a SHA field. "
                 "Downgrade the target's capability flag or fix the "
                 "build-metadata endpoint."
             ),
@@ -2778,6 +2780,80 @@ async def get_task_review_readiness_state(
     return await get_task_review_readiness(session, task=task)
 
 
+def _review_event_lead_message(
+    *,
+    board: Board,
+    task: Task,
+    event: TaskReviewEvent,
+) -> str:
+    return "\n".join(
+        [
+            "STRUCTURED REVIEW EVENT",
+            f"Board: {board.name}",
+            f"Task: {task.title}",
+            f"Task ID: {task.id}",
+            f"Reviewer role: {event.reviewer_role}",
+            f"Verdict: {event.verdict}",
+            "",
+            "Run the lead next-action and review-readiness gates for this task.",
+        ],
+    )
+
+
+async def _notify_lead_on_review_event(
+    *,
+    session: AsyncSession,
+    task: Task,
+    event: TaskReviewEvent,
+) -> None:
+    if task.board_id is None:
+        return
+    board = await Board.objects.by_id(task.board_id).first(session)
+    if board is None:
+        return
+    lead = (
+        await Agent.objects.filter_by(board_id=task.board_id)
+        .filter(col(Agent.is_board_lead).is_(True))
+        .first(session)
+    )
+    if lead is None or not lead.openclaw_session_id:
+        return
+    if event.agent_id is not None and event.agent_id == lead.id:
+        return
+
+    dispatch = GatewayDispatchService(session)
+    config = await dispatch.optional_gateway_config_for_board(board)
+    if config is None:
+        return
+
+    error = await dispatch.try_send_agent_message(
+        session_key=lead.openclaw_session_id,
+        config=config,
+        agent_name=lead.name,
+        message=_review_event_lead_message(board=board, task=task, event=event),
+        deliver=True,
+    )
+    if error is None:
+        record_activity(
+            session,
+            event_type="review_event.lead_notified",
+            message=f"Lead agent notified for structured review event {event.id}.",
+            agent_id=lead.id,
+            task_id=task.id,
+            board_id=task.board_id,
+        )
+    else:
+        record_activity(
+            session,
+            event_type="review_event.lead_notify_failed",
+            message=f"Lead notify failed for structured review event {event.id}: {error}",
+            agent_id=lead.id,
+            task_id=task.id,
+            board_id=task.board_id,
+        )
+    await session.commit()
+
+
 @router.post("/{task_id}/review-events", response_model=TaskReviewEventRead)
 async def record_task_review_event(
     payload: TaskReviewEventCreate,
@@ -2811,6 +2887,15 @@ async def record_task_review_event(
     session.add(event)
     await session.commit()
     await session.refresh(event)
+    try:
+        await _notify_lead_on_review_event(session=session, task=task, event=event)
+    except Exception:
+        logger.exception(
+            "review_event.lead_notify_unexpected board_id=%s task_id=%s event_id=%s",
+            task.board_id,
+            task.id,
+            event.id,
+        )
     return task_review_event_read(event)
 
 

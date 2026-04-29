@@ -14,6 +14,7 @@ from app.schemas.gateway_api import (
     GatewayCommandsResponse,
     GatewayEvalApprovalResolveRequest,
     GatewayEvalSessionEnsureRequest,
+    OpenClawRuntimeStatusResponse,
     GatewayResolveQuery,
     GatewaySessionHistoryResponse,
     GatewaySessionMessageRequest,
@@ -22,6 +23,7 @@ from app.schemas.gateway_api import (
     GatewaysStatusResponse,
 )
 from app.services.openclaw.gateway_rpc import GATEWAY_EVENTS, GATEWAY_METHODS, PROTOCOL_VERSION
+from app.services.openclaw.runtime_status import collect_openclaw_status
 from app.services.openclaw.session_service import GatewaySessionService
 from app.services.organizations import OrganizationContext
 
@@ -252,4 +254,20 @@ async def gateway_commands(
         protocol_version=PROTOCOL_VERSION,
         methods=GATEWAY_METHODS,
         events=GATEWAY_EVENTS,
+    )
+
+
+@router.get("/runtime/status", response_model=OpenClawRuntimeStatusResponse)
+async def openclaw_runtime_status(
+    _auth: AuthContext = AUTH_DEP,
+    _ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> OpenClawRuntimeStatusResponse:
+    """Return the local OpenClaw runtime status snapshot."""
+
+    snapshot = await collect_openclaw_status()
+    return OpenClawRuntimeStatusResponse(
+        ok=snapshot.ok,
+        status=snapshot.payload,
+        error=snapshot.error,
+        return_code=snapshot.return_code,
     )

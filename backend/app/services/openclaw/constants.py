@@ -66,6 +66,11 @@ DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY: dict[str, bool] = {
     "useIndicator": True,
 }
 
+DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES = "20mb"
+DEFAULT_SUBAGENT_ALLOW_AGENTS = ("claude", "codex")
+DEFAULT_SUBAGENT_RUN_TIMEOUT_SECONDS = 3600
+DEFAULT_SUBAGENT_ARCHIVE_AFTER_MINUTES = 120
+
 DEFAULT_IDENTITY_PROFILE = {
     "role": "Generalist",
     "communication_style": "direct, concise, practical",

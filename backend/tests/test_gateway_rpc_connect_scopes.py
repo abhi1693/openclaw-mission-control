@@ -10,6 +10,7 @@ from app.services.openclaw.gateway_rpc import (
     CONTROL_UI_CLIENT_MODE,
     DEFAULT_GATEWAY_CLIENT_ID,
     DEFAULT_GATEWAY_CLIENT_MODE,
+    GATEWAY_METHODS,
     GATEWAY_OPERATOR_SCOPES,
     GatewayConfig,
     OpenClawGatewayError,
@@ -18,6 +19,10 @@ from app.services.openclaw.gateway_rpc import (
     openclaw_call,
     redact_gateway_error_message,
 )
+
+
+def test_gateway_methods_include_openclaw_426_node_pair_remove() -> None:
+    assert "node.pair.remove" in GATEWAY_METHODS
 
 
 def test_build_connect_params_defaults_to_device_pairing(
