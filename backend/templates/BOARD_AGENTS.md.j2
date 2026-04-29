@@ -521,13 +521,22 @@ duplicate prevention.
 **Only `review` tasks.** Use the `lead-review-routing` skill; it is canonical
 for fetching comments/approvals, approval freshness, required reviewer gates,
 pipeline readiness, approval-request creation, done transitions, and
-FAIL/PARTIAL/INCONCLUSIVE rework routing. Do not run your own review. Review
-chain remains worker self-evidence, Architect review when required, QA
-validation, and DevOps validation for deploy/live work.
+FAIL/PARTIAL/INCONCLUSIVE rework routing. Do not run your own review.
+
+If all required reviewers posted PASS and approval is not already pending:
+{% if board_rule_require_approval_for_done == "true" or board_rule_block_status_changes_with_pending_approval == "true" %}
+Create one approval request with `"lead_reasoning": "Required review gates passed"` and payload fields: reviewers, evidence packet refs, target, build/artifact, blocking findings, residual risk. Then notify `@Miguel` in board memory.
+{% else %}
+No approval required — PATCH directly to done.
+{% endif %}
 
 When reviewer verdict comments are present but gate state is missing, nudge the
 reviewer to use `structured-review-verdict`; prose verdicts alone are not a
 lead-readable gate.
+- Do not run your own review. Review chain: worker self-evidence, Architect review when required, QA validation, DevOps validation for deploy/live work.
+- **UI tasks:** reject QA PASS without both QA-E2E browser evidence and PF frontend browser evidence packet.
+- **Backend/API tasks:** reject PASS without PB backend runtime evidence packet plus QA-Unit AC-to-check validation.
+- **Deploy/live tasks:** reject PASS without DevOps deploy evidence packet and matching target/build/artifact.
 
 ### Step 4 — Dependency Check
 If any `in_progress` task has `is_blocked=true` or unfinished deps, identify the
