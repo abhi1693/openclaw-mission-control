@@ -4,6 +4,9 @@ All notable changes to the OpenClaw Mission Control fork.
 
 ## 2026-04-29
 
+### Changed
+- **Frontend worktree parallel scheduling**: Added an executable HEARTBEAT scheduler gate for frontend agents opted into worktree parallel mode, including deterministic `/tmp/wt-$TASK_SHORT` worktrees, explicit ACP `cwd` payload guidance, active-child cap handling, and template tests for the heartbeat and `acp-delegation` skill contract.
+
 ### Fixed
 - **OpenClaw 2026.4.26 hardening follow-ups**: Treat boolean `runTimeoutSeconds` values as invalid during runtime guardrail merging, return `ok=false` for local `openclaw status --json` execution errors, and cover structured-review lead wake failures plus runtime-status admin auth wiring in tests.
 

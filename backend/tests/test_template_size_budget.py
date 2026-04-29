@@ -207,6 +207,43 @@ def test_heartbeat_templates_stay_within_soft_budget() -> None:
         )
 
 
+def test_frontend_parallel_heartbeat_schedules_worktree_acp_children() -> None:
+    context = {
+        **_REALISTIC_RENDER_CONTEXT,
+        "agent_name": "Programmer-Frontend",
+        "identity_role": "Frontend Developer",
+        "identity_frontend_parallel_mode": "worktree",
+    }
+    rendered = _render_template(
+        "BOARD_HEARTBEAT.md.j2",
+        is_main_agent=False,
+        is_board_lead=False,
+        **context,
+    )
+
+    assert "Frontend Parallel Scheduler Gate" in rendered
+    assert "- `WORKSPACE_PATH` when `identity.frontend_parallel_mode` is worktree" in rendered
+    assert "Maintain up to 2 active implementation tasks" in rendered
+    assert "def unfinished_child" in rendered
+    assert "/tmp/mc-frontend-scheduler.env" in rendered
+    assert 'WT_PATH="/tmp/wt-$TASK_SHORT"' in rendered
+    assert 'WT_BRANCH="wt/$TASK_SHORT"' in rendered
+    assert 'git -C "$WORKSPACE_PATH" worktree add' in rendered
+    assert '"cwd": "$WT_PATH"' in rendered
+    assert "Merge `wt/$TASK_SHORT` back to the main workspace" in rendered
+    assert "wt-$TASK_ID" not in rendered
+    assert "Do not use the main workspace for implementation children" in rendered
+
+
+def test_acp_delegation_accepts_heartbeat_derived_worktree_cwd() -> None:
+    skill_text = _read_skill_text_or_skip("acp-delegation")
+
+    assert "A heartbeat-derived `WT_PATH` counts as the supplied worktree path." in skill_text
+    assert "do not omit `cwd` because the lead did not spell out the path" in skill_text
+    assert '"cwd": "$WT_PATH"' in skill_text
+    assert "/tmp/wt-<TASK_ID>" not in skill_text
+
+
 @_SKIP_LOCAL_TEMPLATE_PHILOSOPHY
 def test_agents_md_fits_in_bootstrap_per_file_cap() -> None:
     """AGENTS.md is injected at session start (not every tick) but it
@@ -1007,7 +1044,9 @@ def test_acp_delegation_documents_explicit_worktree_cwd_mode() -> None:
     assert "### Worktree Task Mode" in skill
     assert "git worktree add" in skill
     assert "explicit opt-in only" in skill
-    assert '"cwd": "/tmp/wt-<TASK_ID>"' in skill
+    assert 'WT_PATH="/tmp/wt-$TASK_SHORT"' in skill
+    assert '"cwd": "$WT_PATH"' in skill
+    assert "/tmp/wt-<TASK_ID>" not in skill
     assert "There is one worktree per task, not per acceptance criterion" in skill
     assert "acp-router" not in skill
     assert "ACP transport unavailable" in skill
