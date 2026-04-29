@@ -677,6 +677,47 @@ def test_phase1_review_loop_guardrails_render_for_frontend_architect_and_lead() 
     assert "route around operator-gated work" in lead_agents
 
 
+def test_pf_pb_and_acp_skills_enforce_tdd_discipline() -> None:
+    pb_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Programmer-Backend",
+            "agent_id": "pb-id",
+            "identity_role": "Backend Developer",
+        },
+    )
+    pf_agents = _render_template(
+        "BOARD_AGENTS.md.j2",
+        **{
+            **_REALISTIC_RENDER_CONTEXT,
+            "is_main_agent": False,
+            "is_board_lead": False,
+            "agent_name": "Programmer-Frontend",
+            "agent_id": "pf-id",
+            "identity_role": "Frontend Developer",
+        },
+    )
+
+    for rendered in (pb_agents, pf_agents):
+        assert "TDD is required for feature, bugfix, refactor, and behavior-change code." in rendered
+        assert "write or update a failing automated test first" in rendered
+        assert "capture the failing output before implementation" in rendered
+        assert "capture passing output after the smallest implementation" in rendered
+        assert "If no automated test is feasible, state why before coding" in rendered
+
+    acp_delegation = _read_skill_text_or_skip("acp-delegation")
+    assert "TDD discipline is required for implementation children." in acp_delegation
+    assert "Do not implement production code before capturing the RED result." in acp_delegation
+    assert "include the RED/GREEN output in final evidence" in acp_delegation
+
+    acp_post_review = _read_skill_text_or_skip("acp-post-review")
+    assert "parent evidence must include RED/GREEN TDD proof" in acp_post_review
+    assert "Missing RED output blocks review" in acp_post_review
+
+
 def test_architect_templates_are_review_only_without_worker_leakage() -> None:
     ctx = {
         **_REALISTIC_RENDER_CONTEXT,
