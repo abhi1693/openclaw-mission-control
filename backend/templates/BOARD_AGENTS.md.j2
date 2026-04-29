@@ -302,6 +302,7 @@ You are a worker agent for this board. You own execution quality.
 - For ACP delegation, Codex implements and Claude Code reviews. Use `acp-delegation` for the exact payloads.
 
 ### Ralph by Task
+- TDD is required for feature, bugfix, refactor, and behavior-change code. Before touching production code, write or update a failing automated test first, run it, and capture the failing output before implementation. Then capture passing output after the smallest implementation. If no automated test is feasible, state why before coding and provide equivalent runtime regression proof.
 - Apply Ralph discipline per claimed task, not as a board-wide infinite loop.
 - Keep exactly one active implementation task unless `@lead` explicitly routes otherwise.
 - For each claimed task: read the task and ACs, search first, then work one acceptance criterion at a time. For each AC: implement the smallest correct slice, build/test, and validate with runtime evidence before moving to the next AC. After all ACs pass, use the ACP review flow, then post evidence and `@lead` handoff before moving on.
@@ -329,6 +330,7 @@ After the Codex child returns, use the `acp-post-review` skill before posting ev
 - For ACP delegation, Claude Code implements and Codex reviews. Use `acp-delegation` for the exact payloads.
 
 ### Ralph by Task
+- TDD is required for feature, bugfix, refactor, and behavior-change code. Before touching production code, write or update a failing automated test first, run it, and capture the failing output before implementation. Then capture passing output after the smallest implementation. If no automated test is feasible, state why before coding and provide equivalent browser/runtime regression proof.
 - Apply Ralph discipline per claimed task, not as a board-wide infinite loop.
 - Keep exactly one active implementation task unless `@lead` explicitly routes otherwise.
 - For each claimed task: read the task and ACs, search first, then work one acceptance criterion at a time. For each AC: implement the smallest correct slice, build/test, and validate with browser/runtime evidence before moving to the next AC. After all ACs pass, use the ACP review flow, then post evidence and `@lead` handoff before moving on.

@@ -30,10 +30,14 @@ from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services import souls_directory
 from app.services.openclaw.constants import (
     BOARD_SHARED_TEMPLATE_MAP,
+    DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES,
     DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY,
     DEFAULT_GATEWAY_FILES,
     DEFAULT_HEARTBEAT_CONFIG,
     DEFAULT_IDENTITY_PROFILE,
+    DEFAULT_SUBAGENT_ALLOW_AGENTS,
+    DEFAULT_SUBAGENT_ARCHIVE_AFTER_MINUTES,
+    DEFAULT_SUBAGENT_RUN_TIMEOUT_SECONDS,
     EXTRA_IDENTITY_PROFILE_FIELDS,
     HEARTBEAT_AGENT_TEMPLATE,
     HEARTBEAT_LEAD_TEMPLATE,
@@ -146,8 +150,6 @@ def _heartbeat_config(agent: Agent) -> dict[str, Any]:
     merged = DEFAULT_HEARTBEAT_CONFIG.copy()
     if isinstance(agent.heartbeat_config, dict):
         merged.update(agent.heartbeat_config)
-    if getattr(agent, "is_board_lead", False):
-        merged["isolatedSession"] = False
     # Architectural contract (per Codex round-2 review): the
     # post-refactor templates (slim HEARTBEAT.md referencing AGENTS.md
     # playbooks) assume the gateway injects the full bootstrap file set
@@ -255,6 +257,109 @@ def _channel_heartbeat_visibility_patch(config_data: dict[str, Any]) -> dict[str
     return {"defaults": {"heartbeat": merged}}
 
 
+def _disabled_byte_guard(value: object) -> bool:
+    if value is None or value is False:
+        return True
+    if isinstance(value, (int, float)):
+        return value <= 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized in {"", "0", "0b", "0kb", "0mb", "0gb", "false", "off", "disabled"}
+    return False
+
+
+def _merge_required_agent_ids(existing: object, required: tuple[str, ...]) -> list[str] | None:
+    if not isinstance(existing, list):
+        return list(required)
+
+    normalized_existing = [
+        value.strip() for value in existing if isinstance(value, str) and value.strip()
+    ]
+    if "*" in normalized_existing:
+        return None
+
+    merged = list(normalized_existing)
+    changed = False
+    for agent_id in required:
+        if agent_id not in merged:
+            merged.append(agent_id)
+            changed = True
+    if not changed and len(merged) == len(existing):
+        return None
+    return merged
+
+
+def _invalid_positive_int(value: object) -> bool:
+    return isinstance(value, bool) or not isinstance(value, int) or value <= 0
+
+
+def _openclaw_426_runtime_patch(config_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Build a minimal OpenClaw 4.26 runtime hardening patch.
+
+    MC provisions long-lived heartbeat sessions. OpenClaw 4.26 added a
+    transcript-byte compaction guard and tightened explicit subagent target
+    policy. Keep this merge narrow: preserve operator-provided compaction and
+    subagent values, add only missing safety knobs, and turn off automatic ACP
+    thread dispatch because MC templates use explicit ``sessions_spawn`` calls.
+    """
+
+    agents = config_data.get("agents")
+    if not isinstance(agents, dict):
+        agents = {}
+    defaults = agents.get("defaults")
+    if not isinstance(defaults, dict):
+        defaults = {}
+
+    agents_patch: dict[str, Any] = {}
+
+    compaction = defaults.get("compaction")
+    if not isinstance(compaction, dict):
+        compaction = {}
+    merged_compaction = dict(compaction)
+    if merged_compaction.get("truncateAfterCompaction") is not True:
+        merged_compaction["truncateAfterCompaction"] = True
+    if _disabled_byte_guard(merged_compaction.get("maxActiveTranscriptBytes")):
+        merged_compaction["maxActiveTranscriptBytes"] = DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES
+    if merged_compaction != compaction:
+        agents_patch.setdefault("defaults", {})["compaction"] = merged_compaction
+
+    subagents = defaults.get("subagents")
+    if not isinstance(subagents, dict):
+        subagents = {}
+    merged_subagents = dict(subagents)
+    merged_allow_agents = _merge_required_agent_ids(
+        merged_subagents.get("allowAgents"),
+        DEFAULT_SUBAGENT_ALLOW_AGENTS,
+    )
+    if merged_allow_agents is not None:
+        merged_subagents["allowAgents"] = merged_allow_agents
+    if merged_subagents.get("requireAgentId") is not True:
+        merged_subagents["requireAgentId"] = True
+    if _invalid_positive_int(merged_subagents.get("runTimeoutSeconds")):
+        merged_subagents["runTimeoutSeconds"] = DEFAULT_SUBAGENT_RUN_TIMEOUT_SECONDS
+    if "archiveAfterMinutes" not in merged_subagents:
+        merged_subagents["archiveAfterMinutes"] = DEFAULT_SUBAGENT_ARCHIVE_AFTER_MINUTES
+    if merged_subagents != subagents:
+        agents_patch.setdefault("defaults", {})["subagents"] = merged_subagents
+
+    patch: dict[str, Any] = {}
+    if agents_patch:
+        patch["agents"] = agents_patch
+
+    acp = config_data.get("acp")
+    if not isinstance(acp, dict):
+        acp = {}
+    dispatch = acp.get("dispatch")
+    if not isinstance(dispatch, dict):
+        dispatch = {}
+    if dispatch.get("enabled") is not False:
+        merged_dispatch = dict(dispatch)
+        merged_dispatch["enabled"] = False
+        patch["acp"] = {"dispatch": merged_dispatch}
+
+    return patch or None
+
+
 def _template_env() -> Environment:
     """Create the Jinja environment used for gateway template rendering.
 
@@ -303,7 +408,7 @@ def _workspace_path(agent: Agent, workspace_root: str) -> str:
 
     # Use agent key derived from session key when possible. This prevents collisions for
     # lead agents (session key includes board id) even if multiple boards share the same
-    # display name (e.g. "Lead Agent").
+    # display name (e.g. "Supervisor").
     key = _agent_key(agent)
 
     # Backwards-compat: gateway-main agents historically used session keys that encoded
@@ -793,14 +898,26 @@ class OpenClawGatewayControlPlane(GatewayControlPlane):
 
         channels_patch = _channel_heartbeat_visibility_patch(config_data)
         tools_patch = _tools_exec_host_patch(config_data)
+        runtime_patch = _openclaw_426_runtime_patch(config_data)
 
         # Skip config.patch entirely when nothing changed — avoids an unnecessary
         # gateway SIGUSR1 restart that rotates agent tokens and breaks active sessions.
-        if new_list == raw_list and channels_patch is None and tools_patch is None:
+        if (
+            new_list == raw_list
+            and channels_patch is None
+            and tools_patch is None
+            and runtime_patch is None
+        ):
             logger.debug("patch_agent_heartbeats: no changes detected, skipping config.patch")
             return
 
         patch: dict[str, Any] = {"agents": {"list": new_list}}
+        if runtime_patch is not None:
+            for key, value in runtime_patch.items():
+                if key == "agents":
+                    patch["agents"].update(value)
+                else:
+                    patch[key] = value
         if channels_patch is not None:
             patch["channels"] = channels_patch
         if tools_patch is not None:

@@ -156,7 +156,7 @@ class OpenClawProvisioningService(OpenClawDBService):
 
     @staticmethod
     def lead_agent_name(_: Board) -> str:
-        return "Lead Agent"
+        return "Supervisor"
 
     async def ensure_board_lead_agent(
         self,
@@ -175,9 +175,9 @@ class OpenClawProvisioningService(OpenClawDBService):
             )
         ).first()
         if existing:
-            desired_name = config_options.agent_name or self.lead_agent_name(board)
             changed = False
-            if existing.name != desired_name:
+            if config_options.agent_name and existing.name != config_options.agent_name:
+                desired_name = config_options.agent_name
                 existing.name = desired_name
                 changed = True
             if existing.gateway_id != request.gateway.id:

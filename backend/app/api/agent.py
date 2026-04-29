@@ -53,22 +53,15 @@ from app.schemas.gateway_coordination import (
 from app.schemas.health import AgentHealthStatusResponse
 from app.schemas.lead_actions import LeadNextActionRead
 from app.schemas.pagination import DefaultLimitOffsetPage
-from app.schemas.subagent_failures import (
-    SubagentFailureReport,
-    SubagentFailureReportResponse,
-)
 from app.schemas.tags import TagRef
 from app.schemas.task_review_events import (
     TaskReviewEventCreate,
     TaskReviewEventRead,
     TaskReviewReadinessRead,
 )
+from app.schemas.task_pipeline_events import TaskPipelineStateRead
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
 from app.services.activity_log import record_activity
-from app.services.subagent_failure_blocker import (
-    file_subagent_failure_blocker_if_configured,
-    parse_subagent_failure_payload,
-)
 from app.services.openclaw.coordination_service import GatewayCoordinationService
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import AgentLifecycleService
@@ -157,6 +150,12 @@ def _task_list_filters(
 
 TASK_LIST_FILTERS_DEP = Depends(_task_list_filters)
 ACTIVE_LEAD_STATUSES = ("inbox", "in_progress", "review", "rework")
+LEAD_DONE_APPROVAL_ACTION_TYPES = (
+    "move_to_done",
+    "mark_done",
+    "task_done",
+    "move_task_to_done",
+)
 
 
 def _actor(agent_ctx: AgentAuthContext) -> ActorContext:
@@ -181,7 +180,7 @@ async def _lead_approval_state_by_task_id(
             )
             .where(col(Approval.board_id) == board_id)
             .where(col(Approval.task_id).in_(task_ids))
-            .where(col(Approval.action_type) == "move_to_done"),
+            .where(col(Approval.action_type).in_(LEAD_DONE_APPROVAL_ACTION_TYPES)),
         ),
     )
     linked_rows = list(
@@ -195,7 +194,7 @@ async def _lead_approval_state_by_task_id(
             .join(Approval, col(Approval.id) == col(ApprovalTaskLink.approval_id))
             .where(col(Approval.board_id) == board_id)
             .where(col(ApprovalTaskLink.task_id).in_(task_ids))
-            .where(col(Approval.action_type) == "move_to_done"),
+            .where(col(Approval.action_type).in_(LEAD_DONE_APPROVAL_ACTION_TYPES)),
         ),
     )
     return latest_approval_state_by_task_id(
@@ -241,7 +240,9 @@ async def _lead_pipeline_missing_by_task_id(
 ) -> dict[UUID, list[str]]:
     missing_by_task_id: dict[UUID, list[str]] = {}
     for task in tasks:
-        if task.status != "review" or not frontend_pipeline_required(task.review_packet_type):
+        if task.status not in {"in_progress", "review"}:
+            continue
+        if not frontend_pipeline_required(task.review_packet_type):
             continue
         cycle_since = task.in_progress_at or task.previous_in_progress_at
         events = await list_task_pipeline_events(
@@ -249,9 +250,7 @@ async def _lead_pipeline_missing_by_task_id(
             task_id=task.id,
             since=cycle_since,
         )
-        missing = pipeline_missing_states(events)
-        if missing:
-            missing_by_task_id[task.id] = missing
+        missing_by_task_id[task.id] = pipeline_missing_states(events)
     return missing_by_task_id
 
 
@@ -1048,9 +1047,12 @@ async def create_task(
                 "operator_decision_summary": task.operator_decision_summary,
             },
         )
-    tasks_api._require_delivery_contract_with_metric(
-        task=task,
-        actor_agent_id=agent_ctx.agent.id,
+    tasks_api._require_delivery_contract_for_task_state(
+        status_value=task.status,
+        review_packet_type=task.review_packet_type,
+        validation_target=task.validation_target,
+        validation_target_kind=task.validation_target_kind,
+        validation_target_scope=task.validation_target_scope,
     )
     if task.assigned_agent_id:
         agent = await Agent.objects.by_id(task.assigned_agent_id).first(session)
@@ -1289,6 +1291,41 @@ async def create_task_comment(
 
 
 @router.get(
+    "/boards/{board_id}/tasks/{task_id}/pipeline",
+    response_model=TaskPipelineStateRead,
+    tags=AGENT_BOARD_TAGS,
+    openapi_extra=_agent_board_openapi_hints(
+        intent="agent_task_pipeline_state",
+        when_to_use=[
+            "Lead or worker needs structured implementation pipeline readiness before routing to review.",
+            "Lead next-action details include missing_pipeline_states for an in-progress frontend_ui or mixed task.",
+        ],
+        when_not_to_use=[
+            "Do not use for reviewer PASS/FAIL verdict readiness after a task is already in review; use review-readiness instead.",
+        ],
+        routing_examples=[
+            {
+                "input": {
+                    "intent": "check whether implementation evidence can move to review",
+                    "required_privilege": "any_agent",
+                },
+                "decision": "agent_task_pipeline_state",
+            }
+        ],
+        side_effects=["None. This endpoint is read-only."],
+    ),
+)
+async def get_task_pipeline_state(
+    task: Task = TASK_DEP,
+    session: AsyncSession = SESSION_DEP,
+    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
+) -> TaskPipelineStateRead:
+    """Return structured implementation pipeline readiness for an agent-visible task."""
+    _guard_task_access(agent_ctx, task)
+    return await tasks_api.get_task_pipeline_state(task=task, session=session)
+
+
+@router.get(
     "/boards/{board_id}/tasks/{task_id}/review-readiness",
     response_model=TaskReviewReadinessRead,
     tags=AGENT_BOARD_TAGS,
@@ -1354,83 +1391,6 @@ async def record_task_review_event(
         session=session,
         actor=_actor(agent_ctx),
     )
-
-
-@router.post(
-    "/boards/{board_id}/tasks/{task_id}/subagent-failure",
-    response_model=SubagentFailureReportResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=AGENT_BOARD_TAGS,
-    openapi_extra=_agent_board_openapi_hints(
-        intent="agent_subagent_failure_report",
-        when_to_use=[
-            "Parent agent detected a delegated subagent failure "
-            "(timeout, tool-use error, crash) and needs to surface it "
-            "as a structured routing object.",
-        ],
-        routing_examples=[
-            {
-                "input": {
-                    "intent": "codex subagent timed out after 8s on the Admin form fix",
-                    "required_privilege": "any_agent",
-                },
-                "decision": "agent_subagent_failure_report",
-            }
-        ],
-    ),
-)
-async def report_subagent_failure(
-    payload: SubagentFailureReport,
-    board: Board = BOARD_DEP,
-    task: Task = TASK_DEP,
-    session: AsyncSession = SESSION_DEP,
-    agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
-) -> SubagentFailureReportResponse:
-    """Self-report a subagent failure from the parent agent's
-    runtime.
-
-    Converts the report into a ``runtime``-category ``Blocker`` row
-    via ``file_subagent_failure_blocker_if_configured`` when the
-    board has graduated ``structured_blockers_v1``. Dedupes on
-    ``(task, requested_role)`` — retry storms with drifted
-    ``runtime_ms`` / ``error_class`` collapse onto one open row.
-
-    Returns ``{blocker_id: null}`` when the filer returned None
-    (flag off, or already an open dedupe-matching row). Returns
-    ``{blocker_id: <uuid>}`` on a fresh file.
-
-    This endpoint is the parent agent's active-reporting path — it
-    ships before the gateway's 4.20+ ``subagent_failure`` activity-
-    event push-channel is live. Once that channel lands, both paths
-    can coexist (same filer, same dedupe index).
-    """
-
-    _guard_task_access(agent_ctx, task)
-    parsed = parse_subagent_failure_payload(payload.model_dump())
-    if parsed is None:
-        # Pydantic caught the obvious shape problems already; a None
-        # here means a subtle validator mismatch (bool masquerading
-        # as int via a hand-rolled dict, etc.). Surface 422 so the
-        # agent sees a clean validation error, not a silent no-op.
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "subagent_failure_payload_invalid",
-                "message": (
-                    "Payload failed subagent_failure_blocker validation. "
-                    "Check runtime_ms bounds, requested_role length, "
-                    "and error_class presence."
-                ),
-            },
-        )
-    blocker_id = await file_subagent_failure_blocker_if_configured(
-        session,
-        board=board,
-        task_id=task.id,
-        parent_agent_id=agent_ctx.agent.id,
-        payload=parsed,
-    )
-    return SubagentFailureReportResponse(blocker_id=blocker_id)
 
 
 @router.get(

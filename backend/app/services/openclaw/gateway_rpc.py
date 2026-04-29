@@ -44,11 +44,13 @@ DEFAULT_GATEWAY_CLIENT_ID = "gateway-client"
 DEFAULT_GATEWAY_CLIENT_MODE = "backend"
 CONTROL_UI_CLIENT_ID = "openclaw-control-ui"
 CONTROL_UI_CLIENT_MODE = "ui"
+GATEWAY_WS_OPEN_TIMEOUT_SECONDS = 35
+GATEWAY_WS_CLOSE_TIMEOUT_SECONDS = 5
 GatewayConnectMode = Literal["device", "control_ui"]
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
-# Updated for OpenClaw 2026.4.5 (3e72c03).
+# Updated for OpenClaw 2026.4.26 (be8c246).
 GATEWAY_METHODS = [
     "health",
     "logs.tail",
@@ -134,6 +136,7 @@ GATEWAY_METHODS = [
     "node.pair.list",
     "node.pair.approve",
     "node.pair.reject",
+    "node.pair.remove",
     "node.pair.verify",
     "node.pending.drain",
     "node.pending.enqueue",
@@ -174,7 +177,7 @@ GATEWAY_METHODS = [
     "chat.send",
 ]
 
-# Updated for OpenClaw 2026.4.5 (3e72c03).
+# Updated for OpenClaw 2026.4.26 (be8c246).
 GATEWAY_EVENTS = [
     "connect.challenge",
     "agent",
@@ -547,7 +550,11 @@ async def _openclaw_call_once(
 ) -> object:
     origin = _build_control_ui_origin(gateway_url) if config.disable_device_pairing else None
     ssl_context = _create_ssl_context(config)
-    connect_kwargs: dict[str, Any] = {"ping_interval": None}
+    connect_kwargs: dict[str, Any] = {
+        "ping_interval": None,
+        "open_timeout": GATEWAY_WS_OPEN_TIMEOUT_SECONDS,
+        "close_timeout": GATEWAY_WS_CLOSE_TIMEOUT_SECONDS,
+    }
     if origin is not None:
         connect_kwargs["origin"] = origin
     if ssl_context is not None:
@@ -565,7 +572,11 @@ async def _openclaw_connect_metadata_once(
 ) -> object:
     origin = _build_control_ui_origin(gateway_url) if config.disable_device_pairing else None
     ssl_context = _create_ssl_context(config)
-    connect_kwargs: dict[str, Any] = {"ping_interval": None}
+    connect_kwargs: dict[str, Any] = {
+        "ping_interval": None,
+        "open_timeout": GATEWAY_WS_OPEN_TIMEOUT_SECONDS,
+        "close_timeout": GATEWAY_WS_CLOSE_TIMEOUT_SECONDS,
+    }
     if origin is not None:
         connect_kwargs["origin"] = origin
     if ssl_context is not None:

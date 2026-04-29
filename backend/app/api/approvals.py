@@ -199,6 +199,14 @@ async def _ensure_no_pending_approval_conflicts(
         )
 
 
+DONE_APPROVAL_ACTION_TYPES = (
+    "move_to_done",
+    "mark_done",
+    "task_done",
+    "move_task_to_done",
+)
+
+
 async def _ensure_move_to_done_targets_in_review(
     session: AsyncSession,
     *,
@@ -206,7 +214,7 @@ async def _ensure_move_to_done_targets_in_review(
     action_type: str,
     task_ids: Sequence[UUID],
 ) -> None:
-    if action_type != "move_to_done" or not task_ids:
+    if action_type not in DONE_APPROVAL_ACTION_TYPES or not task_ids:
         return
     rows = await session.exec(
         select(Task.id, Task.status)
@@ -234,7 +242,7 @@ async def _ensure_move_to_done_targets_have_delivery_contract(
     action_type: str,
     task_ids: Sequence[UUID],
 ) -> None:
-    if action_type != "move_to_done" or not task_ids:
+    if action_type not in DONE_APPROVAL_ACTION_TYPES or not task_ids:
         return
     rows = await session.exec(
         select(

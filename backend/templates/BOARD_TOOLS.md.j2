@@ -31,12 +31,12 @@
 ```bash
 mkdir -p api
 curl -fsS "{{ base_url }}/openapi.json" -o api/openapi.json
-jq -r '
-  .paths | to_entries[] as $p
-  | $p.value | to_entries[]
-  | select((.value.tags // []) | index("{{ role_tag }}"))
-  | "\(.key|ascii_upcase)\t\($p.key)\t\(.value.operationId // "-")\t\(.value[\"x-llm-intent\"] // "-")\t\(.value[\"x-when-to-use\"] // [] | join(\" | \"))\t\(.value[\"x-routing-policy\"] // [] | join(\" | \"))"
-' api/openapi.json | sort > api/{{ role_tag }}-operations.tsv
+jq -r -f /dev/stdin api/openapi.json <<'JQ' | sort > api/{{ role_tag }}-operations.tsv
+.paths | to_entries[] as $p
+| $p.value | to_entries[]
+| select((.value.tags // []) | index("{{ role_tag }}"))
+| "\(.key|ascii_upcase)\t\($p.key)\t\(.value.operationId // "-")\t\(.value["x-llm-intent"] // "-")\t\(.value["x-when-to-use"] // [] | join(" | "))\t\(.value["x-routing-policy"] // [] | join(" | "))"
+JQ
 ```
 
 ## API source of truth

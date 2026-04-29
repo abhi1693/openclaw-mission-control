@@ -59,7 +59,7 @@ async def run() -> None:
 
         lead = Agent(
             board_id=board.id,
-            name="Lead Agent",
+            name="Supervisor",
             status="online",
             is_board_lead=True,
         )
