@@ -33,6 +33,8 @@ services:
       # like `backend/templates/`.
       context: .
       dockerfile: backend/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - path: ./backend/.env
         required: false
@@ -51,7 +53,13 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build:
@@ -71,7 +79,13 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     develop:
       watch:
         # Rebuild frontend image when UI source or build config changes.
@@ -94,6 +108,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "scripts/rq-docker", "worker"]
     env_file:
       - path: ./backend/.env
@@ -113,6 +129,12 @@ services:
       RQ_DISPATCH_THROTTLE_SECONDS: ${RQ_DISPATCH_THROTTLE_SECONDS:-2.0}
       RQ_DISPATCH_MAX_RETRIES: ${RQ_DISPATCH_MAX_RETRIES:-3}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import redis; r=redis.from_url('redis://redis:6379/0'); r.ping()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
   postgres_data:
