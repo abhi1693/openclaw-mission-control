@@ -772,6 +772,38 @@ async def update_approval(
     history_task_ids_for_event: list[UUID] = []
     if "status" in updates:
         target_status = updates["status"]
+        # Idempotency: a same-decision resolve on an already-resolved approval
+        # returns the current state without mutating ``resolved_at``, writing
+        # history, or firing lead notifications. Mirrors the OpenClaw 4.27
+        # gateway-side approval idempotency contract so client retries after
+        # a transient network blip do not double-record.
+        if (
+            target_status in {"approved", "rejected"}
+            and prior_status == target_status
+        ):
+            reads = await _approval_reads(session, [approval])
+            return reads[0]
+        # Conflict guard: refuse to flip an already-resolved approval to a
+        # different terminal decision. Callers that need to overturn a
+        # decision must open a new approval (or use the unblock path) so the
+        # audit trail remains accurate.
+        if (
+            prior_status in {"approved", "rejected"}
+            and target_status in {"approved", "rejected"}
+            and prior_status != target_status
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": (
+                        "Approval is already resolved; refusing conflicting "
+                        "terminal decision."
+                    ),
+                    "approval_id": str(approval.id),
+                    "current_status": prior_status,
+                    "requested_status": target_status,
+                },
+            )
         if target_status == "pending" and prior_status != "pending":
             task_ids_by_approval = await load_task_ids_by_approval(
                 session, approval_ids=[approval.id]
