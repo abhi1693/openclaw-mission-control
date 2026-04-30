@@ -17,6 +17,25 @@ class HealthStatusResponse(SQLModel):
     )
 
 
+class ReadinessStatusResponse(SQLModel):
+    """Readiness payload reporting per-dependency probe results.
+
+    Returned with HTTP 200 when every dependency check is healthy and HTTP 503
+    when any dependency is unreachable. The `checks` map contains one entry per
+    probed dependency with value "ok" or "fail".
+    """
+
+    ok: bool = Field(
+        description="True when every dependency check succeeded.",
+        examples=[True],
+    )
+    checks: dict[str, str] = Field(
+        default_factory=dict,
+        description='Per-dependency probe results, keyed by dependency name (e.g. "db", "redis").',
+        examples=[{"db": "ok", "redis": "ok"}],
+    )
+
+
 class AgentHealthStatusResponse(HealthStatusResponse):
     """Agent-authenticated liveness payload for agent route probes."""
 

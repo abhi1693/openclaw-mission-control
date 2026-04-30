@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
+import redis
 from fastapi import APIRouter, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi_pagination import add_pagination
+from sqlalchemy import text
 
 from app.api.activity import router as activity_router
 from app.api.agent import router as agent_router
@@ -37,8 +41,8 @@ from app.core.logging import configure_logging, get_logger
 from app.core.rate_limit import validate_rate_limit_redis
 from app.core.rate_limit_backend import RateLimitBackend
 from app.core.security_headers import SecurityHeadersMiddleware
-from app.db.session import init_db
-from app.schemas.health import HealthStatusResponse
+from app.db.session import async_engine, init_db
+from app.schemas.health import HealthStatusResponse, ReadinessStatusResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -521,19 +525,64 @@ def healthz() -> HealthStatusResponse:
 @app.get(
     "/readyz",
     tags=["health"],
-    response_model=HealthStatusResponse,
+    response_model=ReadinessStatusResponse,
     summary="Readiness Check",
-    description="Readiness probe endpoint for service orchestration checks.",
+    description=(
+        "Readiness probe that verifies critical dependencies (database, Redis) are reachable. "
+        "Returns HTTP 200 only when every dependency is healthy; otherwise HTTP 503 with "
+        "per-dependency check results."
+    ),
     responses={
         status.HTTP_200_OK: {
-            "description": "Service is ready.",
-            "content": {"application/json": {"example": {"ok": True}}},
-        }
+            "description": "Service is ready: every dependency probe succeeded.",
+            "content": {
+                "application/json": {"example": {"ok": True, "checks": {"db": "ok", "redis": "ok"}}}
+            },
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "Service is not ready: at least one dependency probe failed.",
+            "content": {
+                "application/json": {
+                    "example": {"ok": False, "checks": {"db": "ok", "redis": "fail"}}
+                }
+            },
+        },
     },
 )
-def readyz() -> HealthStatusResponse:
-    """Readiness probe endpoint for service orchestration checks."""
-    return HealthStatusResponse(ok=True)
+async def readyz() -> JSONResponse:
+    """Readiness probe that verifies database and Redis connectivity.
+
+    Each dependency is probed independently so an outage in one is reported
+    alongside the healthy status of the others. The endpoint returns HTTP 503
+    when any probe fails so orchestrators (Cloudflare, Kubernetes, uptime
+    monitors) can react instead of being silently lied to.
+    """
+    checks: dict[str, str] = {}
+
+    try:
+        async with async_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["db"] = "ok"
+    except Exception:
+        logger.exception("readyz: database probe failed")
+        checks["db"] = "fail"
+
+    try:
+        client = redis.Redis.from_url(settings.rq_redis_url)
+        try:
+            await asyncio.to_thread(client.ping)
+            checks["redis"] = "ok"
+        finally:
+            await asyncio.to_thread(client.close)
+    except Exception:
+        logger.exception("readyz: redis probe failed")
+        checks["redis"] = "fail"
+
+    overall_ok = all(value == "ok" for value in checks.values())
+    return JSONResponse(
+        {"ok": overall_ok, "checks": checks},
+        status_code=(status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE),
+    )
 
 
 api_v1 = APIRouter(prefix="/api/v1")
