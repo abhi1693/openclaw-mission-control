@@ -32,8 +32,10 @@ from pydantic import BaseModel, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from app.core.auth_mode import AuthMode
+from app.core.client_ip import get_client_ip
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.rate_limit import user_auth_limiter
 from app.db import crud
 from app.db.session import get_session
 from app.models.users import User
@@ -458,6 +460,8 @@ async def get_auth_context(
     session: AsyncSession = SESSION_DEP,
 ) -> AuthContext:
     """Resolve required authenticated user context for the configured auth mode."""
+    if not await user_auth_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     if settings.auth_mode == AuthMode.LOCAL:
         local_auth = await _resolve_local_auth_context(
             request=request,
@@ -502,6 +506,8 @@ async def get_auth_context_optional(
     """Resolve user context if available, otherwise return `None`."""
     if request.headers.get("X-Agent-Token"):
         return None
+    if not await user_auth_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     if settings.auth_mode == AuthMode.LOCAL:
         return await _resolve_local_auth_context(
             request=request,

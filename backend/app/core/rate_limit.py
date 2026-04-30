@@ -235,3 +235,15 @@ webhook_ingest_limiter: RateLimiter = create_rate_limiter(
     max_requests=60,
     window_seconds=60.0,
 )
+# User auth: 120 requests per 60 seconds per IP.
+#
+# Generous enough for an SPA hitting many user-authed endpoints concurrently
+# (~2 RPS sustained) but tight enough to make brute-forcing the local-auth
+# bearer impractical regardless of which protected route an attacker probes.
+# Operators behind a reverse proxy must configure ``TRUSTED_PROXIES`` so the
+# limit keys on real client IPs rather than the proxy edge IP.
+user_auth_limiter: RateLimiter = create_rate_limiter(
+    namespace="user_auth",
+    max_requests=120,
+    window_seconds=60.0,
+)

@@ -34,7 +34,7 @@ async def test_get_auth_context_raises_401_when_clerk_signed_out(
 
     with pytest.raises(HTTPException) as excinfo:
         await auth.get_auth_context(  # type: ignore[arg-type]
-            request=SimpleNamespace(headers={}),
+            request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={}),
             credentials=None,
             session=_FakeSession(),  # type: ignore[arg-type]
         )
@@ -75,7 +75,7 @@ async def test_get_auth_context_uses_request_state_payload_claims(
     monkeypatch.setattr(orgs, "ensure_member_for_user", _fake_ensure_member_for_user)
 
     ctx = await auth.get_auth_context(  # type: ignore[arg-type]
-        request=SimpleNamespace(headers={}),
+        request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={}),
         credentials=None,
         session=_FakeSession(),  # type: ignore[arg-type]
     )
@@ -98,7 +98,7 @@ async def test_get_auth_context_optional_returns_none_for_agent_token(
     monkeypatch.setattr(auth, "_authenticate_clerk_request", _boom)
 
     out = await auth.get_auth_context_optional(  # type: ignore[arg-type]
-        request=SimpleNamespace(headers={"X-Agent-Token": "agent"}),
+        request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={"X-Agent-Token": "agent"}),
         credentials=None,
         session=_FakeSession(),  # type: ignore[arg-type]
     )
@@ -118,7 +118,7 @@ async def test_get_auth_context_local_mode_requires_valid_bearer_token(
     monkeypatch.setattr(auth, "_get_or_create_local_user", _fake_local_user)
 
     ctx = await auth.get_auth_context(  # type: ignore[arg-type]
-        request=SimpleNamespace(headers={"Authorization": "Bearer expected-token"}),
+        request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={"Authorization": "Bearer expected-token"}),
         credentials=None,
         session=_FakeSession(),  # type: ignore[arg-type]
     )
@@ -141,7 +141,7 @@ async def test_get_auth_context_optional_local_mode_returns_none_without_token(
     monkeypatch.setattr(auth, "_get_or_create_local_user", _boom)
 
     out = await auth.get_auth_context_optional(  # type: ignore[arg-type]
-        request=SimpleNamespace(headers={}),
+        request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={}),
         credentials=None,
         session=_FakeSession(),  # type: ignore[arg-type]
     )
