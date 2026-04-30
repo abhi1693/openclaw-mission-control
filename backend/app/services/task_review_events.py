@@ -91,6 +91,72 @@ def _coerce_uuid_list(value: object) -> list[UUID] | None:
     return parsed
 
 
+def _is_present_text(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_pass_value(value: object) -> bool:
+    return isinstance(value, str) and value.strip().lower() == PASS_VERDICT
+
+
+def _is_zero_count(value: object) -> bool:
+    return type(value) is int and value == 0
+
+
+def _non_empty_dict_rows(value: object) -> list[dict[str, object]] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    rows: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            return None
+        rows.append(item)
+    return rows
+
+
+def _qa_e2e_pass_artifact_issues(
+    *,
+    latest_by_role: dict[str, TaskReviewEvent],
+    required_roles: Sequence[str],
+) -> list[str]:
+    if "qa_e2e" not in required_roles:
+        return []
+
+    event = latest_by_role.get("qa_e2e")
+    if event is None or event.verdict != PASS_VERDICT:
+        return []
+
+    issues: list[str] = []
+    if event.evidence_type != "browser":
+        issues.append("qa_e2e_pass_wrong_evidence_type")
+    if not _is_present_text(event.target):
+        issues.append("qa_e2e_pass_missing_target")
+    if not _is_present_text(event.build_hash):
+        issues.append("qa_e2e_pass_missing_build_hash")
+
+    evidence = event.evidence if isinstance(event.evidence, dict) else {}
+    ac_rows = _non_empty_dict_rows(evidence.get("ac_rows"))
+    if ac_rows is None:
+        issues.append("qa_e2e_pass_missing_ac_rows")
+    elif any(not _is_pass_value(row.get("result")) for row in ac_rows):
+        issues.append("qa_e2e_pass_ac_rows_have_failures")
+
+    browser_matrix = _non_empty_dict_rows(evidence.get("browser_matrix"))
+    if browser_matrix is None:
+        issues.append("qa_e2e_pass_missing_browser_matrix")
+    elif any(
+        not _is_pass_value(row.get("result"))
+        or not _is_zero_count(row.get("console_errors"))
+        or not _is_zero_count(row.get("network_failures"))
+        or not _is_present_text(row.get("route"))
+        or not _is_present_text(row.get("viewport"))
+        for row in browser_matrix
+    ):
+        issues.append("qa_e2e_pass_browser_matrix_has_failures")
+
+    return issues
+
+
 def _review_only_artifact_state(
     *,
     task: Task,
@@ -156,13 +222,18 @@ def build_review_readiness(
         if latest_by_role.get(role) is not None
         and latest_by_role[role].verdict in BLOCKING_VERDICTS
     ]
-    artifact_issues, declared_child_task_ids, missing_child_task_ids = (
+    artifact_issues = _qa_e2e_pass_artifact_issues(
+        latest_by_role=latest_by_role,
+        required_roles=required_roles,
+    )
+    review_only_artifact_issues, declared_child_task_ids, missing_child_task_ids = (
         _review_only_artifact_state(
             task=task,
             latest_by_role=latest_by_role,
             board_task_ids=board_task_ids,
         )
     )
+    artifact_issues.extend(review_only_artifact_issues)
     ready = bool(required_roles) and not missing_roles and not blocking_roles and all(
         latest_by_role[role].verdict == PASS_VERDICT for role in required_roles
     ) and not artifact_issues

@@ -1136,6 +1136,8 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "second task-comment nudge" in verdict
     assert "commits and refreshes the structured" in verdict
     assert "Do not repost an identical PASS" in verdict
+    assert '"ac_rows"' in verdict
+    assert '"browser_matrix"' in verdict
 
 
 def test_extracted_worker_review_skills_match_template_boundaries() -> None:
@@ -1144,6 +1146,8 @@ def test_extracted_worker_review_skills_match_template_boundaries() -> None:
     assert "QA-Unit PASS Evidence" in qa
     assert "Suggested routing: lead move to rework" in qa
     assert "structured-review-verdict" in qa
+    assert '"ac_rows"' in qa
+    assert '"browser_matrix"' in qa
 
     architect = _read_skill_text_or_skip("architect-review-verdict")
     assert "Architect Review Verdict" in architect
