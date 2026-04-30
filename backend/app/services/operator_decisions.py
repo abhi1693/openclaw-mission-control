@@ -25,6 +25,7 @@ from app.models.operator_decisions import (
     OperatorDecision,
     OperatorDecisionTaskLink,
 )
+from app.services.blocker_reason_codes import group_codes_by_task
 
 
 async def task_ids_with_pending_operator_decision(
@@ -73,3 +74,34 @@ async def task_has_pending_operator_decision(
     )
     result = await session.exec(stmt)
     return bool(result.first())
+
+
+async def pending_operator_decision_reason_codes_by_task_id(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Iterable[UUID],
+) -> dict[UUID, list[str]]:
+    """Return non-null pending-decision reason codes grouped by task id.
+
+    Mirrors ``open_blocker_reason_codes_by_task_id`` for the first-class
+    operator-decision entity. A single decision can block multiple tasks
+    via the join sidecar; each linked task gets the same code in its list.
+    Tasks whose only pending decisions carry ``reason_code IS NULL`` are
+    absent from the result map.
+    """
+    task_id_list = list(task_ids)
+    if not task_id_list:
+        return {}
+    stmt = (
+        select(col(OperatorDecisionTaskLink.task_id), col(OperatorDecision.reason_code))
+        .join(
+            OperatorDecision,
+            col(OperatorDecisionTaskLink.decision_id) == col(OperatorDecision.id),
+        )
+        .where(col(OperatorDecision.board_id) == board_id)
+        .where(col(OperatorDecision.status) == "pending")
+        .where(col(OperatorDecisionTaskLink.task_id).in_(task_id_list))
+        .where(col(OperatorDecision.reason_code).is_not(None))
+    )
+    return group_codes_by_task((await session.exec(stmt)).all())

@@ -16,6 +16,7 @@ from pydantic import model_validator
 from sqlmodel import Field, SQLModel
 
 from app.schemas.blockers import BlockerCategory
+from app.schemas.common import ReasonCode
 from app.schemas.common import NonEmptyStr
 
 ReviewVerdict = Literal["pass", "fail", "needs_changes"]
@@ -32,6 +33,8 @@ class ReviewBlockerDescriptor(SQLModel):
     """
 
     category: BlockerCategory
+    # See ``app.services.blocker_reason_codes`` for the canonical recognised registry.
+    reason_code: ReasonCode = None
     owner_role: NonEmptyStr
     required_artifact: str | None = None
     target_env: str | None = None
@@ -68,6 +71,10 @@ class ReviewBlockerRead(SQLModel):
     id: UUID
     blocker_id: UUID
     category: BlockerCategory
+    # Exposes the structured reason code stamped at review-create time so
+    # readers can run the same revalidation dispatch as ad-hoc blockers
+    # without an extra fetch against the Blocker row.
+    reason_code: str | None = None
     owner_role: str
     required_artifact: str | None
     target_env: str | None

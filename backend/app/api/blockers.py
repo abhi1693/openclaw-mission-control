@@ -100,6 +100,7 @@ async def create_task_blocker(
         board_id=board.id,
         task_id=task.id,
         category=payload.category,
+        reason_code=payload.reason_code,
         owner_role=payload.owner_role,
         required_artifact=payload.required_artifact,
         target_env=payload.target_env,
@@ -174,7 +175,7 @@ async def update_task_blocker(
         blocker.resolved_at = utcnow()
         mutated = True
 
-    for field in ("required_artifact", "target_env", "reopen_condition", "citation"):
+    for field in ("required_artifact", "target_env", "reopen_condition", "citation", "reason_code"):
         if field in payload.model_fields_set:
             setattr(blocker, field, getattr(payload, field))
             mutated = True

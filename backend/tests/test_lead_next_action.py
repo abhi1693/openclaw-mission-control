@@ -400,6 +400,114 @@ def test_returns_clear_when_only_known_blocked_work_remains() -> None:
     assert action.reason_code == "only_waiting_or_no_active_work"
 
 
+def test_open_structured_blocker_excludes_task_from_active_queue() -> None:
+    """A task with an open structured Blocker must not dominate routing.
+
+    Mirrors the read-side blocker model in tasks.py — without this filter,
+    a parked task with an open Blocker keeps appearing in the active queue
+    and starves inbox routing.
+    """
+    blocked_task = _task(
+        status="in_progress",
+        title="In progress with structured blocker",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    inbox_task = _task(status="inbox", title="Unassigned inbox work")
+
+    action = select_lead_next_action(
+        tasks=[blocked_task, inbox_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({blocked_task.id}),
+    )
+
+    assert action.action == "route_inbox"
+    assert action.task_id == inbox_task.id
+
+
+def test_pending_operator_decision_excludes_task_from_active_queue() -> None:
+    """A pending OperatorDecision (first-class entity) excludes routing.
+
+    Same contract as the legacy ``operator_decision_required`` boolean flag.
+    """
+    blocked_task = _task(
+        status="in_progress",
+        title="In progress with pending operator decision",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    inbox_task = _task(status="inbox", title="Unassigned inbox work")
+
+    action = select_lead_next_action(
+        tasks=[blocked_task, inbox_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_pending_operator_decision=frozenset({blocked_task.id}),
+    )
+
+    assert action.action == "route_inbox"
+    assert action.task_id == inbox_task.id
+
+
+def test_all_four_blocker_sources_filter_independently() -> None:
+    """Each of the four blocker sources independently filters a task."""
+    by_dependency = _task(
+        status="in_progress", title="dep-blocked", assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    by_legacy_flag = _task(
+        status="in_progress", title="legacy-flag-blocked", assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    by_legacy_flag.operator_decision_required = True
+    by_open_blocker = _task(
+        status="in_progress", title="structured-blocker", assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    by_pending_decision = _task(
+        status="in_progress", title="pending-decision", assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    inbox_task = _task(status="inbox", title="Available inbox work")
+
+    action = select_lead_next_action(
+        tasks=[by_dependency, by_legacy_flag, by_open_blocker, by_pending_decision, inbox_task],
+        blocked_by_task_id={by_dependency.id: [uuid4()]},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({by_open_blocker.id}),
+        tasks_with_pending_operator_decision=frozenset({by_pending_decision.id}),
+    )
+
+    assert action.action == "route_inbox"
+    assert action.task_id == inbox_task.id
+
+
+def test_open_blocker_alone_yields_clear() -> None:
+    """A board with only an open-blocker-blocked task and no inbox work
+    must return clear — never pick the blocked task as next action."""
+    blocked_task = _task(
+        status="in_progress",
+        title="Only blocked work",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[blocked_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({blocked_task.id}),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+
+
 def test_latest_approval_state_uses_newest_move_to_done_row() -> None:
     task_id = uuid4()
     old_created = utcnow()

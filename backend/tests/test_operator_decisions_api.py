@@ -106,6 +106,7 @@ async def test_create_decision_defaults_pending_and_stamps_author(
     assert read.status == "pending"
     assert read.created_by_agent_id == actor.agent.id  # type: ignore[union-attr]
     assert read.dependent_task_ids == [task.id]
+    assert read.reason_code is None
     persisted = (
         await session.exec(
             select(OperatorDecisionTaskLink).where(
@@ -290,6 +291,36 @@ async def test_create_rejects_cross_board_dependent_task_id(
         )
     assert exc.value.status_code == 422
     assert "unknown_task_ids" in exc.value.detail  # type: ignore[operator]
+
+
+@pytest.mark.asyncio
+async def test_create_and_update_decision_reason_code_roundtrip(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """``reason_code`` round-trips through create + update + read.
+
+    The structured fine-grained code is open vocabulary so revalidation
+    skills can key off it (e.g. ``gateway_ws_timeout`` may self-resolve;
+    ``operator_policy`` cannot)."""
+    session, board, _task, actor = seeded
+    created = await create_operator_decision(
+        payload=OperatorDecisionCreate(
+            question="Ship hero accent without .160 sync?",
+            reason_code="deploy_drift",
+        ),
+        board=board,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    assert created.reason_code == "deploy_drift"
+    sharpened = await update_operator_decision(
+        decision_id=created.id,
+        payload=OperatorDecisionUpdate(reason_code="operator_policy"),
+        board=board,
+        session=session,
+        _actor=actor,  # type: ignore[arg-type]
+    )
+    assert sharpened.reason_code == "operator_policy"
 
 
 @pytest.mark.asyncio

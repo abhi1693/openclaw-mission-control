@@ -44,6 +44,15 @@ For implementation payloads, require this feedback loop inside the same
 executor session:
 
 ```text
+TDD discipline is required for implementation children.
+For feature, bugfix, refactor, or behavior-change code: write or update a
+failing automated test first, run it, and capture the RED output before
+touching production code. Do not implement production code before capturing the
+RED result. Then implement the smallest code change, rerun the targeted test and
+checks, and include the RED/GREEN output in final evidence. If no automated test
+is feasible, state why before coding and provide equivalent runtime/browser
+regression proof.
+
 For each acceptance criterion in order:
 1. implement the smallest slice for that AC
 2. build/check the changed code
@@ -62,7 +71,9 @@ one complete feedback cycle per AC.
 
 Worktree task parallelism is explicit opt-in only. Use it only when the parent
 heartbeat or lead instruction says PF worktree mode is enabled for this board
-and provides the worktree path. Never invent a `cwd`.
+and provides or derives the worktree path. Never invent a `cwd` outside that
+gate. A heartbeat-derived `WT_PATH` counts as the supplied worktree path. If
+the scheduler created `WT_PATH`, do not omit `cwd` because the lead did not spell out the path.
 
 When worktree mode is enabled:
 
@@ -71,7 +82,8 @@ When worktree mode is enabled:
 - The child owns only implementation inside the supplied `cwd`.
 - There is one worktree per task, not per acceptance criterion.
 - The Ralph Loop Rule still applies inside the executor session.
-- Add `"cwd": "/tmp/wt-<TASK_ID>"` to the implementation payload.
+- Add `"cwd": "$WT_PATH"` to the implementation payload after the scheduler
+  defines `WT_PATH="/tmp/wt-$TASK_SHORT"`.
 - Do not add `cwd` for review-only payloads unless the parent explicitly says
   the review must inspect that worktree before merge.
 
@@ -131,7 +143,7 @@ Use these as the minimum shape. Replace placeholders before spawning.
   "label": "mc-task-<TASK_ID>-impl-a1",
   "cleanup": "keep",
   "runTimeoutSeconds": 3600,
-  "task": "<task summary>\n\nAcceptance criteria:\n[PASTE ALL ACCEPTANCE CRITERIA]\n\nContext:\n[PASTE RELEVANT EVIDENCE, CONSTRAINTS, REPO PATHS, CONTRACT NOTES]\n\nRole evidence requirements:\n[PASTE THE APPLICABLE ROLE EVIDENCE PACKET FROM THIS SKILL]\n\nImplement only the in-scope changes. Do not move board status. Work one acceptance criterion at a time inside this same executor session: implement the smallest slice for AC1, build/check, test or validate with runtime/browser/deploy evidence, fix failures, then mark AC1 PASS/FAIL before starting AC2. Continue this loop for every AC. Do not spawn extra ACP children, sub-sessions, or worktrees for individual ACs. After all ACs pass their own loop, review the full diff, commit, and return.\n\nPrint:\n1. files changed\n2. test/check results with command output summaries\n3. required runtime/browser/deploy evidence\n4. each acceptance criterion with PASS/FAIL\n5. unresolved risks or blockers"
+  "task": "<task summary>\n\nAcceptance criteria:\n[PASTE ALL ACCEPTANCE CRITERIA]\n\nContext:\n[PASTE RELEVANT EVIDENCE, CONSTRAINTS, REPO PATHS, CONTRACT NOTES]\n\nRole evidence requirements:\n[PASTE THE APPLICABLE ROLE EVIDENCE PACKET FROM THIS SKILL]\n\nImplement only the in-scope changes. Do not move board status. TDD discipline is required for implementation children: for feature, bugfix, refactor, or behavior-change code, write or update a failing automated test first, run it, and capture the RED output before touching production code. Do not implement production code before capturing the RED result. Then implement the smallest code change, rerun the targeted test and checks, and include the RED/GREEN output in final evidence. If no automated test is feasible, state why before coding and provide equivalent runtime/browser regression proof.\n\nWork one acceptance criterion at a time inside this same executor session: implement the smallest slice for AC1, build/check, test or validate with runtime/browser/deploy evidence, fix failures, then mark AC1 PASS/FAIL before starting AC2. Continue this loop for every AC. Do not spawn extra ACP children, sub-sessions, or worktrees for individual ACs. After all ACs pass their own loop, review the full diff, commit, and return.\n\nPrint:\n1. files changed\n2. RED/GREEN TDD output or no-test-feasible reason\n3. test/check results with command output summaries\n4. required runtime/browser/deploy evidence\n5. each acceptance criterion with PASS/FAIL\n6. unresolved risks or blockers"
 }
 ```
 
@@ -142,7 +154,7 @@ worktree, add this field to the implementation payload:
 
 ```json
 {
-  "cwd": "/tmp/wt-<TASK_ID>"
+  "cwd": "$WT_PATH"
 }
 ```
 
@@ -283,21 +295,66 @@ ACP_EXECUTOR_STARTED child=<childSessionKey> run=<runId> label=mc-task-<TASK_ID>
 
 Then wait for the child completion event. Do not poll in a loop.
 
-If spawn is rejected, do not post `ACP_EXECUTOR_STARTED`. Record the rejection payload/error in the task evidence.
-
-**Spawn-call error retry:** if the `sessions_spawn` API call itself returns an error (network failure, runtime rejection, or any non-`accepted` response from the gateway), retry exactly once with the same payload. If the retry also fails, post `"ACP spawn failed: <error>. @lead"` to the task and stop. Do not retry a third time. Do not silently fall back to local implementation when ACP delegation is the assigned workflow.
-
-This rule covers errors at the spawn-call boundary. Failures during a run that did successfully spawn are governed by § No Double Spawn and § Retry Budget below.
+If spawn is rejected, do not post `ACP_EXECUTOR_STARTED`. Record the rejection payload/error in the task evidence and follow the retry/escalation rules below.
 
 ### No Double Spawn
 
 Before spawning, check the latest `ACP_EXECUTOR_STARTED` comment for the same `TASK_ID` and stage:
 
 - If no completion event exists, wait.
-- If the prior attempt failed or timed out, respawn once with `a2`.
+- If the prior attempt failed or timed out, run the WS Timeout Idempotency check below before respawning. Only after the idempotency check confirms no child exists may you respawn once with `a2`.
 - If two attempts fail, escalate to `@lead`; do not spawn `a3` unless the lead/operator changes a causal condition.
 
 Do not silently switch to local implementation when ACP delegation is the assigned workflow.
+
+### WS Timeout Idempotency
+
+A `sessions_spawn` that returns `gateway timeout after 10000ms` (or any
+WS/RPC timeout after the initial accept) does **not** prove the child
+failed to start. The gateway may have accepted the spawn and created a
+live child session, but the WS reply was lost in transit. Retrying with a
+fresh label in that state creates a duplicate child running the same work
+— wasted compute, divergent diffs, and confused parent state.
+
+Before retrying after any WS/RPC timeout, run the idempotency check:
+
+1. Wait 5 seconds (the gateway may still be flushing the spawn reply).
+2. List recent child sessions:
+
+   ```bash
+   openclaw sessions --agent "$CHILD_AGENT_ID" --active 5 --json
+   ```
+
+   `$CHILD_AGENT_ID` is the spawn's `agentId` value (e.g. `claude` or
+   `codex`).
+3. Look for an entry whose label matches the spawn's label exactly, or
+   whose label prefix matches `mc-task-<TASK_ID>-<STAGE>-a<N>` for the
+   attempt that timed out.
+4. If a matching session exists, the spawn worked despite the lost reply.
+   Do **not** retry. Post the standard `ACP_EXECUTOR_STARTED` marker with
+   that session's key/runId and continue waiting for the completion
+   event.
+5. If no matching session exists after the wait + list, the spawn truly
+   failed. Proceed to the retry rule under `No Double Spawn`.
+
+Classify the timeout type before deciding the retry shape:
+
+- **Transport failure** (WS handshake never completed, `ECONNREFUSED`,
+  TLS error, gateway port not reachable): safe to retry once after a
+  30-second backoff with the **same** label — the gateway never
+  acknowledged, so reusing the label is idempotent. Skip the sessions
+  check; there is nothing to find.
+- **Accepted-but-silent** (WS handshake OK, no spawn reply within the
+  10-second timeout): always run the sessions check above first. Never
+  retry with a fresh label until the check confirms no child exists.
+- **Resource-pressure** (gateway returns 503/429, `capacity exceeded`,
+  or DevOps confirms WS overload): do **not** retry. Post one task
+  comment `@DevOps ACP_INFRA_BLOCKER: <exact error envelope>` and stop.
+  Retry only after DevOps signals recovery via a board comment naming
+  this task.
+
+One classification per timeout, one action per classification. Do not
+flap between retry and park within the same tick.
 
 ## Large File Strategy
 

@@ -168,21 +168,27 @@ If this fails (5xx/network), stop. Do not continue.
 2. **Frontend Parallel Scheduler Gate.** This replaces the single-task
    selector while `identity.frontend_parallel_mode={{ identity_frontend_parallel_mode }}`
    is enabled. Do not use the main workspace for implementation children.
-   Maintain up to 2 active implementation tasks unless the operator has
-   explicitly raised the cap.
+   Maintain up to 4 active implementation tasks unless the operator has
+   explicitly raised or lowered the cap.
 
    First, if this wake contains an ACP child completion, process that result
    with `acp-post-review`; do not spawn new work on the same tick.
 
    Otherwise fetch assigned work and comments. Count active implementation
    tasks as assigned `in_progress` or `rework` tasks whose latest task thread
-   has an accepted `ACP_EXECUTOR_STARTED` marker and no child completion has
-   been processed by the parent. If active count is already `2`, return
-   `HEARTBEAT_OK` unless a selected active child result needs processing.
+   has an accepted `ACP_EXECUTOR_STARTED` marker AND no child completion has
+   been processed by the parent. A task that is parked, blocked on operator
+   decision (`operator_decision_required=true`), waiting on another role, or
+   whose ACP spawn never returned `accepted` does **not** count toward the
+   cap — these tasks are assigned to you but no child is running, so they
+   consume zero ACP capacity. If active count by this strict definition is
+   already `4`, return `HEARTBEAT_OK` unless a selected active child result
+   needs processing.
 
-   If active count is below `2`, choose the first non-blocked task in this
-   order: active `in_progress` without an unfinished child, assigned `rework`,
-   then assigned `inbox`. Set `TASK_ID` before continuing.
+   If active count is below `4`, choose the first non-blocked task in this
+   order: active `in_progress` without an unfinished child, assigned `rework`
+   that has cleared its blocker, then assigned `inbox`. Set `TASK_ID` before
+   continuing.
 
 ```bash
 curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?assigned_agent_id=$AGENT_ID" \
@@ -473,8 +479,10 @@ evidence for this board. The **Frontend Parallel Scheduler Gate** above is the
 authoritative scheduler.
 
 Rules:
-- Cap at 2 active implementation tasks unless the operator explicitly raises
-  the cap for this board.
+- Cap at 4 active implementation tasks unless the operator explicitly raises
+  or lowers the cap for this board. "Active" = task with an accepted
+  `ACP_EXECUTOR_STARTED` marker and no processed child completion. Parked,
+  blocked, or `operator_decision_required=true` tasks do not count.
 - Use `acp-delegation` § Worktree Task Mode. Parallelism is per task, not per
   acceptance criterion, and each task gets one ACP executor session.
 - Post the `ACP_EXECUTOR_STARTED` marker only after the ACP spawn is accepted,

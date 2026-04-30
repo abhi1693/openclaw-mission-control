@@ -58,6 +58,11 @@ class OperatorDecision(TenantScoped, table=True):
     # tasks. Not machine-evaluated in Phase III; becomes structured in
     # Phase IV once actionability enforcement lands.
     unblock_rule: str | None = None
+    # Fine-grained reason code complementing the free-text ``unblock_rule``.
+    # See ``app.services.blocker_reason_codes`` for the canonical recognised
+    # registry; the schema is open-vocabulary so new codes can be added
+    # without a migration.
+    reason_code: str | None = Field(default=None, max_length=64)
     # Status isn't individually indexed — migration b10ca1ab1e04 dropped
     # the standalone ``ix_operator_decisions_status`` once the partial
     # ``ix_operator_decisions_board_id_pending`` above covers the only

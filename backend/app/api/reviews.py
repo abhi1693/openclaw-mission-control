@@ -55,6 +55,7 @@ def _to_review_blocker_read(
         id=link.id,
         blocker_id=blocker.id,
         category=blocker.category,  # type: ignore[arg-type]
+        reason_code=blocker.reason_code,
         owner_role=blocker.owner_role,
         required_artifact=blocker.required_artifact,
         target_env=blocker.target_env,
@@ -160,6 +161,7 @@ async def create_task_review(
             board_id=board.id,
             task_id=task.id,
             category=descriptor.category,
+            reason_code=descriptor.reason_code,
             owner_role=descriptor.owner_role,
             required_artifact=descriptor.required_artifact,
             target_env=descriptor.target_env,

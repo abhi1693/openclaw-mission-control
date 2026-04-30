@@ -114,6 +114,104 @@ async def test_create_blocker_stamps_board_task_and_author(
 
 
 @pytest.mark.asyncio
+async def test_create_blocker_persists_reason_code(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """``reason_code`` is the structured fine-grained code consumed by
+    revalidation/recovery skills (open vocabulary, complementing the
+    coarse ``category`` enum). Round-trips through write + read."""
+    session, board, task, actor = seeded
+    read = await create_task_blocker(
+        payload=_create_payload(reason_code="gateway_ws_timeout"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    assert read.reason_code == "gateway_ws_timeout"
+
+
+@pytest.mark.asyncio
+async def test_create_blocker_reason_code_optional(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """Pre-existing callers that don't supply ``reason_code`` keep
+    working — additive, nullable column. Existing rows have NULL."""
+    session, board, task, actor = seeded
+    read = await create_task_blocker(
+        payload=_create_payload(),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    assert read.reason_code is None
+
+
+@pytest.mark.asyncio
+async def test_create_blocker_rejects_malformed_reason_code(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """``reason_code`` must match ``^[a-z][a-z0-9_]{0,63}$``. Garbage
+    input is 422'd at the schema layer, before reaching the DB."""
+    import pytest as pytest_mod
+    with pytest_mod.raises(Exception):
+        # spaces + capital letters are not allowed
+        BlockerCreate.model_validate(
+            {"category": "runtime", "owner_role": "PF", "reason_code": "Gateway WS Timeout!"}
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_blocker_normalizes_reason_code(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """Whitespace/case normalization runs before persistence so callers
+    that vary capitalization or pad with whitespace don't fragment the
+    code vocabulary."""
+    session, board, task, actor = seeded
+    read = await create_task_blocker(
+        payload=BlockerCreate.model_validate({
+            "category": "runtime",
+            "owner_role": "PF",
+            "reason_code": "  Gateway_WS_Timeout  ",
+        }),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    assert read.reason_code == "gateway_ws_timeout"
+
+
+@pytest.mark.asyncio
+async def test_blocker_update_can_patch_reason_code(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """Post-creation reason_code correction (typo fix, advisory→strict
+    cleanup, manual remediation) must work via PATCH BlockerUpdate."""
+    from app.api.blockers import update_task_blocker
+    from app.schemas.blockers import BlockerUpdate
+    session, board, task, actor = seeded
+    read = await create_task_blocker(
+        payload=_create_payload(reason_code="infra_other"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    updated = await update_task_blocker(
+        blocker_id=read.id,
+        payload=BlockerUpdate(reason_code="gateway_ws_timeout"),
+        task=task,
+        session=session,
+        _board=board,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    assert updated.reason_code == "gateway_ws_timeout"
+
+
+@pytest.mark.asyncio
 async def test_supersedes_resolves_prior_blocker(
     seeded: tuple[AsyncSession, Board, Task, _ActorStub],
 ) -> None:

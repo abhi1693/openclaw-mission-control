@@ -92,6 +92,11 @@ class Blocker(TenantScoped, table=True):
     board_id: UUID = Field(foreign_key="boards.id", index=True)
     task_id: UUID = Field(foreign_key="tasks.id", index=True)
     category: str
+    # Fine-grained reason code complementing the coarse 5-value ``category``.
+    # See ``app.services.blocker_reason_codes`` for the canonical recognised
+    # registry; the schema is open-vocabulary so new codes can be added
+    # without a migration.
+    reason_code: str | None = Field(default=None, max_length=64)
     owner_role: str
     required_artifact: str | None = None
     target_env: str | None = None

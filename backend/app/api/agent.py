@@ -61,6 +61,7 @@ from app.schemas.task_review_events import (
 )
 from app.schemas.task_pipeline_events import TaskPipelineStateRead
 from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, TaskRead, TaskUpdate
+from app.schemas.view_models import TaskCardRead
 from app.services.activity_log import record_activity
 from app.services.openclaw.coordination_service import GatewayCoordinationService
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
@@ -82,6 +83,14 @@ from app.services.task_dependencies import (
     dependency_status_by_id,
     validate_dependency_update,
     dependency_ids_by_task_id,
+)
+from app.services.blockers import (
+    open_blocker_reason_codes_by_task_id,
+    task_ids_with_open_blocker,
+)
+from app.services.operator_decisions import (
+    pending_operator_decision_reason_codes_by_task_id,
+    task_ids_with_pending_operator_decision,
 )
 
 if TYPE_CHECKING:
@@ -672,7 +681,7 @@ async def list_agents(
 
 @router.get(
     "/boards/{board_id}/tasks",
-    response_model=DefaultLimitOffsetPage[TaskRead],
+    response_model=DefaultLimitOffsetPage[TaskCardRead],
     tags=AGENT_BOARD_TAGS,
     openapi_extra=_agent_board_openapi_hints(
         intent="agent_board_task_discovery",
@@ -703,21 +712,48 @@ async def list_tasks(
     board: Board = BOARD_DEP,
     session: AsyncSession = SESSION_DEP,
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
-) -> LimitOffsetPage[TaskRead]:
+) -> LimitOffsetPage[TaskCardRead]:
     """List tasks on a board with status/assignment filters.
 
     Common patterns:
     - worker: fetch assigned inbox/in-progress tasks
-    - lead: fetch unassigned inbox tasks for delegation
+    - lead: fetch unassigned inbox tasks for delegation; the response
+      includes ``open_blocker_reason_codes`` and
+      ``pending_operator_decision_reason_codes`` per task so the
+      ``lead-health-scan`` skill can run revalidation dispatch in one
+      round-trip without N+1 fetching the structured blocker rows.
     """
     _guard_board_access(agent_ctx, board)
-    return await tasks_api.list_tasks(
+    page = await tasks_api.list_tasks(
         status_filter=filters.status_filter,
         assigned_agent_id=filters.assigned_agent_id,
         unassigned=filters.unassigned,
         board=board,
         session=session,
         _actor=_actor(agent_ctx),
+    )
+    # ``tasks_api.list_tasks`` is shared with the user-auth path
+    # (response_model=TaskRead); we widen the agent response here only.
+    page_task_ids = [task.id for task in page.items]
+    blocker_codes = await open_blocker_reason_codes_by_task_id(
+        session, board_id=board.id, task_ids=page_task_ids,
+    )
+    decision_codes = await pending_operator_decision_reason_codes_by_task_id(
+        session, board_id=board.id, task_ids=page_task_ids,
+    )
+    enriched = [
+        TaskCardRead(
+            **task.model_dump(),
+            open_blocker_reason_codes=blocker_codes.get(task.id, []),
+            pending_operator_decision_reason_codes=decision_codes.get(task.id, []),
+        )
+        for task in page.items
+    ]
+    return LimitOffsetPage[TaskCardRead](
+        items=enriched,
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
     )
 
 
@@ -777,12 +813,20 @@ async def get_lead_next_action(
         session,
         tasks=tasks,
     )
+    open_blocker_ids = await task_ids_with_open_blocker(
+        session, board_id=board.id, task_ids=task_ids,
+    )
+    pending_operator_decision_ids = await task_ids_with_pending_operator_decision(
+        session, board_id=board.id, task_ids=task_ids,
+    )
     return select_lead_next_action(
         tasks=tasks,
         blocked_by_task_id=blocked_by_task_id,
         approval_state_by_task_id=approval_state_by_task_id,
         pipeline_missing_by_task_id=pipeline_missing_by_task_id,
         review_readiness_by_task_id=review_readiness_by_task_id,
+        tasks_with_open_blocker=open_blocker_ids,
+        tasks_with_pending_operator_decision=pending_operator_decision_ids,
     )
 
 

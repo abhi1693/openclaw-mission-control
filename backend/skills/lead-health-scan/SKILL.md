@@ -80,3 +80,72 @@ agent UUIDs from the scan, not `$AGENT_ID`.
   it still cannot move.
 
 Do not post another "still blocked" comment. A comment is not routing.
+
+## Stale Operator-Blocker Revalidation
+
+When the scan finds a task with `is_blocked=true`, check whether the
+underlying blocker can be revalidated rather than left waiting
+indefinitely. The agent task-scan endpoint
+(`/api/v1/agent/boards/$BOARD_ID/tasks`) returns each task with two
+inline lists:
+
+- `open_blocker_reason_codes` — codes from open structured `Blocker` rows
+- `pending_operator_decision_reason_codes` — codes from pending
+  `OperatorDecision` entities linked to the task
+
+The task is also blocked if `operator_decision_required=true` (the legacy
+boolean on `Task` that predates the structured entities). Such tasks
+have no `reason_code` to dispatch on — they appear in the scan with
+`is_blocked=true` but both code lists empty. Treat them as the **legacy
+unstructured class** below.
+
+### Per-code revalidation threshold and action
+
+| `reason_code` | Stale-after | Probe + action |
+|---|---|---|
+| `gateway_ws_timeout` | 6h | Probe gateway WS handshake; if `HTTP/1.1 101 Switching Protocols` returns within 5 seconds, post one comment: `REVALIDATION_CANDIDATE reason_code=gateway_ws_timeout: gateway WS healthy at <ts>; @<assigned_owner> please retry one ACP spawn per acp-delegation § WS Timeout Idempotency, then update the blocker.` |
+| `deploy_drift` | 6h | If the live target's loaded build hash now matches the source-of-truth commit, post `REVALIDATION_CANDIDATE reason_code=deploy_drift: live build matches source at <commit>; @DevOps confirm and resolve blocker.` |
+| `external_dependency` | 24h | Post `REVALIDATION_CANDIDATE reason_code=external_dependency: <ageH>h old; @<owner> please confirm dependency status.` |
+| `operator_policy`, `requirements_clarification`, `credential_required`, `infra_other` | n/a | Durable human decisions — do **not** auto-revalidate. Surface in the daily operator digest only. |
+| unknown / null | n/a | Do not auto-revalidate. The canonical recognised set lives in `app/services/blocker_reason_codes.py`; treat anything else as opaque. |
+
+The 24h threshold for `external_dependency` is intentionally longer than
+the 6h infra threshold — vendor waits are normal; nudging at 6h would
+spam. Codes not yet listed here default to "do not auto-revalidate".
+
+### Legacy unstructured class
+
+A task with `is_blocked=true`, both reason-code lists empty, AND
+`operator_decision_required=true` is a legacy row from before the
+structured `reason_code` field landed (alembic `f2b3c4d5e6a7`). The
+skill cannot probe it — there's no machine signal to act on. **Surface
+it once per 24h** with:
+
+```
+LEGACY_BLOCKED_TASK_NEEDS_TRIAGE: task=<id> updated_at=<ts> assigned=<owner>
+@<lead> structured reason_code is missing on this task. Inspect the
+latest blocker comment, file a `Blocker` or `OperatorDecision` with a
+recognised `reason_code`, and resolve `operator_decision_required` so
+revalidation dispatch can act on this task in the future.
+```
+
+This converts the legacy gap into a queue rather than a silent miss.
+
+### Anti-spam rules
+
+- Post at most one `REVALIDATION_CANDIDATE` (or `LEGACY_BLOCKED_TASK_NEEDS_TRIAGE`)
+  comment per task per the per-code stale-after window. If a prior
+  comment of the same kind exists newer than that window, skip and proceed
+  to the next task. (Implementation: read the most recent N task
+  comments for the marker prefix; compare timestamps. Use the
+  comment-stream endpoint, not memory.)
+- Never clear `operator_decision_required`, never `PATCH`
+  `Blocker.resolved_at`, and never close an `OperatorDecision` from this
+  skill — only the blocker's owner or operator can resolve.
+- If the probe fails (gateway still unhealthy, build hash still
+  mismatched), do not post anything. Silence is the correct signal that
+  the blocker is still active.
+- If a task carries multiple codes (one Blocker + one OperatorDecision),
+  pick the highest-priority code per this order:
+  `gateway_ws_timeout > deploy_drift > external_dependency > operator_durable codes > legacy`. Do
+  not post one comment per code — one task, one revalidation candidate.

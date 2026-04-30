@@ -16,7 +16,7 @@ from uuid import UUID
 from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel
 
-from app.schemas.common import NonEmptyStr
+from app.schemas.common import NonEmptyStr, ReasonCode
 
 OperatorDecisionStatus = Literal["pending", "resolved", "cancelled"]
 
@@ -29,6 +29,8 @@ class OperatorDecisionCreate(SQLModel):
     question: NonEmptyStr
     owner_user_id: UUID | None = None
     unblock_rule: str | None = None
+    # See ``app.services.blocker_reason_codes`` for the canonical recognised registry.
+    reason_code: ReasonCode = None
     dependent_task_ids: list[UUID] = Field(default_factory=list)
 
 
@@ -42,6 +44,7 @@ class OperatorDecisionUpdate(SQLModel):
 
     owner_user_id: UUID | None = None
     unblock_rule: str | None = None
+    reason_code: ReasonCode = None
     resolved_value: str | None = None
     status_transition: Literal["resolve", "cancel"] | None = None
 
@@ -87,6 +90,7 @@ class OperatorDecisionRead(SQLModel):
     question: str
     owner_user_id: UUID | None
     unblock_rule: str | None
+    reason_code: str | None = None
     status: OperatorDecisionStatus
     resolved_value: str | None
     created_by_agent_id: UUID | None

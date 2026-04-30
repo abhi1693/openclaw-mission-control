@@ -14,7 +14,7 @@ from uuid import UUID
 from pydantic import model_validator
 from sqlmodel import SQLModel
 
-from app.schemas.common import NonEmptyStr
+from app.schemas.common import NonEmptyStr, ReasonCode
 
 # Mirror the ``ck_blockers_category_values`` CHECK string on the
 # Blocker model. The Pydantic Literal validates API writes; the DB
@@ -28,6 +28,10 @@ class BlockerBase(SQLModel):
     """Fields shared across create/read payloads."""
 
     category: BlockerCategory
+    # See ``app.services.blocker_reason_codes`` for the canonical
+    # recognised registry. Open-vocabulary at the schema layer; readers
+    # treat unknown codes as opaque.
+    reason_code: ReasonCode = None
     owner_role: NonEmptyStr
     required_artifact: str | None = None
     target_env: str | None = None
@@ -52,6 +56,9 @@ class BlockerUpdate(SQLModel):
     target_env: str | None = None
     reopen_condition: str | None = None
     citation: str | None = None
+    # Allows post-creation correction (typo fix, advisory→strict cleanup,
+    # manual remediation of legacy NULLs).
+    reason_code: ReasonCode = None
     status_transition: Literal["acknowledge", "resolve"] | None = None
 
     @model_validator(mode="after")

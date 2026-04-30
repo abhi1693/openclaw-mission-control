@@ -44,10 +44,28 @@ def latest_approval_state_by_task_id(
     return state_by_task_id
 
 
-def _is_waiting(task: Task, blocked_by_task_id: Mapping[UUID, Sequence[UUID]]) -> bool:
+def _is_waiting(
+    task: Task,
+    blocked_by_task_id: Mapping[UUID, Sequence[UUID]],
+    tasks_with_open_blocker: frozenset[UUID] | set[UUID] = frozenset(),
+    tasks_with_pending_operator_decision: frozenset[UUID] | set[UUID] = frozenset(),
+) -> bool:
+    """A task is "waiting" if any of the four blocker sources apply.
+
+    Mirrors the read-side blocker model in ``backend/app/api/tasks.py``
+    (§I1/§I3): unresolved dependency, legacy boolean flag, open structured
+    Blocker row, or pending OperatorDecision entity. Lead routing must
+    exclude all four — otherwise a parked task with a structured Blocker
+    can dominate the active queue and starve inbox routing.
+    """
     if task.status in {"done", "cancelled"}:
         return True
-    return bool(blocked_by_task_id.get(task.id)) or bool(task.operator_decision_required)
+    return (
+        bool(blocked_by_task_id.get(task.id))
+        or bool(task.operator_decision_required)
+        or task.id in tasks_with_open_blocker
+        or task.id in tasks_with_pending_operator_decision
+    )
 
 
 def _task_sort_key(task: Task) -> tuple[str, str]:
@@ -118,18 +136,29 @@ def select_lead_next_action(
     approval_state_by_task_id: Mapping[UUID, ApprovalState],
     pipeline_missing_by_task_id: Mapping[UUID, Sequence[str]],
     review_readiness_by_task_id: Mapping[UUID, object] | None = None,
+    tasks_with_open_blocker: frozenset[UUID] | set[UUID] | None = None,
+    tasks_with_pending_operator_decision: frozenset[UUID] | set[UUID] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
     """Return the single closest-to-done lead action from structured state."""
 
     if now is None:
         now = utcnow()
+    if tasks_with_open_blocker is None:
+        tasks_with_open_blocker = frozenset()
+    if tasks_with_pending_operator_decision is None:
+        tasks_with_pending_operator_decision = frozenset()
 
     active_tasks = [
         task
         for task in tasks
         if task.status in {"inbox", "in_progress", "review", "rework"}
-        and not _is_waiting(task, blocked_by_task_id)
+        and not _is_waiting(
+            task,
+            blocked_by_task_id,
+            tasks_with_open_blocker,
+            tasks_with_pending_operator_decision,
+        )
     ]
     ordered = sorted(active_tasks, key=_task_sort_key)
     review_readiness_by_task_id = review_readiness_by_task_id or {}

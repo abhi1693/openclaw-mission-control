@@ -18,6 +18,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.blockers import Blocker
+from app.services.blocker_reason_codes import group_codes_by_task
 
 
 async def task_ids_with_open_blocker(
@@ -60,3 +61,30 @@ async def task_has_open_blocker(
     )
     result = await session.exec(stmt)
     return bool(result.first())
+
+
+async def open_blocker_reason_codes_by_task_id(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Iterable[UUID],
+) -> dict[UUID, list[str]]:
+    """Return non-null open-blocker reason codes grouped by task id.
+
+    Lets the agent task scan endpoint expose ``reason_code`` per task in
+    one batched query — without it the Supervisor's ``lead-health-scan``
+    skill would N+1 the blocker rows to find revalidation candidates.
+    Tasks whose only open blockers carry ``reason_code IS NULL`` are
+    absent from the result map.
+    """
+    task_id_list = list(task_ids)
+    if not task_id_list:
+        return {}
+    stmt = (
+        select(col(Blocker.task_id), col(Blocker.reason_code))
+        .where(col(Blocker.board_id) == board_id)
+        .where(col(Blocker.task_id).in_(task_id_list))
+        .where(col(Blocker.resolved_at).is_(None))
+        .where(col(Blocker.reason_code).is_not(None))
+    )
+    return group_codes_by_task((await session.exec(stmt)).all())

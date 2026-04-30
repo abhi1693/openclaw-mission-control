@@ -90,6 +90,7 @@ def _decision_read(
         question=decision.question,
         owner_user_id=decision.owner_user_id,
         unblock_rule=decision.unblock_rule,
+        reason_code=decision.reason_code,
         status=decision.status,  # type: ignore[arg-type]
         resolved_value=decision.resolved_value,
         created_by_agent_id=decision.created_by_agent_id,
@@ -214,6 +215,7 @@ async def create_operator_decision(
         question=payload.question,
         owner_user_id=payload.owner_user_id,
         unblock_rule=payload.unblock_rule,
+        reason_code=payload.reason_code,
         created_by_agent_id=actor.agent.id if actor.agent is not None else None,
     )
     session.add(decision)
@@ -278,7 +280,7 @@ async def update_operator_decision(
     elif "resolved_value" in payload.model_fields_set:
         # Draft sharpening while still pending.
         new_values["resolved_value"] = payload.resolved_value
-    for field in ("owner_user_id", "unblock_rule"):
+    for field in ("owner_user_id", "unblock_rule", "reason_code"):
         if field in payload.model_fields_set:
             new_values[field] = getattr(payload, field)
 
