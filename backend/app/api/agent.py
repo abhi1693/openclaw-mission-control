@@ -96,6 +96,7 @@ from app.services.operator_decisions import (
 )
 from app.services.parent_cascade import (
     orphan_children_with_terminal_parent,
+    task_ids_with_children,
 )
 
 if TYPE_CHECKING:
@@ -839,6 +840,9 @@ async def get_lead_next_action(
     orphan_children = await orphan_children_with_terminal_parent(
         session, board_id=board.id,
     )
+    parents_already_materialized = await task_ids_with_children(
+        session, board_id=board.id, task_ids=task_ids,
+    )
     return select_lead_next_action(
         tasks=tasks,
         blocked_by_task_id=blocked_by_task_id,
@@ -848,6 +852,7 @@ async def get_lead_next_action(
         tasks_with_open_blocker=open_blocker_ids,
         tasks_with_pending_operator_decision=pending_operator_decision_ids,
         orphan_children_with_terminal_parent=orphan_children,
+        tasks_with_children=parents_already_materialized,
     )
 
 

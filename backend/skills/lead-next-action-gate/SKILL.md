@@ -78,6 +78,20 @@ before guessing an endpoint.
   second-guess the threshold; record `details.in_progress_minutes` in the
   nudge comment for context.
 - `route_inbox`: use `lead-inbox-routing` for the returned task.
+- `materialize_decomposition_plan`: the returned task is in `inbox`,
+  assigned to a reviewer (typically Architect), and has no children
+  yet. The decomposition handshake is mid-flight: the assignee was
+  asked to post a decomposition plan and the lead now needs to
+  materialize it. Read the most recent decomposition comment on the
+  task (look for "Architect decomposition for {task_id}" or similar
+  marker), parse the per-AC subtask list, then for each subtask:
+  POST `/tasks` with `assigned_agent_id`, `parent_task_id` (the
+  current task's id), `depends_on_task_ids` (sibling ordering), and
+  copied acceptance criteria. After all subtasks are created, retire
+  the umbrella per `lead-inbox-routing`'s Umbrella Lifecycle. If no
+  decomposition comment exists yet, post one nudge to the assignee
+  asking for the plan, then stop. `details.assigned_agent_id` is
+  echoed back in the action payload for convenience.
 - `cancel_orphan_child`: the returned task is a non-terminal child whose
   parent reached a terminal state (`done`/`cancelled`). The parent's
   decomposition is over and this child is obsolete unless it carries

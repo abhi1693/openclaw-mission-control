@@ -81,6 +81,36 @@ async def orphan_children_by_parent_id(
     return dict(grouped)
 
 
+async def task_ids_with_children(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Iterable[UUID],
+) -> frozenset[UUID]:
+    """Return the subset of ``task_ids`` that have at least one child task.
+
+    "Child" means any task on the same board with
+    ``parent_task_id == this task's id`` regardless of the child's
+    status. Used by the lead next-action gate to distinguish
+    decomposition parents that have already been materialized
+    (subtasks created) from those still awaiting Supervisor pickup
+    after the assignee posted a plan.
+    """
+    parent_id_list = list(task_ids)
+    if not parent_id_list:
+        return frozenset()
+    stmt = (
+        select(col(Task.parent_task_id))
+        .where(col(Task.board_id) == board_id)
+        .where(col(Task.parent_task_id).in_(parent_id_list))
+        .distinct()
+    )
+    return frozenset(
+        parent_id for parent_id in (await session.exec(stmt)).all()
+        if parent_id is not None
+    )
+
+
 async def orphan_children_with_terminal_parent(
     session: AsyncSession,
     *,

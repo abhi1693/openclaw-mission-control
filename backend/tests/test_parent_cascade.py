@@ -268,6 +268,64 @@ def test_review_with_missing_pipeline_still_traps_inbox_routing() -> None:
     assert action.task_id == review_missing_pipeline.id
 
 
+def test_materialize_decomposition_plan_fires_for_inbox_assigned_no_children() -> None:
+    """Architect-assigned inbox task without children — Supervisor must
+    materialize the decomposition plan. This is the gap that left
+    Track B stale: tier 9 (route_inbox) requires unassigned, so
+    assigned-to-Architect inbox tasks were invisible to the gate."""
+    architect_assigned_inbox = _task(status="inbox", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[architect_assigned_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset(),
+    )
+
+    assert action.action == "materialize_decomposition_plan"
+    assert action.reason_code == "inbox_assigned_awaiting_subtask_materialization"
+    assert action.task_id == architect_assigned_inbox.id
+    assert action.details["assigned_agent_id"] == str(
+        architect_assigned_inbox.assigned_agent_id
+    )
+
+
+def test_materialize_skipped_when_already_has_children() -> None:
+    """Idempotency: once subtasks are created (parent_task_id set on
+    children), this task is already materialized — no further action."""
+    parent = _task(status="inbox", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[parent],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset({parent.id}),
+    )
+
+    assert action.action == "clear"
+
+
+def test_route_inbox_wins_over_materialize_when_unassigned_present() -> None:
+    """Unassigned inbox tasks (route_inbox) are preferred over
+    assigned-but-unmaterialized — fresh routing trumps decomposition
+    cleanup."""
+    unassigned = _task(status="inbox", title="unassigned routable")
+    architect_assigned = _task(status="inbox", assigned=True, title="awaiting plan")
+
+    action = select_lead_next_action(
+        tasks=[unassigned, architect_assigned],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset(),
+    )
+
+    assert action.action == "route_inbox"
+    assert action.task_id == unassigned.id
+
+
 def test_orphan_action_skipped_when_child_already_terminal() -> None:
     """If the orphan map happens to contain a child that's now terminal
     (race between snapshot read and selection), skip it."""

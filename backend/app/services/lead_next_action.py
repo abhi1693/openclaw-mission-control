@@ -140,6 +140,7 @@ def select_lead_next_action(
     tasks_with_open_blocker: frozenset[UUID] | set[UUID] | None = None,
     tasks_with_pending_operator_decision: frozenset[UUID] | set[UUID] | None = None,
     orphan_children_with_terminal_parent: Mapping[UUID, UUID] | None = None,
+    tasks_with_children: frozenset[UUID] | set[UUID] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
     """Return the single closest-to-done lead action from structured state."""
@@ -362,6 +363,34 @@ def select_lead_next_action(
                 action="route_inbox",
                 reason_code="unassigned_inbox_needs_routing",
             )
+
+    # Tier (last before clear) — inbox tasks already assigned to a
+    # reviewer/architect awaiting Supervisor materialization. The
+    # ``lead-inbox-routing`` decomposition handshake is: (1) lead
+    # assigns task to Architect, (2) Architect posts decomposition
+    # plan as a comment, (3) lead reads plan and creates parent-linked
+    # subtasks, (4) lead retires the umbrella. Without a tier here,
+    # step (3) never gets surfaced to the lead via ``/lead/next-action``
+    # because tier 9 (``route_inbox``) requires ``assigned_agent_id IS
+    # NULL``. Tasks would sit in inbox-with-Architect-assigned forever.
+    # The ``tasks_with_children`` set lets us skip already-materialized
+    # parents (idempotency).
+    if tasks_with_children is None:
+        tasks_with_children = frozenset()
+    for task in ordered:
+        if task.status != "inbox" or task.assigned_agent_id is None:
+            continue
+        if task.id in tasks_with_children:
+            continue
+        return _action(
+            task=task,
+            action_required=True,
+            action="materialize_decomposition_plan",
+            reason_code="inbox_assigned_awaiting_subtask_materialization",
+            details={
+                "assigned_agent_id": str(task.assigned_agent_id),
+            },
+        )
 
     return _action(
         task=None,
