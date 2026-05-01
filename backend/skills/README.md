@@ -48,6 +48,7 @@ agents read to decide whether to invoke the skill.
 
 - **architect-review-verdict** — Use when an Architect or review-only board agent must review submitted work, decomposition, architecture, API, auth, or state-machine changes.
 - **qa-validation-verdict** — Use when a QA board agent must validate a task in review status and post a PASS, FAIL, INCONCLUSIVE, or INFRA BLOCKED verdict.
+- **qa-browser-oracle-alternation** — Use to pick between Playwright and Codex Computer Use as the browser-validation oracle; companions qa-validation-verdict for cross-validating UI behavior across two independent browser sensors.
 - **devops-deploy-validation** — Use when a DevOps board agent must validate deployed state, classify infra/deploy drift, or diagnose a DevOps-owned review or rework failure.
 
 ## Deploy
