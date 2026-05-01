@@ -3,9 +3,56 @@ name: mc-board-api
 description: Use when posting comments, recording pipeline events, or filing reviewer verdicts to the Mission Control board API — instead of hand-rolling curl with the auth token. Replaces the curl-pattern in ACP children, scripts, and any agent that talks to MC's task endpoints.
 ---
 
-# Mission Control Board API — typed CLI
+# Mission Control Board API — typed access for ACP children
 
-A Python helper at `/usr/local/bin/mc_client.py` exposes the high-traffic MC
+Two equivalent typed surfaces are available, depending on whether you're
+calling MC from inside an ACP child (with MCP tool support) or from a
+plain bash environment (CLI). Both wrap the same MC endpoints with the
+same auth/board enforcement.
+
+| Surface | When to use | Auth source |
+|---|---|---|
+| **MCP tools** (preferred for ACP children) | Inside Claude/Codex/OpenCode ACP children — MCP tools are typed, validated, and surface in the agent's tool list | Provided by ACPX spawn parent via env |
+| **CLI** at `/usr/local/bin/mc_client.py` | Bash scripts, manual operator runs, automation that doesn't go through ACP | Same env vars |
+
+## MCP tools (preferred when available)
+
+When ACPX is configured with the MC MCP server (see "Wire-up" below),
+ACP children automatically see four tools:
+
+- `mc_task_read({ task_id })` → returns the task envelope
+- `mc_comment_create({ task_id, message })` → posts a comment
+- `mc_pipeline_event_create({ task_id, state, ...optional })` → records a pipeline event (`code_changed`, `committed`, `built`, `deployed`, `live_build_verified`, `runtime_verified`, `qa_ready`, `model_fallback`)
+- `mc_review_event_create({ task_id, reviewer_role, verdict, ...optional })` → posts a structured review verdict (`pass | fail | inconclusive | infra_blocked`)
+
+Tool input schemas constrain enum-valued fields (state, verdict,
+reviewer_role) to the real MC schema Literals — if you pass an invalid
+value the MCP host rejects the call before it reaches MC.
+
+### Wire-up (operator, one-time per gateway)
+
+Add the MC MCP server to ACPX's `mcpServers` config:
+
+```bash
+openclaw config set plugins.entries.acpx.config.mcpServers.mc-board-api '{
+  "command": "python3",
+  "args": ["/usr/local/bin/mc_mcp_server.py"],
+  "env": {
+    "LOCAL_AUTH_TOKEN": "<bearer token>",
+    "BOARD_ID": "<board uuid>",
+    "MC_BASE_URL": "http://192.168.2.64:8000"
+  }
+}' --strict-json
+openclaw gateway restart  # required to refresh in-memory ACPX config
+```
+
+After restart, every ACP child the gateway spawns has `mc_*` tools
+available. Children should call them directly rather than building
+curl strings.
+
+## CLI alternative (plain bash environments)
+
+A Python helper at `/usr/local/bin/mc_client.py` exposes the same MC
 board endpoints as typed CLI subcommands. **Use this instead of constructing
 `curl` commands by hand.** The CLI handles auth, JSON encoding, error
 classification, and stays in sync with the real schema (verdict choices,
