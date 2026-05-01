@@ -98,7 +98,7 @@ The Codex CU evidence dict should include keys:
 ```json
 {
   "oracle": "codex_computer_use",
-  "cua_driver_version": "<version string from /codex computer-use status>",
+  "cua_driver_version": "<version string from `/codex computer-use status` slash command>",
   "screenshots": [
     {"step": "ac1_initial", "ref": "<screenshot id or path>"},
     {"step": "ac1_after_submit", "ref": "..."}
@@ -150,23 +150,37 @@ Computer Use as the gate review, every review cycle naturally has
 
 ## Pre-flight: is Codex Computer Use available?
 
-Before posting QA-E2E review with `browser_codex_computer_use`, confirm
-the oracle is operational:
+`codex computer-use status` / `codex computer-use install` are **not
+subcommands of the local Codex CLI binary** — they are OpenClaw slash
+commands surfaced **inside** a Codex-runtime ACP session (i.e., from
+within the QA-E2E agent's Codex session prompt, not from a plain
+shell on `.60`).
 
-```bash
-# On the QA-E2E host
-codex computer-use status
+Before posting QA-E2E review with `browser_codex_computer_use`, confirm
+the oracle is operational by typing the slash command from within
+your Codex session:
+
+```
+/codex computer-use status
 ```
 
-If status is "not installed" and you're QA-E2E, either:
-- Trigger install: `codex computer-use install` (fetches `cua-driver`
-  from the trycua upstream)
+Expected reply: a status block from OpenClaw's Codex integration
+(reports `cua-driver` install state, version, and reachability).
+
+If the status reports "not installed" and you're QA-E2E:
+- Trigger install from the same Codex session: `/codex computer-use install`
+  (OpenClaw fetches `cua-driver` from the trycua upstream)
 - Or escalate to the operator (file under `INFRA_BLOCKED` if neither
   oracle is reachable)
 
 `/codex computer-use install` works on Linux gateway hosts (like
-`.60`) via `cua-driver`; on macOS, it integrates with the OpenClaw.app
+`.60`) via `cua-driver`; on macOS it integrates with the OpenClaw.app
 PeekabooBridge instead.
+
+If you need to confirm availability from a plain shell (e.g.,
+operator on `.60` debugging), check for the `cua-driver` binary
+directly (`which cua-driver` and `cua-driver --version`) — there is
+no Codex-CLI shell command that reports the same state.
 
 ## Routing of verdicts
 

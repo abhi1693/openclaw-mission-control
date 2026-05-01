@@ -113,15 +113,43 @@ def pipeline_present_states(events: Sequence[TaskPipelineEvent]) -> list[str]:
 def latest_model_fallback_step(
     events: Sequence[TaskPipelineEvent],
 ) -> TaskPipelineEvent | None:
-    """Return the most recent ``model_fallback`` event, if any.
+    """Return the most recent ``model_fallback`` event from a pre-fetched list.
 
-    Surfaced inline on review-readiness responses so reviewers see which
-    model actually produced the packet without paging through every event.
+    Used by callers that ALREADY have the full event list in memory
+    (e.g., the pipeline-state endpoint at /tasks/{id}/pipeline). For
+    callers that only need the latest fallback step, prefer
+    :func:`fetch_latest_model_fallback_step` — it pushes the filter to
+    SQL with ``LIMIT 1`` instead of round-tripping every event.
     """
     fallbacks = [event for event in events if event.state == "model_fallback"]
     if not fallbacks:
         return None
     return max(fallbacks, key=lambda value: value.created_at)
+
+
+async def fetch_latest_model_fallback_step(
+    session: AsyncSession,
+    *,
+    task_id: UUID,
+    since: datetime | None = None,
+) -> TaskPipelineEvent | None:
+    """SQL-side fetch of the most recent ``model_fallback`` event.
+
+    Avoids the N+1 pattern where review-readiness loops every task in
+    the board and fetches the full event list just to extract the
+    latest fallback. Pushes ``WHERE state = 'model_fallback'`` and
+    ``ORDER BY created_at DESC LIMIT 1`` to the database.
+    """
+    statement = (
+        select(TaskPipelineEvent)
+        .where(col(TaskPipelineEvent.task_id) == task_id)
+        .where(col(TaskPipelineEvent.state) == "model_fallback")
+    )
+    if since is not None:
+        statement = statement.where(col(TaskPipelineEvent.created_at) >= since)
+    statement = statement.order_by(desc(col(TaskPipelineEvent.created_at))).limit(1)
+    rows = list(await session.exec(statement))
+    return rows[0] if rows else None
 
 
 def pipeline_event_has_required_fields(event: TaskPipelineEvent) -> bool:

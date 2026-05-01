@@ -121,7 +121,11 @@ class TestToolsList:
 
 
 class TestToolsCall:
-    def test_unknown_tool_returns_error_response(self) -> None:
+    def test_unknown_tool_returns_invalid_params_error(self) -> None:
+        """Per MCP 2024-11-05: unknown tool name is a protocol-level
+        invalid-params error (-32602), not internal error (-32603).
+        Codex 4th-pass finding #2.
+        """
         msg = {
             "jsonrpc": "2.0",
             "id": 5,
@@ -131,7 +135,37 @@ class TestToolsCall:
         resp = _module.process_message(msg)
         assert resp is not None
         assert "error" in resp
-        assert resp["error"]["code"] == -32603
+        assert resp["error"]["code"] == -32602
+        assert "Invalid params" in resp["error"]["message"]
+        assert "nope" in resp["error"]["message"]
+
+    def test_request_method_without_id_is_invalid_request(self) -> None:
+        """Codex 4th-pass finding #1: tools/call without an id is
+        malformed; must NOT execute the tool, must return -32600 with
+        id=null, and must not hit the dispatcher.
+        """
+        from unittest import mock as mock_module
+
+        with mock_module.patch.object(_module, "dispatch_tool") as fake_dispatch:
+            msg = {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "mc_comment_create", "arguments": {}},
+            }
+            resp = _module.process_message(msg)
+        assert resp is not None
+        assert resp["error"]["code"] == -32600
+        assert resp["id"] is None
+        # Dispatcher must NOT have run — otherwise we just performed a
+        # write with no response, the original Codex finding.
+        fake_dispatch.assert_not_called()
+
+    def test_initialize_without_id_is_rejected(self) -> None:
+        """initialize without id is malformed (it's a request, not a notification)."""
+        msg = {"jsonrpc": "2.0", "method": "initialize"}
+        resp = _module.process_message(msg)
+        assert resp is not None
+        assert resp["error"]["code"] == -32600
 
     def test_task_read_dispatches_via_paginated_list(self) -> None:
         captured: dict[str, Any] = {}
@@ -228,6 +262,48 @@ class TestToolsCall:
         assert result["isError"] is False
         assert captured["payload"]["verdict"] == "infra_blocked"
         assert captured["payload"]["reviewer_role"] == "qa_e2e"
+
+    def test_review_event_create_carries_blocking_owner_and_routing(self) -> None:
+        """Codex 4th-pass finding #3: the FAIL/INCONCLUSIVE routing
+        fields blocking_owner and suggested_routing must be threaded
+        through the MCP tool to the MC schema.
+        """
+        captured: dict[str, Any] = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["payload"] = json.loads(req.data)
+            return _StubResponse(b'{"id": "rev"}')
+
+        with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
+            result = _module.handle_tools_call(
+                {
+                    "name": "mc_review_event_create",
+                    "arguments": {
+                        "task_id": "t",
+                        "reviewer_role": "qa_e2e",
+                        "verdict": "fail",
+                        "blocking_owner": "PF",
+                        "suggested_routing": "lead move to rework for PF",
+                    },
+                }
+            )
+        assert result["isError"] is False
+        assert captured["payload"]["blocking_owner"] == "PF"
+        assert (
+            captured["payload"]["suggested_routing"]
+            == "lead move to rework for PF"
+        )
+
+    def test_review_event_schema_advertises_blocking_owner_and_routing(self) -> None:
+        """Tool input schema must list the routing fields so MCP hosts
+        offer them as completion suggestions and reject typos."""
+        result = _module.handle_tools_list({})
+        review_tool = next(
+            t for t in result["tools"] if t["name"] == "mc_review_event_create"
+        )
+        props = review_tool["inputSchema"]["properties"]
+        assert "blocking_owner" in props
+        assert "suggested_routing" in props
 
 
 class TestErrorHandling:

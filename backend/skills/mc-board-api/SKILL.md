@@ -29,7 +29,7 @@ Tool input schemas constrain enum-valued fields (state, verdict,
 reviewer_role) to the real MC schema Literals — if you pass an invalid
 value the MCP host rejects the call before it reaches MC.
 
-### Wire-up (operator, one-time per gateway)
+### Wire-up (operator action; restart-required)
 
 Add the MC MCP server to ACPX's `mcpServers` config:
 
@@ -43,12 +43,31 @@ openclaw config set plugins.entries.acpx.config.mcpServers.mc-board-api '{
     "MC_BASE_URL": "http://192.168.2.64:8000"
   }
 }' --strict-json
-openclaw gateway restart  # required to refresh in-memory ACPX config
 ```
 
-After restart, every ACP child the gateway spawns has `mc_*` tools
-available. Children should call them directly rather than building
-curl strings.
+This change lives at `plugins.entries.acpx.config.*` — an
+agent-context path that follows the **in-memory authority** model. The
+file edit lands immediately, but the gateway will not pick it up until
+its in-memory representation is refreshed by a restart cycle. **Do
+not casually run `openclaw gateway restart` from this skill.** Restart
+kills heartbeat scheduling for every agent (per
+`feedback_acp_default_restart`) and aborts active ACP child runs in
+the deferred-drain queue.
+
+The right operator workflow:
+
+1. Check current heartbeat state (`jq '.agents.list[] | select(.heartbeatsEnabled==true) | .id' /root/.openclaw/openclaw.json`).
+   If all are `false`, the restart cost is essentially zero.
+2. Drain or accept the cost of any active ACP child runs.
+3. Trigger a restart at a planned window (typically `openclaw gateway
+   restart` from the operator's session, OR the next natural restart
+   cycle from an unrelated config change).
+4. Verify the new MCP server is loaded by spawning a test ACP child
+   and listing tools.
+
+After the restart actually fires, every ACP child the gateway spawns
+has `mc_*` tools available. Children should call them directly rather
+than building curl strings.
 
 ## CLI alternative (plain bash environments)
 

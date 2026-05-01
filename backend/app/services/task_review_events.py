@@ -228,22 +228,19 @@ async def get_task_review_readiness(
             await session.exec(select(Task.id).where(col(Task.board_id) == task.board_id)),
         )
 
-    # Pull the latest model_fallback pipeline event for the current cycle
-    # (in_progress_at → now). Fallback events are informational; they are
-    # surfaced inline on review-readiness so reviewers see the trajectory
-    # context without paging through pipeline events.
-    from app.services.task_pipeline import (
-        latest_model_fallback_step,
-        list_task_pipeline_events,
-    )
+    # Pull the latest model_fallback pipeline event for the current cycle.
+    # Pushes ``state = 'model_fallback'`` + ``ORDER BY created_at DESC
+    # LIMIT 1`` to SQL so the per-task cost is one targeted row, not a
+    # full event-list fetch (avoids the N+1 pattern when the lead loops
+    # every review task on next-action).
+    from app.services.task_pipeline import fetch_latest_model_fallback_step
 
     cycle_since = task.in_progress_at or task.previous_in_progress_at
-    pipeline_events = await list_task_pipeline_events(
+    latest_fallback = await fetch_latest_model_fallback_step(
         session,
         task_id=task.id,
         since=cycle_since,
     )
-    latest_fallback = latest_model_fallback_step(pipeline_events)
 
     return build_review_readiness(
         task=task,

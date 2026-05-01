@@ -228,3 +228,100 @@ class TestLatestModelFallbackStep:
         assert result is newest
         assert result is not None and result.evidence is not None
         assert result.evidence["reason"] == "billing"
+
+
+# --- SQL-level fetch (Codex 4th-pass finding #7: avoid N+1) ---
+
+
+class TestFetchLatestModelFallbackStepSql:
+    """``fetch_latest_model_fallback_step`` pushes the filter to SQL."""
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_fallback_events_in_db(self) -> None:
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_pipeline import fetch_latest_model_fallback_step
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                result = await fetch_latest_model_fallback_step(
+                    session, task_id=uuid4()
+                )
+                assert result is None
+        finally:
+            await engine.dispose()
+
+    @pytest.mark.asyncio
+    async def test_filters_to_state_model_fallback_at_sql_level(self) -> None:
+        """Confirm ``state = 'model_fallback'`` is in the WHERE, not Python."""
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_pipeline import fetch_latest_model_fallback_step
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                task_id = uuid4()
+                base = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
+                # Seed a non-fallback and a fallback; filter must skip the
+                # non-fallback row even though it's newer.
+                committed = TaskPipelineEvent(
+                    id=uuid4(),
+                    board_id=uuid4(),
+                    task_id=task_id,
+                    agent_id=None,
+                    state="committed",
+                    source="test",
+                    commit_sha="abc1234",
+                    created_at=base + timedelta(minutes=5),
+                )
+                fallback_old = TaskPipelineEvent(
+                    id=uuid4(),
+                    board_id=uuid4(),
+                    task_id=task_id,
+                    agent_id=None,
+                    state="model_fallback",
+                    source="test",
+                    evidence={
+                        "from_model": "x",
+                        "to_model": "y",
+                        "reason": "timeout",
+                    },
+                    created_at=base,
+                )
+                fallback_newer = TaskPipelineEvent(
+                    id=uuid4(),
+                    board_id=uuid4(),
+                    task_id=task_id,
+                    agent_id=None,
+                    state="model_fallback",
+                    source="test",
+                    evidence={
+                        "from_model": "y",
+                        "to_model": "z",
+                        "reason": "billing",
+                    },
+                    created_at=base + timedelta(minutes=1),
+                )
+                session.add_all([committed, fallback_old, fallback_newer])
+                await session.commit()
+
+                result = await fetch_latest_model_fallback_step(
+                    session, task_id=task_id
+                )
+                assert result is not None
+                assert result.state == "model_fallback"
+                assert result.id == fallback_newer.id
+                assert result.evidence is not None
+                assert result.evidence["reason"] == "billing"
+        finally:
+            await engine.dispose()

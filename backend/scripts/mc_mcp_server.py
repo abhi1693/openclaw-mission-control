@@ -185,6 +185,8 @@ def op_review_event_create(
     target: str | None = None,
     build_hash: str | None = None,
     source_commit: str | None = None,
+    blocking_owner: str | None = None,
+    suggested_routing: str | None = None,
     evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     token = _resolve_env("LOCAL_AUTH_TOKEN")
@@ -199,6 +201,10 @@ def op_review_event_create(
         payload["build_hash"] = build_hash
     if source_commit:
         payload["source_commit"] = source_commit
+    if blocking_owner:
+        payload["blocking_owner"] = blocking_owner
+    if suggested_routing:
+        payload["suggested_routing"] = suggested_routing
     if evidence is not None:
         payload["evidence"] = evidence
     return _request(
@@ -316,6 +322,22 @@ TOOLS: list[dict[str, Any]] = [
                 "target": {"type": "string"},
                 "build_hash": {"type": "string"},
                 "source_commit": {"type": "string"},
+                "blocking_owner": {
+                    "type": "string",
+                    "description": (
+                        "For FAIL/INCONCLUSIVE: who should fix this. "
+                        "Used by lead-review-routing to choose the rework "
+                        "destination role."
+                    ),
+                },
+                "suggested_routing": {
+                    "type": "string",
+                    "description": (
+                        "For FAIL/INCONCLUSIVE: free-form routing hint "
+                        "the lead applies (e.g., 'route to operator', "
+                        "'lead move to rework for PB')."
+                    ),
+                },
                 "evidence": {"type": "object"},
             },
             "required": ["task_id", "reviewer_role", "verdict"],
@@ -354,6 +376,8 @@ def dispatch_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             target=arguments.get("target"),
             build_hash=arguments.get("build_hash"),
             source_commit=arguments.get("source_commit"),
+            blocking_owner=arguments.get("blocking_owner"),
+            suggested_routing=arguments.get("suggested_routing"),
             evidence=evidence if isinstance(evidence, dict) else None,
         )
     raise ValueError(f"unknown tool: {name}")
@@ -377,22 +401,34 @@ def handle_tools_list(_params: dict[str, Any]) -> dict[str, Any]:
     return {"tools": TOOLS}
 
 
+class InvalidToolParamsError(Exception):
+    """Raised when tool params fail protocol validation (unknown tool name,
+    missing required argument, wrong type). Mapped to JSON-RPC -32602
+    Invalid params per MCP 2024-11-05."""
+
+
 def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
     name = params.get("name")
     arguments = params.get("arguments") or {}
     if not isinstance(name, str):
-        raise ValueError("tool 'name' is required")
+        raise InvalidToolParamsError("tool 'name' must be a string")
     if not isinstance(arguments, dict):
-        raise ValueError("tool 'arguments' must be an object")
+        raise InvalidToolParamsError("tool 'arguments' must be an object")
     try:
         result = dispatch_tool(name, arguments)
     except HttpError as exc:
+        # Business / API failure: surface to the LLM via tool result with
+        # isError=true (per MCP spec), not as a JSON-RPC protocol error.
         return {
             "content": [
                 {"type": "text", "text": f"HTTP {exc.status}: {exc.body[:1000]}"}
             ],
             "isError": True,
         }
+    except ValueError as exc:
+        # dispatch_tool() raises ValueError for unknown tool names.
+        # Per MCP, this is "invalid params" → JSON-RPC -32602.
+        raise InvalidToolParamsError(str(exc)) from exc
     return {
         "content": [{"type": "text", "text": json.dumps(result)}],
         "isError": False,
@@ -418,18 +454,38 @@ def make_error(request_id: object, code: int, message: str) -> dict[str, Any]:
     }
 
 
+_REQUEST_METHODS = frozenset({"initialize", "tools/list", "tools/call"})
+_NOTIFICATION_METHODS = frozenset({"notifications/initialized"})
+
+
 def process_message(message: dict[str, Any]) -> dict[str, Any] | None:
     """Process one JSON-RPC message; return a response dict or None for
-    notifications (which require no response per JSON-RPC 2.0)."""
+    notifications.
+
+    Per JSON-RPC 2.0 + MCP 2024-11-05:
+    - Requests carry an ``id`` (string or number) and MUST get a response.
+    - Notifications have no ``id`` and MUST NOT get a response.
+    - The server distinguishes by the method's contract, not by whether
+      the client included an ``id``. A request method without an ``id``
+      is malformed and gets ``-32600 Invalid Request``.
+    """
     method = message.get("method")
     params = message.get("params") or {}
     request_id = message.get("id")
 
-    if method == "notifications/initialized":
-        return None  # client handshake completion; no response
+    # Notifications: discard, never respond, even on error.
+    if method in _NOTIFICATION_METHODS:
+        return None
 
+    # Request methods MUST carry id (string or number). Reject malformed.
     if not isinstance(method, str):
         return make_error(request_id, -32600, "Invalid Request: missing method")
+    if method in _REQUEST_METHODS and request_id is None:
+        return make_error(
+            None,
+            -32600,
+            f"Invalid Request: method {method!r} requires an id",
+        )
 
     handler = HANDLERS.get(method)
     if handler is None:
@@ -437,12 +493,12 @@ def process_message(message: dict[str, Any]) -> dict[str, Any] | None:
 
     try:
         result = handler(params if isinstance(params, dict) else {})
+    except InvalidToolParamsError as exc:
+        return make_error(request_id, -32602, f"Invalid params: {exc}")
     except Exception as exc:
         LOG.exception("handler %s failed", method)
         return make_error(request_id, -32603, f"Internal error: {exc}")
 
-    if request_id is None:
-        return None  # notification — no response
     return make_response(request_id, result)
 
 
