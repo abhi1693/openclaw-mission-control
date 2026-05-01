@@ -120,9 +120,10 @@ mc_client.py task-read --task <task-uuid>
 ```
 
 Returns the full task envelope (id, title, description, status,
-priority, packet metadata) as JSON on stdout. Walks the list endpoint
-internally because MC has no single-task GET — exit code 2 + 404 detail
-on stderr if the task is not on the configured board.
+priority, packet metadata) as JSON on stdout. Hits ``GET /api/v1/boards/
+{board_id}/tasks/{task_id}`` directly — one request, no pagination.
+Exit code 2 + 404 detail on stderr if the task is not on the
+configured board.
 
 ### Post a task comment
 

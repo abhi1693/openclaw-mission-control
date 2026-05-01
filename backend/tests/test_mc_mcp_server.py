@@ -167,17 +167,16 @@ class TestToolsCall:
         assert resp is not None
         assert resp["error"]["code"] == -32600
 
-    def test_task_read_dispatches_via_paginated_list(self) -> None:
+    def test_task_read_dispatches_via_single_task_endpoint(self) -> None:
+        """``mc_task_read`` hits ``GET /tasks/{task_id}`` directly — one
+        request, no pagination of the whole board."""
         captured: dict[str, Any] = {}
 
         def fake_urlopen(req, timeout=None):
             captured["url"] = req.full_url
+            captured["method"] = req.get_method()
             captured["auth"] = req.headers.get("Authorization")
-            return _StubResponse(
-                json.dumps(
-                    {"items": [{"id": "abc", "title": "found"}], "total": 1}
-                ).encode()
-            )
+            return _StubResponse(json.dumps({"id": "abc", "title": "found"}).encode())
 
         with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
             result = _module.handle_tools_call(
@@ -188,7 +187,10 @@ class TestToolsCall:
         body = json.loads(result["content"][0]["text"])
         assert body == {"id": "abc", "title": "found"}
         assert captured["auth"] == "Bearer test-token"
-        assert "/tasks?limit=200&offset=0" in captured["url"]
+        assert captured["method"] == "GET"
+        assert captured["url"].endswith("/tasks/abc")
+        assert "?limit=" not in captured["url"]
+        assert "?offset=" not in captured["url"]
 
     def test_comment_create_posts_message(self) -> None:
         captured: dict[str, Any] = {}

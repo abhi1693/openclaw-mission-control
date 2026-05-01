@@ -54,7 +54,9 @@ DEFAULT_BASE_URL = "http://192.168.2.64:8000"
 
 
 # --- HTTP plumbing (mirrors mc_client.py for consistency; intentionally
-# duplicated rather than imported so this script has no PYTHONPATH dep) ---
+# duplicated rather than imported so this script has no PYTHONPATH dep
+# beyond stdlib — both this server and the CLI deploy to /usr/local/bin
+# as standalone scripts) ---
 
 
 class HttpError(RuntimeError):
@@ -110,23 +112,11 @@ def op_task_read(task_id: str) -> dict[str, Any]:
     token = _resolve_env("LOCAL_AUTH_TOKEN")
     board = _resolve_env("BOARD_ID")
     base = _base_url()
-    offset = 0
-    page_size = 200
-    while offset <= 5000:
-        url = f"{base}/api/v1/boards/{board}/tasks?limit={page_size}&offset={offset}"
-        page = _request(method="GET", url=url, token=token)
-        items = page if isinstance(page, list) else page.get("items", [])
-        if not items:
-            break
-        for task in items:
-            if isinstance(task, dict) and task.get("id") == task_id:
-                return task
-        if isinstance(page, dict):
-            total = page.get("total")
-            if isinstance(total, int) and offset + page_size >= total:
-                break
-        offset += page_size
-    raise HttpError(404, json.dumps({"detail": f"task {task_id} not found"}))
+    return _request(
+        method="GET",
+        url=f"{base}/api/v1/boards/{board}/tasks/{task_id}",
+        token=token,
+    )
 
 
 def op_comment_create(task_id: str, message: str) -> dict[str, Any]:

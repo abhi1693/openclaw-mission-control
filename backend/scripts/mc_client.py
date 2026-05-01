@@ -137,31 +137,16 @@ def _parse_evidence(value: str | None) -> dict[str, Any] | None:
 
 
 def cmd_task_read(args: argparse.Namespace) -> dict[str, Any]:
-    """Read one task. The board API exposes no single-task GET — paginate
-    the list endpoint and filter client-side. Returns 1-task envelope or
-    raises HttpError(404) if not found."""
+    """Read one task by id via the single-task GET endpoint.
+
+    Returns the task envelope or raises HttpError(404) if the task
+    does not belong to the configured board.
+    """
     token = _resolve_token(args)
     board = _resolve_board(args)
     base = _resolve_base_url(args)
-    offset = 0
-    page_size = 200
-    while True:
-        url = f"{base}/api/v1/boards/{board}/tasks?limit={page_size}&offset={offset}"
-        page = _request(method="GET", url=url, token=token)
-        items = page if isinstance(page, list) else page.get("items", [])
-        if not items:
-            break
-        for task in items:
-            if isinstance(task, dict) and task.get("id") == args.task:
-                return task
-        if isinstance(page, dict):
-            total = page.get("total")
-            if isinstance(total, int) and offset + page_size >= total:
-                break
-        offset += page_size
-        if offset > 5000:  # hard safety stop
-            break
-    raise HttpError(404, json.dumps({"detail": f"task {args.task} not found"}))
+    url = f"{base}/api/v1/boards/{board}/tasks/{args.task}"
+    return _request(method="GET", url=url, token=token)  # type: ignore[return-value]
 
 
 def cmd_comment_create(args: argparse.Namespace) -> dict[str, Any]:

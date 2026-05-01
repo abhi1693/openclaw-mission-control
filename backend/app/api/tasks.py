@@ -2901,6 +2901,26 @@ def _require_reviewer_role_allowed(
         )
 
 
+@router.get("/{task_id}", response_model=TaskRead)
+async def get_task(
+    task: Task = TASK_DEP,
+    session: AsyncSession = SESSION_DEP,
+    _actor: ActorContext = ACTOR_DEP,
+) -> TaskRead:
+    """Return the full task envelope by id.
+
+    Pair endpoint to ``GET /tasks`` (list) — lets clients fetch one task
+    without paginating the whole board. Output shape matches list-page
+    items (same enrichments via ``_task_read_page``).
+    """
+    if task.board_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    page = await _task_read_page(session=session, board_id=task.board_id, tasks=[task])
+    if not page:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return page[0]
+
+
 @router.get("/{task_id}/pipeline", response_model=TaskPipelineStateRead)
 async def get_task_pipeline_state(
     task: Task = TASK_DEP,

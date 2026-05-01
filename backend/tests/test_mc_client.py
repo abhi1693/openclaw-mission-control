@@ -12,6 +12,7 @@ import importlib.util
 import io
 import json
 import sys
+import urllib.error
 from pathlib import Path
 from typing import Any, cast
 from unittest import mock
@@ -310,11 +311,13 @@ class _StubResponse:
 
 
 class TestHttpFlow:
-    def test_task_read_paginates_list_and_filters(
+    def test_task_read_hits_single_task_endpoint(
         self,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
+        """task-read goes to GET /tasks/{task_id} — one request, no
+        pagination of the whole board."""
         monkeypatch.setenv("LOCAL_AUTH_TOKEN", "test-token")
         monkeypatch.setenv("BOARD_ID", "board-uuid")
         captured: dict[str, Any] = {"calls": 0, "urls": []}
@@ -323,14 +326,7 @@ class TestHttpFlow:
             captured["calls"] = int(captured["calls"]) + 1
             captured["urls"].append(req.full_url)
             captured["auth"] = req.headers.get("Authorization")
-            body = {
-                "items": [
-                    {"id": "other-1", "title": "x"},
-                    {"id": "abc", "title": "found-task"},
-                    {"id": "other-2", "title": "y"},
-                ],
-                "total": 3,
-            }
+            body = {"id": "abc", "title": "found-task"}
             return _StubResponse(json.dumps(body).encode())
 
         with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
@@ -338,11 +334,8 @@ class TestHttpFlow:
 
         assert rc == 0
         assert captured["auth"] == "Bearer test-token"
-        # Single page request because total=3 fit in one page
         assert captured["calls"] == 1
-        assert captured["urls"][0].startswith(
-            "http://test/api/v1/boards/board-uuid/tasks?limit=200&offset=0"
-        )
+        assert captured["urls"][0] == "http://test/api/v1/boards/board-uuid/tasks/abc"
         out = capsys.readouterr().out
         assert json.loads(out) == {"id": "abc", "title": "found-task"}
 
@@ -355,7 +348,13 @@ class TestHttpFlow:
         monkeypatch.setenv("BOARD_ID", "b")
 
         def fake_urlopen(req, timeout=None):
-            return _StubResponse(json.dumps({"items": [], "total": 0}).encode())
+            raise urllib.error.HTTPError(
+                req.full_url,
+                404,
+                "Not Found",
+                hdrs={},  # type: ignore[arg-type]
+                fp=io.BytesIO(json.dumps({"detail": "task missing not found"}).encode()),
+            )
 
         with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
             rc = main(["--base-url", "http://test", "task-read", "--task", "missing"])
