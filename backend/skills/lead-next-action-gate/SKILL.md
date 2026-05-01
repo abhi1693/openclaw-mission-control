@@ -77,7 +77,13 @@ before guessing an endpoint.
   reason_code the task has been `in_progress` long enough to nudge — do not
   second-guess the threshold; record `details.in_progress_minutes` in the
   nudge comment for context.
-- `route_inbox`: use `lead-inbox-routing` for the returned task.
+- `route_inbox`: use `lead-inbox-routing` for the returned task. If
+  `reason_code=assigned_inbox_needs_lead_triage`, do not assume the assignee can
+  self-advance it. Assigned inbox is lead-owned triage: either move it to
+  `review` for review/QA intake, move it to `in_progress` only when assigning
+  an implementation owner, create/decompose child work, or add a structured
+  blocker/operator decision if it is intentionally parked. Do not leave
+  `is_blocked=false` parked inbox tasks assigned to review-only agents.
 - `materialize_decomposition_plan`: the returned task is in `inbox`,
   assigned to a reviewer (typically Architect), and has no children
   yet. The decomposition handshake is mid-flight: the assignee was

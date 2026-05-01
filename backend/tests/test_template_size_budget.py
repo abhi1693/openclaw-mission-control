@@ -1054,6 +1054,13 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "LEAD_NEXT_ACTION_REQUIRED" in next_action
     assert "review_task_ready_for_approval" in next_action
     assert "create exactly" in next_action
+    assert "assigned_inbox_needs_lead_triage" in next_action
+    assert "assigned inbox" in next_action.lower()
+    assert "Do not leave" in next_action
+    assert "`is_blocked=false` parked inbox tasks" in next_action
+    assert "Drain Loop" in next_action
+    assert "per-tick cap of **5 applied actions**" in next_action
+    assert "Do not exit to Memory Intake after the first" in next_action
 
     health = _read_skill_text_or_skip("lead-health-scan")
     assert "LEAD_TASKS_JSON" in health
