@@ -92,6 +92,9 @@ from app.services.operator_decisions import (
     pending_operator_decision_reason_codes_by_task_id,
     task_ids_with_pending_operator_decision,
 )
+from app.services.parent_cascade import (
+    orphan_children_with_terminal_parent,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -819,6 +822,9 @@ async def get_lead_next_action(
     pending_operator_decision_ids = await task_ids_with_pending_operator_decision(
         session, board_id=board.id, task_ids=task_ids,
     )
+    orphan_children = await orphan_children_with_terminal_parent(
+        session, board_id=board.id,
+    )
     return select_lead_next_action(
         tasks=tasks,
         blocked_by_task_id=blocked_by_task_id,
@@ -827,6 +833,7 @@ async def get_lead_next_action(
         review_readiness_by_task_id=review_readiness_by_task_id,
         tasks_with_open_blocker=open_blocker_ids,
         tasks_with_pending_operator_decision=pending_operator_decision_ids,
+        orphan_children_with_terminal_parent=orphan_children,
     )
 
 

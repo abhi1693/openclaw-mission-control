@@ -117,6 +117,11 @@ from app.services.operator_decisions import (
     task_has_pending_operator_decision,
     task_ids_with_pending_operator_decision,
 )
+from app.services.parent_cascade import (
+    TERMINAL_STATUSES,
+    non_terminal_children_of,
+    orphan_children_with_terminal_parent,
+)
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_ids_by_task_id,
@@ -403,6 +408,41 @@ def _blocked_task_error(blocked_by_task_ids: Sequence[UUID]) -> HTTPException:
             "blocked_by_task_ids": [str(value) for value in blocked_by_task_ids],
         },
     )
+
+
+def _invalid_parent_task_error(reason: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={
+            "message": f"Invalid parent_task_id: {reason}.",
+            "code": "task_parent_task_id_invalid",
+        },
+    )
+
+
+async def _validate_parent_task_id(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+    parent_task_id: UUID | None,
+) -> None:
+    """Reject self-parent and cross-board / unknown parent references.
+
+    Cross-board parents would break the cascade (the orphan-detection
+    sweep is board-scoped); self-parents would loop the cascade.
+    """
+    if parent_task_id is None:
+        return
+    if parent_task_id == task_id:
+        raise _invalid_parent_task_error("a task cannot be its own parent")
+    parent = await Task.objects.by_id(parent_task_id).first(session)
+    if parent is None:
+        raise _invalid_parent_task_error(f"parent task {parent_task_id} not found")
+    if parent.board_id != board_id:
+        raise _invalid_parent_task_error(
+            "parent task belongs to a different board"
+        )
 
 
 def _operator_decision_block_error(summary: str | None = None) -> HTTPException:
@@ -2684,6 +2724,12 @@ async def create_task(
         raise _blocked_task_error(blocked_by)
     if task.operator_decision_required and (task.assigned_agent_id is not None or task.status != "inbox"):
         raise _operator_decision_block_error(task.operator_decision_summary)
+    await _validate_parent_task_id(
+        session,
+        board_id=board.id,
+        task_id=task.id,
+        parent_task_id=task.parent_task_id,
+    )
     _require_delivery_contract_with_metric(
         task=task,
         actor_agent_id=None,  # create_task is user-initiated (USER_AUTH_DEP)
@@ -3526,6 +3572,15 @@ async def _task_read_response(
     has_pending_decision = await task_has_pending_operator_decision(
         session, board_id=board_id, task_id=task.id
     )
+    # Phase V — surface orphan children only when the task itself is
+    # terminal. Skipping the lookup for non-terminal tasks keeps the
+    # hot path's query count unchanged.
+    if task.status in TERMINAL_STATUSES:
+        orphan_child_ids = await non_terminal_children_of(
+            session, board_id=board_id, parent_task_id=task.id
+        )
+    else:
+        orphan_child_ids = []
     return TaskRead.model_validate(task, from_attributes=True).model_copy(
         update={
             "depends_on_task_ids": dep_ids,
@@ -3539,6 +3594,7 @@ async def _task_read_response(
                 has_pending_operator_decision=has_pending_decision,
             ),
             "custom_field_values": custom_field_values_by_task_id.get(task.id, {}),
+            "orphan_child_task_ids": orphan_child_ids,
         },
     )
 
@@ -3834,6 +3890,49 @@ def _task_event_details(task: Task, previous_status: str) -> tuple[str, str]:
     return "task.updated", f"Task updated: {task.title}."
 
 
+async def _record_parent_terminated_event_if_orphans(
+    session: AsyncSession,
+    *,
+    task: Task,
+    previous_status: str,
+    actor_agent_id: UUID | None,
+) -> None:
+    """Emit ``task.parent_terminated`` listing non-terminal children.
+
+    Phase V cascade: when a parent task transitions into a terminal
+    state, surface its non-terminal children as orphans in the
+    activity stream. The event is informational — it does NOT mutate
+    the children. Lead-cancel narrow exception (follow-up PR) and
+    operator review consume this signal.
+    """
+    if previous_status == task.status:
+        return
+    if task.status not in TERMINAL_STATUSES:
+        return
+    if task.board_id is None:
+        return
+    orphan_ids = await non_terminal_children_of(
+        session, board_id=task.board_id, parent_task_id=task.id
+    )
+    if not orphan_ids:
+        return
+    short_list = ", ".join(str(cid)[:8] for cid in orphan_ids[:5])
+    if len(orphan_ids) > 5:
+        short_list += f", +{len(orphan_ids) - 5} more"
+    record_activity(
+        session,
+        event_type="task.parent_terminated",
+        task_id=task.id,
+        message=(
+            f"Parent task moved to {task.status}; "
+            f"{len(orphan_ids)} non-terminal child task(s) now orphaned: "
+            f"{short_list}. Operator/lead may cancel obsolete children."
+        ),
+        agent_id=actor_agent_id,
+        board_id=task.board_id,
+    )
+
+
 async def _lead_notify_new_assignee(
     session: AsyncSession,
     *,
@@ -4058,6 +4157,12 @@ async def _apply_lead_task_update(
         message=message,
         agent_id=update.actor.agent.id,
         board_id=update.board_id,
+    )
+    await _record_parent_terminated_event_if_orphans(
+        session,
+        task=update.task,
+        previous_status=update.previous_status,
+        actor_agent_id=update.actor.agent.id,
     )
     await _reconcile_dependents_for_dependency_toggle(
         session,
@@ -4408,6 +4513,12 @@ async def _record_task_update_activity(
         message=message,
         agent_id=actor_agent_id,
         board_id=update.board_id,
+    )
+    await _record_parent_terminated_event_if_orphans(
+        session,
+        task=update.task,
+        previous_status=update.previous_status,
+        actor_agent_id=actor_agent_id,
     )
     await _reconcile_dependents_for_dependency_toggle(
         session,

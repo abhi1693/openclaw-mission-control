@@ -78,6 +78,18 @@ before guessing an endpoint.
   second-guess the threshold; record `details.in_progress_minutes` in the
   nudge comment for context.
 - `route_inbox`: use `lead-inbox-routing` for the returned task.
+- `cancel_orphan_child`: the returned task is a non-terminal child whose
+  parent reached a terminal state (`done`/`cancelled`). The parent's
+  decomposition is over and this child is obsolete unless it carries
+  independent work the parent didn't subsume. Verify by reading the task
+  description + recent comments. If genuinely obsolete, post one
+  `@operator` comment quoting `details.parent_task_id` and asking the
+  operator to PATCH `{"status":"cancelled"}` (lead-cancel returns 403).
+  If the child has independent work, comment with the rationale and
+  detach it from the parent (PATCH `{"parent_task_id": null}`); the
+  next tick's gate will then route it normally. `details.orphan_count`
+  reports the total orphan candidates so the lead can decide whether to
+  drain via the per-tick cap.
 - `clear`: no structured lead action is currently required. Continue to memory
   intake, then health scan.
 

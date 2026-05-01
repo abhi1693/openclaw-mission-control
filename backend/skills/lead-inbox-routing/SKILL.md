@@ -53,7 +53,12 @@ If Architect already posted a plan, skip the route and run umbrella lifecycle.
 ## Umbrella Lifecycle
 
 1. Create each subtask from Architect's plan with `assigned_agent_id`,
-   `depends_on_task_ids`, and copied acceptance criteria.
+   `depends_on_task_ids`, copied acceptance criteria, **and `parent_task_id`
+   pointing at the umbrella**. The `parent_task_id` link is what lets the
+   backend cascade: when the umbrella moves to `done`/`cancelled`, the
+   `task.parent_terminated` activity event fires listing any non-terminal
+   children, and `/lead/next-action` will return `cancel_orphan_child` so
+   the obsolete child gets cleaned up automatically.
 2. Mark pure-container umbrella tasks with **one** `UMBRELLA_RETIRED` comment
    listing the created subtask ids. Leads cannot cancel tasks — only operators
    can (`POST .../tasks/{id}` with `{"status":"cancelled"}` returns 403 for
@@ -64,6 +69,21 @@ If Architect already posted a plan, skip the route and run umbrella lifecycle.
    `depends_on_task_ids` or an `OperatorDecision`. Do not write `is_blocked`
    directly.
 4. Route subtasks as normal tasks.
+
+Subtask create payload shape:
+
+```json
+{
+  "title": "<subtask title>",
+  "description": "<copied AC>",
+  "assigned_agent_id": "<UUID>",
+  "parent_task_id": "<umbrella UUID>",
+  "depends_on_task_ids": ["<sibling UUID>"]
+}
+```
+
+`parent_task_id` is rejected by the backend if it points at a task on a
+different board or at the subtask itself.
 
 ## Normal Task Routing
 

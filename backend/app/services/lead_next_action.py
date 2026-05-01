@@ -138,6 +138,7 @@ def select_lead_next_action(
     review_readiness_by_task_id: Mapping[UUID, object] | None = None,
     tasks_with_open_blocker: frozenset[UUID] | set[UUID] | None = None,
     tasks_with_pending_operator_decision: frozenset[UUID] | set[UUID] | None = None,
+    orphan_children_with_terminal_parent: Mapping[UUID, UUID] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
     """Return the single closest-to-done lead action from structured state."""
@@ -273,6 +274,37 @@ def select_lead_next_action(
                 "next_step": "inspect_pipeline_state_not_review_readiness",
             },
         )
+
+    # Phase V — orphan children of terminal parents. Surface BEFORE
+    # rework/inbox routing so the lead retires obsolete decomposition
+    # children rather than nudging owners to keep working on them. We
+    # iterate the full ``tasks`` list (not ``ordered``) because an
+    # orphan child can carry its own waiting flags — those don't
+    # disqualify it from cleanup; the parent terminating already
+    # declared the work moot. Active review/in_progress orphans are
+    # left to complete naturally — those branches return earlier.
+    if orphan_children_with_terminal_parent:
+        # Stable order: the lowest-id task that's an orphan, so the
+        # action is deterministic across calls within the same tick.
+        orphan_candidates = [
+            task for task in tasks
+            if task.id in orphan_children_with_terminal_parent
+            and task.status not in {"done", "cancelled", "review", "in_progress"}
+        ]
+        if orphan_candidates:
+            orphan_candidates.sort(key=lambda t: (str(t.id),))
+            orphan_task = orphan_candidates[0]
+            parent_id = orphan_children_with_terminal_parent[orphan_task.id]
+            return _action(
+                task=orphan_task,
+                action_required=True,
+                action="cancel_orphan_child",
+                reason_code="non_terminal_child_of_terminal_parent",
+                details={
+                    "parent_task_id": str(parent_id),
+                    "orphan_count": len(orphan_candidates),
+                },
+            )
 
     for task in ordered:
         if task.status == "rework" and task.assigned_agent_id is not None:

@@ -58,6 +58,16 @@ class Task(TenantScoped, table=True):
         foreign_key="board_memory.id",
         index=True,
     )
+    # Phase V: explicit parent/child link for decomposition cascade.
+    # Set when a subtask is created from a parent's decomposition plan
+    # (see ``lead-inbox-routing`` Umbrella Lifecycle). Distinct from
+    # ``TaskDependency`` (ordering) — children point at the umbrella,
+    # not at sibling prereqs.
+    parent_task_id: UUID | None = Field(
+        default=None,
+        foreign_key="tasks.id",
+        index=True,
+    )
 
     created_by_user_id: UUID | None = Field(
         default=None,
