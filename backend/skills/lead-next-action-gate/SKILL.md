@@ -114,4 +114,8 @@ above holds.
 
 Do not convert a required next action into a generic health scan. If the action
 cannot be applied because an owner, target, approval, pipeline field, or
-operator decision is missing, record that specific friction once and stop.
+runtime/deploy/source/contract fact is missing, create or reuse one structured
+`Blocker` with the owner and unblock condition, then stop. If the missing input
+is a human/operator choice, create or reuse one first-class `OperatorDecision`,
+then stop. Do not set legacy `operator_decision_required` on active assigned
+work.

@@ -455,7 +455,7 @@ If the task passes the gate, claim it atomically:
    - Do not move `review` to `rework`. For FAIL/PARTIAL, post the validation verdict with `Suggested routing: lead move to rework for <owner/reason>` and stop.
 {% else %}
 3. **When blocked or idle.**
-   - For a new blocker not already represented by a dependency, blocker, or OperatorDecision, post one precise friction comment naming the missing artifact, URL/status, or endpoint.
+   - For a new blocker not already represented by a dependency, structured `Blocker`, or `OperatorDecision`, create the appropriate routing object first: structured `Blocker` for runtime/deploy/source/contract friction, `OperatorDecision` for a human/operator choice. Then post at most one precise friction comment naming the object and the missing artifact, URL/status, or endpoint.
    - If the blocker is already represented or there is no active task, return `HEARTBEAT_OK`.
 {% endif %}
 

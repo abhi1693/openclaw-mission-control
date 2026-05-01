@@ -556,6 +556,184 @@ async def test_non_lead_agent_cannot_set_operator_decision_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_lead_cannot_set_legacy_operator_decision_on_active_assigned_task() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            lead_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id,
+                    name="Lead",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="active task",
+                    description="",
+                    status="in_progress",
+                    assigned_agent_id=worker_id,
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
+            assert lead is not None
+
+            with pytest.raises(HTTPException) as exc:
+                await tasks_api.update_task(
+                    payload=TaskUpdate(
+                        operator_decision_required=True,
+                        operator_decision_summary="Waiting on deploy artifact choice.",
+                    ),
+                    task=task,
+                    session=session,
+                    actor=ActorContext(actor_type="agent", agent=lead),
+                )
+
+            assert exc.value.status_code == 409
+            assert isinstance(exc.value.detail, dict)
+            assert exc.value.detail["code"] == "task_blocked_operator_decision_required"
+            assert "structured Blocker" in exc.value.detail["message"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_lead_can_set_legacy_operator_decision_on_terminal_assigned_task() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            lead_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id,
+                    name="Lead",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=worker_id,
+                    name="worker",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="terminal assigned task",
+                    description="",
+                    status="done",
+                    assigned_agent_id=worker_id,
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (
+                await session.exec(select(Task).where(col(Task.id) == task_id))
+            ).first()
+            assert task is not None
+            lead = (
+                await session.exec(select(Agent).where(col(Agent.id) == lead_id))
+            ).first()
+            assert lead is not None
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(
+                    operator_decision_required=True,
+                    operator_decision_summary="Compatibility flag on terminal task.",
+                ),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=lead),
+            )
+
+            assert updated.operator_decision_required is True
+            assert (
+                updated.operator_decision_summary
+                == "Compatibility flag on terminal task."
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_non_lead_agent_moves_task_to_review_and_reassigns_to_lead() -> None:
     engine = await _make_engine()
     try:
@@ -722,6 +900,21 @@ async def test_non_lead_agent_move_to_review_reassigns_to_lead_and_sends_review_
                 async def optional_gateway_config_for_board(self, _board: Board) -> object:
                     return object()
 
+                async def try_send_agent_message(
+                    self,
+                    *,
+                    session_key: str,
+                    config: Any,
+                    agent_name: str,
+                    message: str,
+                    deliver: bool,
+                ) -> str | None:
+                    _ = config, deliver
+                    sent["session_key"] = session_key
+                    sent["agent_name"] = agent_name
+                    sent["message"] = message
+                    return None
+
             async def _fake_send_agent_task_message(
                 *,
                 dispatch: Any,
@@ -757,8 +950,9 @@ async def test_non_lead_agent_move_to_review_reassigns_to_lead_and_sends_review_
             assert updated.assigned_agent_id == lead_id
             assert sent["session_key"] == "lead-session"
             assert sent["agent_name"] == "Lead Agent"
-            assert "TASK READY FOR LEAD REVIEW" in sent["message"]
-            assert "review the deliverables" in sent["message"]
+            assert "END_WORK: task moved from in_progress to review" in sent["message"]
+            assert "Route per lead-review-routing skill." in sent["message"]
+            assert "Status: review" in sent["message"]
     finally:
         await engine.dispose()
 
@@ -839,6 +1033,25 @@ async def test_lead_moves_review_task_to_inbox_unassigns_by_default_for_reroute(
 
                 async def optional_gateway_config_for_board(self, _board: Board) -> object:
                     return object()
+
+                async def try_send_agent_message(
+                    self,
+                    *,
+                    session_key: str,
+                    config: Any,
+                    agent_name: str,
+                    message: str,
+                    deliver: bool,
+                ) -> str | None:
+                    _ = config, deliver
+                    sent.append(
+                        {
+                            "session_key": session_key,
+                            "agent_name": agent_name,
+                            "message": message,
+                        },
+                    )
+                    return None
 
             async def _fake_send_agent_task_message(
                 *,
@@ -994,6 +1207,25 @@ async def test_lead_moves_review_task_to_inbox_and_preserves_explicit_reroute_as
                 async def optional_gateway_config_for_board(self, _board: Board) -> object:
                     return object()
 
+                async def try_send_agent_message(
+                    self,
+                    *,
+                    session_key: str,
+                    config: Any,
+                    agent_name: str,
+                    message: str,
+                    deliver: bool,
+                ) -> str | None:
+                    _ = config, deliver
+                    sent.append(
+                        {
+                            "session_key": session_key,
+                            "agent_name": agent_name,
+                            "message": message,
+                        },
+                    )
+                    return None
+
             async def _fake_send_agent_task_message(
                 *,
                 dispatch: Any,
@@ -1131,6 +1363,25 @@ async def test_lead_moves_review_task_to_rework_and_reassigns_last_worker_with_r
 
                 async def optional_gateway_config_for_board(self, _board: Board) -> object:
                     return object()
+
+                async def try_send_agent_message(
+                    self,
+                    *,
+                    session_key: str,
+                    config: Any,
+                    agent_name: str,
+                    message: str,
+                    deliver: bool,
+                ) -> str | None:
+                    _ = config, deliver
+                    sent.append(
+                        {
+                            "session_key": session_key,
+                            "agent_name": agent_name,
+                            "message": message,
+                        },
+                    )
+                    return None
 
             async def _fake_send_agent_task_message(
                 *,

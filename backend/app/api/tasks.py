@@ -421,6 +421,20 @@ def _operator_decision_block_error(summary: str | None = None) -> HTTPException:
     )
 
 
+def _legacy_operator_decision_active_task_error(
+    summary: str | None = None,
+) -> HTTPException:
+    error = _operator_decision_block_error(summary)
+    if isinstance(error.detail, dict):
+        error.detail["message"] = (
+            f"{error.detail['message']} File a structured Blocker for "
+            "runtime/deploy/source/contract friction, or a first-class "
+            "OperatorDecision for human/operator choices, instead of setting "
+            "legacy operator_decision_required on active assigned work."
+        )
+    return error
+
+
 ERROR_CODE_DELIVERY_CONTRACT_INCOMPLETE = "task_delivery_contract_incomplete"
 ERROR_CODE_COMMENT_SUPPRESSED_BLOCKED_LANE = "comment_suppressed_blocked_lane"
 ERROR_CODE_COMMENT_ECHOED_NO_OP = "comment_echoed_as_no_op"
@@ -3898,6 +3912,28 @@ async def _apply_lead_task_update(
     attempted_transition = (
         "assigned_agent_id" in attempted_fields or "status" in attempted_fields
     )
+    if (
+        "operator_decision_required" in attempted_fields
+        and effective_operator_decision_required
+    ):
+        target_status = _required_status_value(
+            update.updates.get("status", update.task.status),
+        )
+        target_assigned_agent_id = (
+            update.updates.get("assigned_agent_id", update.task.assigned_agent_id)
+            if target_status != "inbox"
+            else update.updates.get("assigned_agent_id")
+        )
+        legacy_odr_allowed = target_status in {"done", "cancelled"} or (
+            target_status == "inbox" and target_assigned_agent_id is None
+        )
+        if not legacy_odr_allowed:
+            raise _legacy_operator_decision_active_task_error(
+                effective_operator_decision_summary
+                if isinstance(effective_operator_decision_summary, str)
+                or effective_operator_decision_summary is None
+                else None
+            )
     if effective_operator_decision_required and attempted_transition:
         raise _operator_decision_block_error(
             effective_operator_decision_summary

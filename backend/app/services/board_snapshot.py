@@ -15,8 +15,19 @@ from app.schemas.approvals import ApprovalRead
 from app.schemas.board_memory import BoardMemoryRead
 from app.schemas.boards import BoardRead
 from app.schemas.view_models import BoardSnapshot, TaskCardRead
-from app.services.approval_task_links import load_task_ids_by_approval, task_counts_for_board
+from app.services.approval_task_links import (
+    load_task_ids_by_approval,
+    task_counts_for_board,
+)
+from app.services.blockers import (
+    open_blocker_reason_codes_by_task_id,
+    task_ids_with_open_blocker,
+)
 from app.services.openclaw.provisioning_db import AgentLifecycleService
+from app.services.operator_decisions import (
+    pending_operator_decision_reason_codes_by_task_id,
+    task_ids_with_pending_operator_decision,
+)
 from app.services.tags import TagState, load_tag_state
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
@@ -61,20 +72,38 @@ def _task_to_card(
     deps_by_task_id: dict[UUID, list[UUID]],
     dependency_status_by_id_map: dict[UUID, str],
     tag_state_by_task_id: dict[UUID, TagState],
+    tasks_with_open_blocker: set[UUID] | frozenset[UUID] = frozenset(),
+    tasks_with_pending_operator_decision: set[UUID] | frozenset[UUID] = frozenset(),
+    open_blocker_reason_codes_by_task_id: dict[UUID, list[str]] | None = None,
+    pending_operator_decision_reason_codes_by_task_id: (
+        dict[UUID, list[str]] | None
+    ) = None,
 ) -> TaskCardRead:
     card = TaskCardRead.model_validate(task, from_attributes=True)
     approvals_count, approvals_pending_count = counts_by_task_id.get(task.id, (0, 0))
-    assignee = agent_name_by_id.get(task.assigned_agent_id) if task.assigned_agent_id else None
+    assignee = (
+        agent_name_by_id.get(task.assigned_agent_id)
+        if task.assigned_agent_id
+        else None
+    )
     depends_on_task_ids = deps_by_task_id.get(task.id, [])
     tag_state = tag_state_by_task_id.get(task.id, TagState())
+    open_blocker_codes = (open_blocker_reason_codes_by_task_id or {}).get(task.id, [])
+    decision_codes_by_task_id = (
+        pending_operator_decision_reason_codes_by_task_id or {}
+    )
+    pending_decision_codes = decision_codes_by_task_id.get(task.id, [])
     blocked_by_task_ids = blocked_by_dependency_ids(
         dependency_ids=depends_on_task_ids,
         status_by_id=dependency_status_by_id_map,
     )
     if task.status in {"done", "cancelled"}:
         blocked_by_task_ids = []
-    is_blocked = bool(blocked_by_task_ids) or (
-        bool(task.operator_decision_required) and task.status not in {"done", "cancelled"}
+    is_blocked = task.status not in {"done", "cancelled"} and (
+        bool(blocked_by_task_ids)
+        or bool(task.operator_decision_required)
+        or task.id in tasks_with_open_blocker
+        or task.id in tasks_with_pending_operator_decision
     )
     return card.model_copy(
         update={
@@ -86,6 +115,8 @@ def _task_to_card(
             "tags": tag_state.tags,
             "blocked_by_task_ids": blocked_by_task_ids,
             "is_blocked": is_blocked,
+            "open_blocker_reason_codes": open_blocker_codes,
+            "pending_operator_decision_reason_codes": pending_decision_codes,
         },
     )
 
@@ -173,6 +204,30 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
     ]
 
     counts_by_task_id = await task_counts_for_board(session, board_id=board.id)
+    tasks_with_open_blocker = await task_ids_with_open_blocker(
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
+    )
+    tasks_with_pending_operator_decision = (
+        await task_ids_with_pending_operator_decision(
+            session,
+            board_id=board.id,
+            task_ids=task_ids,
+        )
+    )
+    open_blocker_codes_by_task_id = await open_blocker_reason_codes_by_task_id(
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
+    )
+    pending_decision_codes_by_task_id = (
+        await pending_operator_decision_reason_codes_by_task_id(
+            session,
+            board_id=board.id,
+            task_ids=task_ids,
+        )
+    )
 
     task_cards = [
         _task_to_card(
@@ -182,6 +237,12 @@ async def build_board_snapshot(session: AsyncSession, board: Board) -> BoardSnap
             deps_by_task_id=deps_by_task_id,
             dependency_status_by_id_map=dependency_status_by_id_map,
             tag_state_by_task_id=tag_state_by_task_id,
+            tasks_with_open_blocker=tasks_with_open_blocker,
+            tasks_with_pending_operator_decision=tasks_with_pending_operator_decision,
+            open_blocker_reason_codes_by_task_id=open_blocker_codes_by_task_id,
+            pending_operator_decision_reason_codes_by_task_id=(
+                pending_decision_codes_by_task_id
+            ),
         )
         for task in tasks
     ]
