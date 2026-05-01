@@ -45,6 +45,7 @@ from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.task_review_events import TaskReviewEvent
 from app.models.tasks import Task
 from app.schemas.activity_events import ActivityEventRead
+from app.schemas.approvals import DONE_APPROVAL_ACTION_TYPES
 from app.schemas.common import OkResponse
 from app.schemas.errors import BlockedTaskError
 from app.schemas.pagination import DefaultLimitOffsetPage
@@ -1130,12 +1131,7 @@ async def _reject_pending_move_to_done_approvals_for_task(
     board_id: UUID,
     task_id: UUID,
 ) -> None:
-    done_approval_action_types = (
-        "move_to_done",
-        "mark_done",
-        "task_done",
-        "move_task_to_done",
-    )
+    done_approval_action_types = DONE_APPROVAL_ACTION_TYPES
     linked_rows = list(
         await session.exec(
             select(Approval)

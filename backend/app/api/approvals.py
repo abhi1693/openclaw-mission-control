@@ -29,6 +29,7 @@ from app.models.approval_history import ApprovalHistory
 from app.models.approvals import Approval
 from app.models.tasks import Task
 from app.schemas.approvals import (
+    DONE_APPROVAL_ACTION_TYPES,
     ApprovalCreate,
     ApprovalRead,
     ApprovalStatus,
@@ -216,20 +217,6 @@ async def _lock_approval_for_update(
         select(Approval).where(col(Approval.id) == approval_id).with_for_update()
     )
     return rows.first()
-
-
-DONE_APPROVAL_ACTION_TYPES = (
-    "move_to_done",
-    "mark_done",
-    "task_done",
-    "move_task_to_done",
-    # Supervisor models routinely send ``mark_task_done`` despite
-    # the skill documenting ``move_to_done``. Recognize the alias so
-    # the move-to-review and target validation paths actually run,
-    # and so the lead next-action gate's approval-state lookup
-    # picks up Supervisor-created approvals.
-    "mark_task_done",
-)
 
 
 async def _ensure_move_to_done_targets_in_review(

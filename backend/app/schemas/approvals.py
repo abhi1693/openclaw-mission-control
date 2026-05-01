@@ -14,6 +14,20 @@ STATUS_REQUIRED_ERROR = "status is required"
 LEAD_REASONING_REQUIRED_ERROR = "lead reasoning is required"
 RUNTIME_ANNOTATION_TYPES = (datetime, UUID)
 
+# Canonical set of ``action_type`` values that mean "approve to move
+# this task to ``done``". Multiple aliases exist because Supervisor
+# models historically emit different strings — keep all aliases here
+# so every gate (validation, lead approval-state lookup,
+# pending-approval auto-reject on cancel) recognises the same set.
+# Adding a new alias requires updating ONLY this constant.
+DONE_APPROVAL_ACTION_TYPES: tuple[str, ...] = (
+    "move_to_done",
+    "mark_done",
+    "task_done",
+    "move_task_to_done",
+    "mark_task_done",
+)
+
 
 class ApprovalBase(SQLModel):
     """Shared approval fields used across create/read payloads."""

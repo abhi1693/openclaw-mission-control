@@ -307,12 +307,13 @@ def test_materialize_skipped_when_already_has_children() -> None:
     assert action.action == "clear"
 
 
-def test_route_inbox_wins_over_materialize_when_unassigned_present() -> None:
-    """Unassigned inbox tasks (route_inbox) are preferred over
-    assigned-but-unmaterialized — fresh routing trumps decomposition
-    cleanup."""
-    unassigned = _task(status="inbox", title="unassigned routable")
-    architect_assigned = _task(status="inbox", assigned=True, title="awaiting plan")
+def test_materialize_wins_over_route_inbox() -> None:
+    """Codex 2026-05-01 finding D: an Architect-assigned task with a
+    decomposition plan posted should outrank fresh unassigned inbox.
+    Otherwise a steady stream of fresh inbox arrivals starves
+    materialization indefinitely (Track B 14d-old example)."""
+    unassigned = _task(status="inbox", title="fresh unassigned")
+    architect_assigned = _task(status="inbox", assigned=True, title="awaiting plan materialization")
 
     action = select_lead_next_action(
         tasks=[unassigned, architect_assigned],
@@ -322,8 +323,27 @@ def test_route_inbox_wins_over_materialize_when_unassigned_present() -> None:
         tasks_with_children=frozenset(),
     )
 
-    assert action.action == "route_inbox"
-    assert action.task_id == unassigned.id
+    assert action.action == "materialize_decomposition_plan"
+    assert action.task_id == architect_assigned.id
+
+
+def test_materialize_skipped_when_umbrella_retired_marker_present() -> None:
+    """Codex 2026-05-01 finding C: pre-Phase-V umbrellas with the
+    UMBRELLA_RETIRED marker comment but no parent_task_id-linked
+    children would re-fire materialize forever. Treat the marker as
+    a second idempotency signal."""
+    architect_assigned = _task(status="inbox", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[architect_assigned],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset(),
+        tasks_with_umbrella_retired_marker=frozenset({architect_assigned.id}),
+    )
+
+    assert action.action == "clear"
 
 
 def test_orphan_action_skipped_when_child_already_terminal() -> None:

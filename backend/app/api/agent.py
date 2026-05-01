@@ -35,7 +35,12 @@ from app.schemas.agents import (
     AgentNudge,
     AgentRead,
 )
-from app.schemas.approvals import ApprovalCreate, ApprovalRead, ApprovalStatus
+from app.schemas.approvals import (
+    DONE_APPROVAL_ACTION_TYPES,
+    ApprovalCreate,
+    ApprovalRead,
+    ApprovalStatus,
+)
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.board_onboarding import BoardOnboardingAgentUpdate, BoardOnboardingRead
 from app.schemas.board_webhooks import BoardWebhookPayloadRead
@@ -97,6 +102,7 @@ from app.services.operator_decisions import (
 from app.services.parent_cascade import (
     orphan_children_with_terminal_parent,
     task_ids_with_children,
+    task_ids_with_umbrella_retired_marker,
 )
 
 if TYPE_CHECKING:
@@ -165,18 +171,7 @@ def _task_list_filters(
 
 TASK_LIST_FILTERS_DEP = Depends(_task_list_filters)
 ACTIVE_LEAD_STATUSES = ("inbox", "in_progress", "review", "rework")
-LEAD_DONE_APPROVAL_ACTION_TYPES = (
-    "move_to_done",
-    "mark_done",
-    "task_done",
-    "move_task_to_done",
-    # Supervisor models commonly emit ``mark_task_done`` even though
-    # ``lead-review-routing`` documents ``move_to_done``. Without this
-    # alias the gate's approval-state lookup misses pending approvals
-    # the Supervisor itself created and tier 2 keeps re-firing
-    # ``review_task_ready_for_approval`` on the same task forever.
-    "mark_task_done",
-)
+LEAD_DONE_APPROVAL_ACTION_TYPES = DONE_APPROVAL_ACTION_TYPES
 
 
 def _actor(agent_ctx: AgentAuthContext) -> ActorContext:
@@ -843,6 +838,9 @@ async def get_lead_next_action(
     parents_already_materialized = await task_ids_with_children(
         session, board_id=board.id, task_ids=task_ids,
     )
+    parents_with_retired_marker = await task_ids_with_umbrella_retired_marker(
+        session, board_id=board.id, task_ids=task_ids,
+    )
     return select_lead_next_action(
         tasks=tasks,
         blocked_by_task_id=blocked_by_task_id,
@@ -853,6 +851,7 @@ async def get_lead_next_action(
         tasks_with_pending_operator_decision=pending_operator_decision_ids,
         orphan_children_with_terminal_parent=orphan_children,
         tasks_with_children=parents_already_materialized,
+        tasks_with_umbrella_retired_marker=parents_with_retired_marker,
     )
 
 

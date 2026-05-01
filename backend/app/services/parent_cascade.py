@@ -81,6 +81,43 @@ async def orphan_children_by_parent_id(
     return dict(grouped)
 
 
+async def task_ids_with_umbrella_retired_marker(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Iterable[UUID],
+) -> frozenset[UUID]:
+    """Return the subset of ``task_ids`` carrying an ``UMBRELLA_RETIRED`` comment.
+
+    The marker is posted by the lead per ``lead-inbox-routing``'s
+    Umbrella Lifecycle when a pure-container parent has been
+    decomposed into subtasks. Once present, the lead's job on this
+    umbrella is done — re-firing ``materialize_decomposition_plan``
+    would be wasteful (and noisy on pre-Phase-V umbrellas where the
+    children predate ``parent_task_id`` and so don't show up in
+    ``task_ids_with_children``). This helper provides the secondary
+    idempotency signal.
+    """
+    from app.models.activity_events import ActivityEvent  # local — avoid circular
+
+    task_id_list = list(task_ids)
+    if not task_id_list:
+        return frozenset()
+    stmt = (
+        select(col(ActivityEvent.task_id))
+        .where(col(ActivityEvent.board_id) == board_id)
+        .where(col(ActivityEvent.task_id).in_(task_id_list))
+        .where(col(ActivityEvent.event_type) == "task.comment")
+        .where(col(ActivityEvent.message).is_not(None))
+        .where(col(ActivityEvent.message).contains("UMBRELLA_RETIRED"))
+        .distinct()
+    )
+    return frozenset(
+        task_id for task_id in (await session.exec(stmt)).all()
+        if task_id is not None
+    )
+
+
 async def task_ids_with_children(
     session: AsyncSession,
     *,

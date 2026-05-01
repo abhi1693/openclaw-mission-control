@@ -141,6 +141,7 @@ def select_lead_next_action(
     tasks_with_pending_operator_decision: frozenset[UUID] | set[UUID] | None = None,
     orphan_children_with_terminal_parent: Mapping[UUID, UUID] | None = None,
     tasks_with_children: frozenset[UUID] | set[UUID] | None = None,
+    tasks_with_umbrella_retired_marker: frozenset[UUID] | set[UUID] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
     """Return the single closest-to-done lead action from structured state."""
@@ -355,32 +356,34 @@ def select_lead_next_action(
             },
         )
 
-    for task in ordered:
-        if task.status == "inbox" and task.assigned_agent_id is None:
-            return _action(
-                task=task,
-                action_required=True,
-                action="route_inbox",
-                reason_code="unassigned_inbox_needs_routing",
-            )
-
-    # Tier (last before clear) — inbox tasks already assigned to a
-    # reviewer/architect awaiting Supervisor materialization. The
-    # ``lead-inbox-routing`` decomposition handshake is: (1) lead
-    # assigns task to Architect, (2) Architect posts decomposition
-    # plan as a comment, (3) lead reads plan and creates parent-linked
-    # subtasks, (4) lead retires the umbrella. Without a tier here,
-    # step (3) never gets surfaced to the lead via ``/lead/next-action``
-    # because tier 9 (``route_inbox``) requires ``assigned_agent_id IS
-    # NULL``. Tasks would sit in inbox-with-Architect-assigned forever.
-    # The ``tasks_with_children`` set lets us skip already-materialized
-    # parents (idempotency).
+    # Inbox tasks already assigned to a reviewer/architect awaiting
+    # Supervisor materialization. The ``lead-inbox-routing``
+    # decomposition handshake is: (1) lead assigns task to Architect,
+    # (2) Architect posts decomposition plan as a comment, (3) lead
+    # reads plan and creates parent-linked subtasks, (4) lead retires
+    # the umbrella with an ``UMBRELLA_RETIRED`` marker comment. Without
+    # a tier here, step (3) never gets surfaced because the
+    # ``route_inbox`` tier below requires ``assigned_agent_id IS
+    # NULL``. Placed BEFORE ``route_inbox`` so an older Architect-
+    # assigned task with a plan posted is processed before a fresh
+    # unassigned arrival — otherwise a steady stream of fresh inbox
+    # work could starve materialization indefinitely.
+    #
+    # Two idempotency signals: skip if children already exist via
+    # ``parent_task_id`` (Phase V cascade) OR if an
+    # ``UMBRELLA_RETIRED`` marker comment is present (covers
+    # pre-Phase-V umbrellas where children predate ``parent_task_id``
+    # and so don't show up in ``tasks_with_children``).
     if tasks_with_children is None:
         tasks_with_children = frozenset()
+    if tasks_with_umbrella_retired_marker is None:
+        tasks_with_umbrella_retired_marker = frozenset()
     for task in ordered:
         if task.status != "inbox" or task.assigned_agent_id is None:
             continue
         if task.id in tasks_with_children:
+            continue
+        if task.id in tasks_with_umbrella_retired_marker:
             continue
         return _action(
             task=task,
@@ -391,6 +394,15 @@ def select_lead_next_action(
                 "assigned_agent_id": str(task.assigned_agent_id),
             },
         )
+
+    for task in ordered:
+        if task.status == "inbox" and task.assigned_agent_id is None:
+            return _action(
+                task=task,
+                action_required=True,
+                action="route_inbox",
+                reason_code="unassigned_inbox_needs_routing",
+            )
 
     return _action(
         task=None,
