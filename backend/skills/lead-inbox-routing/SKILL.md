@@ -54,7 +54,12 @@ If Architect already posted a plan, skip the route and run umbrella lifecycle.
 
 1. Create each subtask from Architect's plan with `assigned_agent_id`,
    `depends_on_task_ids`, and copied acceptance criteria.
-2. Retire pure-container umbrella tasks with `{"status":"cancelled"}`.
+2. Mark pure-container umbrella tasks with **one** `UMBRELLA_RETIRED` comment
+   listing the created subtask ids. Leads cannot cancel tasks — only operators
+   can (`POST .../tasks/{id}` with `{"status":"cancelled"}` returns 403 for
+   agents). Leave the umbrella in `inbox` after posting the marker. Skip
+   re-commenting on later ticks if a `UMBRELLA_RETIRED` marker is already
+   present.
 3. If the umbrella has its own artifact, link real dependencies through
    `depends_on_task_ids` or an `OperatorDecision`. Do not write `is_blocked`
    directly.
