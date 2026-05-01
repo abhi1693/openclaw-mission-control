@@ -10,6 +10,7 @@ from uuid import UUID
 from app.core.time import as_naive_utc, utcnow
 from app.models.tasks import Task
 from app.schemas.lead_actions import LeadNextActionName, LeadNextActionRead
+from app.services.parent_cascade import TERMINAL_STATUSES
 from app.services.task_pipeline import split_missing_states_by_default_owner
 
 ApprovalState = Literal["none", "pending", "approved", "rejected"]
@@ -138,6 +139,9 @@ def select_lead_next_action(
     review_readiness_by_task_id: Mapping[UUID, object] | None = None,
     tasks_with_open_blocker: frozenset[UUID] | set[UUID] | None = None,
     tasks_with_pending_operator_decision: frozenset[UUID] | set[UUID] | None = None,
+    orphan_children_with_terminal_parent: Mapping[UUID, UUID] | None = None,
+    tasks_with_children: frozenset[UUID] | set[UUID] | None = None,
+    tasks_with_umbrella_retired_marker: frozenset[UUID] | set[UUID] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
     """Return the single closest-to-done lead action from structured state."""
@@ -207,6 +211,16 @@ def select_lead_next_action(
         if task.status != "review":
             continue
         approval_state = approval_state_by_task_id.get(task.id, "none")
+        # Pending approvals are operator-owned: the lead has no
+        # further action until the operator approves, rejects, or
+        # cancels. Falling through unblocks lower-tier work
+        # (orphan cleanup, rework follow-up, inbox routing) so the
+        # heartbeat drain loop doesn't trap on the same review every
+        # tick. ``approved`` is handled by the earlier tier 1 loop;
+        # everything else (``none`` without readiness, ``rejected``,
+        # missing pipeline) is genuine lead-actionable friction.
+        if approval_state == "pending":
+            continue
         missing_pipeline = list(pipeline_missing_by_task_id.get(task.id, []))
         return _action(
             task=task,
@@ -274,6 +288,82 @@ def select_lead_next_action(
             },
         )
 
+    # Phase V — orphan children of terminal parents. Surface BEFORE
+    # rework/inbox routing so the lead retires obsolete decomposition
+    # children rather than nudging owners to keep working on them.
+    # Iterates the full ``tasks`` list (not ``ordered``) because an
+    # orphan child can carry its own waiting flags — those don't
+    # disqualify cleanup; the parent terminating already declared the
+    # work moot. Orphans currently in ``review`` or ``in_progress``
+    # are left to complete naturally — earlier branches will have
+    # surfaced those if they need attention. Already-terminal orphans
+    # are skipped (race-safe: snapshot may include a child that
+    # transitioned during the tick). Sorted by id (not timestamp like
+    # ``_task_sort_key``) because cleanup ordering is arbitrary as
+    # long as it is deterministic across calls within the same tick.
+    if orphan_children_with_terminal_parent:
+        orphan_candidates = sorted(
+            (
+                task for task in tasks
+                if task.id in orphan_children_with_terminal_parent
+                and task.status not in TERMINAL_STATUSES
+                and task.status not in {"review", "in_progress"}
+            ),
+            key=lambda t: str(t.id),
+        )
+        if orphan_candidates:
+            orphan_task = orphan_candidates[0]
+            parent_id = orphan_children_with_terminal_parent[orphan_task.id]
+            return _action(
+                task=orphan_task,
+                action_required=True,
+                action="cancel_orphan_child",
+                reason_code="non_terminal_child_of_terminal_parent",
+                details={
+                    "parent_task_id": str(parent_id),
+                    "orphan_count": len(orphan_candidates),
+                },
+            )
+
+    # Inbox tasks already assigned to a reviewer/architect awaiting
+    # Supervisor materialization. The ``lead-inbox-routing``
+    # decomposition handshake is: (1) lead assigns task to Architect,
+    # (2) Architect posts decomposition plan as a comment, (3) lead
+    # reads plan and creates parent-linked subtasks, (4) lead retires
+    # the umbrella with an ``UMBRELLA_RETIRED`` marker comment. Without
+    # a tier here, step (3) never gets surfaced because the
+    # ``route_inbox`` tier below requires ``assigned_agent_id IS
+    # NULL``. Placed BEFORE ``route_inbox`` so an older Architect-
+    # assigned task with a plan posted is processed before a fresh
+    # unassigned arrival — otherwise a steady stream of fresh inbox
+    # work could starve materialization indefinitely.
+    #
+    # Two idempotency signals: skip if children already exist via
+    # ``parent_task_id`` (Phase V cascade) OR if an
+    # ``UMBRELLA_RETIRED`` marker comment is present (covers
+    # pre-Phase-V umbrellas where children predate ``parent_task_id``
+    # and so don't show up in ``tasks_with_children``).
+    if tasks_with_children is None:
+        tasks_with_children = frozenset()
+    if tasks_with_umbrella_retired_marker is None:
+        tasks_with_umbrella_retired_marker = frozenset()
+    for task in ordered:
+        if task.status != "inbox" or task.assigned_agent_id is None:
+            continue
+        if task.id in tasks_with_children:
+            continue
+        if task.id in tasks_with_umbrella_retired_marker:
+            continue
+        return _action(
+            task=task,
+            action_required=True,
+            action="materialize_decomposition_plan",
+            reason_code="inbox_assigned_awaiting_subtask_materialization",
+            details={
+                "assigned_agent_id": str(task.assigned_agent_id),
+            },
+        )
+
     for task in ordered:
         if task.status == "inbox" and task.assigned_agent_id is None:
             return _action(
@@ -281,22 +371,6 @@ def select_lead_next_action(
                 action_required=True,
                 action="route_inbox",
                 reason_code="unassigned_inbox_needs_routing",
-            )
-
-    for task in ordered:
-        if task.status == "inbox" and task.assigned_agent_id is not None:
-            return _action(
-                task=task,
-                action_required=True,
-                action="route_inbox",
-                reason_code="assigned_inbox_needs_lead_triage",
-                details={
-                    "next_step": "triage_assigned_inbox",
-                    "lead_must_decide": (
-                        "move_to_review_if_review_intake, move_to_in_progress_if_implementation, "
-                        "decompose_or_block_if_parked"
-                    ),
-                },
             )
 
     for task in ordered:

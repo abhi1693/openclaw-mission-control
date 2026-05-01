@@ -618,7 +618,8 @@ GET `/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit=20` with `X-Ag
 {% else %}
 - If no spec in description/comments → post `"@lead No spec found. What should I implement?"` and stop. Do NOT guess.
 {% endif %}
-- Post comments via: `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"message": "TEXT"}'`
+- Post comments via the typed CLI: `mc_client.py comment-create --task "$TASK_ID" --message "TEXT"`. It handles auth, board scoping, and JSON encoding for you. See `mc-board-api` skill for the MCP-tool form (`mc_comment_create`) when running inside an ACP child with the MC MCP server wired.
+- Raw HTTP fallback only when `mc_client.py` is unavailable: `curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{"message": "TEXT"}'`
 
 {% if identity_validation_flow == "qa_validation" %}
 {% set validator_role_lower = (identity_role | default("") | lower) %}

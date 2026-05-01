@@ -70,10 +70,16 @@ agent UUIDs from the scan, not `$AGENT_ID`.
 
 - If the next action is owned and executable, let the owner work. Do not post a
   hold comment.
-- If the first friction is missing deploy/live target, credential, or operator
-  action, create or reuse one `OperatorDecision`, link dependent tasks, and
-  route one DevOps/operator action. Then stop touching those task threads until
-  the decision resolves.
+- If the first friction is runtime/deploy/source/contract friction (missing
+  deploy/live target, credential, source artifact, API endpoint, or validation
+  evidence), create or reuse one structured `Blocker` on the task with
+  `reason_code`, `owner_role`, and the narrowest useful
+  `required_artifact`/`target_env`/`reopen_condition`. Then route one owner
+  action and stop touching that task thread until the blocker resolves.
+- If the first friction is a human/operator choice, create or reuse one
+  first-class `OperatorDecision`, link dependent tasks, and stop touching those
+  task threads until the decision resolves.
+- Do not set legacy `operator_decision_required` on active assigned work.
 - If the first friction is code/test/review feedback, classify the owner first,
   then move exactly that task through `rework -> in_progress -> review`.
 - Offline agent with live task: recover once, then assign the task elsewhere if

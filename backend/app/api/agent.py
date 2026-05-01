@@ -35,7 +35,12 @@ from app.schemas.agents import (
     AgentNudge,
     AgentRead,
 )
-from app.schemas.approvals import ApprovalCreate, ApprovalRead, ApprovalStatus
+from app.schemas.approvals import (
+    DONE_APPROVAL_ACTION_TYPES,
+    ApprovalCreate,
+    ApprovalRead,
+    ApprovalStatus,
+)
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.board_onboarding import BoardOnboardingAgentUpdate, BoardOnboardingRead
 from app.schemas.board_webhooks import BoardWebhookPayloadRead
@@ -74,10 +79,12 @@ from app.services.lead_next_action import (
 from app.services.tags import replace_tags, validate_tag_ids
 from app.services.task_pipeline import (
     frontend_pipeline_required,
-    list_task_pipeline_events,
+    list_task_pipeline_events_for_tasks,
     pipeline_missing_states,
 )
-from app.services.task_review_events import get_task_review_readiness
+from app.services.task_review_events import (
+    get_task_review_readiness_batch,
+)
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_status_by_id,
@@ -91,6 +98,11 @@ from app.services.blockers import (
 from app.services.operator_decisions import (
     pending_operator_decision_reason_codes_by_task_id,
     task_ids_with_pending_operator_decision,
+)
+from app.services.parent_cascade import (
+    orphan_children_with_terminal_parent,
+    task_ids_with_children,
+    task_ids_with_umbrella_retired_marker,
 )
 
 if TYPE_CHECKING:
@@ -159,16 +171,28 @@ def _task_list_filters(
 
 TASK_LIST_FILTERS_DEP = Depends(_task_list_filters)
 ACTIVE_LEAD_STATUSES = ("inbox", "in_progress", "review", "rework")
-LEAD_DONE_APPROVAL_ACTION_TYPES = (
-    "move_to_done",
-    "mark_done",
-    "task_done",
-    "move_task_to_done",
-)
+LEAD_DONE_APPROVAL_ACTION_TYPES = DONE_APPROVAL_ACTION_TYPES
 
 
 def _actor(agent_ctx: AgentAuthContext) -> ActorContext:
     return ActorContext(actor_type="agent", agent=agent_ctx.agent)
+
+
+def _task_card_with_reason_codes(
+    task: TaskRead,
+    *,
+    open_blocker_reason_codes: list[str],
+    pending_operator_decision_reason_codes: list[str],
+) -> TaskCardRead:
+    task_payload = task.model_dump()
+    # ``tasks_api.list_tasks`` may already return ``TaskCardRead`` rows
+    # from the user-auth path. Replace enrichment fields instead of
+    # passing duplicate keyword arguments into the Pydantic constructor.
+    task_payload["open_blocker_reason_codes"] = open_blocker_reason_codes
+    task_payload["pending_operator_decision_reason_codes"] = (
+        pending_operator_decision_reason_codes
+    )
+    return TaskCardRead(**task_payload)
 
 
 async def _lead_approval_state_by_task_id(
@@ -247,18 +271,23 @@ async def _lead_pipeline_missing_by_task_id(
     *,
     tasks: Sequence[Task],
 ) -> dict[UUID, list[str]]:
+    relevant_tasks = [
+        task
+        for task in tasks
+        if task.status in {"in_progress", "review"}
+        and frontend_pipeline_required(task.review_packet_type)
+    ]
+    if not relevant_tasks:
+        return {}
+    events_by_task = await list_task_pipeline_events_for_tasks(
+        session, task_ids=[task.id for task in relevant_tasks]
+    )
     missing_by_task_id: dict[UUID, list[str]] = {}
-    for task in tasks:
-        if task.status not in {"in_progress", "review"}:
-            continue
-        if not frontend_pipeline_required(task.review_packet_type):
-            continue
+    for task in relevant_tasks:
         cycle_since = task.in_progress_at or task.previous_in_progress_at
-        events = await list_task_pipeline_events(
-            session,
-            task_id=task.id,
-            since=cycle_since,
-        )
+        events = events_by_task.get(task.id, [])
+        if cycle_since is not None:
+            events = [event for event in events if event.created_at >= cycle_since]
         missing_by_task_id[task.id] = pipeline_missing_states(events)
     return missing_by_task_id
 
@@ -268,13 +297,14 @@ async def _lead_review_readiness_by_task_id(
     *,
     tasks: Sequence[Task],
 ) -> dict[UUID, dict[str, object]]:
-    readiness_by_task_id: dict[UUID, dict[str, object]] = {}
-    for task in tasks:
-        if task.status != "review":
-            continue
-        readiness = await get_task_review_readiness(session, task=task)
-        readiness_by_task_id[task.id] = readiness.model_dump(mode="json")
-    return readiness_by_task_id
+    review_tasks = [task for task in tasks if task.status == "review"]
+    if not review_tasks:
+        return {}
+    readiness_by_task = await get_task_review_readiness_batch(session, tasks=review_tasks)
+    return {
+        task_id: readiness.model_dump(mode="json")
+        for task_id, readiness in readiness_by_task.items()
+    }
 
 
 def _agent_board_openapi_hints(
@@ -742,19 +772,14 @@ async def list_tasks(
         session, board_id=board.id, task_ids=page_task_ids,
     )
     enriched = [
-        TaskCardRead(
-            **task.model_dump(),
+        _task_card_with_reason_codes(
+            task,
             open_blocker_reason_codes=blocker_codes.get(task.id, []),
             pending_operator_decision_reason_codes=decision_codes.get(task.id, []),
         )
         for task in page.items
     ]
-    return LimitOffsetPage[TaskCardRead](
-        items=enriched,
-        total=page.total,
-        limit=page.limit,
-        offset=page.offset,
-    )
+    return page.model_copy(update={"items": enriched})
 
 
 @router.get(
@@ -819,6 +844,15 @@ async def get_lead_next_action(
     pending_operator_decision_ids = await task_ids_with_pending_operator_decision(
         session, board_id=board.id, task_ids=task_ids,
     )
+    orphan_children = await orphan_children_with_terminal_parent(
+        session, board_id=board.id,
+    )
+    parents_already_materialized = await task_ids_with_children(
+        session, board_id=board.id, task_ids=task_ids,
+    )
+    parents_with_retired_marker = await task_ids_with_umbrella_retired_marker(
+        session, board_id=board.id, task_ids=task_ids,
+    )
     return select_lead_next_action(
         tasks=tasks,
         blocked_by_task_id=blocked_by_task_id,
@@ -827,6 +861,9 @@ async def get_lead_next_action(
         review_readiness_by_task_id=review_readiness_by_task_id,
         tasks_with_open_blocker=open_blocker_ids,
         tasks_with_pending_operator_decision=pending_operator_decision_ids,
+        orphan_children_with_terminal_parent=orphan_children,
+        tasks_with_children=parents_already_materialized,
+        tasks_with_umbrella_retired_marker=parents_with_retired_marker,
     )
 
 
@@ -1097,6 +1134,12 @@ async def create_task(
         validation_target=task.validation_target,
         validation_target_kind=task.validation_target_kind,
         validation_target_scope=task.validation_target_scope,
+    )
+    await tasks_api._validate_parent_task_id(
+        session,
+        board_id=board.id,
+        task_id=task.id,
+        parent_task_id=task.parent_task_id,
     )
     if task.assigned_agent_id:
         agent = await Agent.objects.by_id(task.assigned_agent_id).first(session)

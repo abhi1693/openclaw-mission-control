@@ -29,6 +29,7 @@ from app.models.approval_history import ApprovalHistory
 from app.models.approvals import Approval
 from app.models.tasks import Task
 from app.schemas.approvals import (
+    DONE_APPROVAL_ACTION_TYPES,
     ApprovalCreate,
     ApprovalRead,
     ApprovalStatus,
@@ -199,12 +200,23 @@ async def _ensure_no_pending_approval_conflicts(
         )
 
 
-DONE_APPROVAL_ACTION_TYPES = (
-    "move_to_done",
-    "mark_done",
-    "task_done",
-    "move_task_to_done",
-)
+async def _lock_approval_for_update(
+    session: AsyncSession,
+    approval_id: str | UUID,
+) -> Approval | None:
+    """Fetch the approval row holding a SELECT FOR UPDATE row lock.
+
+    Concentrates the locking SQL behind one helper so update_approval's
+    test surface (which monkeypatches ``approvals.Approval`` with a fake
+    class to dodge SQLAlchemy entirely) can substitute this helper
+    directly without needing real SQLAlchemy coercion.
+
+    Codex F1 from the 2026-05-01 review.
+    """
+    rows = await session.exec(
+        select(Approval).where(col(Approval.id) == approval_id).with_for_update()
+    )
+    return rows.first()
 
 
 async def _ensure_move_to_done_targets_in_review(
@@ -764,7 +776,13 @@ async def update_approval(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only board leads can reject approvals.",
             )
-    approval = await Approval.objects.by_id(approval_id).first(session)
+    # Lock the approval row for the duration of this transaction so concurrent
+    # PATCHes against the same approval serialize at the database. Without this
+    # lock, two requests can both observe ``status=pending``, both pass the
+    # idempotency / conflict guards below, and both commit terminal decisions
+    # — last-write-wins. SQLite tests don't surface this (engine-level lock);
+    # PostgreSQL on .66 does. Codex F1 from the 2026-05-01 review.
+    approval = await _lock_approval_for_update(session, approval_id)
     if approval is None or approval.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     prior_status = approval.status
@@ -798,6 +816,27 @@ async def update_approval(
                     "message": (
                         "Approval is already resolved; refusing conflicting "
                         "terminal decision."
+                    ),
+                    "approval_id": str(approval.id),
+                    "current_status": prior_status,
+                    "requested_status": target_status,
+                },
+            )
+        # Audit-integrity guard: ``approved -> pending`` is forbidden because
+        # it converts a 2-PATCH overturn (approved -> pending -> rejected)
+        # into a clean bypass of the terminal-flip conflict guard above.
+        # The legitimate rehydrate path is ``rejected -> pending`` (worker
+        # re-submitting after a rejection); approving and then "un-approving"
+        # has no legitimate ergonomics — operators who need to overturn an
+        # approved decision must open a new approval. Codex F2 from the
+        # 2026-05-01 review re-pass.
+        if target_status == "pending" and prior_status == "approved":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": (
+                        "Cannot reopen an approved approval to pending; "
+                        "create a new approval to overturn."
                     ),
                     "approval_id": str(approval.id),
                     "current_status": prior_status,

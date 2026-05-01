@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Column, ForeignKey, UniqueConstraint, Uuid
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -57,6 +57,27 @@ class Task(TenantScoped, table=True):
         default=None,
         foreign_key="board_memory.id",
         index=True,
+    )
+    # Phase V: explicit parent/child link for decomposition cascade.
+    # Set at create time when a subtask is created from a parent's
+    # decomposition plan (see ``lead-inbox-routing`` Umbrella
+    # Lifecycle). Treated as immutable post-create: ``TaskUpdate``
+    # deliberately does not surface this field, so PATCH callers
+    # cannot re-parent a task. If reparenting becomes a real need,
+    # add the field to ``TaskUpdate`` together with revalidation
+    # (no self-parent, no cross-board, no cycles via parent chain).
+    # ``ondelete=SET NULL`` is set on both the alembic migration AND
+    # this column so ``SQLModel.metadata.create_all`` (used by
+    # tests/dev paths) produces the same FK semantics as the
+    # production migration.
+    parent_task_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            Uuid(),
+            ForeignKey("tasks.id", ondelete="SET NULL"),
+            index=True,
+            nullable=True,
+        ),
     )
 
     created_by_user_id: UUID | None = Field(

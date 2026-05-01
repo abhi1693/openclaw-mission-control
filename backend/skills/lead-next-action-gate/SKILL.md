@@ -78,6 +78,36 @@ before guessing an endpoint.
   second-guess the threshold; record `details.in_progress_minutes` in the
   nudge comment for context.
 - `route_inbox`: use `lead-inbox-routing` for the returned task.
+- `materialize_decomposition_plan`: the returned task is in `inbox`,
+  assigned to a reviewer (typically Architect), and has no children
+  yet. The decomposition handshake is mid-flight: the assignee was
+  asked to post a decomposition plan and the lead now needs to
+  materialize it. Read the most recent decomposition comment on the
+  task (look for "Architect decomposition for {task_id}" or similar
+  marker), parse the per-AC subtask list, then for each subtask:
+  POST `/tasks` with `assigned_agent_id`, `parent_task_id` (the
+  current task's id), `depends_on_task_ids` (sibling ordering), and
+  copied acceptance criteria. After all subtasks are created, retire
+  the umbrella per `lead-inbox-routing`'s Umbrella Lifecycle. If no
+  decomposition comment exists yet, post one nudge to the assignee
+  asking for the plan, then stop. `details.assigned_agent_id` is
+  echoed back in the action payload for convenience.
+- `cancel_orphan_child`: the returned task is a non-terminal child whose
+  parent reached a terminal state (`done`/`cancelled`). The parent's
+  decomposition is over and this child is obsolete unless it carries
+  independent work the parent didn't subsume. Verify by reading the
+  task description + recent comments. If genuinely obsolete, post one
+  `@operator` comment quoting `details.parent_task_id` and asking the
+  operator to PATCH `{"status":"cancelled"}` (lead-cancel returns 403).
+  If the child has independent work that should outlive the parent's
+  decomposition, comment the rationale and ask the operator to either
+  cancel the child or — if reparenting becomes a real need — to file
+  a follow-up so engineering can add a re-parent endpoint
+  (`parent_task_id` is currently immutable post-create). Do not
+  attempt to PATCH `parent_task_id` yourself; the field is not in the
+  ``TaskUpdate`` schema and the change will be silently dropped.
+  `details.orphan_count` reports the total orphan candidates so the
+  lead can decide whether to drain via the per-tick cap.
 - `clear`: no structured lead action is currently required. Continue to memory
   intake, then health scan.
 
@@ -114,4 +144,8 @@ above holds.
 
 Do not convert a required next action into a generic health scan. If the action
 cannot be applied because an owner, target, approval, pipeline field, or
-operator decision is missing, record that specific friction once and stop.
+runtime/deploy/source/contract fact is missing, create or reuse one structured
+`Blocker` with the owner and unblock condition, then stop. If the missing input
+is a human/operator choice, create or reuse one first-class `OperatorDecision`,
+then stop. Do not set legacy `operator_decision_required` on active assigned
+work.

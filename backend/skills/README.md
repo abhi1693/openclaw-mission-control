@@ -31,6 +31,7 @@ agents read to decide whether to invoke the skill.
 
 - **acp-delegation** — Use when a board agent must delegate coding, review, or validation work through OpenClaw ACP `sessions_spawn` instead of doing it locally.
 - **acp-post-review** — Use when an OpenClaw board agent has received an ACP child completion event and must verify the child result before posting evidence or routing the task.
+- **mc-board-api** — Use when posting comments, recording pipeline events, or filing reviewer verdicts to MC instead of hand-rolling curl with the auth token (typed CLI at `/usr/local/bin/mc_client.py`).
 - **structured-review-verdict** — Use when a board reviewer has posted a review verdict comment and the verdict must become visible to Mission Control review-readiness gates.
 - **rework-resubmit** — Use when an OpenClaw board implementation task has been returned to rework after QA, Architect, Lead, or Supervisor rejection.
 - **reviewer-recheck** — Use when a QA, Architect, or review-only verdict has been challenged, rejected, or returned for correction on the same task.
@@ -47,6 +48,7 @@ agents read to decide whether to invoke the skill.
 
 - **architect-review-verdict** — Use when an Architect or review-only board agent must review submitted work, decomposition, architecture, API, auth, or state-machine changes.
 - **qa-validation-verdict** — Use when a QA board agent must validate a task in review status and post a PASS, FAIL, INCONCLUSIVE, or INFRA BLOCKED verdict.
+- **qa-browser-oracle-alternation** — Use to pick between Playwright and Codex Computer Use as the browser-validation oracle; companions qa-validation-verdict for cross-validating UI behavior across two independent browser sensors.
 - **devops-deploy-validation** — Use when a DevOps board agent must validate deployed state, classify infra/deploy drift, or diagnose a DevOps-owned review or rework failure.
 
 ## Deploy

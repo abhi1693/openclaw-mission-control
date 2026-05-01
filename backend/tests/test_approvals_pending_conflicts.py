@@ -171,9 +171,15 @@ async def test_update_approval_rejects_reopening_to_pending_with_existing_pendin
                 session=session,
                 actor=_test_actor(session),
             )
+            # Rejected (not approved) so the rehydrate-to-pending path is
+            # reachable and we actually exercise the pending-conflict guard.
+            # An approved -> pending PATCH is now blocked at the audit-
+            # integrity guard before reaching pending-conflict; covered by
+            # test_update_approval_forbids_approved_to_pending_overturn_path
+            # in test_approvals_idempotency.py.
             resolved = await approvals_api.update_approval(
                 approval_id=resolved_pending.id,  # type: ignore[arg-type]
-                payload=ApprovalUpdate(status="approved"),
+                payload=ApprovalUpdate(status="rejected"),
                 board=board,
                 session=session,
                 actor=_test_actor(session),

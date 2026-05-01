@@ -403,6 +403,12 @@ def test_routes_unassigned_inbox_before_assigned_rework() -> None:
 
 
 def test_routes_assigned_inbox_for_lead_triage() -> None:
+    """Assigned-inbox tasks now route through ``materialize_decomposition_plan``
+    (replaces the old ``assigned_inbox_needs_lead_triage`` action). The new
+    tier carries idempotency guards (``tasks_with_children``,
+    ``tasks_with_umbrella_retired_marker``) so the lead loop doesn't fire
+    the same nudge every heartbeat.
+    """
     task = _task(status="inbox", title="Assigned inbox", assigned=True)
 
     action = select_lead_next_action(
@@ -413,11 +419,11 @@ def test_routes_assigned_inbox_for_lead_triage() -> None:
     )
 
     assert action.action_required is True
-    assert action.action == "route_inbox"
-    assert action.reason_code == "assigned_inbox_needs_lead_triage"
+    assert action.action == "materialize_decomposition_plan"
+    assert action.reason_code == "inbox_assigned_awaiting_subtask_materialization"
     assert action.task_id == task.id
     assert action.assigned_agent_id == task.assigned_agent_id
-    assert action.details["next_step"] == "triage_assigned_inbox"
+    assert action.details["assigned_agent_id"] == str(task.assigned_agent_id)
 
 
 def test_routes_assigned_inbox_before_assigned_rework() -> None:
@@ -432,8 +438,8 @@ def test_routes_assigned_inbox_before_assigned_rework() -> None:
     )
 
     assert action.action_required is True
-    assert action.action == "route_inbox"
-    assert action.reason_code == "assigned_inbox_needs_lead_triage"
+    assert action.action == "materialize_decomposition_plan"
+    assert action.reason_code == "inbox_assigned_awaiting_subtask_materialization"
     assert action.task_id == inbox.id
 
 

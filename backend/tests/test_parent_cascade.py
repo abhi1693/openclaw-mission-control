@@ -1,0 +1,515 @@
+# ruff: noqa: INP001
+"""Phase V parent-child cascade: orphan detection + cancel_orphan_child action."""
+
+from __future__ import annotations
+
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.api import tasks as tasks_api
+from app.models.boards import Board
+from app.models.gateways import Gateway
+from app.models.organizations import Organization
+from app.models.tasks import Task
+from app.services.lead_next_action import select_lead_next_action
+from app.services.parent_cascade import non_terminal_children_of
+
+
+async def _make_engine() -> AsyncEngine:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.connect() as conn, conn.begin():
+        await conn.run_sync(SQLModel.metadata.create_all)
+    return engine
+
+
+async def _make_session(engine: AsyncEngine) -> AsyncSession:
+    return AsyncSession(engine, expire_on_commit=False)
+
+
+async def _seed_board(session: AsyncSession) -> tuple[object, object, object]:
+    org_id = uuid4()
+    board_id = uuid4()
+    gateway_id = uuid4()
+    session.add(Organization(id=org_id, name="org"))
+    session.add(
+        Gateway(
+            id=gateway_id,
+            organization_id=org_id,
+            name="gateway",
+            url="https://gateway.local",
+            workspace_root="/tmp/workspace",
+        ),
+    )
+    session.add(
+        Board(
+            id=board_id,
+            organization_id=org_id,
+            name="board",
+            slug="board",
+            gateway_id=gateway_id,
+        ),
+    )
+    await session.commit()
+    return org_id, board_id, gateway_id
+
+
+def _task(
+    *,
+    status: str = "inbox",
+    title: str = "T",
+    assigned: bool = False,
+    parent_task_id=None,
+) -> Task:
+    return Task(
+        id=uuid4(),
+        board_id=uuid4(),
+        title=title,
+        status=status,
+        assigned_agent_id=uuid4() if assigned else None,
+        parent_task_id=parent_task_id,
+    )
+
+
+def test_orphan_child_action_returned_when_parent_terminal_and_child_active() -> None:
+    parent = _task(status="done", title="Parent — shipped")
+    child = _task(status="rework", title="Obsolete child", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[parent, child],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={child.id: parent.id},
+    )
+
+    assert action.action_required is True
+    assert action.action == "cancel_orphan_child"
+    assert action.reason_code == "non_terminal_child_of_terminal_parent"
+    assert action.task_id == child.id
+    assert action.details["parent_task_id"] == str(parent.id)
+    assert action.details["orphan_count"] == 1
+
+
+def test_orphan_action_overrides_route_inbox() -> None:
+    """If both an unassigned inbox task AND an orphan child exist, drain the
+    orphan first — cleanup of obsolete decomposition wins over allocating
+    fresh inbox attention."""
+    parent = _task(status="cancelled", title="Cancelled parent")
+    orphan = _task(status="rework", title="Orphan rework", assigned=True)
+    fresh_inbox = _task(status="inbox", title="Fresh routable inbox")
+
+    action = select_lead_next_action(
+        tasks=[parent, orphan, fresh_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={orphan.id: parent.id},
+    )
+
+    assert action.action == "cancel_orphan_child"
+    assert action.task_id == orphan.id
+
+
+def test_review_action_still_wins_over_orphan() -> None:
+    """An active review task ranks above orphan cleanup — real work first."""
+    parent = _task(status="done")
+    orphan = _task(status="rework", assigned=True)
+    review_task = _task(status="review", title="Real review work")
+
+    action = select_lead_next_action(
+        tasks=[parent, orphan, review_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_task.id: "none"},
+        pipeline_missing_by_task_id={},
+        review_readiness_by_task_id={review_task.id: {"ready": True}},
+        orphan_children_with_terminal_parent={orphan.id: parent.id},
+    )
+
+    assert action.action == "inspect_review_gates"
+    assert action.task_id == review_task.id
+
+
+def test_orphan_action_skipped_when_orphan_map_empty() -> None:
+    inbox_task = _task(status="inbox")
+
+    action = select_lead_next_action(
+        tasks=[inbox_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={},
+    )
+
+    assert action.action == "route_inbox"
+
+
+def test_orphan_action_skipped_when_kwarg_omitted() -> None:
+    """Backwards-compat: callers that don't pass the orphan map see no
+    change in behavior — the kwarg defaults to None."""
+    inbox_task = _task(status="inbox")
+
+    action = select_lead_next_action(
+        tasks=[inbox_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+    )
+
+    assert action.action == "route_inbox"
+
+
+def test_orphan_action_uses_lowest_id_for_determinism() -> None:
+    parent = _task(status="done")
+    # Two orphans with different ids; action should pick the one with the
+    # lexicographically smaller string id.
+    orphan_a = _task(status="rework", title="A")
+    orphan_b = _task(status="inbox", title="B")
+    smaller = sorted([orphan_a, orphan_b], key=lambda t: str(t.id))[0]
+
+    action = select_lead_next_action(
+        tasks=[parent, orphan_a, orphan_b],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={
+            orphan_a.id: parent.id,
+            orphan_b.id: parent.id,
+        },
+    )
+
+    assert action.action == "cancel_orphan_child"
+    assert action.task_id == smaller.id
+    assert action.details["orphan_count"] == 2
+
+
+def test_orphan_with_blocker_still_surfaces() -> None:
+    """An orphan child can carry its own waiting flags (open Blocker, pending
+    OperatorDecision, etc.) — those don't disqualify it from cleanup. The
+    parent terminating already declared the work moot."""
+    parent = _task(status="done")
+    orphan = _task(status="rework", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[parent, orphan],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({orphan.id}),
+        orphan_children_with_terminal_parent={orphan.id: parent.id},
+    )
+
+    assert action.action == "cancel_orphan_child"
+    assert action.task_id == orphan.id
+
+
+def test_pending_approval_review_falls_through_to_inbox_routing() -> None:
+    """Drain-loop semantics: a review task whose approval is already
+    pending has no further lead action — the operator owns the next
+    move. The gate must fall through past the review tiers so inbox
+    routing can fire in the same heartbeat tick instead of trapping
+    on the operator-pending review every poll."""
+    review_pending = _task(status="review", title="awaiting operator approval")
+    routable_inbox = _task(status="inbox", title="14d-old unblocked inbox")
+
+    action = select_lead_next_action(
+        tasks=[review_pending, routable_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_pending.id: "pending"},
+        pipeline_missing_by_task_id={},
+        review_readiness_by_task_id={review_pending.id: {"ready": True}},
+    )
+
+    assert action.action == "route_inbox"
+    assert action.task_id == routable_inbox.id
+
+
+def test_pending_approval_review_does_not_block_orphan_cleanup() -> None:
+    """Same drain-loop fix in the orphan tier — operator-pending
+    review must not starve cleanup of obsolete decomposition
+    children."""
+    review_pending = _task(status="review", title="awaiting operator approval")
+    parent = _task(status="done")
+    orphan = _task(status="rework", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[review_pending, parent, orphan],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_pending.id: "pending"},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={orphan.id: parent.id},
+    )
+
+    assert action.action == "cancel_orphan_child"
+    assert action.task_id == orphan.id
+
+
+def test_review_with_missing_pipeline_still_traps_inbox_routing() -> None:
+    """The fall-through only applies to pending approvals — a review
+    task with genuinely missing pipeline states is real lead work
+    and must keep firing inspect_review_gates ahead of inbox routing."""
+    review_missing_pipeline = _task(status="review", title="missing built+deployed")
+    routable_inbox = _task(status="inbox", title="should wait")
+
+    action = select_lead_next_action(
+        tasks=[review_missing_pipeline, routable_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_missing_pipeline.id: "none"},
+        pipeline_missing_by_task_id={review_missing_pipeline.id: ["built", "deployed"]},
+        review_readiness_by_task_id={review_missing_pipeline.id: {"ready": False}},
+    )
+
+    assert action.action == "inspect_review_gates"
+    assert action.reason_code == "review_task_missing_gates"
+    assert action.task_id == review_missing_pipeline.id
+
+
+def test_materialize_decomposition_plan_fires_for_inbox_assigned_no_children() -> None:
+    """Architect-assigned inbox task without children — Supervisor must
+    materialize the decomposition plan. This is the gap that left
+    Track B stale: tier 9 (route_inbox) requires unassigned, so
+    assigned-to-Architect inbox tasks were invisible to the gate."""
+    architect_assigned_inbox = _task(status="inbox", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[architect_assigned_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset(),
+    )
+
+    assert action.action == "materialize_decomposition_plan"
+    assert action.reason_code == "inbox_assigned_awaiting_subtask_materialization"
+    assert action.task_id == architect_assigned_inbox.id
+    assert action.details["assigned_agent_id"] == str(
+        architect_assigned_inbox.assigned_agent_id
+    )
+
+
+def test_materialize_skipped_when_already_has_children() -> None:
+    """Idempotency: once subtasks are created (parent_task_id set on
+    children), this task is already materialized — no further action."""
+    parent = _task(status="inbox", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[parent],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset({parent.id}),
+    )
+
+    assert action.action == "clear"
+
+
+def test_materialize_wins_over_route_inbox() -> None:
+    """Codex 2026-05-01 finding D: an Architect-assigned task with a
+    decomposition plan posted should outrank fresh unassigned inbox.
+    Otherwise a steady stream of fresh inbox arrivals starves
+    materialization indefinitely (Track B 14d-old example)."""
+    unassigned = _task(status="inbox", title="fresh unassigned")
+    architect_assigned = _task(status="inbox", assigned=True, title="awaiting plan materialization")
+
+    action = select_lead_next_action(
+        tasks=[unassigned, architect_assigned],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset(),
+    )
+
+    assert action.action == "materialize_decomposition_plan"
+    assert action.task_id == architect_assigned.id
+
+
+def test_materialize_skipped_when_umbrella_retired_marker_present() -> None:
+    """Codex 2026-05-01 finding C: pre-Phase-V umbrellas with the
+    UMBRELLA_RETIRED marker comment but no parent_task_id-linked
+    children would re-fire materialize forever. Treat the marker as
+    a second idempotency signal."""
+    architect_assigned = _task(status="inbox", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[architect_assigned],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_children=frozenset(),
+        tasks_with_umbrella_retired_marker=frozenset({architect_assigned.id}),
+    )
+
+    assert action.action == "clear"
+
+
+def test_orphan_action_skipped_when_child_already_terminal() -> None:
+    """If the orphan map happens to contain a child that's now terminal
+    (race between snapshot read and selection), skip it."""
+    parent = _task(status="done")
+    already_done_child = _task(status="cancelled")
+
+    action = select_lead_next_action(
+        tasks=[parent, already_done_child],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={already_done_child.id: parent.id},
+    )
+
+    assert action.action == "clear"
+
+
+# Integration tests for the validator + cascade query — exercise real
+# DB paths called out in the 2026-05-01 codex review.
+
+
+@pytest.mark.asyncio
+async def test_validate_parent_task_id_rejects_self_parent() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _, board_id, _ = await _seed_board(session)
+            task_id = uuid4()
+            with pytest.raises(HTTPException) as excinfo:
+                await tasks_api._validate_parent_task_id(
+                    session,
+                    board_id=board_id,
+                    task_id=task_id,
+                    parent_task_id=task_id,
+                )
+            assert excinfo.value.status_code == 422
+            assert "own parent" in excinfo.value.detail["message"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_validate_parent_task_id_rejects_unknown_parent() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _, board_id, _ = await _seed_board(session)
+            with pytest.raises(HTTPException) as excinfo:
+                await tasks_api._validate_parent_task_id(
+                    session,
+                    board_id=board_id,
+                    task_id=uuid4(),
+                    parent_task_id=uuid4(),
+                )
+            assert excinfo.value.status_code == 422
+            assert "not found" in excinfo.value.detail["message"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_validate_parent_task_id_rejects_cross_board_parent() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _, board_id_a, _ = await _seed_board(session)
+            _, board_id_b, _ = await _seed_board(session)
+            parent = Task(
+                id=uuid4(),
+                board_id=board_id_a,
+                title="parent-on-board-a",
+                status="inbox",
+            )
+            session.add(parent)
+            await session.commit()
+
+            with pytest.raises(HTTPException) as excinfo:
+                await tasks_api._validate_parent_task_id(
+                    session,
+                    board_id=board_id_b,
+                    task_id=uuid4(),
+                    parent_task_id=parent.id,
+                )
+            assert excinfo.value.status_code == 422
+            assert "different board" in excinfo.value.detail["message"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_validate_parent_task_id_rejects_terminal_parent() -> None:
+    """Codex 2026-05-01: a child born under an already-terminal parent
+    is born orphaned and never gets a transition event. Reject at
+    create-time instead."""
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _, board_id, _ = await _seed_board(session)
+            parent = Task(
+                id=uuid4(),
+                board_id=board_id,
+                title="terminal-parent",
+                status="done",
+            )
+            session.add(parent)
+            await session.commit()
+
+            with pytest.raises(HTTPException) as excinfo:
+                await tasks_api._validate_parent_task_id(
+                    session,
+                    board_id=board_id,
+                    task_id=uuid4(),
+                    parent_task_id=parent.id,
+                )
+            assert excinfo.value.status_code == 422
+            assert "born orphaned" in excinfo.value.detail["message"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_non_terminal_children_of_returns_only_active_children() -> None:
+    """Verify the cascade query filter: terminal children are excluded,
+    children on other boards are excluded, and ordering is stable
+    by created_at."""
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            _, board_id, _ = await _seed_board(session)
+            parent_id = uuid4()
+            session.add(
+                Task(id=parent_id, board_id=board_id, title="parent", status="done"),
+            )
+            child_a = Task(
+                id=uuid4(),
+                board_id=board_id,
+                title="child-a-active",
+                status="rework",
+                parent_task_id=parent_id,
+            )
+            child_b_terminal = Task(
+                id=uuid4(),
+                board_id=board_id,
+                title="child-b-cancelled",
+                status="cancelled",
+                parent_task_id=parent_id,
+            )
+            child_c = Task(
+                id=uuid4(),
+                board_id=board_id,
+                title="child-c-active",
+                status="inbox",
+                parent_task_id=parent_id,
+            )
+            session.add_all([child_a, child_b_terminal, child_c])
+            await session.commit()
+
+            children = await non_terminal_children_of(
+                session, board_id=board_id, parent_task_id=parent_id
+            )
+
+            assert child_a.id in children
+            assert child_c.id in children
+            assert child_b_terminal.id not in children
+            assert len(children) == 2
+    finally:
+        await engine.dispose()

@@ -17,6 +17,28 @@ on any task in `review` status.
 
 ## API Call
 
+**Preferred path: `mc-board-api`.** Use the typed MCP tool
+(`mc_review_event_create`) inside ACP children, or the typed CLI
+(`mc_client.py review-event-create`) in plain bash — both wrap this
+endpoint with auth, board, and enum-validation built in. Don't hand-roll
+curl unless `mc-board-api` is unavailable.
+
+```bash
+# Preferred (CLI fallback when MCP tools aren't available)
+mc_client.py review-event-create \
+  --task "$TASK_ID" \
+  --reviewer-role <YOUR_ROLE> \
+  --verdict <lowercase_verdict> \
+  --evidence-type <TYPE_OR_NULL> \
+  --target <VALIDATION_TARGET_OR_NULL> \
+  --build-hash <BUILD_HASH_OR_NULL> \
+  --source-commit <COMMIT_SHA_OR_NULL> \
+  --evidence '{"comment":"<ONE_LINE_SUMMARY>"}'
+```
+
+If you must fall back to raw HTTP (e.g., debugging from a host without
+`mc_client.py` in PATH):
+
 ```bash
 curl -fsS -X POST \
   "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/review-events" \
@@ -42,7 +64,7 @@ JSON
 |-------|----------|--------|
 | `reviewer_role` | yes | Your board role: `architect`, `qa_e2e`, `qa_unit`, `devops`, or `lead` |
 | `verdict` | yes | `pass`, `fail`, `inconclusive`, or `infra_blocked` |
-| `evidence_type` | no | `browser`, `unit_contract`, `deploy`, `runtime`, `source_review`, or null |
+| `evidence_type` | no | `browser` (Playwright), `browser_codex_computer_use` (Codex CU), `browser_cross_validated` (both oracles agreed), `unit_contract`, `deploy`, `runtime`, `source_review`, or null |
 | `target` | no | The validation URL, command, or environment you tested against |
 | `build_hash` | no | Loaded build hash, artifact digest, or asset filename |
 | `source_commit` | no | Commit SHA of the reviewed work |
@@ -61,10 +83,28 @@ The JSON `verdict` value must be lowercase. Map human comment verdicts as
 | Agent Role | reviewer_role | evidence_type |
 |------------|--------------|---------------|
 | Architect | `architect` | `source_review` |
-| QA-E2E | `qa_e2e` | `browser` |
+| QA-E2E | `qa_e2e` | `browser_codex_computer_use` (default; see `qa-browser-oracle-alternation`) |
 | QA-Unit | `qa_unit` | `unit_contract` |
 | DevOps Engineer | `devops` | `deploy` |
 | Supervisor/Lead | `lead` | null |
+
+### Browser oracle assignment (QA-E2E and PF)
+
+Per `qa-browser-oracle-alternation`, the browser-validation oracle is
+assigned by role:
+
+- **PF self-validation packets** use `evidence_type: "browser"` (Playwright).
+- **QA-E2E review events** use `evidence_type: "browser_codex_computer_use"` (Codex Computer Use).
+- When BOTH oracles ran on the same build and AGREED on PASS, QA-E2E
+  may post `evidence_type: "browser_cross_validated"` with both oracle
+  outputs in the evidence dict.
+- On disagreement, QA-E2E posts `verdict: "inconclusive"` carrying the
+  failing oracle's `evidence_type` plus a `disagreement_summary`
+  (see oracle skill for the full evidence shape).
+
+Operator override and `INFRA_BLOCKED` fallback also live in
+`qa-browser-oracle-alternation` — read it before posting the QA-E2E
+review event.
 
 ## Examples
 
@@ -86,21 +126,30 @@ curl -fsS -X POST \
   }'
 ```
 
-### QA-E2E PASS (frontend_ui task)
+### QA-E2E PASS (frontend_ui task — Codex Computer Use)
 
 ```bash
-curl -fsS -X POST \
-  "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/review-events" \
-  -H "X-Agent-Token: $AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reviewer_role": "qa_e2e",
-    "verdict": "pass",
-    "evidence_type": "browser",
-    "target": "<VALIDATION_TARGET>",
-    "build_hash": "<BUILD_HASH>",
-    "evidence": {"comment": "All ACs verified via Playwright at 375/768/1440 viewports"}
-  }'
+mc_client.py review-event-create \
+  --task "$TASK_ID" \
+  --reviewer-role qa_e2e \
+  --verdict pass \
+  --evidence-type browser_codex_computer_use \
+  --target "<VALIDATION_TARGET>" \
+  --build-hash "<BUILD_HASH>" \
+  --evidence '{"comment":"All ACs verified via Codex Computer Use; screenshots attached in evidence dict","oracle":"codex_computer_use"}'
+```
+
+### QA-E2E PASS (cross-validated — both oracles agreed)
+
+```bash
+mc_client.py review-event-create \
+  --task "$TASK_ID" \
+  --reviewer-role qa_e2e \
+  --verdict pass \
+  --evidence-type browser_cross_validated \
+  --target "<VALIDATION_TARGET>" \
+  --build-hash "<BUILD_HASH>" \
+  --evidence '{"comment":"PF Playwright PASS + QA-E2E Codex CU PASS on the same build","oracle":"cross_validated"}'
 ```
 
 ### Architect FAIL with routing

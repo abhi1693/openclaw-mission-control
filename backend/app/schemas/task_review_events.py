@@ -9,6 +9,8 @@ from uuid import UUID
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
+from app.schemas.task_pipeline_events import TaskPipelineEventRead
+
 ReviewerRole = Literal["architect", "qa_unit", "qa_e2e", "devops", "lead"]
 ReviewVerdict = Literal["pass", "fail", "inconclusive", "infra_blocked"]
 
@@ -78,3 +80,9 @@ class TaskReviewReadinessRead(SQLModel):
     missing_child_task_ids: list[UUID] = Field(default_factory=list)
     ready: bool
     events: list[TaskReviewEventRead]
+    # Most recent ``model_fallback`` pipeline event for this task's current
+    # cycle, if any. Surfaced inline so reviewers see WHICH model actually
+    # produced the packet (after any fallback chain) without paging through
+    # pipeline events. Informational — does NOT affect ``ready``; fallback
+    # events are excluded from readiness gates by design.
+    latest_fallback_step: TaskPipelineEventRead | None = None

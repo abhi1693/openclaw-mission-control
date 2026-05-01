@@ -11,8 +11,14 @@ from sqlalchemy import desc
 from sqlmodel import col, select
 
 from app.models.tasks import Task
+from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.task_review_events import TaskReviewEvent
+from app.schemas.task_pipeline_events import TaskPipelineEventRead
 from app.schemas.task_review_events import TaskReviewEventRead, TaskReviewReadinessRead
+from app.services.task_pipeline import (
+    fetch_latest_model_fallback_step,
+    fetch_latest_model_fallback_steps_for_tasks,
+)
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -209,8 +215,14 @@ def build_review_readiness(
     task: Task,
     events: Sequence[TaskReviewEvent],
     board_task_ids: Collection[UUID] | None = None,
+    latest_fallback_step: TaskPipelineEvent | None = None,
 ) -> TaskReviewReadinessRead:
-    """Compute whether structured reviewer verdicts satisfy current task gates."""
+    """Compute whether structured reviewer verdicts satisfy current task gates.
+
+    The optional ``latest_fallback_step`` is informational — it is surfaced
+    inline so reviewers see WHICH model produced the packet, but it does
+    NOT participate in readiness gating.
+    """
 
     required_roles = required_review_roles(task.review_packet_type)
     latest_by_role = _latest_events_by_role(task=task, events=events)
@@ -237,6 +249,12 @@ def build_review_readiness(
     ready = bool(required_roles) and not missing_roles and not blocking_roles and all(
         latest_by_role[role].verdict == PASS_VERDICT for role in required_roles
     ) and not artifact_issues
+    fallback_payload: TaskPipelineEventRead | None = None
+    if latest_fallback_step is not None:
+        fallback_payload = TaskPipelineEventRead.model_validate(
+            latest_fallback_step,
+            from_attributes=True,
+        )
     return TaskReviewReadinessRead(
         task_id=task.id,
         review_packet_type=task.review_packet_type,
@@ -252,6 +270,7 @@ def build_review_readiness(
             task_review_event_read(event)
             for event in sorted(events, key=lambda value: value.created_at, reverse=True)
         ],
+        latest_fallback_step=fallback_payload,
     )
 
 
@@ -270,6 +289,29 @@ async def list_task_review_events(
     return list(await session.exec(statement))
 
 
+async def list_task_review_events_for_tasks(
+    session: "AsyncSession",
+    *,
+    task_ids: Sequence[UUID],
+) -> dict[UUID, list[TaskReviewEvent]]:
+    """Batch-fetch review events grouped by task_id (one SQL pass).
+
+    Per-task ``cycle_since`` filtering is the caller's job — each task has
+    its own cycle. Events within a group are sorted ``created_at DESC``.
+    """
+    if not task_ids:
+        return {}
+    statement = (
+        select(TaskReviewEvent)
+        .where(col(TaskReviewEvent.task_id).in_(list(task_ids)))
+        .order_by(desc(col(TaskReviewEvent.created_at)))
+    )
+    events_by_task: dict[UUID, list[TaskReviewEvent]] = {}
+    for event in await session.exec(statement):
+        events_by_task.setdefault(event.task_id, []).append(event)
+    return events_by_task
+
+
 async def get_task_review_readiness(
     session: "AsyncSession",
     *,
@@ -277,14 +319,82 @@ async def get_task_review_readiness(
 ) -> TaskReviewReadinessRead:
     """Load structured review verdicts and compute readiness for a task."""
 
-    events = await list_task_review_events(session, task_id=task.id)
+    cycle_since = _cycle_since(task)
+    events = await list_task_review_events(session, task_id=task.id, since=cycle_since)
     board_task_ids: set[UUID] | None = None
     if task.board_id is not None:
         board_task_ids = set(
             await session.exec(select(Task.id).where(col(Task.board_id) == task.board_id)),
         )
+
+    latest_fallback = await fetch_latest_model_fallback_step(
+        session,
+        task_id=task.id,
+        since=cycle_since,
+    )
+
     return build_review_readiness(
         task=task,
         events=events,
         board_task_ids=board_task_ids,
+        latest_fallback_step=latest_fallback,
     )
+
+
+async def get_task_review_readiness_batch(
+    session: "AsyncSession",
+    *,
+    tasks: Sequence["Task"],
+) -> dict[UUID, TaskReviewReadinessRead]:
+    """Batched readiness computation for multiple tasks.
+
+    For the lead next-action loop. Issues: 1 query per distinct board for
+    ``board_task_ids``, 1 query for all review events, 1 query for all
+    fallback steps. Replaces the per-task ``get_task_review_readiness``
+    pattern (3 queries × N tasks).
+
+    Per-task ``cycle_since`` filtering is applied in Python after the
+    batch fetches, since each task has its own cycle.
+    """
+    if not tasks:
+        return {}
+
+    distinct_board_ids = {task.board_id for task in tasks if task.board_id is not None}
+    board_task_ids_by_board: dict[UUID, set[UUID]] = {}
+    for board_id in distinct_board_ids:
+        board_task_ids_by_board[board_id] = set(
+            await session.exec(select(Task.id).where(col(Task.board_id) == board_id)),
+        )
+
+    task_ids = [task.id for task in tasks]
+    events_by_task = await list_task_review_events_for_tasks(session, task_ids=task_ids)
+    fallback_by_task = await fetch_latest_model_fallback_steps_for_tasks(
+        session, task_ids=task_ids
+    )
+
+    out: dict[UUID, TaskReviewReadinessRead] = {}
+    for task in tasks:
+        cycle_since = _cycle_since(task)
+        events = events_by_task.get(task.id, [])
+        if cycle_since is not None:
+            events = [event for event in events if event.created_at >= cycle_since]
+
+        latest_fallback = fallback_by_task.get(task.id)
+        if (
+            latest_fallback is not None
+            and cycle_since is not None
+            and latest_fallback.created_at < cycle_since
+        ):
+            latest_fallback = None
+
+        board_task_ids = (
+            board_task_ids_by_board.get(task.board_id) if task.board_id is not None else None
+        )
+
+        out[task.id] = build_review_readiness(
+            task=task,
+            events=events,
+            board_task_ids=board_task_ids,
+            latest_fallback_step=latest_fallback,
+        )
+    return out

@@ -60,6 +60,19 @@ only for parent-owned ACP handoffs and blockers. QA/Architect/DevOps review verd
 handoffs use `structured-review-verdict`; reviewers post the structured event
 instead of using this ACP handoff path.
 
+**Preferred:** use the typed `mc-board-api` skill — `mc_comment_create`
+(MCP tool, inside ACP children with the MC MCP server wired) or
+`mc_client.py comment-create` (CLI on the gateway host). Both wrap
+this endpoint with auth, board enforcement, and JSON encoding. Don't
+hand-roll curl unless `mc-board-api` is unavailable.
+
+```bash
+# Preferred (CLI fallback when MCP tools aren't available)
+mc_client.py comment-create --task "$TASK_ID" --message "TEXT @lead"
+```
+
+Raw HTTP fallback (e.g., debugging from a host without `mc_client.py`):
+
 ```bash
 curl -fsS -X POST "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments" \
   -H "X-Agent-Token: $AUTH_TOKEN" \

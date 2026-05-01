@@ -291,6 +291,11 @@ class TaskBase(SQLModel):
     operator_decision_summary: str | None = None
     depends_on_task_ids: list[UUID] = Field(default_factory=list)
     tag_ids: list[UUID] = Field(default_factory=list)
+    # Phase V: parent task in a decomposition relationship. NULL on
+    # standalone tasks. Set by ``lead-inbox-routing`` when creating
+    # subtasks from a parent's decomposition plan; the cascade service
+    # surfaces non-terminal children of terminal parents for cleanup.
+    parent_task_id: UUID | None = None
 
     @field_validator(
         "validation_target",
@@ -434,6 +439,11 @@ class TaskRead(TaskBase):
     is_blocked: bool = False
     tags: list[TagRef] = Field(default_factory=list)
     custom_field_values: TaskCustomFieldValues | None = None
+    # Phase V — non-terminal child tasks of this task. Populated only
+    # for terminal (done/cancelled) tasks; empty list otherwise.
+    # Surfaces orphans for the operator/lead so they can decide
+    # whether each child still has independent work to do.
+    orphan_child_task_ids: list[UUID] = Field(default_factory=list)
 
 
 class TaskCommentCreate(SQLModel):

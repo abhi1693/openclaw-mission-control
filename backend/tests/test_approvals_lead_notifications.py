@@ -46,6 +46,11 @@ class _FakeSession:
     commits: int = 0
     refreshed: int = 0
     added: list[object] = None  # type: ignore[assignment]
+    # Approval row returned from the locking SELECT in update_approval.
+    # Set by tests that exercise update_approval after the row-lock change
+    # (Codex F1, 2026-05-01). Defaults to ``None`` for tests that don't
+    # exercise that path.
+    locked_approval: Approval | None = None
 
     def __post_init__(self) -> None:
         if self.added is None:
@@ -59,6 +64,23 @@ class _FakeSession:
 
     async def refresh(self, _value: object) -> None:
         self.refreshed += 1
+
+    async def exec(self, _statement: object) -> "_FakeExecResult":
+        """Stub for the locking SELECT(Approval).with_for_update() call.
+
+        Returns a result wrapper whose ``.first()`` yields the seeded
+        approval. Real session.exec returns a richer object, but
+        update_approval only uses ``.first()`` on this path.
+        """
+        return _FakeExecResult(self.locked_approval)
+
+
+@dataclass
+class _FakeExecResult:
+    _approval: Approval | None
+
+    def first(self) -> Approval | None:
+        return self._approval
 
 
 def _board() -> Board:
@@ -95,11 +117,18 @@ async def test_update_approval_notifies_lead_when_approved(
         is_board_lead=True,
         openclaw_session_id="agent:lead:session",
     )
-    session = _FakeSession()
+    session = _FakeSession(locked_approval=approval)
     captured: dict[str, Any] = {}
 
     fake_approval_model = type("FakeApprovalModel", (), {"objects": _ApprovalObjects(approval)})
     monkeypatch.setattr(approvals, "Approval", fake_approval_model)
+
+    async def _fake_lock_approval_for_update(
+        _session: object, _approval_id: object
+    ) -> Approval:
+        return approval
+
+    monkeypatch.setattr(approvals, "_lock_approval_for_update", _fake_lock_approval_for_update)
 
     async def _fake_resolve_lead(*_args: Any, **_kwargs: Any) -> Agent:
         return lead
@@ -175,11 +204,18 @@ async def test_update_approval_skips_notify_when_status_not_resolved(
 ) -> None:
     board = _board()
     approval = _approval(board_id=board.id, status="pending")
-    session = _FakeSession()
+    session = _FakeSession(locked_approval=approval)
     called = {"notify": 0}
 
     fake_approval_model = type("FakeApprovalModel", (), {"objects": _ApprovalObjects(approval)})
     monkeypatch.setattr(approvals, "Approval", fake_approval_model)
+
+    async def _fake_lock_approval_for_update(
+        _session: object, _approval_id: object
+    ) -> Approval:
+        return approval
+
+    monkeypatch.setattr(approvals, "_lock_approval_for_update", _fake_lock_approval_for_update)
 
     async def _fake_notify(**_kwargs: Any) -> None:
         called["notify"] += 1

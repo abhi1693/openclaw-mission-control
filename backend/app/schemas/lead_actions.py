@@ -14,6 +14,8 @@ LeadNextActionName = Literal[
     "route_rework",
     "inspect_stale_in_progress",
     "route_inbox",
+    "materialize_decomposition_plan",
+    "cancel_orphan_child",
     "clear",
 ]
 
