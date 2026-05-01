@@ -1109,6 +1109,12 @@ async def create_task(
         validation_target_kind=task.validation_target_kind,
         validation_target_scope=task.validation_target_scope,
     )
+    await tasks_api._validate_parent_task_id(
+        session,
+        board_id=board.id,
+        task_id=task.id,
+        parent_task_id=task.parent_task_id,
+    )
     if task.assigned_agent_id:
         agent = await Agent.objects.by_id(task.assigned_agent_id).first(session)
         if agent is None:

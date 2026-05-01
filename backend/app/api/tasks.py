@@ -443,6 +443,11 @@ async def _validate_parent_task_id(
         raise _invalid_parent_task_error(
             "parent task belongs to a different board"
         )
+    if parent.status in TERMINAL_STATUSES:
+        raise _invalid_parent_task_error(
+            f"parent task {parent_task_id} is already {parent.status}; "
+            "child would be born orphaned"
+        )
 
 
 def _operator_decision_block_error(summary: str | None = None) -> HTTPException:
