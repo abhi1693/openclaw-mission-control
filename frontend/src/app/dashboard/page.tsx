@@ -22,6 +22,7 @@ import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Markdown } from "@/components/atoms/Markdown";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
+import { SystemPulse } from "@/components/molecules/SystemPulse";
 import { ApiError } from "@/api/mutator";
 import {
   type dashboardMetricsApiV1MetricsDashboardGetResponse,
@@ -907,6 +908,8 @@ export default function DashboardPage() {
                 Load failed: {metricsQuery.error.message}
               </div>
             ) : null}
+
+            <SystemPulse enabled={Boolean(isSignedIn)} className="mb-4" />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <TopMetricCard
