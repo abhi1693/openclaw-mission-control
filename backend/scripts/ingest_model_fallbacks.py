@@ -43,10 +43,16 @@ from typing import Any
 
 LOG = logging.getLogger("ingest_model_fallbacks")
 
+# Generalized to accept any stage suffix after the task UUID — not just
+# ``-impl-``. Review-only and validation-stage ACP children can also emit
+# ``ACP_EXECUTOR_STARTED`` markers with labels like
+# ``mc-task-<uuid>-review-<round>`` or ``-validation-<round>``; hardcoding
+# ``-impl-`` would silently drop their fallback events. Codex F5 from the
+# 2026-05-01 review.
 EXECUTOR_STARTED_RE = re.compile(
-    r"ACP_EXECUTOR_STARTED.*?run=(?P<run>[0-9a-f-]{36}).*?label=(?P<label>mc-task-[A-Za-z0-9-]+-impl-[A-Za-z0-9-]+)"
+    r"ACP_EXECUTOR_STARTED.*?run=(?P<run>[0-9a-f-]{36}).*?label=(?P<label>mc-task-[A-Za-z0-9_-]+)"
 )
-TASK_ID_FROM_LABEL_RE = re.compile(r"^mc-task-(?P<task_id>[0-9a-f-]{36})-impl-")
+TASK_ID_FROM_LABEL_RE = re.compile(r"^mc-task-(?P<task_id>[0-9a-f-]{36})-")
 
 
 @dataclasses.dataclass(frozen=True)

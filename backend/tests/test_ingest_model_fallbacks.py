@@ -231,6 +231,40 @@ class TestExecutorStartedRegex:
             "mc-task-9ac55b51-9fc2-4a99-9638-5ce7a9a55dfe-impl-codex-a2"
         )
 
+    def test_matches_review_stage_label(self) -> None:
+        """Codex F5: regex must accept non-impl stage suffixes too."""
+        message = (
+            "ACP_EXECUTOR_STARTED child=agent:claude:acp:abc "
+            "run=12345678-1234-1234-1234-123456789abc "
+            "label=mc-task-deadbeef-dead-beef-dead-beefdeadbeef-review-a1"
+        )
+        match = EXECUTOR_STARTED_RE.search(message)
+        assert match is not None
+        assert match.group("run") == "12345678-1234-1234-1234-123456789abc"
+        label_match = TASK_ID_FROM_LABEL_RE.match(match.group("label"))
+        assert label_match is not None
+        assert label_match.group("task_id") == "deadbeef-dead-beef-dead-beefdeadbeef"
+
+    def test_matches_validation_stage_label(self) -> None:
+        """Codex F5: validation-stage labels must extract task_id correctly."""
+        message = (
+            "ACP_EXECUTOR_STARTED child=agent:codex:acp:xyz "
+            "run=abcd1234-abcd-abcd-abcd-abcdef123456 "
+            "label=mc-task-cafebabe-cafe-babe-cafe-babecafebabe-validation-a2"
+        )
+        match = EXECUTOR_STARTED_RE.search(message)
+        assert match is not None
+        label_match = TASK_ID_FROM_LABEL_RE.match(match.group("label"))
+        assert label_match is not None
+        assert label_match.group("task_id") == "cafebabe-cafe-babe-cafe-babecafebabe"
+
+    def test_existing_impl_label_still_matches(self) -> None:
+        """Regression: F5 fix must not break the impl-* path that prod uses."""
+        label = "mc-task-c8c664d2-0664-4c1e-8c9e-be33a502b71c-impl-a1"
+        match = TASK_ID_FROM_LABEL_RE.match(label)
+        assert match is not None
+        assert match.group("task_id") == "c8c664d2-0664-4c1e-8c9e-be33a502b71c"
+
     def test_finds_multiple_markers_in_one_comment(self) -> None:
         message = (
             "First retry: ACP_EXECUTOR_STARTED child=agent:claude:acp:aaa run=11111111-1111-1111-1111-111111111111 label=mc-task-aaa-aaa-impl-a1\n"

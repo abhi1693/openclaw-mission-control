@@ -477,10 +477,13 @@ evidence for this board. The **Frontend Parallel Scheduler Gate** above is the
 authoritative scheduler.
 
 Rules:
-- Cap at 4 active implementation tasks unless the operator explicitly raises
-  or lowers the cap for this board. "Active" = task with an accepted
+- Cap at 2 active implementation tasks unless the operator explicitly raises
+  the cap for this board. "Active" = task with an accepted
   `ACP_EXECUTOR_STARTED` marker and no processed child completion. Parked,
   blocked, or `operator_decision_required=true` tasks do not count.
+  The scheduler enforces this cap at `if len(active) < 2:` above; bumping the
+  prose without also bumping the scheduler creates a phantom contract that
+  agents will hit as a hard rejection.
 - Use `acp-delegation` § Worktree Task Mode. Parallelism is per task, not per
   acceptance criterion, and each task gets one ACP executor session.
 - Post the `ACP_EXECUTOR_STARTED` marker only after the ACP spawn is accepted,
