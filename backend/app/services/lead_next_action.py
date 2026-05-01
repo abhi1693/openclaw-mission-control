@@ -209,6 +209,16 @@ def select_lead_next_action(
         if task.status != "review":
             continue
         approval_state = approval_state_by_task_id.get(task.id, "none")
+        # Pending approvals are operator-owned: the lead has no
+        # further action until the operator approves, rejects, or
+        # cancels. Falling through unblocks lower-tier work
+        # (orphan cleanup, rework follow-up, inbox routing) so the
+        # heartbeat drain loop doesn't trap on the same review every
+        # tick. ``approved`` is handled by the earlier tier 1 loop;
+        # everything else (``none`` without readiness, ``rejected``,
+        # missing pipeline) is genuine lead-actionable friction.
+        if approval_state == "pending":
+            continue
         missing_pipeline = list(pipeline_missing_by_task_id.get(task.id, []))
         return _action(
             task=task,

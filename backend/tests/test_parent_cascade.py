@@ -207,6 +207,67 @@ def test_orphan_with_blocker_still_surfaces() -> None:
     assert action.task_id == orphan.id
 
 
+def test_pending_approval_review_falls_through_to_inbox_routing() -> None:
+    """Drain-loop semantics: a review task whose approval is already
+    pending has no further lead action — the operator owns the next
+    move. The gate must fall through past the review tiers so inbox
+    routing can fire in the same heartbeat tick instead of trapping
+    on the operator-pending review every poll."""
+    review_pending = _task(status="review", title="awaiting operator approval")
+    routable_inbox = _task(status="inbox", title="14d-old unblocked inbox")
+
+    action = select_lead_next_action(
+        tasks=[review_pending, routable_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_pending.id: "pending"},
+        pipeline_missing_by_task_id={},
+        review_readiness_by_task_id={review_pending.id: {"ready": True}},
+    )
+
+    assert action.action == "route_inbox"
+    assert action.task_id == routable_inbox.id
+
+
+def test_pending_approval_review_does_not_block_orphan_cleanup() -> None:
+    """Same drain-loop fix in the orphan tier — operator-pending
+    review must not starve cleanup of obsolete decomposition
+    children."""
+    review_pending = _task(status="review", title="awaiting operator approval")
+    parent = _task(status="done")
+    orphan = _task(status="rework", assigned=True)
+
+    action = select_lead_next_action(
+        tasks=[review_pending, parent, orphan],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_pending.id: "pending"},
+        pipeline_missing_by_task_id={},
+        orphan_children_with_terminal_parent={orphan.id: parent.id},
+    )
+
+    assert action.action == "cancel_orphan_child"
+    assert action.task_id == orphan.id
+
+
+def test_review_with_missing_pipeline_still_traps_inbox_routing() -> None:
+    """The fall-through only applies to pending approvals — a review
+    task with genuinely missing pipeline states is real lead work
+    and must keep firing inspect_review_gates ahead of inbox routing."""
+    review_missing_pipeline = _task(status="review", title="missing built+deployed")
+    routable_inbox = _task(status="inbox", title="should wait")
+
+    action = select_lead_next_action(
+        tasks=[review_missing_pipeline, routable_inbox],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_missing_pipeline.id: "none"},
+        pipeline_missing_by_task_id={review_missing_pipeline.id: ["built", "deployed"]},
+        review_readiness_by_task_id={review_missing_pipeline.id: {"ready": False}},
+    )
+
+    assert action.action == "inspect_review_gates"
+    assert action.reason_code == "review_task_missing_gates"
+    assert action.task_id == review_missing_pipeline.id
+
+
 def test_orphan_action_skipped_when_child_already_terminal() -> None:
     """If the orphan map happens to contain a child that's now terminal
     (race between snapshot read and selection), skip it."""
