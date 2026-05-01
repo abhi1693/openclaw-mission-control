@@ -10,8 +10,9 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { GlobalLoader } from "@/components/ui/global-loader";
 
 export const metadata: Metadata = {
-  title: "OpenClaw Mission Control",
-  description: "A calm command center for every task.",
+  title: "Simple Pro Mission Control",
+  description:
+    "Mission control for the AI team building and operating Simple Pro — Belle, agents, boards, and approvals in one calm command center.",
 };
 
 const bodyFont = IBM_Plex_Sans({
