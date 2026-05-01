@@ -366,6 +366,47 @@ class TestEnvResolution:
         monkeypatch.delenv("MC_BASE_URL", raising=False)
         assert _module._base_url() == _module.DEFAULT_BASE_URL
 
+    def test_token_resolved_per_call_not_cached_at_module_init(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Per-agent attribution requires LOCAL_AUTH_TOKEN to be re-read on
+        every op_* invocation. If a refactor caches the token at module
+        import (or first call), every ACP spawn would write events with
+        the wrong agent_id. Pin the contract here.
+        """
+        from unittest import mock
+
+        captured_tokens: list[str] = []
+
+        def fake_urlopen(req, timeout=None):
+            captured_tokens.append(req.headers.get("Authorization") or "")
+
+            class _Resp:
+                def __enter__(self) -> "_Resp":
+                    return self
+
+                def __exit__(self, *exc: object) -> None:
+                    return None
+
+                def read(self) -> bytes:
+                    return b'{"ok": true}'
+
+            return _Resp()
+
+        monkeypatch.setenv("BOARD_ID", "board-uuid")
+        monkeypatch.setenv("MC_BASE_URL", "http://test")
+
+        with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
+            monkeypatch.setenv("LOCAL_AUTH_TOKEN", "agent-A-token")
+            _module.op_task_read("task-1")
+            monkeypatch.setenv("LOCAL_AUTH_TOKEN", "agent-B-token")
+            _module.op_task_read("task-2")
+
+        assert captured_tokens == [
+            "Bearer agent-A-token",
+            "Bearer agent-B-token",
+        ]
+
 
 # --- stdio loop ---
 

@@ -38,12 +38,28 @@ openclaw config set plugins.entries.acpx.config.mcpServers.mc-board-api '{
   "command": "python3",
   "args": ["/usr/local/bin/mc_mcp_server.py"],
   "env": {
-    "LOCAL_AUTH_TOKEN": "<bearer token>",
-    "BOARD_ID": "<board uuid>",
     "MC_BASE_URL": "http://192.168.2.64:8000"
   }
 }' --strict-json
 ```
+
+**Important — do NOT put `LOCAL_AUTH_TOKEN` or `BOARD_ID` in this env
+block.** Those values are **per-agent**: every ACP child has its own
+bearer token, and MC stamps `agent_id` on pipeline / review events
+based on which token authenticated the call (per
+`project_pipeline_event_attribution`). A static token in config means
+every spawn writes events with the wrong attribution.
+
+`mc_mcp_server.py` resolves both vars from the spawned process's env
+at call time. MCP stdio servers inherit their parent process's env by
+default, and ACPX already populates the ACP child env per spawn with
+the agent's `LOCAL_AUTH_TOKEN` and the task's `BOARD_ID`. Leave them
+out of `mcpServers.<name>.env` and they flow through automatically;
+only `MC_BASE_URL` (or other genuinely static values) belongs here.
+
+If a spawn lands without `LOCAL_AUTH_TOKEN` or `BOARD_ID`, the MCP
+server raises `RuntimeError` with a clear message — that's a sign the
+spawn parent forgot to inject them, not a bug in the wire-up.
 
 This change lives at `plugins.entries.acpx.config.*` — an
 agent-context path that follows the **in-memory authority** model. The
@@ -58,7 +74,8 @@ The right operator workflow:
 
 1. Check current heartbeat state (`jq '.agents.list[] | select(.heartbeatsEnabled==true) | .id' /root/.openclaw/openclaw.json`).
    If all are `false`, the restart cost is essentially zero.
-2. Drain or accept the cost of any active ACP child runs.
+2. Check for active ACP children (`pgrep -fa codex-acp` on the gateway
+   host). Drain or accept the cost of running spawns.
 3. Trigger a restart at a planned window (typically `openclaw gateway
    restart` from the operator's session, OR the next natural restart
    cycle from an unrelated config change).
