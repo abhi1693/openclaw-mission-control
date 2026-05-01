@@ -169,6 +169,12 @@ LEAD_DONE_APPROVAL_ACTION_TYPES = (
     "mark_done",
     "task_done",
     "move_task_to_done",
+    # Supervisor models commonly emit ``mark_task_done`` even though
+    # ``lead-review-routing`` documents ``move_to_done``. Without this
+    # alias the gate's approval-state lookup misses pending approvals
+    # the Supervisor itself created and tier 2 keeps re-firing
+    # ``review_task_ready_for_approval`` on the same task forever.
+    "mark_task_done",
 )
 
 

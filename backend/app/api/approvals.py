@@ -223,6 +223,12 @@ DONE_APPROVAL_ACTION_TYPES = (
     "mark_done",
     "task_done",
     "move_task_to_done",
+    # Supervisor models routinely send ``mark_task_done`` despite
+    # the skill documenting ``move_to_done``. Recognize the alias so
+    # the move-to-review and target validation paths actually run,
+    # and so the lead next-action gate's approval-state lookup
+    # picks up Supervisor-created approvals.
+    "mark_task_done",
 )
 
 
