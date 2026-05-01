@@ -77,7 +77,10 @@ from app.services.task_pipeline import (
     list_task_pipeline_events,
     pipeline_missing_states,
 )
-from app.services.task_review_events import get_task_review_readiness
+from app.services.task_review_events import (
+    get_task_review_readiness,
+    get_task_review_readiness_batch,
+)
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
     dependency_status_by_id,
@@ -271,13 +274,14 @@ async def _lead_review_readiness_by_task_id(
     *,
     tasks: Sequence[Task],
 ) -> dict[UUID, dict[str, object]]:
-    readiness_by_task_id: dict[UUID, dict[str, object]] = {}
-    for task in tasks:
-        if task.status != "review":
-            continue
-        readiness = await get_task_review_readiness(session, task=task)
-        readiness_by_task_id[task.id] = readiness.model_dump(mode="json")
-    return readiness_by_task_id
+    review_tasks = [task for task in tasks if task.status == "review"]
+    if not review_tasks:
+        return {}
+    readiness_by_task = await get_task_review_readiness_batch(session, tasks=review_tasks)
+    return {
+        task_id: readiness.model_dump(mode="json")
+        for task_id, readiness in readiness_by_task.items()
+    }
 
 
 def _agent_board_openapi_hints(

@@ -6,6 +6,8 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import uuid4
 
+import pytest
+
 from app.core.time import utcnow
 from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.task_review_events import TaskReviewEvent
@@ -257,3 +259,154 @@ class TestLatestFallbackStepSurfacing:
         assert readiness.latest_fallback_step is not None
         assert readiness.latest_fallback_step.task_id == task.id
         assert readiness.latest_fallback_step.created_at == fallback.created_at
+
+
+# --- Lead-loop batch readiness (N+1 fix) ---
+
+
+class TestGetTaskReviewReadinessBatch:
+    """``get_task_review_readiness_batch`` issues a constant query count
+    regardless of N tasks (board_task_ids per board + 2 batch fetches).
+    """
+
+    @pytest.mark.asyncio
+    async def test_empty_tasks_returns_empty_dict(self) -> None:
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_review_events import get_task_review_readiness_batch
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                result = await get_task_review_readiness_batch(session, tasks=[])
+                assert result == {}
+        finally:
+            await engine.dispose()
+
+    @pytest.mark.asyncio
+    async def test_query_count_independent_of_task_count(self) -> None:
+        """4 review tasks on the same board should produce a constant query
+        count (1 board_task_ids + 1 review-events + 1 fallbacks = 3),
+        not 3 per task = 12.
+        """
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_review_events import get_task_review_readiness_batch
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+
+        query_count = 0
+
+        from sqlalchemy import event as sa_event
+
+        @sa_event.listens_for(engine.sync_engine, "before_cursor_execute")
+        def _count(*_args: object, **_kwargs: object) -> None:
+            nonlocal query_count
+            query_count += 1
+
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                board_id = uuid4()
+                tasks = [
+                    Task(
+                        id=uuid4(),
+                        board_id=board_id,
+                        title=f"task-{idx}",
+                        status="review",
+                        review_packet_type="frontend_ui",
+                        in_progress_at=utcnow(),
+                    )
+                    for idx in range(4)
+                ]
+                session.add_all(tasks)
+                for task in tasks:
+                    session.add(_event(task, reviewer_role="architect", verdict="pass"))
+                    session.add(_event(task, reviewer_role="qa_e2e", verdict="pass"))
+                await session.commit()
+
+                query_count = 0
+                result = await get_task_review_readiness_batch(session, tasks=tasks)
+
+                assert len(result) == 4
+                assert all(readiness.ready is True for readiness in result.values())
+                # 1 board_task_ids query + 1 review-events batch + 1 fallback batch.
+                # Total constant regardless of N tasks.
+                assert query_count == 3, f"expected 3 queries, got {query_count}"
+        finally:
+            await engine.dispose()
+
+    @pytest.mark.asyncio
+    async def test_per_task_cycle_since_filter_applied_in_batch(self) -> None:
+        """Pre-cycle review events must be excluded per task even when
+        the batch fetch pulls them all in one query.
+        """
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_review_events import get_task_review_readiness_batch
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                board_id = uuid4()
+                cycle_start = utcnow()
+                task = Task(
+                    id=uuid4(),
+                    board_id=board_id,
+                    title="task with old verdicts",
+                    status="review",
+                    review_packet_type="frontend_ui",
+                    in_progress_at=cycle_start,
+                )
+                # Pre-cycle events (must be excluded from readiness calc)
+                pre_cycle_architect = TaskReviewEvent(
+                    board_id=board_id,
+                    task_id=task.id,
+                    agent_id=uuid4(),
+                    reviewer_role="architect",
+                    verdict="fail",
+                    evidence_type="review",
+                    created_at=cycle_start - timedelta(hours=1),
+                )
+                # Current-cycle events (counted)
+                current_architect = TaskReviewEvent(
+                    board_id=board_id,
+                    task_id=task.id,
+                    agent_id=uuid4(),
+                    reviewer_role="architect",
+                    verdict="pass",
+                    evidence_type="review",
+                    created_at=cycle_start + timedelta(minutes=1),
+                )
+                current_qa = TaskReviewEvent(
+                    board_id=board_id,
+                    task_id=task.id,
+                    agent_id=uuid4(),
+                    reviewer_role="qa_e2e",
+                    verdict="pass",
+                    evidence_type="browser",
+                    created_at=cycle_start + timedelta(minutes=2),
+                )
+                session.add_all([task, pre_cycle_architect, current_architect, current_qa])
+                await session.commit()
+
+                result = await get_task_review_readiness_batch(session, tasks=[task])
+
+                readiness = result[task.id]
+                assert readiness.ready is True
+                # Serialized events must only include current-cycle
+                assert len(readiness.events) == 2
+                assert all(e.created_at >= cycle_start for e in readiness.events)
+        finally:
+            await engine.dispose()

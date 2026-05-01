@@ -15,7 +15,10 @@ from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.task_review_events import TaskReviewEvent
 from app.schemas.task_pipeline_events import TaskPipelineEventRead
 from app.schemas.task_review_events import TaskReviewEventRead, TaskReviewReadinessRead
-from app.services.task_pipeline import fetch_latest_model_fallback_step
+from app.services.task_pipeline import (
+    fetch_latest_model_fallback_step,
+    fetch_latest_model_fallback_steps_for_tasks,
+)
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -215,6 +218,29 @@ async def list_task_review_events(
     return list(await session.exec(statement))
 
 
+async def list_task_review_events_for_tasks(
+    session: "AsyncSession",
+    *,
+    task_ids: Sequence[UUID],
+) -> dict[UUID, list[TaskReviewEvent]]:
+    """Batch-fetch review events grouped by task_id (one SQL pass).
+
+    Per-task ``cycle_since`` filtering is the caller's job — each task has
+    its own cycle. Events within a group are sorted ``created_at DESC``.
+    """
+    if not task_ids:
+        return {}
+    statement = (
+        select(TaskReviewEvent)
+        .where(col(TaskReviewEvent.task_id).in_(list(task_ids)))
+        .order_by(desc(col(TaskReviewEvent.created_at)))
+    )
+    events_by_task: dict[UUID, list[TaskReviewEvent]] = {}
+    for event in await session.exec(statement):
+        events_by_task.setdefault(event.task_id, []).append(event)
+    return events_by_task
+
+
 async def get_task_review_readiness(
     session: "AsyncSession",
     *,
@@ -242,3 +268,62 @@ async def get_task_review_readiness(
         board_task_ids=board_task_ids,
         latest_fallback_step=latest_fallback,
     )
+
+
+async def get_task_review_readiness_batch(
+    session: "AsyncSession",
+    *,
+    tasks: Sequence["Task"],
+) -> dict[UUID, TaskReviewReadinessRead]:
+    """Batched readiness computation for multiple tasks.
+
+    For the lead next-action loop. Issues: 1 query per distinct board for
+    ``board_task_ids``, 1 query for all review events, 1 query for all
+    fallback steps. Replaces the per-task ``get_task_review_readiness``
+    pattern (3 queries × N tasks).
+
+    Per-task ``cycle_since`` filtering is applied in Python after the
+    batch fetches, since each task has its own cycle.
+    """
+    if not tasks:
+        return {}
+
+    distinct_board_ids = {task.board_id for task in tasks if task.board_id is not None}
+    board_task_ids_by_board: dict[UUID, set[UUID]] = {}
+    for board_id in distinct_board_ids:
+        board_task_ids_by_board[board_id] = set(
+            await session.exec(select(Task.id).where(col(Task.board_id) == board_id)),
+        )
+
+    task_ids = [task.id for task in tasks]
+    events_by_task = await list_task_review_events_for_tasks(session, task_ids=task_ids)
+    fallback_by_task = await fetch_latest_model_fallback_steps_for_tasks(
+        session, task_ids=task_ids
+    )
+
+    out: dict[UUID, TaskReviewReadinessRead] = {}
+    for task in tasks:
+        cycle_since = _cycle_since(task)
+        events = events_by_task.get(task.id, [])
+        if cycle_since is not None:
+            events = [event for event in events if event.created_at >= cycle_since]
+
+        latest_fallback = fallback_by_task.get(task.id)
+        if (
+            latest_fallback is not None
+            and cycle_since is not None
+            and latest_fallback.created_at < cycle_since
+        ):
+            latest_fallback = None
+
+        board_task_ids = (
+            board_task_ids_by_board.get(task.board_id) if task.board_id is not None else None
+        )
+
+        out[task.id] = build_review_readiness(
+            task=task,
+            events=events,
+            board_task_ids=board_task_ids,
+            latest_fallback_step=latest_fallback,
+        )
+    return out

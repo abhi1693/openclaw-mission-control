@@ -133,12 +133,12 @@ async def fetch_latest_model_fallback_step(
     task_id: UUID,
     since: datetime | None = None,
 ) -> TaskPipelineEvent | None:
-    """SQL-side fetch of the most recent ``model_fallback`` event.
+    """SQL-side fetch of the most recent ``model_fallback`` event for one task.
 
-    Avoids the N+1 pattern where review-readiness loops every task in
-    the board and fetches the full event list just to extract the
-    latest fallback. Pushes ``WHERE state = 'model_fallback'`` and
-    ``ORDER BY created_at DESC LIMIT 1`` to the database.
+    Use this for the per-task API endpoint (``/tasks/{id}/review-readiness``).
+    For multi-task callers (lead next-action loop), use
+    :func:`fetch_latest_model_fallback_steps_for_tasks` instead — calling
+    this in a loop is an N+1.
     """
     statement = (
         select(TaskPipelineEvent)
@@ -150,6 +150,33 @@ async def fetch_latest_model_fallback_step(
     statement = statement.order_by(desc(col(TaskPipelineEvent.created_at))).limit(1)
     rows = list(await session.exec(statement))
     return rows[0] if rows else None
+
+
+async def fetch_latest_model_fallback_steps_for_tasks(
+    session: AsyncSession,
+    *,
+    task_ids: Sequence[UUID],
+) -> dict[UUID, TaskPipelineEvent]:
+    """Batch-fetch the latest ``model_fallback`` event per task in one query.
+
+    Per-task ``cycle_since`` filtering is the caller's job — each task has
+    its own cycle, so SQL-level since filtering would need a shared lower
+    bound. The query orders by ``task_id, created_at DESC``; the first row
+    seen per ``task_id`` is the latest.
+    """
+    if not task_ids:
+        return {}
+    statement = (
+        select(TaskPipelineEvent)
+        .where(col(TaskPipelineEvent.task_id).in_(list(task_ids)))
+        .where(col(TaskPipelineEvent.state) == "model_fallback")
+        .order_by(col(TaskPipelineEvent.task_id), desc(col(TaskPipelineEvent.created_at)))
+    )
+    latest_by_task: dict[UUID, TaskPipelineEvent] = {}
+    for event in await session.exec(statement):
+        if event.task_id not in latest_by_task:
+            latest_by_task[event.task_id] = event
+    return latest_by_task
 
 
 def pipeline_event_has_required_fields(event: TaskPipelineEvent) -> bool:

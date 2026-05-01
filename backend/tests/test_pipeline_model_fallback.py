@@ -9,7 +9,7 @@ responses.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -323,5 +323,102 @@ class TestFetchLatestModelFallbackStepSql:
                 assert result.id == fallback_newer.id
                 assert result.evidence is not None
                 assert result.evidence["reason"] == "billing"
+        finally:
+            await engine.dispose()
+
+
+# --- Batched SQL fetch (lead-loop N+1 fix) ---
+
+
+class TestFetchLatestModelFallbackStepsForTasks:
+    """``fetch_latest_model_fallback_steps_for_tasks`` returns one SQL pass."""
+
+    @pytest.mark.asyncio
+    async def test_empty_task_ids_returns_empty_dict(self) -> None:
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_pipeline import (
+            fetch_latest_model_fallback_steps_for_tasks,
+        )
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                result = await fetch_latest_model_fallback_steps_for_tasks(
+                    session, task_ids=[]
+                )
+                assert result == {}
+        finally:
+            await engine.dispose()
+
+    @pytest.mark.asyncio
+    async def test_returns_latest_per_task_skipping_other_states(self) -> None:
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlmodel import SQLModel
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from app.services.task_pipeline import (
+            fetch_latest_model_fallback_steps_for_tasks,
+        )
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.connect() as conn, conn.begin():
+            await conn.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                board_id = uuid4()
+                task_a = uuid4()
+                task_b = uuid4()
+                task_c = uuid4()  # has no fallback events
+                base = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
+
+                def _ev(
+                    task_id: UUID,
+                    state: str,
+                    minute: int,
+                    reason: str | None = None,
+                ) -> TaskPipelineEvent:
+                    evidence = (
+                        {"from_model": "x", "to_model": "y", "reason": reason}
+                        if reason
+                        else None
+                    )
+                    return TaskPipelineEvent(
+                        id=uuid4(),
+                        board_id=board_id,
+                        task_id=task_id,
+                        agent_id=None,
+                        state=state,
+                        source="test",
+                        evidence=evidence,
+                        created_at=base + timedelta(minutes=minute),
+                    )
+
+                rows = [
+                    _ev(task_a, "model_fallback", 0, "timeout"),
+                    _ev(task_a, "model_fallback", 5, "billing"),  # latest for A
+                    _ev(task_a, "committed", 10),  # newer but not fallback
+                    _ev(task_b, "model_fallback", 1, "overloaded"),  # only fallback for B
+                    _ev(task_c, "code_changed", 7),  # no fallback for C
+                ]
+                rows[2].commit_sha = "abc1234"  # type: ignore[attr-defined]
+                session.add_all(rows)
+                await session.commit()
+
+                result = await fetch_latest_model_fallback_steps_for_tasks(
+                    session, task_ids=[task_a, task_b, task_c]
+                )
+
+                assert set(result.keys()) == {task_a, task_b}  # task_c absent
+                evidence_a = result[task_a].evidence
+                evidence_b = result[task_b].evidence
+                assert evidence_a is not None
+                assert evidence_a["reason"] == "billing"
+                assert evidence_b is not None
+                assert evidence_b["reason"] == "overloaded"
         finally:
             await engine.dispose()
