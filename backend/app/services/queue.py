@@ -298,3 +298,35 @@ def requeue_if_failed(
         queue_name,
         redis_url=redis_url,
     )
+
+
+def queue_depths(
+    queue_name: str,
+    *,
+    redis_url: str | None = None,
+) -> tuple[int, int]:
+    """Return ``(ready_depth, scheduled_depth)`` for *queue_name*.
+
+    ``ready_depth`` is the number of tasks waiting in the immediate ready
+    queue (a Redis list), and ``scheduled_depth`` is the number parked in
+    the delayed-task sorted set. Fail-open: returns ``(0, 0)`` and logs a
+    warning if Redis is unreachable, so a transient Redis outage cannot
+    cascade into 5xxs on operator-facing status endpoints.
+    """
+    client = _redis_client(redis_url)
+    try:
+        ready = int(cast(int, client.llen(queue_name)))
+        scheduled = int(cast(int, client.zcard(_scheduled_queue_name(queue_name))))
+        return ready, scheduled
+    except Exception:
+        logger.warning(
+            "rq.queue.depth_unavailable",
+            extra={"queue_name": queue_name},
+            exc_info=True,
+        )
+        return 0, 0
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass

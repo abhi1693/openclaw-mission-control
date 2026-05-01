@@ -27,6 +27,7 @@ from app.api.metrics import router as metrics_router
 from app.api.organizations import router as organizations_router
 from app.api.skills_marketplace import router as skills_marketplace_router
 from app.api.souls_directory import router as souls_directory_router
+from app.api.system import router as system_router
 from app.api.tags import router as tags_router
 from app.api.task_custom_fields import router as task_custom_fields_router
 from app.api.tasks import router as tasks_router
@@ -129,6 +130,13 @@ OPENAPI_TAGS = [
     {
         "name": "users",
         "description": "User profile read/update operations and user-centric settings endpoints.",
+    },
+    {
+        "name": "system",
+        "description": (
+            "Operator-facing system status: queue depth, agent online/offline counts, and "
+            "gateway count, scoped to the caller's active organization."
+        ),
     },
     {
         "name": "agent",
@@ -558,6 +566,7 @@ api_v1.include_router(tasks_router)
 api_v1.include_router(task_custom_fields_router)
 api_v1.include_router(tags_router)
 api_v1.include_router(users_router)
+api_v1.include_router(system_router)
 app.include_router(api_v1)
 
 add_pagination(app)
