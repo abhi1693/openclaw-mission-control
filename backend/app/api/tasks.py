@@ -3210,43 +3210,79 @@ async def record_task_review_event(
     # entry, so a concurrent transition (e.g. another lead/admin moving
     # ``review -> done``) could be silently overwritten. After refresh
     # we only auto-transition if the canonical row still says ``review``.
+    # ``_task_has_pending_linked_approval`` + board flag check mirrors
+    # the regular PATCH path's pending-approval gate (codex 2026-05-02
+    # holistic review caught the bypass: my auto-rework would land
+    # status=rework while a pending move_to_done approval stayed linked
+    # to the now-non-review task). When the gate would block the same
+    # transition on the regular PATCH path, the auto-transition is
+    # silently skipped — the FAIL event is still committed (visible in
+    # readiness) and operator can choose to cancel or honor the
+    # approval before the next status move.
     await session.refresh(task)
     if payload.verdict == "fail" and task.status == "review":
-        lead = (
-            await Agent.objects.filter_by(board_id=task.board_id)
-            .filter(col(Agent.is_board_lead).is_(True))
-            .first(session)
-        )
-        last_worker_id: UUID | None = None
-        if lead is not None:
-            last_worker_id = await _last_worker_who_moved_task_to_review(
+        board_blocks_on_pending_approval = (
+            await session.exec(
+                select(col(Board.block_status_changes_with_pending_approval)).where(
+                    col(Board.id) == task.board_id,
+                ),
+            )
+        ).first()
+        if board_blocks_on_pending_approval and await _task_has_pending_linked_approval(
+            session,
+            board_id=task.board_id,
+            task_id=task.id,
+        ):
+            record_activity(
                 session,
+                event_type="review_event.auto_rework_skipped_pending_approval",
+                message=(
+                    f"FAIL verdict on {task.title} did not trigger auto-rework: "
+                    "pending linked approval blocks status change "
+                    "(Board.block_status_changes_with_pending_approval=True). "
+                    "Operator must resolve the approval before status moves."
+                ),
+                agent_id=agent_id,
                 task_id=task.id,
                 board_id=task.board_id,
-                lead_agent_id=lead.id,
             )
-        rework_at = utcnow()
-        task.previous_in_progress_at = task.in_progress_at
-        task.in_progress_at = None
-        task.rework_started_at = rework_at
-        task.rework_entry_commit_sha = task.packet_commit_sha
-        task.assigned_agent_id = last_worker_id
-        task.status = "rework"
-        task.updated_at = rework_at
-        session.add(task)
-        record_activity(
-            session,
-            event_type="task.status_changed",
-            message=(
-                f"Task moved to rework: {task.title} "
-                f"(auto-transition on {payload.reviewer_role} FAIL verdict)."
-            ),
-            agent_id=agent_id,
-            task_id=task.id,
-            board_id=task.board_id,
-        )
-        await session.commit()
-        await session.refresh(task)
+            await session.commit()
+        else:
+            lead = (
+                await Agent.objects.filter_by(board_id=task.board_id)
+                .filter(col(Agent.is_board_lead).is_(True))
+                .first(session)
+            )
+            last_worker_id: UUID | None = None
+            if lead is not None:
+                last_worker_id = await _last_worker_who_moved_task_to_review(
+                    session,
+                    task_id=task.id,
+                    board_id=task.board_id,
+                    lead_agent_id=lead.id,
+                )
+            rework_at = utcnow()
+            task.previous_in_progress_at = task.in_progress_at
+            task.in_progress_at = None
+            task.rework_started_at = rework_at
+            task.rework_entry_commit_sha = task.packet_commit_sha
+            task.assigned_agent_id = last_worker_id
+            task.status = "rework"
+            task.updated_at = rework_at
+            session.add(task)
+            record_activity(
+                session,
+                event_type="task.status_changed",
+                message=(
+                    f"Task moved to rework: {task.title} "
+                    f"(auto-transition on {payload.reviewer_role} FAIL verdict)."
+                ),
+                agent_id=agent_id,
+                task_id=task.id,
+                board_id=task.board_id,
+            )
+            await session.commit()
+            await session.refresh(task)
     try:
         await _notify_lead_on_review_event(session=session, task=task, event=event)
     except Exception:
