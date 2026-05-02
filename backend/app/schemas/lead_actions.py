@@ -13,6 +13,7 @@ LeadNextActionName = Literal[
     "inspect_review_gates",
     "route_rework",
     "inspect_stale_in_progress",
+    "inspect_stale_blocker",
     "route_inbox",
     "materialize_decomposition_plan",
     "cancel_orphan_child",

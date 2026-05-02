@@ -111,6 +111,7 @@ from app.services.tags import (
     validate_tag_ids,
 )
 from app.services.blockers import (
+    auto_resolve_pipeline_blockers_if_ready,
     open_blocker_summary_for_task,
     task_has_open_blocker,
     task_ids_with_open_blocker,
@@ -3034,6 +3035,18 @@ async def record_task_pipeline_event(
                 session.add(existing)
                 await session.commit()
                 await session.refresh(existing)
+                # Phase V §I9 Fix 2 — overwrite-merge can supply the
+                # final missing required field, flipping pipeline.ready
+                # to true. Codex review caught that the original Fix 2
+                # commit only hooked the create path. Both paths must
+                # call the resolver.
+                merge_resolved_count = await auto_resolve_pipeline_blockers_if_ready(
+                    session,
+                    board_id=task.board_id,
+                    task_id=task.id,
+                )
+                if merge_resolved_count:
+                    await session.commit()
                 return _task_pipeline_event_read(existing)
     event = TaskPipelineEvent(
         board_id=task.board_id,
@@ -3050,6 +3063,19 @@ async def record_task_pipeline_event(
     session.add(event)
     await session.commit()
     await session.refresh(event)
+    # Phase V §I9 Fix 2 — auto-resolve system-authored pipeline Blockers
+    # when this event makes ``pipeline.ready=true``. Closes the AC5
+    # failure mode where the lead's pipeline_missing_review_gate Blocker
+    # would stay open forever after the worker filled in the missing
+    # events. Best-effort: if the event committed but the resolver call
+    # raises, the next pipeline-event POST will reconcile.
+    resolved_count = await auto_resolve_pipeline_blockers_if_ready(
+        session,
+        board_id=task.board_id,
+        task_id=task.id,
+    )
+    if resolved_count:
+        await session.commit()
     return _task_pipeline_event_read(event)
 
 

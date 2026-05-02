@@ -121,6 +121,22 @@ async def create_task_blocker(
             status_code=status.HTTP_409_CONFLICT,
             detail="blocker already superseded",
         ) from exc
+    # Phase V §I9 Fix 2 — retroactive reconcile path. If pipeline events
+    # already satisfied the unblock condition BEFORE the lead opened
+    # this Blocker (race window: worker posts events at T0, lead opens
+    # Blocker at T0+ε), auto-resolve it now so it doesn't get stuck open.
+    # Same helper used by ``record_task_pipeline_event`` for the
+    # forward race.
+    from app.services.blockers import auto_resolve_pipeline_blockers_if_ready
+
+    resolved_count = await auto_resolve_pipeline_blockers_if_ready(
+        session,
+        board_id=board.id,
+        task_id=task.id,
+    )
+    if resolved_count:
+        await session.commit()
+        await session.refresh(blocker)
     # Blocker columns are all Python-side defaults or payload copies
     # — no server-side defaults, no triggers — so ``refresh()`` would
     # just burn a round trip reading back what we already know.

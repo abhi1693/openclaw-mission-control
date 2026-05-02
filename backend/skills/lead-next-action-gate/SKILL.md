@@ -77,6 +77,37 @@ before guessing an endpoint.
   reason_code the task has been `in_progress` long enough to nudge — do not
   second-guess the threshold; record `details.in_progress_minutes` in the
   nudge comment for context.
+- `inspect_stale_blocker`: the returned task has at least one open
+  structured `Blocker` aged past `details.stale_blocker_grace_minutes`
+  (currently 20 min, aligned with the in_progress nudge grace).
+  ``_is_waiting()`` filters blocked tasks out of the lead's normal
+  active queue, so without this tier they go invisible — AC5 incident
+  at 2026-05-02 01:39 UTC sat blocked + invisible for ~12h. The lead
+  must nudge the Blocker owner once, then stop. Owner resolution
+  order:
+  1. `details.acknowledged_by_agent_id` if non-null — that's the agent
+     who claimed responsibility via PATCH `/blockers/{id}` with
+     `status_transition=acknowledge`. Nudge them by direct message.
+  2. Else `details.owner_role` if non-null — POST a comment on the
+     task tagging the role (`@Programmer-Frontend`, `@DevOps`, etc.).
+  3. Else fall back to the task's `assigned_agent_id` — open the task
+     comments, post one nudge naming the open Blocker IDs (from
+     `details.blocker_ids`) and reason codes (from
+     `details.reason_codes`), and ask the assignee to either resolve
+     each via PATCH `/blockers/{id}` `{status_transition: resolve}`
+     once the unblock condition is met or post evidence of the
+     blocker's continuing validity. Record
+     `details.oldest_blocker_age_minutes` in the nudge so the owner
+     sees the age. Do NOT silently resolve the Blocker yourself — the
+     pipeline-shaped reason codes
+     (`pipeline_missing_review_gate`,
+     `in_progress_pipeline_missing_review_gate`) already auto-resolve
+     once `pipeline.ready=true`, so a stale-blocker action with those
+     reason_codes means the worker still hasn't filled in the missing
+     events. For other reason codes (operator-policy, content-gate,
+     etc.) the owner is the only valid resolver. After nudging, do
+     not re-fire the action on the same task within the same tick —
+     drain-loop dedup catches consecutive identical tuples.
 - `route_inbox`: use `lead-inbox-routing` for the returned task.
 - `materialize_decomposition_plan`: the returned task is in `inbox`,
   assigned to a reviewer (typically Architect), and has no children

@@ -73,6 +73,7 @@ from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.lead_next_action import (
     ApprovalState,
+    OpenBlockerRow,
     latest_approval_state_by_task_id,
     select_lead_next_action,
 )
@@ -93,6 +94,7 @@ from app.services.task_dependencies import (
 )
 from app.services.blockers import (
     open_blocker_reason_codes_by_task_id,
+    open_blocker_rows_by_task_id,
     task_ids_with_open_blocker,
 )
 from app.services.operator_decisions import (
@@ -841,6 +843,27 @@ async def get_lead_next_action(
     open_blocker_ids = await task_ids_with_open_blocker(
         session, board_id=board.id, task_ids=task_ids,
     )
+    # Phase V §I9 Fix 3 — batched fetch of full open Blocker rows so
+    # the new ``inspect_stale_blocker`` tier in select_lead_next_action
+    # can compute age vs. STALE_BLOCKER_NUDGE_GRACE without N+1
+    # selecting per task. Convert the raw tuples to ``OpenBlockerRow``
+    # NamedTuples at the boundary so the gate's signature is typed.
+    open_blocker_rows_raw = await open_blocker_rows_by_task_id(
+        session, board_id=board.id, task_ids=task_ids,
+    )
+    open_blockers_by_task_id_typed: dict[UUID, list[OpenBlockerRow]] = {
+        task_id: [
+            OpenBlockerRow(
+                id=blocker_id,
+                reason_code=reason_code,
+                owner_role=owner_role,
+                acknowledged_by_agent_id=acknowledged_by_agent_id,
+                created_at=created_at,
+            )
+            for blocker_id, reason_code, owner_role, acknowledged_by_agent_id, created_at in rows
+        ]
+        for task_id, rows in open_blocker_rows_raw.items()
+    }
     pending_operator_decision_ids = await task_ids_with_pending_operator_decision(
         session, board_id=board.id, task_ids=task_ids,
     )
@@ -864,6 +887,7 @@ async def get_lead_next_action(
         orphan_children_with_terminal_parent=orphan_children,
         tasks_with_children=parents_already_materialized,
         tasks_with_umbrella_retired_marker=parents_with_retired_marker,
+        open_blockers_by_task_id=open_blockers_by_task_id_typed,
     )
 
 

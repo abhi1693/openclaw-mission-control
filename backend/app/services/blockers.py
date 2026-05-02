@@ -11,14 +11,31 @@ reads.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import exists
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.time import utcnow
 from app.models.blockers import Blocker
 from app.services.blocker_reason_codes import group_codes_by_task
+
+# Reason codes that the system emits on the lead path when pipeline
+# events are missing for a task. AC5 incident at 2026-05-02 01:39 UTC
+# showed why these need machine-owned resolution: the lead opens them,
+# the worker fills the missing pipeline events, and without an explicit
+# resolver the Blocker stays open forever (and ``is_blocked=True`` stays
+# with it). Manual / operator-decision Blockers are NEVER in this set —
+# those require explicit human resolution.
+PIPELINE_AUTO_RESOLVE_REASON_CODES: Final[frozenset[str]] = frozenset(
+    {
+        "pipeline_missing_review_gate",
+        "in_progress_pipeline_missing_review_gate",
+    },
+)
 
 
 async def task_ids_with_open_blocker(
@@ -47,6 +64,50 @@ async def task_ids_with_open_blocker(
     return set((await session.exec(stmt)).all())
 
 
+async def open_blocker_rows_by_task_id(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_ids: Iterable[UUID],
+) -> dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime]]]:
+    """Batched projection of open Blockers grouped by task_id.
+
+    Each value is a list of
+    ``(blocker_id, reason_code, owner_role, acknowledged_by_agent_id, created_at)``
+    tuples ordered by ``created_at`` ascending so the caller can pick
+    the oldest blocker without re-sorting.
+
+    Used by the lead next-action endpoint to feed the new
+    ``open_blockers_by_task_id`` parameter for the stale-blocker tier
+    in one SQL pass — without this, the tier would need a per-task
+    SELECT and N+1 the endpoint.
+    """
+    task_id_list = list(task_ids)
+    if not task_id_list:
+        return {}
+    stmt = (
+        select(
+            col(Blocker.task_id),
+            col(Blocker.id),
+            col(Blocker.reason_code),
+            col(Blocker.owner_role),
+            col(Blocker.acknowledged_by_agent_id),
+            col(Blocker.created_at),
+        )
+        .where(col(Blocker.board_id) == board_id)
+        .where(col(Blocker.task_id).in_(task_id_list))
+        .where(col(Blocker.resolved_at).is_(None))
+        .order_by(col(Blocker.task_id), col(Blocker.created_at))
+    )
+    grouped: dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime]]] = {}
+    for row in (await session.exec(stmt)).all():
+        task_id, blocker_id, reason_code, owner_role, owner_agent_id, created_at = row
+        grouped.setdefault(task_id, []).append(
+            (blocker_id, reason_code, owner_role, owner_agent_id, created_at),
+        )
+    return grouped
+
+
 async def task_has_open_blocker(
     session: AsyncSession, *, board_id: UUID, task_id: UUID
 ) -> bool:
@@ -61,6 +122,73 @@ async def task_has_open_blocker(
     )
     result = await session.exec(stmt)
     return bool(result.first())
+
+
+async def auto_resolve_pipeline_blockers_if_ready(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+) -> int:
+    """Resolve system-authored pipeline Blockers when pipeline.ready=true.
+
+    Fires from two call sites — pipeline-event create and Blocker create
+    — to close the AC5-shaped failure mode: pipeline events arrive that
+    satisfy the unblock condition, but the Blocker entity itself stays
+    open because nothing knows how to map "pipeline ready" back to
+    "Blocker resolved." Manual blockers (operator_policy, content
+    gates, etc.) are out of scope; only reason codes in
+    ``PIPELINE_AUTO_RESOLVE_REASON_CODES`` qualify.
+
+    **Cycle scope:** events are filtered by the task's current cycle
+    (``task.in_progress_at`` or ``task.previous_in_progress_at``).
+    Without this, a stale set of events from a prior review cycle
+    (already done/rejected, then sent back to rework) would falsely
+    satisfy ``pipeline.ready`` for a new-cycle Blocker, producing the
+    inverse of the AC5 failure (auto-resolving a still-blocked task).
+    Same cycle window the lead's missing-state calc uses.
+
+    Returns the number of Blockers resolved (0 when nothing to do).
+    The caller is responsible for ``session.commit()`` afterwards if
+    the count is non-zero — keeping commit out of this helper lets
+    callers batch with their own transaction work.
+    """
+    from app.models.tasks import Task
+    from app.services.task_pipeline import (
+        list_task_pipeline_events,
+        pipeline_missing_states,
+    )
+
+    open_blockers_stmt = (
+        select(Blocker)
+        .where(col(Blocker.board_id) == board_id)
+        .where(col(Blocker.task_id) == task_id)
+        .where(col(Blocker.resolved_at).is_(None))
+        .where(col(Blocker.reason_code).in_(PIPELINE_AUTO_RESOLVE_REASON_CODES))
+    )
+    open_blockers = list((await session.exec(open_blockers_stmt)).all())
+    if not open_blockers:
+        return 0
+
+    task = (
+        await session.exec(select(Task).where(col(Task.id) == task_id))
+    ).first()
+    if task is None:
+        return 0
+    cycle_since = task.in_progress_at or task.previous_in_progress_at
+    events = await list_task_pipeline_events(
+        session, task_id=task_id, since=cycle_since
+    )
+    if pipeline_missing_states(events):
+        # Pipeline still has missing required states for the current
+        # cycle — keep Blockers open.
+        return 0
+
+    now = utcnow()
+    for blocker in open_blockers:
+        blocker.resolved_at = now
+        session.add(blocker)
+    return len(open_blockers)
 
 
 async def open_blocker_summary_for_task(
