@@ -6,6 +6,8 @@ directly orchestrate gateway RPC calls.
 
 from __future__ import annotations
 
+import asyncio
+from typing import Final
 from uuid import uuid4
 
 from app.models.boards import Board
@@ -24,6 +26,22 @@ from app.services.openclaw.gateway_rpc import (
     ensure_session,
     send_message,
 )
+
+# Hard ceiling on agent-notify gateway calls to prevent the
+# best-effort notify path from wedging caller request threads when
+# the gateway WebSocket hangs. Two repros on 2026-05-02:
+#   - Comment POST on E.3 returned after 3,757,043 ms (62 min)
+#   - Comment POST on E.3 returned after 4,484,215 ms (74 min)
+# In both cases the gateway was unresponsive, ``send_message`` blocked
+# on the WebSocket await, and the comment-notify call site held the
+# MC request open for the full duration. Notifications are best-effort
+# (the comment is already committed before notify fires), so a
+# bounded timeout is the right contract: the notify either succeeds
+# fast or surfaces a ``OpenClawGatewayError`` and the caller logs the
+# miss and moves on. 30 seconds covers normal gateway latency
+# (typical p95 < 1 s) plus a generous margin for ACPX cold starts;
+# anything beyond that is a hung gateway, not a slow one.
+GATEWAY_NOTIFY_TIMEOUT_SECONDS: Final[float] = 30.0
 
 
 class GatewayDispatchService(OpenClawDBService):
@@ -65,12 +83,21 @@ class GatewayDispatchService(OpenClawDBService):
         deliver: bool = False,
     ) -> OpenClawGatewayError | None:
         try:
-            await self.send_agent_message(
-                session_key=session_key,
-                config=config,
-                agent_name=agent_name,
-                message=message,
-                deliver=deliver,
+            await asyncio.wait_for(
+                self.send_agent_message(
+                    session_key=session_key,
+                    config=config,
+                    agent_name=agent_name,
+                    message=message,
+                    deliver=deliver,
+                ),
+                timeout=GATEWAY_NOTIFY_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return OpenClawGatewayError(
+                "gateway notify timeout: send_agent_message did not return "
+                f"within {GATEWAY_NOTIFY_TIMEOUT_SECONDS}s "
+                f"(session_key={session_key}, agent={agent_name})",
             )
         except OpenClawGatewayError as exc:
             return exc

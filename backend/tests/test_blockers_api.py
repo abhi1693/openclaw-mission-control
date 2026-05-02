@@ -18,7 +18,10 @@ import pytest_asyncio
 from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.blockers import create_task_blocker, update_task_blocker
+from fastapi_pagination import set_params
+from fastapi_pagination.limit_offset import LimitOffsetParams
+
+from app.api.blockers import create_task_blocker, list_task_blockers, update_task_blocker
 from app.models.agents import Agent
 from app.models.blockers import Blocker
 from app.models.boards import Board
@@ -455,3 +458,137 @@ async def test_redundant_acknowledge_conflicts(
             actor=actor,  # type: ignore[arg-type]
         )
     assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_list_task_blockers_filters_by_status_open(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """``GET /blockers?status=open`` must return only unresolved rows.
+
+    Caught on 2026-05-02 while triaging AC5: the status query param
+    was being silently ignored — FastAPI accepted the unknown query
+    string and the handler returned all blockers regardless. Operators
+    read ``is_blocked=True`` from the response when the underlying
+    blockers were already resolved.
+    """
+    session, board, task, actor = seeded
+    open_blocker = await create_task_blocker(
+        payload=_create_payload(reason_code="gateway_ws_timeout"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    closed_blocker = await create_task_blocker(
+        payload=_create_payload(reason_code="deploy_drift"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    await update_task_blocker(
+        blocker_id=closed_blocker.id,
+        payload=BlockerUpdate(status_transition="resolve"),
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+
+    with set_params(LimitOffsetParams(limit=50, offset=0)):
+        page = await list_task_blockers(
+            task=task,
+            session=session,
+            _board=board,
+            _actor=actor,  # type: ignore[arg-type]
+            status="open",
+        )
+    items = page.items if hasattr(page, "items") else page["items"]
+    ids = {item.id for item in items}
+    assert open_blocker.id in ids
+    assert closed_blocker.id not in ids
+
+
+@pytest.mark.asyncio
+async def test_list_task_blockers_filters_by_status_resolved(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """``GET /blockers?status=resolved`` must return only resolved rows."""
+    session, board, task, actor = seeded
+    open_blocker = await create_task_blocker(
+        payload=_create_payload(reason_code="gateway_ws_timeout"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    closed_blocker = await create_task_blocker(
+        payload=_create_payload(reason_code="deploy_drift"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    await update_task_blocker(
+        blocker_id=closed_blocker.id,
+        payload=BlockerUpdate(status_transition="resolve"),
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+
+    with set_params(LimitOffsetParams(limit=50, offset=0)):
+        page = await list_task_blockers(
+            task=task,
+            session=session,
+            _board=board,
+            _actor=actor,  # type: ignore[arg-type]
+            status="resolved",
+        )
+    items = page.items if hasattr(page, "items") else page["items"]
+    ids = {item.id for item in items}
+    assert closed_blocker.id in ids
+    assert open_blocker.id not in ids
+
+
+@pytest.mark.asyncio
+async def test_list_task_blockers_no_filter_returns_both_states(
+    seeded: tuple[AsyncSession, Board, Task, _ActorStub],
+) -> None:
+    """No ``status`` param keeps the all-rows behaviour for callers
+    that already inspect ``resolved_at`` on each row.
+    """
+    session, board, task, actor = seeded
+    open_blocker = await create_task_blocker(
+        payload=_create_payload(reason_code="gateway_ws_timeout"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    closed_blocker = await create_task_blocker(
+        payload=_create_payload(reason_code="deploy_drift"),
+        board=board,
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+    await update_task_blocker(
+        blocker_id=closed_blocker.id,
+        payload=BlockerUpdate(status_transition="resolve"),
+        task=task,
+        session=session,
+        actor=actor,  # type: ignore[arg-type]
+    )
+
+    with set_params(LimitOffsetParams(limit=50, offset=0)):
+        page = await list_task_blockers(
+            task=task,
+            session=session,
+            _board=board,
+            _actor=actor,  # type: ignore[arg-type]
+        )
+    items = page.items if hasattr(page, "items") else page["items"]
+    ids = {item.id for item in items}
+    assert open_blocker.id in ids
+    assert closed_blocker.id in ids
