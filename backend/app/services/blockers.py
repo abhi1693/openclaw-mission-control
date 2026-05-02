@@ -63,6 +63,30 @@ async def task_has_open_blocker(
     return bool(result.first())
 
 
+async def open_blocker_summary_for_task(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    task_id: UUID,
+) -> list[tuple[UUID, str | None]]:
+    """Return ``[(blocker_id, reason_code), ...]`` for all open blockers on a task.
+
+    Used by the PATCH transition guard so the 409 response can name
+    which blockers are holding the task. Returns an empty list when
+    no open blockers exist. Reason codes may be None for legacy rows
+    written before reason_code was required; the guard surfaces the
+    blocker id either way so the operator can resolve it.
+    """
+    stmt = (
+        select(col(Blocker.id), col(Blocker.reason_code))
+        .where(col(Blocker.board_id) == board_id)
+        .where(col(Blocker.task_id) == task_id)
+        .where(col(Blocker.resolved_at).is_(None))
+        .order_by(col(Blocker.created_at))
+    )
+    return [(row[0], row[1]) for row in (await session.exec(stmt)).all()]
+
+
 async def open_blocker_reason_codes_by_task_id(
     session: AsyncSession,
     *,

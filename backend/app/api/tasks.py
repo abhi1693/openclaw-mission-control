@@ -111,6 +111,7 @@ from app.services.tags import (
     validate_tag_ids,
 )
 from app.services.blockers import (
+    open_blocker_summary_for_task,
     task_has_open_blocker,
     task_ids_with_open_blocker,
 )
@@ -407,6 +408,35 @@ def _blocked_task_error(blocked_by_task_ids: Sequence[UUID]) -> HTTPException:
             "message": "Task is blocked by incomplete dependencies.",
             "code": "task_blocked_cannot_transition",
             "blocked_by_task_ids": [str(value) for value in blocked_by_task_ids],
+        },
+    )
+
+
+def _open_blocker_block_error(
+    open_blockers: Sequence[tuple[UUID, str | None]],
+) -> HTTPException:
+    """Reject forward status transitions when open structured Blockers exist.
+
+    Forward = ``in_progress`` / ``review`` / ``done``. ``inbox`` /
+    ``rework`` / ``cancelled`` remain reachable so the assignee can
+    park, retry, or drop blocked work without first resolving every
+    Blocker. Resolve each Blocker via
+    ``PATCH /boards/{board_id}/tasks/{task_id}/blockers/{blocker_id}``
+    with ``{"status_transition": "resolve"}`` before retrying the
+    forward transition.
+    """
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": (
+                "Task has open structured Blockers; resolve them before "
+                "transitioning forward."
+            ),
+            "code": "task_blocked_open_blocker_cannot_transition",
+            "open_blocker_ids": [str(blocker_id) for blocker_id, _ in open_blockers],
+            "open_blocker_reason_codes": [
+                reason_code for _, reason_code in open_blockers if reason_code is not None
+            ],
         },
     )
 
@@ -3139,6 +3169,58 @@ async def record_task_review_event(
     session.add(event)
     await session.commit()
     await session.refresh(event)
+    # Phase V §I9 — auto-transition review → rework on FAIL verdicts.
+    # Without this, an Architect/QA FAIL only flips readiness non-ready;
+    # the task stays in ``review`` and the lead has no signal to route
+    # remediation. AC5 incident at 2026-05-02 01:48 UTC sat in review for
+    # ~12h with an unaddressed FAIL because the status never moved.
+    # Mirrors lead-path rework side-effects at ``_lead_apply_status``:
+    # snapshot in_progress_at, stamp rework_started_at, capture
+    # rework_entry_commit_sha, route assignee back to the last worker
+    # who moved this task to review (the implementer, not the reviewer).
+    # ``session.refresh(task)`` before the status check closes the
+    # stale-read race: under ``expire_on_commit=False`` the in-memory
+    # ``task.status`` would otherwise reflect the value loaded at handler
+    # entry, so a concurrent transition (e.g. another lead/admin moving
+    # ``review -> done``) could be silently overwritten. After refresh
+    # we only auto-transition if the canonical row still says ``review``.
+    await session.refresh(task)
+    if payload.verdict == "fail" and task.status == "review":
+        lead = (
+            await Agent.objects.filter_by(board_id=task.board_id)
+            .filter(col(Agent.is_board_lead).is_(True))
+            .first(session)
+        )
+        last_worker_id: UUID | None = None
+        if lead is not None:
+            last_worker_id = await _last_worker_who_moved_task_to_review(
+                session,
+                task_id=task.id,
+                board_id=task.board_id,
+                lead_agent_id=lead.id,
+            )
+        rework_at = utcnow()
+        task.previous_in_progress_at = task.in_progress_at
+        task.in_progress_at = None
+        task.rework_started_at = rework_at
+        task.rework_entry_commit_sha = task.packet_commit_sha
+        task.assigned_agent_id = last_worker_id
+        task.status = "rework"
+        task.updated_at = rework_at
+        session.add(task)
+        record_activity(
+            session,
+            event_type="task.status_changed",
+            message=(
+                f"Task moved to rework: {task.title} "
+                f"(auto-transition on {payload.reviewer_role} FAIL verdict)."
+            ),
+            agent_id=agent_id,
+            task_id=task.id,
+            board_id=task.board_id,
+        )
+        await session.commit()
+        await session.refresh(task)
     try:
         await _notify_lead_on_review_event(session=session, task=task, event=event)
     except Exception:
@@ -4041,6 +4123,28 @@ async def _apply_lead_task_update(
     attempted_transition = (
         "assigned_agent_id" in attempted_fields or "status" in attempted_fields
     )
+    # Phase V §I9 — open structured ``Blocker`` rows must veto forward
+    # status transitions (in_progress/review/done) on the lead path,
+    # mirroring the dependency and OperatorDecision vetoes above. Until
+    # this guard existed, the AC5 incident at 2026-05-02 01:46 UTC was
+    # possible: the lead path PATCHed ``status=review`` while a
+    # pipeline_missing_review_gate Blocker stayed open. The guard fires
+    # only on real forward transitions; ``rework`` / ``inbox`` /
+    # ``cancelled`` stay reachable so blocked work can be parked, sent
+    # back for fixes, or dropped without resolving every Blocker first.
+    if "status" in attempted_fields:
+        target_status = _required_status_value(update.updates["status"])
+        if (
+            target_status in {"in_progress", "review", "done"}
+            and target_status != update.task.status
+        ):
+            open_blockers = await open_blocker_summary_for_task(
+                session,
+                board_id=update.board_id,
+                task_id=update.task.id,
+            )
+            if open_blockers:
+                raise _open_blocker_block_error(open_blockers)
     if (
         "operator_decision_required" in attempted_fields
         and effective_operator_decision_required
@@ -4308,6 +4412,26 @@ async def _apply_non_lead_agent_task_rules(
                     or effective_operator_decision_summary is None
                     else None
                 )
+        # Phase V §I9 — open structured ``Blocker`` veto on the agent
+        # path. Same shape as the lead-path guard in
+        # ``_apply_lead_task_rules``: forward transitions
+        # (in_progress/review/done) require all open Blockers resolved
+        # first; ``rework`` / ``inbox`` / ``cancelled`` are escape
+        # hatches for assignees to park, retry, or drop blocked work.
+        # Fires only on real status changes, leaving the no-op
+        # claim PATCH (``status=in_progress`` while already
+        # in_progress, used to assign the actor) unaffected.
+        if (
+            status_value in {"in_progress", "review", "done"}
+            and status_value != update.task.status
+        ):
+            open_blockers = await open_blocker_summary_for_task(
+                session,
+                board_id=update.board_id,
+                task_id=update.task.id,
+            )
+            if open_blockers:
+                raise _open_blocker_block_error(open_blockers)
         # ``status_changing`` distinguishes a real transition from a
         # no-op echo. Side effects that depend on the from→to delta
         # (clearing ``in_progress_at``, snapshotting it into
