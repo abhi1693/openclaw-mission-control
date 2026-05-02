@@ -653,3 +653,187 @@ def test_latest_approval_state_uses_newest_move_to_done_row() -> None:
     )
 
     assert state[task_id] == "rejected"
+
+
+def _stale_blocker_age_at() -> datetime:
+    """Datetime guaranteed older than the stale-blocker grace window."""
+    from app.services.lead_next_action import STALE_BLOCKER_NUDGE_GRACE
+
+    return utcnow() - STALE_BLOCKER_NUDGE_GRACE - timedelta(minutes=5)
+
+
+def _fresh_blocker_age_at() -> datetime:
+    return utcnow() - timedelta(minutes=2)
+
+
+def test_inspect_stale_blocker_fires_for_aged_blocker_on_active_task() -> None:
+    """Phase V §I9 Fix 3: blocked tasks aged past the stale-blocker
+    grace window must surface as ``inspect_stale_blocker`` so the lead
+    drain loop can nudge the owner. Without this, ``_is_waiting()``
+    filters blocked tasks out of ``active_tasks`` and the lead has no
+    actionable signal — AC5 sat blocked + invisible for ~12h.
+    """
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Blocked beyond grace",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    blocker_id = uuid4()
+    blocker_row = OpenBlockerRow(
+        id=blocker_id,
+        reason_code="pipeline_missing_review_gate",
+        owner_role="Programmer-Frontend",
+        acknowledged_by_agent_id=None,
+        created_at=_stale_blocker_age_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({task.id}),
+        open_blockers_by_task_id={task.id: [blocker_row]},
+    )
+
+    assert action.action_required is True
+    assert action.action == "inspect_stale_blocker"
+    assert action.reason_code == "stale_open_blocker_needs_owner_followup"
+    assert action.task_id == task.id
+    assert action.details["blocker_count"] == 1
+    assert action.details["blocker_ids"] == [str(blocker_id)]
+    assert action.details["reason_codes"] == ["pipeline_missing_review_gate"]
+    assert action.details["owner_role"] == "Programmer-Frontend"
+
+
+def test_inspect_stale_blocker_skips_blocker_within_grace() -> None:
+    """A freshly-opened Blocker (<20min) must NOT trigger the stale tier
+    — the owner deserves time to act before the lead nudges. Falls
+    through to the legacy clear path since the task is otherwise
+    filtered out of active_tasks by ``_is_waiting``."""
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Blocked within grace",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    fresh_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="pipeline_missing_review_gate",
+        owner_role="Programmer-Frontend",
+        acknowledged_by_agent_id=None,
+        created_at=_fresh_blocker_age_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({task.id}),
+        open_blockers_by_task_id={task.id: [fresh_row]},
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+
+
+def test_inspect_stale_blocker_takes_precedence_over_route_inbox() -> None:
+    """Stale-blocker tier should fire before unassigned-inbox routing
+    so the lead unsticks blocked work first — a stuck blocked task is
+    closer-to-done than a fresh untriaged inbox arrival."""
+    from app.services.lead_next_action import OpenBlockerRow
+
+    blocked_task = _task(
+        status="in_progress",
+        title="Stale blocked task",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    inbox_task = _task(status="inbox", title="Fresh unassigned inbox")
+    stale_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="pipeline_missing_review_gate",
+        owner_role="Programmer-Frontend",
+        acknowledged_by_agent_id=None,
+        created_at=_stale_blocker_age_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[blocked_task, inbox_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({blocked_task.id}),
+        open_blockers_by_task_id={blocked_task.id: [stale_row]},
+    )
+
+    assert action.action == "inspect_stale_blocker"
+    assert action.task_id == blocked_task.id
+
+
+def test_inspect_stale_blocker_yields_to_inspect_review_gates() -> None:
+    """Active actionable review work (not blocked) keeps precedence.
+    Stale-blocker tier is for cleaning up parked work, not jumping in
+    front of normal review routing."""
+    from app.services.lead_next_action import OpenBlockerRow
+
+    review_task = _task(status="review", title="Approved review awaiting done")
+    blocked_task = _task(
+        status="in_progress",
+        title="Stale blocked task",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    stale_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="pipeline_missing_review_gate",
+        owner_role="Programmer-Frontend",
+        acknowledged_by_agent_id=None,
+        created_at=_stale_blocker_age_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[review_task, blocked_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={review_task.id: "approved"},
+        pipeline_missing_by_task_id={},
+        review_readiness_by_task_id={review_task.id: {"ready": True}},
+        tasks_with_open_blocker=frozenset({blocked_task.id}),
+        open_blockers_by_task_id={blocked_task.id: [stale_row]},
+    )
+
+    assert action.action == "inspect_review_gates"
+    assert action.task_id == review_task.id
+
+
+def test_inspect_stale_blocker_skips_terminal_tasks() -> None:
+    """Tasks already in ``done`` or ``cancelled`` aren't candidates for
+    nudging even if they have lingering open Blockers. Those rows are
+    cleanup debt, not active work."""
+    from app.services.lead_next_action import OpenBlockerRow
+
+    done_task = _task(status="done", title="Done with stale blocker")
+    stale_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="pipeline_missing_review_gate",
+        owner_role="Programmer-Frontend",
+        acknowledged_by_agent_id=None,
+        created_at=_stale_blocker_age_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[done_task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        tasks_with_open_blocker=frozenset({done_task.id}),
+        open_blockers_by_task_id={done_task.id: [stale_row]},
+    )
+
+    assert action.action == "clear"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Literal, NamedTuple
 from uuid import UUID
 
 from app.core.time import as_naive_utc, utcnow
@@ -16,10 +16,36 @@ from app.services.task_pipeline import split_missing_states_by_default_owner
 ApprovalState = Literal["none", "pending", "approved", "rejected"]
 ApprovalStateRow = tuple[UUID | None, str, datetime | None, datetime]
 
+
+class OpenBlockerRow(NamedTuple):
+    """Minimal projection of an open ``Blocker`` for the lead gate.
+
+    Phase V §I9 Fix 3 introduced this richer projection because the
+    stale-blocker tier needs ``created_at`` (to compute age vs. grace
+    window) and owner attribution (to surface who should resolve it)
+    — the prior ``tasks_with_open_blocker: frozenset[UUID]`` only
+    carried task ids and was insufficient.
+    """
+
+    id: UUID
+    reason_code: str | None
+    owner_role: str | None
+    acknowledged_by_agent_id: UUID | None
+    created_at: datetime
+
+
 # Grace window after a worker picks up an in_progress task before the lead is
 # nudged to chase missing pipeline events. Avoids premature nudges fired
 # seconds-to-minutes after the worker accepts the task and starts coding.
 IN_PROGRESS_PIPELINE_NUDGE_GRACE = timedelta(minutes=20)
+
+# Phase V §I9 Fix 3 — grace window for the stale-blocker tier. AC5
+# incident showed blocked tasks become invisible to the lead's drain
+# loop (``_is_waiting`` filters them out of ``active_tasks``), so the
+# new tier surfaces them after this delay. Aligned with the existing
+# in-progress nudge grace so owners aren't double-pinged on the same
+# clock.
+STALE_BLOCKER_NUDGE_GRACE = timedelta(minutes=20)
 
 
 def latest_approval_state_by_task_id(
@@ -142,6 +168,7 @@ def select_lead_next_action(
     orphan_children_with_terminal_parent: Mapping[UUID, UUID] | None = None,
     tasks_with_children: frozenset[UUID] | set[UUID] | None = None,
     tasks_with_umbrella_retired_marker: frozenset[UUID] | set[UUID] | None = None,
+    open_blockers_by_task_id: Mapping[UUID, Sequence[OpenBlockerRow]] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
     """Return the single closest-to-done lead action from structured state."""
@@ -394,6 +421,64 @@ def select_lead_next_action(
                 "assigned_agent_id": str(task.assigned_agent_id),
             },
         )
+
+    # Phase V §I9 Fix 3 — surface stale blocked tasks to the lead.
+    # ``_is_waiting()`` filters blocked tasks out of ``active_tasks``,
+    # so without this tier the lead has no actionable signal for parked
+    # work. AC5 incident at 2026-05-02 sat blocked + invisible for ~12h
+    # because the gate's clear-fallback was the only path that
+    # acknowledged blocked tasks (and that path is non-actionable).
+    # Iterates the full ``tasks`` list (not ``ordered``) since blocked
+    # tasks were filtered out earlier. Sorted by id for deterministic
+    # cleanup ordering across calls. Fires only after
+    # ``STALE_BLOCKER_NUDGE_GRACE`` so owners get time to act before
+    # the lead nudges. Above ``route_inbox`` so a stuck blocked
+    # closer-to-done task wins over fresh untriaged inbox arrivals.
+    if open_blockers_by_task_id:
+        stale_threshold = now - STALE_BLOCKER_NUDGE_GRACE
+        stale_candidates = sorted(
+            (
+                task
+                for task in tasks
+                if task.status in {"inbox", "in_progress", "review", "rework"}
+                and task.id in open_blockers_by_task_id
+                and any(
+                    blocker.created_at < stale_threshold
+                    for blocker in open_blockers_by_task_id.get(task.id, ())
+                )
+            ),
+            key=lambda t: str(t.id),
+        )
+        if stale_candidates:
+            stale_task = stale_candidates[0]
+            blockers = list(open_blockers_by_task_id.get(stale_task.id, ()))
+            oldest = min(blockers, key=lambda b: b.created_at)
+            return _action(
+                task=stale_task,
+                action_required=True,
+                action="inspect_stale_blocker",
+                reason_code="stale_open_blocker_needs_owner_followup",
+                details={
+                    "blocker_count": len(blockers),
+                    "blocker_ids": [str(b.id) for b in blockers],
+                    "reason_codes": [
+                        b.reason_code for b in blockers if b.reason_code is not None
+                    ],
+                    "owner_role": oldest.owner_role,
+                    "acknowledged_by_agent_id": (
+                        str(oldest.acknowledged_by_agent_id)
+                        if oldest.acknowledged_by_agent_id is not None
+                        else None
+                    ),
+                    "oldest_blocker_age_minutes": max(
+                        0,
+                        int((now - oldest.created_at).total_seconds() // 60),
+                    ),
+                    "stale_blocker_grace_minutes": int(
+                        STALE_BLOCKER_NUDGE_GRACE.total_seconds() // 60
+                    ),
+                },
+            )
 
     for task in ordered:
         if task.status == "inbox" and task.assigned_agent_id is None:
