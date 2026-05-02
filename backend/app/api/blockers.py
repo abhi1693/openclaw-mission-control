@@ -8,11 +8,12 @@ gating ship in follow-up commits.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import col
 
 from app.api.deps import (
     ACTOR_DEP,
@@ -67,14 +68,32 @@ async def list_task_blockers(
     session: "AsyncSession" = SESSION_DEP,
     _board: "Board" = BOARD_READ_DEP,
     _actor: ActorContext = ACTOR_DEP,
+    status: Literal["open", "resolved"] | None = Query(
+        default=None,
+        description=(
+            "Filter blockers by lifecycle state. ``open`` returns rows "
+            "with ``resolved_at IS NULL``; ``resolved`` returns rows "
+            "with ``resolved_at IS NOT NULL``. Omit to return both."
+        ),
+    ),
 ) -> "LimitOffsetPage[BlockerRead]":
-    """List blockers filed against the task, newest first."""
+    """List blockers filed against the task, newest first.
 
+    The ``status`` query filter was added 2026-05-02 after a triage
+    incident: the param had been documented (and used by operators)
+    but not implemented. FastAPI silently accepted it and returned all
+    rows, leading callers to read ``is_blocked=True`` from response
+    bodies even when every Blocker was resolved.
+    """
     statement = (
         Blocker.objects.filter_by(task_id=task.id)
         .order_by(Blocker.created_at.desc())
         .statement
     )
+    if status == "open":
+        statement = statement.where(col(Blocker.resolved_at).is_(None))
+    elif status == "resolved":
+        statement = statement.where(col(Blocker.resolved_at).is_not(None))
     return await paginate(session, statement)
 
 
