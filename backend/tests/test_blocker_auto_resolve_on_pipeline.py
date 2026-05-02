@@ -59,9 +59,18 @@ async def _setup_board_with_in_progress_task(
     task_title: str,
     packet_commit_sha: str = "abcdef0",
 ) -> tuple[Board, Agent, Task]:
+    """Seed a board, lead, worker, and in_progress task.
+
+    The lead is needed so Blockers seeded by the per-test code can set
+    ``created_by_agent_id=lead.id`` — that's the system-authored signal
+    the resolver checks (codex 2026-05-02 holistic review). The lead
+    is attached to the returned tuple's board via Board.id only;
+    callers that need the lead's id should query for it.
+    """
     org_id = uuid4()
     gateway_id = uuid4()
     board_id = uuid4()
+    lead_id = uuid4()
     worker_id = uuid4()
     task_id = uuid4()
 
@@ -83,6 +92,16 @@ async def _setup_board_with_in_progress_task(
         slug=board_slug,
     )
     session.add(board)
+    session.add(
+        Agent(
+            id=lead_id,
+            board_id=board_id,
+            gateway_id=gateway_id,
+            name="Supervisor",
+            is_board_lead=True,
+            openclaw_session_id=f"agent:{board_slug}:lead",
+        ),
+    )
     worker = Agent(
         id=worker_id,
         board_id=board_id,
@@ -104,6 +123,8 @@ async def _setup_board_with_in_progress_task(
     session.add(task)
     await session.commit()
     await session.refresh(task)
+    # Stash the lead id on the board for tests that need it via getattr.
+    setattr(board, "_test_lead_id", lead_id)  # type: ignore[attr-defined]
     return board, worker, task
 
 
@@ -184,6 +205,7 @@ async def test_pipeline_blocker_auto_resolves_when_pipeline_ready(
         category="runtime",
         owner_role="Programmer-Frontend",
         reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=getattr(board, "_test_lead_id"),
     )
     sqlite_session.add(blocker)
     await sqlite_session.commit()
@@ -217,6 +239,7 @@ async def test_pipeline_blocker_does_not_resolve_when_pipeline_partial(
         category="runtime",
         owner_role="Programmer-Frontend",
         reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=getattr(board, "_test_lead_id"),
     )
     sqlite_session.add(blocker)
     await sqlite_session.commit()
@@ -293,6 +316,7 @@ async def test_pipeline_event_does_not_resolve_other_task_blockers(
         category="runtime",
         owner_role="Programmer-Frontend",
         reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=getattr(board, "_test_lead_id"),
     )
     sqlite_session.add(blocker_b)
     await sqlite_session.commit()
@@ -366,6 +390,7 @@ async def test_pipeline_blocker_does_not_resolve_using_old_cycle_events(
         category="runtime",
         owner_role="Programmer-Frontend",
         reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=getattr(board, "_test_lead_id"),
     )
     sqlite_session.add(blocker)
     await sqlite_session.commit()
@@ -445,6 +470,7 @@ async def test_pipeline_blocker_auto_resolves_on_overwrite_merge_path(
         category="runtime",
         owner_role="Programmer-Frontend",
         reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=getattr(board, "_test_lead_id"),
     )
     sqlite_session.add(blocker)
     await sqlite_session.commit()
@@ -471,6 +497,111 @@ async def test_pipeline_blocker_auto_resolves_on_overwrite_merge_path(
 
 
 @pytest.mark.asyncio
+async def test_operator_authored_blocker_with_pipeline_reason_code_does_not_auto_resolve(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Codex holistic review (2026-05-02) caught: the resolver scope was
+    "reason_code matches the pipeline set" without checking blocker
+    authorship. ``schemas/blockers.BlockerCreate`` accepts arbitrary
+    ``reason_code`` values, so an operator can manually file a Blocker
+    with ``reason_code='pipeline_missing_review_gate'`` to express a
+    HUMAN-owned unblock condition (e.g. "stop here until I look") and
+    my resolver would silently clear it on pipeline events.
+
+    The fix: only auto-resolve Blockers authored by a board-lead agent
+    (the system-emitted ones from ``inspect_stale_in_progress`` /
+    materialization paths). Operator-filed Blockers, even with a
+    pipeline-shaped reason_code, stay manual.
+    """
+    board, worker, task = await _setup_board_with_in_progress_task(
+        sqlite_session,
+        board_slug="operator-authored",
+        task_title="Operator-filed pipeline-coded blocker stays manual",
+    )
+    # Operator (non-lead) creates a Blocker with the pipeline-shaped
+    # reason code as their workflow signal — they want this to stay
+    # open until they personally clear it.
+    operator_id = uuid4()
+    sqlite_session.add(
+        Agent(
+            id=operator_id,
+            board_id=board.id,
+            gateway_id=board.gateway_id,
+            name="Operator",
+            is_board_lead=False,
+            openclaw_session_id="agent:operator:main",
+        ),
+    )
+    blocker = Blocker(
+        id=uuid4(),
+        board_id=board.id,
+        task_id=task.id,
+        category="runtime",
+        owner_role="Operator",
+        reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=operator_id,
+    )
+    sqlite_session.add(blocker)
+    await sqlite_session.commit()
+    await sqlite_session.refresh(blocker)
+
+    await _post_full_pipeline(sqlite_session, task=task, actor=worker)
+
+    await sqlite_session.refresh(blocker)
+    assert blocker.resolved_at is None, (
+        "Operator-filed Blocker with pipeline reason_code must NOT "
+        "auto-resolve — the resolver scope must check authorship, "
+        "not just the reason_code"
+    )
+
+
+@pytest.mark.asyncio
+async def test_lead_authored_blocker_with_pipeline_reason_code_still_auto_resolves(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Sanity: the authorship check must NOT break the AC5-shape repro.
+    A board-lead agent that emits a pipeline-shaped Blocker still gets
+    auto-resolved when pipeline events fill in.
+    """
+    board, worker, task = await _setup_board_with_in_progress_task(
+        sqlite_session,
+        board_slug="lead-authored",
+        task_title="Lead-emitted pipeline blocker auto-resolves",
+    )
+    lead_id = uuid4()
+    sqlite_session.add(
+        Agent(
+            id=lead_id,
+            board_id=board.id,
+            gateway_id=board.gateway_id,
+            name="Supervisor",
+            is_board_lead=True,
+            openclaw_session_id="agent:lead:main",
+        ),
+    )
+    blocker = Blocker(
+        id=uuid4(),
+        board_id=board.id,
+        task_id=task.id,
+        category="runtime",
+        owner_role="Programmer-Frontend",
+        reason_code="pipeline_missing_review_gate",
+        created_by_agent_id=lead_id,
+    )
+    sqlite_session.add(blocker)
+    await sqlite_session.commit()
+    await sqlite_session.refresh(blocker)
+
+    await _post_full_pipeline(sqlite_session, task=task, actor=worker)
+
+    await sqlite_session.refresh(blocker)
+    assert blocker.resolved_at is not None, (
+        "Lead-authored pipeline Blocker must still auto-resolve "
+        "(AC5 repro shape)"
+    )
+
+
+@pytest.mark.asyncio
 async def test_blocker_created_after_pipeline_ready_auto_resolves_retroactively(
     sqlite_session: AsyncSession,
 ) -> None:
@@ -487,11 +618,19 @@ async def test_blocker_created_after_pipeline_ready_auto_resolves_retroactively(
 
     # Now create a system-authored pipeline Blocker via the API
     # path (which is the only path that goes through the reconcile
-    # hook on Blocker create). Direct DB insert wouldn't trigger the
-    # API hook — but in practice the lead's drain loop opens these
-    # via the API, so testing the API path is the realistic case.
+    # hook on Blocker create). Use the lead agent as the actor — the
+    # resolver only auto-resolves Blockers authored by a board lead
+    # (codex 2026-05-02 holistic review caught the operator-bypass).
     from app.api.blockers import create_task_blocker
+    from app.models.agents import Agent as AgentModel
     from app.schemas.blockers import BlockerCreate
+
+    lead = (
+        await sqlite_session.exec(
+            select(AgentModel).where(col(AgentModel.id) == getattr(board, "_test_lead_id")),
+        )
+    ).first()
+    assert lead is not None and lead.is_board_lead
 
     payload = BlockerCreate(
         category="runtime",
@@ -503,7 +642,7 @@ async def test_blocker_created_after_pipeline_ready_auto_resolves_retroactively(
         board=board,
         task=task,
         session=sqlite_session,
-        actor=_ActorStub(agent=worker),
+        actor=_ActorStub(agent=lead),
     )
 
     # Reload via DB to bypass any in-memory staleness

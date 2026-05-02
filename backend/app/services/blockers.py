@@ -159,6 +159,23 @@ async def auto_resolve_pipeline_blockers_if_ready(
         pipeline_missing_states,
     )
 
+    # System-authored signal: only auto-resolve Blockers whose
+    # ``created_by_agent_id`` matches a current board-lead agent. The
+    # API allows arbitrary ``reason_code`` values on POST /blockers,
+    # so an operator could file a manual Blocker with one of the
+    # pipeline reason codes as their own workflow signal — codex
+    # 2026-05-02 holistic review caught that resolving those silently
+    # would be a permission inversion. Restricting to lead authorship
+    # keeps the AC5 repro (lead's ``inspect_stale_in_progress`` /
+    # materialization paths emit these) while letting operator-filed
+    # blockers remain manually-resolved.
+    from app.models.agents import Agent
+
+    lead_ids_stmt = select(col(Agent.id)).where(
+        col(Agent.board_id) == board_id,
+    ).where(col(Agent.is_board_lead).is_(True))
+    lead_ids = list((await session.exec(lead_ids_stmt)).all())
+
     open_blockers_stmt = (
         select(Blocker)
         .where(col(Blocker.board_id) == board_id)
@@ -166,6 +183,13 @@ async def auto_resolve_pipeline_blockers_if_ready(
         .where(col(Blocker.resolved_at).is_(None))
         .where(col(Blocker.reason_code).in_(PIPELINE_AUTO_RESOLVE_REASON_CODES))
     )
+    if lead_ids:
+        open_blockers_stmt = open_blockers_stmt.where(
+            col(Blocker.created_by_agent_id).in_(lead_ids),
+        )
+    else:
+        # No lead → nothing is system-authored on this board.
+        return 0
     open_blockers = list((await session.exec(open_blockers_stmt)).all())
     if not open_blockers:
         return 0

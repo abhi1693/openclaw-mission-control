@@ -386,6 +386,140 @@ async def test_record_task_review_event_fail_auto_transitions_review_to_rework(
 
 
 @pytest.mark.asyncio
+async def test_record_task_review_event_fail_skips_auto_rework_when_approval_pending_and_board_blocks(
+    sqlite_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Codex holistic review (2026-05-02) caught: my auto-rework path
+    bypasses ``Board.block_status_changes_with_pending_approval`` —
+    a board configured to forbid status changes while an approval is
+    pending will still see ``review -> rework`` happen on FAIL, leaving
+    the pending approval orphaned on a non-review task.
+
+    When the board has ``block_status_changes_with_pending_approval=True``
+    AND the task has a pending linked approval, auto-rework must NOT
+    fire. Status stays at ``review``; the operator is the one who
+    moves the task once they decide whether to keep or cancel the
+    pending approval.
+    """
+    from app.models.approvals import Approval
+    from app.models.approval_task_links import ApprovalTaskLink
+
+    org_id = uuid4()
+    gateway_id = uuid4()
+    board_id = uuid4()
+    lead_id = uuid4()
+    worker_id = uuid4()
+    reviewer_id = uuid4()
+    task_id = uuid4()
+    approval_id = uuid4()
+
+    sqlite_session.add(Organization(id=org_id, name=f"org-{org_id}"))
+    sqlite_session.add(
+        Gateway(
+            id=gateway_id,
+            organization_id=org_id,
+            name="gw",
+            url="ws://gateway.example/ws",
+            workspace_root="/tmp/openclaw",
+        ),
+    )
+    sqlite_session.add(
+        Board(
+            id=board_id,
+            organization_id=org_id,
+            gateway_id=gateway_id,
+            name="Approval-blocking board",
+            slug="approval-blocking-board",
+            block_status_changes_with_pending_approval=True,
+        ),
+    )
+    lead = Agent(
+        id=lead_id, board_id=board_id, gateway_id=gateway_id,
+        name="Supervisor", is_board_lead=True,
+        openclaw_session_id="agent:lead:main",
+    )
+    worker = Agent(
+        id=worker_id, board_id=board_id, gateway_id=gateway_id,
+        name="Programmer-Frontend", openclaw_session_id="agent:pf:main",
+    )
+    reviewer = Agent(
+        id=reviewer_id, board_id=board_id, gateway_id=gateway_id,
+        name="Architect", openclaw_session_id="agent:architect:main",
+        identity_profile={"role": "System Architect and Code Reviewer"},
+    )
+    sqlite_session.add(lead)
+    sqlite_session.add(worker)
+    sqlite_session.add(reviewer)
+    task = Task(
+        id=task_id, board_id=board_id, title="Review with pending approval",
+        status="review",
+    )
+    sqlite_session.add(task)
+    # Pending approval linked to this task — would be cancelled/orphaned
+    # by a silent auto-rework.
+    sqlite_session.add(
+        Approval(
+            id=approval_id, board_id=board_id,
+            action_type="move_to_done", status="pending",
+            agent_id=worker_id,
+            confidence=0.9,
+        ),
+    )
+    sqlite_session.add(
+        ApprovalTaskLink(
+            board_id=board_id, approval_id=approval_id, task_id=task_id,
+        ),
+    )
+    await sqlite_session.commit()
+    await sqlite_session.refresh(task)
+
+    class _NoopDispatch:
+        def __init__(self, session): self.session = session
+        async def optional_gateway_config_for_board(self, board):
+            return GatewayConfig(url="ws://gateway.example/ws")
+        async def try_send_agent_message(self, **kwargs): return None
+
+    monkeypatch.setattr(tasks_api, "GatewayDispatchService", _NoopDispatch)
+
+    await tasks_api.record_task_review_event(
+        payload=TaskReviewEventCreate(
+            reviewer_role="architect",
+            verdict="fail",
+            evidence_type="source_review",
+            evidence={"comment": "FAIL with pending approval"},
+        ),
+        task=task,
+        session=sqlite_session,
+        actor=_ActorStub(agent=reviewer),
+    )
+
+    await sqlite_session.refresh(task)
+    # Auto-rework MUST be skipped because the board's
+    # block_status_changes_with_pending_approval gate would normally
+    # 409 the same transition on the regular PATCH path.
+    assert task.status == "review", (
+        f"expected status=review (auto-rework skipped due to pending "
+        f"approval gate), got {task.status}"
+    )
+    # Audit event is the observability contract for the silent skip
+    # — pin it so future refactors don't drop the only signal that
+    # tells the operator why auto-rework didn't fire.
+    skip_events = (
+        await sqlite_session.exec(
+            select(ActivityEvent)
+            .where(ActivityEvent.task_id == task_id)
+            .where(
+                ActivityEvent.event_type
+                == "review_event.auto_rework_skipped_pending_approval",
+            ),
+        )
+    ).all()
+    assert len(skip_events) == 1
+    assert "pending linked approval" in (skip_events[0].message or "")
+
+
+@pytest.mark.asyncio
 async def test_record_task_review_event_fail_does_not_transition_when_status_not_review(
     sqlite_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
