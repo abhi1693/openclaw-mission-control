@@ -1,13 +1,18 @@
 // Standalone smoke test for mc-bootstrap-context handler. No pytest /
 // vitest harness — runs as `node handler.test.mjs` from the plugin dir
 // or any cwd. Covers the pure logic (agent-id inference, role split,
-// markdown rendering) and exercises the handler's side-effect contract
-// against a stub gateway-event payload with fetchJSON intercepted.
+// markdown rendering, per-agent token reading) and exercises the
+// handler's side-effect contract against a stub gateway-event payload.
 //
-// Skipped on purpose: real HTTP calls. The handler's network path is
-// validated end-to-end on the gateway host, not here.
+// Per project memory feedback_tdd_discipline: this test file expresses
+// the contract the handler MUST satisfy. The handler is allowed to
+// change so long as these assertions still pass.
 
 import handler from "./handler.js";
+import http from "node:http";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -22,69 +27,68 @@ function expect(label, actual, predicate) {
   console.error(`FAIL: ${label}\n  got: ${JSON.stringify(actual)?.slice(0, 200)}`);
 }
 
-function makeBootstrapEvent(overrides = {}) {
-  const base = {
+// Build a synthetic agent:bootstrap event matching the gateway contract.
+// `cfg` is the gateway config snapshot the handler walks for env.
+function makeBootstrapEvent({ agentId, sessionKey, env, workspaceDir }) {
+  return {
     type: "agent",
     action: "bootstrap",
-    sessionKey: "agent:lead-05002170-201b-4c66-bae1-26c0c833f206:lead",
+    sessionKey: sessionKey ?? `agent:${agentId}:session`,
     timestamp: Date.now(),
     messages: [],
     context: {
-      sessionKey: "agent:lead-05002170-201b-4c66-bae1-26c0c833f206:lead",
-      workspaceDir: "/root/.openclaw/agents/lead-05002170-201b-4c66-bae1-26c0c833f206",
+      sessionKey: sessionKey ?? `agent:${agentId}:session`,
+      workspaceDir: workspaceDir ?? `/root/.openclaw/agents/${agentId}`,
       bootstrapFiles: [],
       cfg: {
         hooks: {
           internal: {
             entries: {
-              "mc-bootstrap-context": {
-                enabled: true,
-                env: {
-                  MC_BASE_URL: "http://test:8000",
-                  BOARD_ID: "board-uuid",
-                  MC_OPERATOR_TOKEN: "tok",
-                  TIMEOUT_MS: "1500",
-                },
-              },
+              "mc-bootstrap-context": { enabled: true, env },
             },
           },
         },
       },
     },
   };
-  return mergeDeep(base, overrides);
 }
 
-function mergeDeep(a, b) {
-  if (!b) return a;
-  const out = { ...a };
-  for (const [k, v] of Object.entries(b)) {
-    if (v && typeof v === "object" && !Array.isArray(v) && a[k]) {
-      out[k] = mergeDeep(a[k], v);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
+// Spin a temp dir with a workspace-<openclawAgentId>/TOOLS.md file
+// holding the AUTH_TOKEN and AGENT_ID lines the handler expects. The
+// `mcAgentId` is the MC `agents.id` UUID (no `mc-`/`lead-` prefix) —
+// it differs from the OpenClaw agent ID for both lead and worker
+// agents. Returns the WORKSPACE_ROOT path.
+async function makeTempWorkspaceWithToolsMd(openclawAgentId, token, mcAgentId) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mc-bootstrap-test-"));
+  const wsDir = path.join(root, `workspace-${openclawAgentId}`);
+  await fs.mkdir(wsDir, { recursive: true });
+  const toolsContent = [
+    "# TOOLS.md",
+    "",
+    "- `BASE_URL=http://test:8000`",
+    `- \`AUTH_TOKEN=${token}\``,
+    `- \`AGENT_ID=${mcAgentId ?? openclawAgentId}\``,
+    "",
+  ].join("\n");
+  await fs.writeFile(path.join(wsDir, "TOOLS.md"), toolsContent);
+  return root;
 }
 
-// Replace `node:http` and `node:https` import resolution by stubbing
-// the global fetch path. The handler dynamically imports them — this
-// approach won't intercept that. Instead, drive the test against a
-// real loopback server listening on a free port.
-
-import http from "node:http";
-
-async function withStubServer(handler, body, status = 200) {
+// HTTP stub that captures request headers/url and returns a configured body/status.
+async function withStubServer(handlerFn, body, status = 200) {
   return await new Promise((resolve, reject) => {
+    const captured = { headers: null, url: null, method: null };
     const server = http.createServer((req, res) => {
+      captured.headers = req.headers;
+      captured.url = req.url;
+      captured.method = req.method;
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(typeof body === "string" ? body : JSON.stringify(body));
     });
     server.listen(0, "127.0.0.1", async () => {
       const addr = server.address();
       try {
-        const result = await handler(`http://127.0.0.1:${addr.port}`);
+        const result = await handlerFn(`http://127.0.0.1:${addr.port}`, captured);
         server.close(() => resolve(result));
       } catch (err) {
         server.close(() => reject(err));
@@ -93,48 +97,64 @@ async function withStubServer(handler, body, status = 200) {
   });
 }
 
+const TOK = "test-agent-token-abc123";
+
 // --- 1. ignores non-bootstrap events
 {
-  const ev = makeBootstrapEvent({ type: "command", action: "new" });
+  const ev = makeBootstrapEvent({
+    agentId: "lead-x",
+    env: { MC_BASE_URL: "http://x", BOARD_ID: "b" },
+  });
+  ev.type = "command";
+  ev.action = "new";
   await handler(ev);
   expect("non-bootstrap event leaves bootstrapFiles untouched", ev.context.bootstrapFiles.length, 0);
 }
 
-// --- 2. ignores non-MC agents (main, repro-*, eval-*, mc-gateway-*)
+// --- 2. ignores non-MC agents
 {
   for (const id of ["main", "repro-test-agent", "eval-lead-050", "mc-gateway-3821a85a"]) {
     const ev = makeBootstrapEvent({
-      sessionKey: `agent:${id}:s`,
-      context: { sessionKey: `agent:${id}:s`, workspaceDir: `/root/.openclaw/agents/${id}` },
+      agentId: id,
+      env: { MC_BASE_URL: "http://x", BOARD_ID: "b" },
     });
     await handler(ev);
     expect(`non-MC agent ${id} leaves bootstrapFiles empty`, ev.context.bootstrapFiles.length, 0);
   }
 }
 
-// --- 3. missing config → no-op (no throw)
+// --- 3. missing config → no-op
 {
   const ev = makeBootstrapEvent({
-    context: { cfg: { hooks: { internal: { entries: {} } } } },
+    agentId: "lead-x",
+    env: undefined,
   });
+  ev.context.cfg = { hooks: { internal: { entries: {} } } };
   await handler(ev);
   expect("missing config is a clean no-op", ev.context.bootstrapFiles.length, 0);
 }
 
-// --- 4. lead bootstrap with stubbed MC backend → injects MC_RUNTIME_BRIEF.md
+// --- 4. lead bootstrap with token from TOOLS.md → injects MC_RUNTIME_BRIEF.md
 {
+  const agentId = "lead-test1234";
+  const mcAgentId = "11111111-2222-3333-4444-555555555555";
+  const wsRoot = await makeTempWorkspaceWithToolsMd(agentId, TOK, mcAgentId);
   await withStubServer(
-    async (baseUrl) => {
+    async (baseUrl, captured) => {
       const ev = makeBootstrapEvent({
-        context: { cfg: { hooks: { internal: { entries: { "mc-bootstrap-context": { enabled: true, env: { MC_BASE_URL: baseUrl, BOARD_ID: "b", MC_OPERATOR_TOKEN: "t", TIMEOUT_MS: "1500" } } } } } } },
+        agentId,
+        env: { MC_BASE_URL: baseUrl, BOARD_ID: "b", WORKSPACE_ROOT: wsRoot, TIMEOUT_MS: "1500" },
       });
       await handler(ev);
       const f = ev.context.bootstrapFiles[0];
       expect("lead injection produces one file", ev.context.bootstrapFiles.length, 1);
-      expect("lead file is named MC_RUNTIME_BRIEF.md", f?.name, "MC_RUNTIME_BRIEF.md");
+      expect("lead file is MC_RUNTIME_BRIEF.md", f?.name, "MC_RUNTIME_BRIEF.md");
       expect("lead file content is markdown lead brief", f?.content, (s) => typeof s === "string" && s.startsWith("# MC Runtime Brief — Lead"));
       expect("lead file content surfaces action", f?.content, (s) => s.includes("inspect_review_gates"));
-      expect("lead file content surfaces task title", f?.content, (s) => s.includes("Bug: agents.update"));
+
+      // ── New T5/T6 contracts ──
+      expect("request used X-Agent-Token header (not Bearer)", captured.headers, (h) => h?.["x-agent-token"] === TOK);
+      expect("request URL hit /api/v1/agent/boards/.../lead/next-action", captured.url, (u) => typeof u === "string" && u.includes("/api/v1/agent/boards/b/lead/next-action"));
     },
     {
       action: "inspect_review_gates",
@@ -142,23 +162,27 @@ async function withStubServer(handler, body, status = 200) {
       action_required: true,
       task_id: "c611f081",
       task_title: "Bug: agents.update RPC wipes",
-      task_status: "review",
-      details: { approval_state: "approved" },
     },
   );
+  await fs.rm(wsRoot, { recursive: true, force: true });
 }
 
-// --- 5. worker bootstrap with stubbed MC backend → injects task table
+// --- 5. worker bootstrap with token from TOOLS.md → injects task table
+//
+// MC's /agent/boards/.../tasks?assigned_agent_id=<uuid> endpoint
+// validates the query param as a UUID. The OpenClaw agent ID
+// (`mc-<uuid>`) carries a prefix and is rejected (HTTP 422). The
+// MC `agents.id` UUID lives in TOOLS.md as `AGENT_ID=<bare-uuid>`
+// alongside the AUTH_TOKEN, and that's what the URL must use.
 {
+  const openclawAgentId = "mc-test1234abcd";
+  const mcAgentId = "abcd1234-5678-9012-3456-7890abcdefab";
+  const wsRoot = await makeTempWorkspaceWithToolsMd(openclawAgentId, TOK, mcAgentId);
   await withStubServer(
-    async (baseUrl) => {
+    async (baseUrl, captured) => {
       const ev = makeBootstrapEvent({
-        sessionKey: "agent:mc-3461451b-5824-4ed0-872c-d14d5d2be107:s",
-        context: {
-          sessionKey: "agent:mc-3461451b-5824-4ed0-872c-d14d5d2be107:s",
-          workspaceDir: "/root/.openclaw/agents/mc-3461451b-5824-4ed0-872c-d14d5d2be107",
-          cfg: { hooks: { internal: { entries: { "mc-bootstrap-context": { enabled: true, env: { MC_BASE_URL: baseUrl, BOARD_ID: "b", MC_OPERATOR_TOKEN: "t", TIMEOUT_MS: "1500" } } } } } },
-        },
+        agentId: openclawAgentId,
+        env: { MC_BASE_URL: baseUrl, BOARD_ID: "b", WORKSPACE_ROOT: wsRoot, TIMEOUT_MS: "1500" },
       });
       await handler(ev);
       const f = ev.context.bootstrapFiles[0];
@@ -166,6 +190,11 @@ async function withStubServer(handler, body, status = 200) {
       expect("worker file content has worker brief header", f?.content, (s) => typeof s === "string" && s.startsWith("# MC Runtime Brief — Worker"));
       expect("worker file content lists task title", f?.content, (s) => s.includes("Implement nav active state"));
       expect("worker file content shows task count", f?.content, (s) => s.includes("**2** task(s)"));
+
+      // X-Agent-Token + URL uses MC UUID (not OpenClaw agent ID).
+      expect("worker request used X-Agent-Token", captured.headers, (h) => h?.["x-agent-token"] === TOK);
+      expect("worker URL uses MC UUID from TOOLS.md, not OpenClaw agent id", captured.url, (u) => typeof u === "string" && u.includes(`/api/v1/agent/boards/b/tasks?assigned_agent_id=${mcAgentId}`));
+      expect("worker URL does NOT contain mc- prefix", captured.url, (u) => typeof u === "string" && !u.includes("assigned_agent_id=mc-"));
     },
     {
       items: [
@@ -175,14 +204,38 @@ async function withStubServer(handler, body, status = 200) {
       total: 2,
     },
   );
+  await fs.rm(wsRoot, { recursive: true, force: true });
+}
+
+// --- 5b. worker without AGENT_ID in TOOLS.md → no-op (can't build a
+// valid query without the MC UUID)
+{
+  const openclawAgentId = "mc-noagentid12";
+  const wsRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mc-bootstrap-test-"));
+  const wsDir = path.join(wsRoot, `workspace-${openclawAgentId}`);
+  await fs.mkdir(wsDir, { recursive: true });
+  await fs.writeFile(
+    path.join(wsDir, "TOOLS.md"),
+    `# TOOLS.md\n\n- \`AUTH_TOKEN=${TOK}\`\n`,
+  );
+  const ev = makeBootstrapEvent({
+    agentId: openclawAgentId,
+    env: { MC_BASE_URL: "http://unreachable.invalid", BOARD_ID: "b", WORKSPACE_ROOT: wsRoot },
+  });
+  await handler(ev);
+  expect("worker without AGENT_ID is a clean no-op", ev.context.bootstrapFiles.length, 0);
+  await fs.rm(wsRoot, { recursive: true, force: true });
 }
 
 // --- 6. HTTP error → no injection, no throw
 {
+  const agentId = "lead-err1234";
+  const wsRoot = await makeTempWorkspaceWithToolsMd(agentId, TOK);
   await withStubServer(
     async (baseUrl) => {
       const ev = makeBootstrapEvent({
-        context: { cfg: { hooks: { internal: { entries: { "mc-bootstrap-context": { enabled: true, env: { MC_BASE_URL: baseUrl, BOARD_ID: "b", MC_OPERATOR_TOKEN: "t", TIMEOUT_MS: "1500" } } } } } } },
+        agentId,
+        env: { MC_BASE_URL: baseUrl, BOARD_ID: "b", WORKSPACE_ROOT: wsRoot, TIMEOUT_MS: "1500" },
       });
       await handler(ev);
       expect("HTTP 500 does not inject", ev.context.bootstrapFiles.length, 0);
@@ -190,6 +243,37 @@ async function withStubServer(handler, body, status = 200) {
     "internal error",
     500,
   );
+  await fs.rm(wsRoot, { recursive: true, force: true });
+}
+
+// --- 7. missing TOOLS.md → no-op (no throw, no injection)
+{
+  const agentId = "lead-notools999";
+  const wsRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mc-bootstrap-test-"));
+  // intentionally no workspace-<id>/TOOLS.md created
+  const ev = makeBootstrapEvent({
+    agentId,
+    env: { MC_BASE_URL: "http://unreachable.invalid", BOARD_ID: "b", WORKSPACE_ROOT: wsRoot },
+  });
+  await handler(ev);
+  expect("missing TOOLS.md is a clean no-op", ev.context.bootstrapFiles.length, 0);
+  await fs.rm(wsRoot, { recursive: true, force: true });
+}
+
+// --- 8. TOOLS.md without AUTH_TOKEN line → no-op
+{
+  const agentId = "lead-notoken888";
+  const wsRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mc-bootstrap-test-"));
+  const wsDir = path.join(wsRoot, `workspace-${agentId}`);
+  await fs.mkdir(wsDir, { recursive: true });
+  await fs.writeFile(path.join(wsDir, "TOOLS.md"), "# TOOLS.md\n\n- `BASE_URL=http://x`\n");
+  const ev = makeBootstrapEvent({
+    agentId,
+    env: { MC_BASE_URL: "http://unreachable.invalid", BOARD_ID: "b", WORKSPACE_ROOT: wsRoot },
+  });
+  await handler(ev);
+  expect("TOOLS.md without AUTH_TOKEN is a clean no-op", ev.context.bootstrapFiles.length, 0);
+  await fs.rm(wsRoot, { recursive: true, force: true });
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

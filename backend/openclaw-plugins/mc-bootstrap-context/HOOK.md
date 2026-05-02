@@ -52,7 +52,7 @@ lead's next-action selection: the agent doesn't act on a stale frontier.
           "env": {
             "MC_BASE_URL": "http://192.168.2.64:8000",
             "BOARD_ID": "05002170-201b-4c66-bae1-26c0c833f206",
-            "MC_OPERATOR_TOKEN": "${MC_TOKEN}",
+            "WORKSPACE_ROOT": "/root/.openclaw/workspace",
             "TIMEOUT_MS": "2000"
           }
         }
@@ -66,8 +66,26 @@ lead's next-action selection: the agent doesn't act on a stale frontier.
 |---|---|---|
 | `MC_BASE_URL` | yes | MC backend HTTP base — e.g. `http://192.168.2.64:8000` |
 | `BOARD_ID` | yes | Board UUID. One gateway typically maps to one board. |
-| `MC_OPERATOR_TOKEN` | yes | Operator-level bearer token (not per-agent). Use a `SecretRef` or env-var substitution; do NOT inline plaintext in `openclaw.json`. |
+| `WORKSPACE_ROOT` | no, default `/root/.openclaw/workspace` | Where per-agent TOOLS.md files live (`<root>/workspace-<agent_id>/TOOLS.md`). |
 | `TIMEOUT_MS` | no, default 2000 | Hard timeout per HTTP call. Bootstrap is hot path; fail fast. |
+
+## Token model
+
+Each MC agent has its own `AUTH_TOKEN` written into its workspace
+`TOOLS.md` by MC's agent-provisioning flow. The hook reads that
+per-agent token at bootstrap and uses `X-Agent-Token` to call MC's
+`/api/v1/agent/*` routes.
+
+Why per-agent (not operator-level): `/api/v1/agent/*` routes reject
+operator Bearer tokens with 401, AND per-agent attribution preserves
+correct `agent_id` on any side-effects MC infers from the read.
+
+The hook reads `${WORKSPACE_ROOT}/workspace-<agent_id>/TOOLS.md` and
+extracts the value of `AUTH_TOKEN=` on a line matching either the
+markdown-list form or a bare assignment.
+
+Missing TOOLS.md → silent no-op. Missing `AUTH_TOKEN=` line → silent
+no-op. Bootstrap continues with template-rendered files only.
 
 ## Failure semantics
 
@@ -85,10 +103,9 @@ the gateway host (typically `.60`), then:
 ```bash
 openclaw hooks enable mc-bootstrap-context
 openclaw config set hooks.internal.entries.mc-bootstrap-context.enabled true
-openclaw config set hooks.internal.entries.mc-bootstrap-context.env.MC_BASE_URL http://192.168.2.64:8000
-openclaw config set hooks.internal.entries.mc-bootstrap-context.env.BOARD_ID <board-uuid>
-openclaw config set hooks.internal.entries.mc-bootstrap-context.env.MC_OPERATOR_TOKEN '${MC_OPERATOR_TOKEN}'
-# next planned restart picks it up
+openclaw config set hooks.internal.entries.mc-bootstrap-context.env \
+  '{"MC_BASE_URL":"http://192.168.2.64:8000","BOARD_ID":"<board-uuid>","WORKSPACE_ROOT":"/root/.openclaw/workspace","TIMEOUT_MS":"2000"}' --strict-json
+# 4.29 hot-reloads hook env config; no restart required for env changes.
 ```
 
 ## Source of truth

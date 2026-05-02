@@ -4,15 +4,18 @@
 // MC-managed agents start each session with live board state. See HOOK.md
 // for design notes.
 //
-// Stable contract this handler depends on:
-//   - event.type === "agent" && event.action === "bootstrap"
-//   - event.context.sessionKey: string (e.g. "agent:lead-…:lead-…")
-//   - event.context.workspaceDir: string
-//   - event.context.cfg: gateway config snapshot (for hooks.internal.entries.<name>.env)
-//   - event.context.bootstrapFiles: mutable array of { name, path, content, missing }
+// Token model: each MC agent has its own AUTH_TOKEN written into its
+// workspace TOOLS.md by the agent-provisioning flow. The hook reads the
+// per-agent token at bootstrap and uses X-Agent-Token to call MC's
+// /api/v1/agent/* routes (which do NOT accept the operator Bearer).
+// This keeps agent_id attribution correct on any side-effects MC infers
+// from the read (e.g., "agent X looked at next-action").
+
+import { readFile } from "node:fs/promises";
 
 const HOOK_KEY = "mc-bootstrap-context";
 const DEFAULT_TIMEOUT_MS = 2000;
+const DEFAULT_WORKSPACE_ROOT = "/root/.openclaw/workspace";
 const SYNTHETIC_NAME = "MC_RUNTIME_BRIEF.md";
 
 const handler = async (event) => {
@@ -29,19 +32,27 @@ const handler = async (event) => {
   const role = inferRole(agentId);
   if (role === "skip") return;
 
+  const creds = await readPerAgentCreds(agentId, cfg.workspaceRoot);
+  if (!creds?.token) return;
+  // Workers need the MC `agents.id` UUID (not the OpenClaw `mc-<uuid>`
+  // prefixed id) for the assigned_agent_id query param. Lead's
+  // /next-action endpoint doesn't use a query param so mcAgentId is
+  // optional for that path.
+  if (role === "worker" && !creds.mcAgentId) return;
+
   let content;
   try {
     if (role === "lead") {
       const data = await fetchJSON(
         `${cfg.baseUrl}/api/v1/agent/boards/${cfg.boardId}/lead/next-action`,
-        cfg.token,
+        creds.token,
         cfg.timeoutMs,
       );
       content = renderLeadBrief(data);
     } else {
       const data = await fetchJSON(
-        `${cfg.baseUrl}/api/v1/agent/boards/${cfg.boardId}/tasks?assigned_agent_id=${agentId}&limit=50`,
-        cfg.token,
+        `${cfg.baseUrl}/api/v1/agent/boards/${cfg.boardId}/tasks?assigned_agent_id=${creds.mcAgentId}&limit=50`,
+        creds.token,
         cfg.timeoutMs,
       );
       content = renderWorkerQueue(agentId, data);
@@ -59,25 +70,45 @@ const handler = async (event) => {
   });
 };
 
-// Read hook config from gateway snapshot. Returns null if required fields
-// missing — handler must no-op rather than throw.
+// Read hook config from gateway snapshot. MC_OPERATOR_TOKEN intentionally
+// not required; per-agent tokens come from TOOLS.md, not the env block.
 function readHookEnv(gatewayCfg) {
   const entry = gatewayCfg?.hooks?.internal?.entries?.[HOOK_KEY];
   const env = entry?.env;
   if (!env) return null;
   const baseUrl = trimTrailingSlash(env.MC_BASE_URL);
   const boardId = env.BOARD_ID;
-  const token = env.MC_OPERATOR_TOKEN;
-  if (!baseUrl || !boardId || !token) return null;
+  if (!baseUrl || !boardId) return null;
+  const workspaceRoot = typeof env.WORKSPACE_ROOT === "string" && env.WORKSPACE_ROOT
+    ? env.WORKSPACE_ROOT
+    : DEFAULT_WORKSPACE_ROOT;
   const timeoutRaw = Number.parseInt(env.TIMEOUT_MS, 10);
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : DEFAULT_TIMEOUT_MS;
-  return { baseUrl, boardId, token, timeoutMs };
+  return { baseUrl, boardId, workspaceRoot, timeoutMs };
 }
 
-// MC agent ids show up in two recognizable shapes inside OpenClaw:
-//   - sessionKey: "agent:<agentId>:<sessionLabel>"
-//   - workspaceDir: ".../agents/<agentId>" (or workspace-<agentId>)
-// Pull the first match; conservative — return null if neither parses.
+// Read AUTH_TOKEN and AGENT_ID from {workspaceRoot}/workspace-{agentId}/TOOLS.md.
+// Returns { token, mcAgentId } where either may be null. Never throws.
+//
+// AGENT_ID is the MC `agents.id` UUID (no OpenClaw prefix), needed for
+// the worker query path; lead doesn't need it. Returns null only when
+// the file itself is unreadable.
+async function readPerAgentCreds(agentId, workspaceRoot) {
+  const toolsPath = `${workspaceRoot}/workspace-${agentId}/TOOLS.md`;
+  let body;
+  try {
+    body = await readFile(toolsPath, "utf8");
+  } catch {
+    return null;
+  }
+  const tokenMatch = body.match(/^[\s-]*`?AUTH_TOKEN=([^\s`\n]+)`?/m);
+  const idMatch = body.match(/^[\s-]*`?AGENT_ID=([^\s`\n]+)`?/m);
+  return {
+    token: tokenMatch ? tokenMatch[1] : null,
+    mcAgentId: idMatch ? idMatch[1] : null,
+  };
+}
+
 function inferMcAgentId(sessionKey, workspaceDir) {
   if (typeof sessionKey === "string") {
     const m = sessionKey.match(/^agent:([^:]+):/);
@@ -111,8 +142,6 @@ function trimTrailingSlash(s) {
   return s.replace(/\/+$/, "");
 }
 
-// Plain HTTP via Node built-ins. No external deps so this handler runs
-// as-is without an install step.
 async function fetchJSON(url, token, timeoutMs) {
   const { default: http } = await import("node:http");
   const { default: https } = await import("node:https");
@@ -126,7 +155,6 @@ async function fetchJSON(url, token, timeoutMs) {
         port: u.port || (u.protocol === "https:" ? 443 : 80),
         path: `${u.pathname}${u.search}`,
         headers: {
-          "Authorization": `Bearer ${token}`,
           "X-Agent-Token": token,
           "Accept": "application/json",
         },
