@@ -21,6 +21,11 @@ from app.schemas.gateway_api import (
     GatewaySessionResponse,
     GatewaySessionsResponse,
     GatewaysStatusResponse,
+    ProjectedGatewaySession,
+    ProjectedGatewaySessionsResponse,
+)
+from app.services.mc_gateway_subscriber.session_state_repo import (
+    SessionStateRepo,
 )
 from app.services.openclaw.gateway_rpc import GATEWAY_EVENTS, GATEWAY_METHODS, PROTOCOL_VERSION
 from app.services.openclaw.runtime_status import collect_openclaw_status
@@ -270,4 +275,43 @@ async def openclaw_runtime_status(
         status=snapshot.payload,
         error=snapshot.error,
         return_code=snapshot.return_code,
+    )
+
+
+@router.get(
+    "/projected-sessions",
+    response_model=ProjectedGatewaySessionsResponse,
+)
+async def projected_gateway_sessions(
+    agent_id: str | None = Query(default=None),
+    session: AsyncSession = SESSION_DEP,
+    _auth: AuthContext = AUTH_DEP,
+    _ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> ProjectedGatewaySessionsResponse:
+    """Return the latest projected state of every gateway session bucket
+    written by the ``mc_gateway_subscriber`` worker. Optional
+    ``agent_id`` filter narrows to one agent's session_label rows.
+    """
+    if agent_id is None:
+        rows = await SessionStateRepo.list_all(session)
+    else:
+        rows = await SessionStateRepo.list_for_agent(session, agent_id=agent_id)
+    return ProjectedGatewaySessionsResponse(
+        sessions=[
+            ProjectedGatewaySession(
+                agent_id=row.agent_id,
+                session_label=row.session_label,
+                session_id=row.session_id,
+                last_phase=row.last_phase,
+                last_message_seq=row.last_message_seq,
+                last_changed_at_ms=row.last_changed_at_ms,
+                input_tokens=row.input_tokens,
+                output_tokens=row.output_tokens,
+                total_tokens=row.total_tokens,
+                channel=row.channel,
+                aborted_last_run=row.aborted_last_run,
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ],
     )
