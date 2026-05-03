@@ -95,10 +95,34 @@ Build/source: <loaded build hash/artifact id, submitted commit, or source parity
 |---|-----|--------|----------|----------|
 | 1 | <criterion> | PASS/FAIL | unit/contract/api/auth/persist/regression/edge/infra | <literal command/API/readback/browser output> |
 Verdict basis: PASS means all AC rows PASS; FAIL means any code/AC FAIL; INCONCLUSIVE means missing evidence/source drift; INFRA BLOCKED means target/tool unavailable.
-Suggested routing: lead keep in review / lead move to rework for <owner/reason> / lead route DevOps/operator
 Infra issues (not code bugs): <list or "none">
+@Supervisor <one-line routing intent — see "Required @ citation" below>
 Lead wake: structured-review-verdict review event
 ```
+
+## Required @ citation
+
+Every verdict comment MUST end with `@Supervisor` plus a one-line routing
+intent BEFORE the `Lead wake:` line. The structured `/review-events` API
+auto-wakes the lead for routing logic, but the prose comment is what the
+operator sees in the dashboard, agent text dumps, and scrollback. Without
+an explicit `@Supervisor` citation, the wake is invisible to the human-
+facing channel.
+
+**Routing-intent shapes:**
+
+- PASS, all required reviewer roles passed →
+  `@Supervisor lead approve and move to done`
+- PASS, more reviewers still need to run →
+  `@Supervisor @<NextReviewer> next gate is <role>`
+- FAIL → `@Supervisor lead move to rework for <owner> (<one-line reason>)`
+- INCONCLUSIVE / packet-missing →
+  `@Supervisor lead route DevOps/operator (<reason>)`
+- INFRA BLOCKED → `@Supervisor lead route DevOps (infra: <tool/target>)`
+
+The lead is the universal router; QA does not PATCH status itself. If a
+next reviewer is named (e.g., `@Architect`), it's a hint for the lead —
+the lead's `lead-review-routing` skill makes the actual assignment.
 
 Then use `structured-review-verdict` to record the matching structured event.
 The review-events API wakes the lead after the structured event is stored; do

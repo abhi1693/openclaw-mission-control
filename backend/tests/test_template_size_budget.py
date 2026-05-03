@@ -1188,6 +1188,16 @@ def test_extracted_worker_review_skills_match_template_boundaries() -> None:
     assert "Scope: cross-cutting | per-AC" in architect
     assert "AC coverage:" in architect
     assert "Verdict basis:" in architect
+    # Verdict comments must end with @Supervisor + one-line routing intent
+    # so the wake is visible in the human-facing dashboard channel
+    # (production gap 2026-05-03: structured /review-events fired but
+    # operator/dashboard reading the prose comment couldn't see the wake).
+    assert "Required @ citation" in architect
+    assert "@Supervisor" in architect
+
+    qa = _read_skill_text_or_skip("qa-validation-verdict")
+    assert "Required @ citation" in qa
+    assert "@Supervisor" in qa
 
     recheck = _read_skill_text_or_skip("reviewer-recheck")
     assert "QA RECHECK for $TASK_ID" in recheck
@@ -1196,6 +1206,15 @@ def test_extracted_worker_review_skills_match_template_boundaries() -> None:
     # ARCHITECT RECHECK adds a single Diff from previous narrative line
     # (not a per-AC delta column — see triage on architect skill above).
     assert "Diff from previous:" in recheck
+    # Recheck comments must also end with @Supervisor citation.
+    assert "Required @ citation" in recheck
+    assert "@Supervisor" in recheck
+
+    # structured-review-verdict's "no separate nudge" rule must clarify
+    # that the verdict comment ITSELF carries @Supervisor — the rule only
+    # forbids a SECOND follow-up nudge comment after the verdict.
+    structured = _read_skill_text_or_skip("structured-review-verdict")
+    assert "@Supervisor" in structured
 
     devops = _read_skill_text_or_skip("devops-deploy-validation")
     assert "DEVOPS DIAGNOSIS for $TASK_ID rejection" in devops

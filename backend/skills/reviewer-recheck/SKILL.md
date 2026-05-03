@@ -29,6 +29,7 @@ QA RECHECK for $TASK_ID:
   Target/build tested: <url + build hash/artifact id or n/a>
   Re-test evidence: <literal browser/command output>
   Corrected verdict: PASS/FAIL/INCONCLUSIVE/INFRA BLOCKED
+  @Supervisor <one-line routing intent — see "Required @ citation" below>
   Lead wake: structured-review-verdict review event
 ```
 
@@ -47,6 +48,7 @@ ARCHITECT RECHECK for $TASK_ID:
   Corrected verdict: PASS/FAIL/INCONCLUSIVE
   Blocking findings: <list or "none">
   Evidence gaps: <list or "none">
+  @Supervisor <one-line routing intent — see "Required @ citation" below>
   Lead wake: structured-review-verdict review event
 ```
 
@@ -58,3 +60,23 @@ parsing a column of mostly `unchanged` entries.
 
 If the corrected verdict changes required roles, blocking owner, or routing,
 include those fields in the structured review event.
+
+## Required @ citation
+
+Every recheck comment (QA or Architect) MUST end with `@Supervisor` plus
+a one-line routing intent BEFORE the `Lead wake:` line. The structured
+`/review-events` API auto-wakes the lead for routing logic, but the prose
+comment is what the operator sees in the dashboard, agent text dumps, and
+scrollback. Without an explicit `@Supervisor` citation, the wake is
+invisible to the human-facing channel.
+
+**Routing-intent shapes** (same as the original verdict skills):
+
+- Corrected PASS, all required reviewer roles now passing →
+  `@Supervisor lead approve and move to done`
+- Corrected PASS, more reviewers still need to run →
+  `@Supervisor @<NextReviewer> next gate is <role>`
+- Corrected FAIL →
+  `@Supervisor lead move to rework for <owner> (<one-line reason>)`
+- INCONCLUSIVE / packet-missing →
+  `@Supervisor lead route DevOps/operator (<reason>)`

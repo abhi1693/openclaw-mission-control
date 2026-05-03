@@ -84,10 +84,32 @@ Evidence gaps:
 Verdict basis: PASS means no blocking findings AND every spec-value/AC quoted
 verbatim matched the live observation; FAIL means any blocking finding or
 verbatim deviation; INCONCLUSIVE means missing evidence packet or source drift.
-Suggested routing: lead keep in review / lead move to rework for <owner/reason>
-/ lead route operator
+@Supervisor <one-line routing intent — see "Required @ citation" below>
 Lead wake: structured-review-verdict review event
 ```
+
+## Required @ citation
+
+Every verdict comment MUST end with `@Supervisor` plus a one-line routing
+intent BEFORE the `Lead wake:` line. The structured `/review-events` API
+auto-wakes the lead for routing logic, but the prose comment is what the
+operator sees in the dashboard, agent text dumps, and scrollback. Without
+an explicit `@Supervisor` citation, the wake is invisible to the human-
+facing channel.
+
+**Routing-intent shapes:**
+
+- PASS, all required reviewer roles already passed →
+  `@Supervisor lead approve and move to done`
+- PASS, more reviewers still need to run →
+  `@Supervisor @<NextReviewer> next gate is <role>`
+- FAIL → `@Supervisor lead move to rework for <owner> (<one-line reason>)`
+- INCONCLUSIVE / packet-missing → `@Supervisor lead route operator (<reason>)`
+
+The lead is the universal router; the agent doesn't need to PATCH status
+itself. If a next reviewer is named (e.g., `@QA-E2E`), it's a hint for
+the lead — the lead's `lead-review-routing` skill makes the actual
+assignment.
 
 **`Scope:` line.** Choose `per-AC` when each acceptance criterion has
 its own observable artifact (e.g. each AC names a specific component or

@@ -178,10 +178,16 @@ sequence where an `@lead` verdict comment wakes the lead before the structured
 gate data exists.
 
 Do NOT use board memory with `tags=["chat"]` for nudging, and do NOT add a
-second task-comment nudge just for the structured event. If the API call fails,
-post the exact failure as a task comment with `@lead` and stop. If the API call
-succeeds but the lead does not wake, report a backend wake failure with the
-exact response/status instead of inventing another nudge path.
+SEPARATE second task-comment after the verdict comment just to nudge the
+lead. The verdict comment itself MUST contain `@Supervisor <one-line routing
+intent>` (per the verdict skills), and the structured `/review-events` POST
+auto-wakes the lead via API — that's the complete handoff. A subsequent
+follow-up comment "calling out" the verdict is the duplicate nudge to avoid.
+
+If the API call fails, post the exact failure as a task comment with `@lead`
+and stop. If the API call succeeds but the lead does not wake, report a
+backend wake failure with the exact response/status instead of inventing
+another nudge path.
 
 Do not repost an identical PASS for the same evidence. For a recheck or
 correction, post a new verdict event only when the reviewed evidence, commit,
