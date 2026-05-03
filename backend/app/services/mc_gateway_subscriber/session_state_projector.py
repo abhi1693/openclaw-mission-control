@@ -27,6 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.services.openclaw.constants import AGENT_SESSION_PREFIX
+
 
 @dataclass(frozen=True)
 class SessionState:
@@ -59,7 +61,7 @@ def parse_session_key(key: Any) -> tuple[str, str] | None:
     if len(parts) != 3:
         return None
     namespace, agent_id, label = parts
-    if namespace != "agent" or not agent_id or not label:
+    if namespace != AGENT_SESSION_PREFIX or not agent_id or not label:
         return None
     return agent_id, label
 
@@ -108,6 +110,10 @@ class SessionStateProjector:
             channel=_optional_str(session.get("channel")),
             aborted_last_run=bool(session.get("abortedLastRun", False)),
         )
+        # Slice 4 note: when wiring side-effects here (DB write, fan-out
+        # callback), diff `new_state` against `existing` first — heartbeat
+        # ticks emit sessions.changed every ~10s with the same field
+        # values and would otherwise cause write/notify amplification.
         self._state[(agent_id, label)] = new_state
 
     def get(self, agent_id: str) -> tuple[SessionState, ...]:
@@ -117,10 +123,12 @@ class SessionStateProjector:
             s for (aid, _), s in self._state.items() if aid == agent_id
         )
 
-    def snapshot(self) -> dict[tuple[str, str], SessionState]:
-        """Return a defensive copy of the full projection. Mutating the
-        returned dict does NOT affect the projector."""
-        return dict(self._state)
+    def snapshot(self) -> tuple[SessionState, ...]:
+        """Return all currently-projected session snapshots. The
+        returned tuple is immutable; the internal keying scheme (dict
+        keyed by ``(agent_id, session_label)``) is an implementation
+        detail and not exposed."""
+        return tuple(self._state.values())
 
 
 def _optional_str(value: Any) -> str | None:
@@ -130,6 +138,8 @@ def _optional_str(value: Any) -> str | None:
 
 
 def _optional_int(value: Any) -> int | None:
+    # bool is a subclass of int in Python; reject so a mistyped gateway
+    # field carrying True/False doesn't silently become 1/0 token counts.
     if isinstance(value, bool):
         return None
     if isinstance(value, int):

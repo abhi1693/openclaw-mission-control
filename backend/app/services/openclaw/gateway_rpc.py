@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import platform as _platform
 import re
 import ssl
 from dataclasses import dataclass
@@ -33,18 +32,17 @@ from app.services.openclaw.device_identity import (
 # the long-lived event subscriber can share these without dragging
 # app.core.* settings into its import chain.
 from app.services.openclaw.protocol_constants import (  # noqa: E402
+    CONTROL_UI_CLIENT_ID,
+    CONTROL_UI_CLIENT_MODE,
     GATEWAY_OPERATOR_SCOPES,
+    HOST_PLATFORM as _HOST_PLATFORM,
     PROTOCOL_VERSION,
+    build_control_ui_origin as _build_control_ui_origin,
 )
 
-# Resolved once at import time; matches the value written by the openclaw CLI
-# during pairing ("linux", "darwin", or "windows").
-_HOST_PLATFORM: str = _platform.system().lower()
 logger = get_logger(__name__)
 DEFAULT_GATEWAY_CLIENT_ID = "gateway-client"
 DEFAULT_GATEWAY_CLIENT_MODE = "backend"
-CONTROL_UI_CLIENT_ID = "openclaw-control-ui"
-CONTROL_UI_CLIENT_MODE = "ui"
 GATEWAY_WS_OPEN_TIMEOUT_SECONDS = 35
 GATEWAY_WS_CLOSE_TIMEOUT_SECONDS = 5
 GatewayConnectMode = Literal["device", "control_ui"]
@@ -355,24 +353,6 @@ def _create_ssl_context(config: GatewayConfig) -> ssl.SSLContext | None:
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
     return ssl_context
-
-
-def _build_control_ui_origin(gateway_url: str) -> str | None:
-    parsed = urlparse(gateway_url)
-    if not parsed.hostname:
-        return None
-    if parsed.scheme in {"ws", "http"}:
-        origin_scheme = "http"
-    elif parsed.scheme in {"wss", "https"}:
-        origin_scheme = "https"
-    else:
-        return None
-    host = parsed.hostname
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    if parsed.port is not None:
-        host = f"{host}:{parsed.port}"
-    return f"{origin_scheme}://{host}"
 
 
 def _resolve_connect_mode(config: GatewayConfig) -> GatewayConnectMode:

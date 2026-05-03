@@ -106,7 +106,7 @@ def _make_event(
     session_id: str = "062b709b-540e-430b-b451-d48f4acff7b9",
     input_tokens: int | None = 49_931,
     output_tokens: int | None = 14_736,
-    total_tokens: int | None = 10_952,
+    total_tokens: int | None = 64_667,
     channel: str = "webchat",
     display_name: str = "webchat:g-agent-mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66-main",
     label: str = "QA-E2E",
@@ -152,7 +152,7 @@ def _make_event(
 @pytest.mark.asyncio
 async def test_projector_starts_empty() -> None:
     p = SessionStateProjector()
-    assert p.snapshot() == {}
+    assert p.snapshot() == ()
     assert p.get("mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66") == ()
 
 
@@ -172,7 +172,7 @@ async def test_projector_records_first_event() -> None:
     assert s.last_changed_at_ms == 1_777_823_446_849
     assert s.input_tokens == 49_931
     assert s.output_tokens == 14_736
-    assert s.total_tokens == 10_952
+    assert s.total_tokens == 64_667
     assert s.channel == "webchat"
     assert s.aborted_last_run is False
 
@@ -224,7 +224,7 @@ async def test_projector_ignores_unparseable_session_key() -> None:
     whole subscriber connection on the next handler exception."""
     p = SessionStateProjector()
     await p(_make_event(session_key="not-an-agent-key"))
-    assert p.snapshot() == {}
+    assert p.snapshot() == ()
 
 
 @pytest.mark.asyncio
@@ -236,7 +236,7 @@ async def test_projector_ignores_frame_with_no_payload() -> None:
     await p({"type": "event", "event": "sessions.changed", "seq": 1})
     await p({"type": "event", "event": "sessions.changed", "payload": None})
     await p({"type": "event", "event": "sessions.changed", "payload": "oops"})
-    assert p.snapshot() == {}
+    assert p.snapshot() == ()
 
 
 @pytest.mark.asyncio
@@ -249,7 +249,7 @@ async def test_projector_ignores_payload_missing_session_key() -> None:
         "seq": 1,
     }
     await p(frame)
-    assert p.snapshot() == {}
+    assert p.snapshot() == ()
 
 
 @pytest.mark.asyncio
@@ -275,11 +275,17 @@ async def test_projector_handles_event_without_token_counts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_projector_snapshot_returns_independent_copy() -> None:
-    """``snapshot()`` is the read API for the rest of MC. Mutating the
-    returned dict must NOT corrupt the projector's internal state."""
+async def test_projector_snapshot_returns_immutable_tuple() -> None:
+    """``snapshot()`` is the read API for the rest of MC; returning a
+    tuple means callers cannot accidentally corrupt the projector's
+    internal state and the dict-keying scheme stays an implementation
+    detail."""
     p = SessionStateProjector()
     await p(_make_event())
     snap = p.snapshot()
-    snap.clear()
-    assert p.snapshot(), "snapshot() must return a defensive copy"
+    assert isinstance(snap, tuple)
+    assert len(snap) == 1
+    # Subsequent projections must not mutate previously-returned snapshots.
+    await p(_make_event(session_key="agent:mc-other-1234:main"))
+    assert len(snap) == 1
+    assert len(p.snapshot()) == 2

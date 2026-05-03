@@ -39,6 +39,11 @@ GATEWAY_OPERATOR_SCOPES: tuple[str, ...] = (
 CONTROL_UI_CLIENT_ID = "openclaw-control-ui"
 CONTROL_UI_CLIENT_MODE = "ui"
 
+# Event names emitted by the gateway in ``type=event`` frames. Add
+# entries here as projectors start consuming new variants — keeps the
+# string out of handler-registration sites and makes refactors greppable.
+EVENT_SESSIONS_CHANGED = "sessions.changed"
+
 # Resolved once at import time; matches the value the openclaw CLI
 # writes during pairing ("linux", "darwin", or "windows").
 HOST_PLATFORM: str = _platform.system().lower()
@@ -76,8 +81,8 @@ def build_control_ui_connect_params(
 
 def build_control_ui_origin(gateway_url: str) -> str | None:
     """Construct the ``Origin`` header the gateway expects for
-    control-UI WS connections. Mirrors
-    ``gateway_rpc._build_control_ui_origin``.
+    control-UI WS connections. Single source of truth shared by the
+    gateway RPC client and the long-lived event subscriber.
     """
     parsed = urlparse(gateway_url)
     if not parsed.hostname:
@@ -88,7 +93,12 @@ def build_control_ui_origin(gateway_url: str) -> str | None:
         scheme = "https"
     else:
         return None
-    netloc = parsed.hostname
-    if parsed.port:
-        netloc = f"{parsed.hostname}:{parsed.port}"
-    return f"{scheme}://{netloc}"
+    host = parsed.hostname
+    # Bracket bare IPv6 hostnames; urlparse strips brackets on parse,
+    # but the Origin header re-introduces them or the gateway rejects
+    # the colons as a malformed port.
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    return f"{scheme}://{host}"
