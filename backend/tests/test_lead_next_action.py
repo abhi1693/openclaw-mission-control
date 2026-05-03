@@ -766,3 +766,176 @@ def test_inspect_stale_blocker_skips_terminal_tasks() -> None:
     )
 
     assert action.action == "clear"
+
+
+# ---------------------------------------------------------------------------
+# Slice 5: gateway_session_state surfaced in inspect_stale_in_progress
+# ---------------------------------------------------------------------------
+
+
+def _gateway_state(
+    *,
+    agent_id: str = "mc-placeholder",
+    last_changed_at_ms: int = 1_777_823_446_849,
+    last_phase: str | None = "message",
+    aborted_last_run: bool = False,
+    session_id: str = "session-uuid-placeholder",
+):
+    """Build a GatewaySessionState row stub. Imports the SQLModel
+    locally so the rest of the test file stays import-light."""
+    from app.models.gateway_session_state import GatewaySessionState
+
+    return GatewaySessionState(
+        agent_id=agent_id,
+        session_label="main",
+        session_id=session_id,
+        last_phase=last_phase,
+        last_message_seq=158,
+        last_changed_at_ms=last_changed_at_ms,
+        input_tokens=49_931,
+        output_tokens=14_736,
+        total_tokens=64_667,
+        channel="webchat",
+        aborted_last_run=aborted_last_run,
+    )
+
+
+def test_stale_in_progress_health_check_surfaces_gateway_state() -> None:
+    """When the lead is asked to inspect a stale in-progress task and
+    the worker has projected gateway state, the action details must
+    include last_changed_at_ms / aborted_last_run so the lead can
+    distinguish "agent is silent on the gateway" from "agent is
+    actively working but the task DB hasn't been moved"."""
+    task = _task(
+        status="in_progress",
+        title="Backend work",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    gateway_state = _gateway_state(
+        agent_id=f"mc-{task.assigned_agent_id}",
+        last_changed_at_ms=1_777_900_000_000,
+        last_phase="tool",
+        aborted_last_run=False,
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        gateway_session_by_agent_id={task.assigned_agent_id: gateway_state},
+    )
+
+    assert action.action == "inspect_stale_in_progress"
+    assert action.reason_code == "in_progress_work_needs_health_check"
+    gateway = action.details["gateway_session"]
+    assert gateway["last_changed_at_ms"] == 1_777_900_000_000
+    assert gateway["last_phase"] == "tool"
+    assert gateway["aborted_last_run"] is False
+    assert gateway["session_id"] == "session-uuid-placeholder"
+
+
+def test_stale_in_progress_health_check_marks_gateway_state_absent() -> None:
+    """When the projector hasn't seen the assigned agent yet (subscriber
+    just started, or the agent never opened a gateway session), the
+    action details must explicitly say so — not silently omit. The
+    lead playbook needs to distinguish "no signal" from "fresh signal"."""
+    task = _task(
+        status="in_progress",
+        title="Backend work",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+        gateway_session_by_agent_id={},
+    )
+
+    assert action.action == "inspect_stale_in_progress"
+    assert action.details["gateway_session"] is None
+
+
+def test_stale_in_progress_pipeline_missing_surfaces_gateway_state() -> None:
+    """The pipeline-missing variant of inspect_stale_in_progress also
+    benefits from gateway state — if the agent went silent, that's WHY
+    the pipeline events haven't landed yet."""
+    task = _task(
+        status="in_progress",
+        title="Frontend work",
+        assigned=True,
+        review_packet_type="frontend_ui",
+        in_progress_at=_stale_in_progress_at(),
+    )
+    gateway_state = _gateway_state(
+        agent_id=f"mc-{task.assigned_agent_id}",
+        last_changed_at_ms=1_777_500_000_000,
+        last_phase="message",
+        aborted_last_run=True,
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={task.id: ["deployed"]},
+        gateway_session_by_agent_id={task.assigned_agent_id: gateway_state},
+    )
+
+    assert action.action == "inspect_stale_in_progress"
+    assert action.reason_code == "in_progress_pipeline_missing_review_gate"
+    assert action.details["gateway_session"]["aborted_last_run"] is True
+    assert action.details["gateway_session"]["last_phase"] == "message"
+
+
+def test_in_progress_ready_for_review_surfaces_gateway_state() -> None:
+    """The ready-for-review-submission variant — agent has all pipeline
+    events but hasn't patched status. Gateway state tells the lead
+    whether the agent is silent (so nudge them) or just slow."""
+    task = _task(
+        status="in_progress",
+        title="Frontend work",
+        assigned=True,
+        review_packet_type="frontend_ui",
+    )
+    gateway_state = _gateway_state(
+        agent_id=f"mc-{task.assigned_agent_id}",
+        last_changed_at_ms=1_777_950_000_000,
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={task.id: []},  # ready: empty list, not missing
+        gateway_session_by_agent_id={task.assigned_agent_id: gateway_state},
+    )
+
+    assert action.action == "inspect_stale_in_progress"
+    assert action.reason_code == "in_progress_worker_ready_for_review_submission"
+    assert action.details["gateway_session"]["last_changed_at_ms"] == 1_777_950_000_000
+
+
+def test_omitting_gateway_session_param_preserves_existing_behavior() -> None:
+    """gateway_session_by_agent_id is optional; callers that don't pass
+    it (existing tests, tooling) get back details WITHOUT a gateway_session
+    key — additive contract, no churn."""
+    task = _task(
+        status="in_progress",
+        title="Backend work",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+
+    action = select_lead_next_action(
+        tasks=[task],
+        blocked_by_task_id={},
+        approval_state_by_task_id={},
+        pipeline_missing_by_task_id={},
+    )
+
+    assert "gateway_session" not in action.details

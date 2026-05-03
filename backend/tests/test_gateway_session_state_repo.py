@@ -174,6 +174,49 @@ async def test_upsert_persists_aborted_flag(
 
 
 @pytest.mark.asyncio
+async def test_list_main_for_agent_ids_batched(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Lead next-action handler needs the main session row for many
+    assigned agents in one trip — N+1 against the per-board task list
+    is the difference between one query and 50."""
+    a_id = "mc-aaaaaaaa-1111-2222-3333-444444444444"
+    b_id = "mc-bbbbbbbb-1111-2222-3333-444444444444"
+    c_id = "mc-cccccccc-1111-2222-3333-444444444444"
+    await SessionStateRepo.upsert(
+        sqlite_session, _state(agent_id=a_id, session_label="main")
+    )
+    await SessionStateRepo.upsert(
+        sqlite_session, _state(agent_id=a_id, session_label="debug")
+    )
+    await SessionStateRepo.upsert(
+        sqlite_session, _state(agent_id=b_id, session_label="main")
+    )
+    # c_id has no row at all
+    await sqlite_session.commit()
+
+    rows = await SessionStateRepo.list_main_for_agent_ids(
+        sqlite_session, agent_ids=[a_id, b_id, c_id, "mc-unknown"]
+    )
+    assert set(rows.keys()) == {a_id, b_id}
+    assert rows[a_id].session_label == "main"
+    assert rows[b_id].session_label == "main"
+
+
+@pytest.mark.asyncio
+async def test_list_main_for_agent_ids_empty_input_returns_empty(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Defensive: handler may pass an empty list when no in-progress
+    tasks have assigned agents — must not run a `WHERE agent_id IN ()`
+    query, which Postgres rejects as a syntax error."""
+    rows = await SessionStateRepo.list_main_for_agent_ids(
+        sqlite_session, agent_ids=[]
+    )
+    assert rows == {}
+
+
+@pytest.mark.asyncio
 async def test_upsert_writes_updated_at_on_each_call(
     sqlite_session: AsyncSession,
 ) -> None:

@@ -8,6 +8,8 @@ write-wins ordering lives in the projector, not the repo.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import select
 
 from app.core.time import utcnow
@@ -99,3 +101,24 @@ class SessionStateRepo:
         stmt = select(GatewaySessionState)
         result = await session.exec(stmt)
         return list(result.scalars().all())
+
+    @classmethod
+    async def list_main_for_agent_ids(
+        cls,
+        session,
+        *,
+        agent_ids: Iterable[str],
+    ) -> dict[str, GatewaySessionState]:
+        """Batched lookup of the ``main`` session row for each gateway
+        agent_id. Used by the lead next-action handler to avoid N+1 over
+        the in-progress task list. Returns a dict keyed by agent_id;
+        agents with no projected row are simply absent from the result."""
+        ids = list(agent_ids)
+        if not ids:
+            return {}
+        stmt = select(GatewaySessionState).where(
+            GatewaySessionState.agent_id.in_(ids),  # type: ignore[attr-defined]
+            GatewaySessionState.session_label == "main",
+        )
+        result = await session.exec(stmt)
+        return {row.agent_id: row for row in result.scalars().all()}

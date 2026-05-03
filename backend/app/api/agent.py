@@ -71,6 +71,9 @@ from app.services.activity_log import record_activity
 from app.services.openclaw.coordination_service import GatewayCoordinationService
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import AgentLifecycleService
+from app.services.mc_gateway_subscriber.session_state_repo import (
+    SessionStateRepo,
+)
 from app.services.lead_next_action import (
     ApprovalState,
     OpenBlockerRow,
@@ -876,6 +879,25 @@ async def get_lead_next_action(
     parents_with_retired_marker = await task_ids_with_umbrella_retired_marker(
         session, board_id=board.id, task_ids=task_ids,
     )
+    # Slice 5: gateway session projection for in-progress tasks. The
+    # selector adds `gateway_session` to inspect_stale_in_progress
+    # action details so the lead can distinguish "agent silent on the
+    # gateway" from "agent active but task DB unmoved." Worker-side
+    # mc-<uuid> identifier maps back to UUID for the selector.
+    in_progress_agent_uuids = [
+        task.assigned_agent_id
+        for task in tasks
+        if task.status == "in_progress" and task.assigned_agent_id is not None
+    ]
+    gateway_lookup_ids = [f"mc-{aid}" for aid in in_progress_agent_uuids]
+    gateway_state_by_lookup_id = await SessionStateRepo.list_main_for_agent_ids(
+        session, agent_ids=gateway_lookup_ids
+    )
+    gateway_session_by_agent_id = {
+        aid: gateway_state_by_lookup_id[f"mc-{aid}"]
+        for aid in in_progress_agent_uuids
+        if f"mc-{aid}" in gateway_state_by_lookup_id
+    }
     return select_lead_next_action(
         tasks=tasks,
         blocked_by_task_id=blocked_by_task_id,
@@ -888,6 +910,7 @@ async def get_lead_next_action(
         tasks_with_children=parents_already_materialized,
         tasks_with_umbrella_retired_marker=parents_with_retired_marker,
         open_blockers_by_task_id=open_blockers_by_task_id_typed,
+        gateway_session_by_agent_id=gateway_session_by_agent_id,
     )
 
 

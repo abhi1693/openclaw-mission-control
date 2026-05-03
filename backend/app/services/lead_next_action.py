@@ -8,6 +8,7 @@ from typing import Literal, NamedTuple
 from uuid import UUID
 
 from app.core.time import as_naive_utc, utcnow
+from app.models.gateway_session_state import GatewaySessionState
 from app.models.tasks import Task
 from app.schemas.lead_actions import LeadNextActionName, LeadNextActionRead
 from app.services.parent_cascade import TERMINAL_STATUSES
@@ -149,6 +150,29 @@ def _in_progress_is_fresh(
     return age < grace
 
 
+def _gateway_session_details(
+    task: Task,
+    gateway_session_by_agent_id: Mapping[UUID, GatewaySessionState],
+) -> dict[str, object] | None:
+    """Format a slice-4 GatewaySessionState row for inclusion in lead-
+    action details. Returns ``None`` (the explicit no-signal marker)
+    when the projector never recorded a session for this agent — the
+    lead playbook needs to distinguish "no gateway signal" from "fresh
+    signal", so call sites add the ``gateway_session`` key
+    unconditionally when ``gateway_session_by_agent_id`` was passed."""
+    if task.assigned_agent_id is None:
+        return None
+    state = gateway_session_by_agent_id.get(task.assigned_agent_id)
+    if state is None:
+        return None
+    return {
+        "session_id": state.session_id,
+        "last_phase": state.last_phase,
+        "last_changed_at_ms": state.last_changed_at_ms,
+        "aborted_last_run": state.aborted_last_run,
+    }
+
+
 def _in_progress_age_minutes(task: Task, *, now: datetime) -> int | None:
     age = _in_progress_age(task, now=now)
     if age is None:
@@ -169,9 +193,19 @@ def select_lead_next_action(
     tasks_with_children: frozenset[UUID] | set[UUID] | None = None,
     tasks_with_umbrella_retired_marker: frozenset[UUID] | set[UUID] | None = None,
     open_blockers_by_task_id: Mapping[UUID, Sequence[OpenBlockerRow]] | None = None,
+    gateway_session_by_agent_id: Mapping[UUID, GatewaySessionState] | None = None,
     now: datetime | None = None,
 ) -> LeadNextActionRead:
-    """Return the single closest-to-done lead action from structured state."""
+    """Return the single closest-to-done lead action from structured state.
+
+    ``gateway_session_by_agent_id`` is the slice-4 projection of the
+    OpenClaw gateway's per-session state, keyed by ``task.assigned_agent_id``.
+    When provided, ``inspect_stale_in_progress`` actions include a
+    ``gateway_session`` field in details so the lead can distinguish
+    "agent silent on the gateway" (likely wedged) from "agent active but
+    task DB unmoved" (likely just slow). Optional — omitting it
+    preserves the pre-slice-5 details shape.
+    """
 
     if now is None:
         now = utcnow()
@@ -270,22 +304,27 @@ def select_lead_next_action(
             continue
         missing_pipeline = list(pipeline_missing_by_task_id.get(task.id, []))
         if not missing_pipeline:
+            details: dict[str, object] = {
+                "review_packet_type": task.review_packet_type,
+                "validation_target": task.validation_target,
+                "pipeline_ready": True,
+                "missing_pipeline_states": [],
+                "missing_worker_pipeline_states": [],
+                "missing_deploy_pipeline_states": [],
+                "in_progress_minutes": _in_progress_age_minutes(task, now=now),
+                "next_step": "nudge_assigned_worker_to_patch_status_review",
+                "lead_may_not_patch_review": True,
+            }
+            if gateway_session_by_agent_id is not None:
+                details["gateway_session"] = _gateway_session_details(
+                    task, gateway_session_by_agent_id
+                )
             return _action(
                 task=task,
                 action_required=True,
                 action="inspect_stale_in_progress",
                 reason_code="in_progress_worker_ready_for_review_submission",
-                details={
-                    "review_packet_type": task.review_packet_type,
-                    "validation_target": task.validation_target,
-                    "pipeline_ready": True,
-                    "missing_pipeline_states": [],
-                    "missing_worker_pipeline_states": [],
-                    "missing_deploy_pipeline_states": [],
-                    "in_progress_minutes": _in_progress_age_minutes(task, now=now),
-                    "next_step": "nudge_assigned_worker_to_patch_status_review",
-                    "lead_may_not_patch_review": True,
-                },
+                details=details,
             )
         if _in_progress_is_fresh(
             task,
@@ -294,25 +333,30 @@ def select_lead_next_action(
         ):
             continue
         owner_split = split_missing_states_by_default_owner(missing_pipeline)
+        details = {
+            "pipeline_ready": False,
+            "missing_pipeline_states": missing_pipeline,
+            "missing_worker_pipeline_states": owner_split.worker,
+            "missing_deploy_pipeline_states": owner_split.deploy,
+            "pipeline_owner_assumption": "default_openclaw_topology",
+            "review_packet_type": task.review_packet_type,
+            "validation_target": task.validation_target,
+            "in_progress_minutes": _in_progress_age_minutes(task, now=now),
+            "in_progress_grace_minutes": int(
+                IN_PROGRESS_PIPELINE_NUDGE_GRACE.total_seconds() // 60
+            ),
+            "next_step": "inspect_pipeline_state_not_review_readiness",
+        }
+        if gateway_session_by_agent_id is not None:
+            details["gateway_session"] = _gateway_session_details(
+                task, gateway_session_by_agent_id
+            )
         return _action(
             task=task,
             action_required=True,
             action="inspect_stale_in_progress",
             reason_code="in_progress_pipeline_missing_review_gate",
-            details={
-                "pipeline_ready": False,
-                "missing_pipeline_states": missing_pipeline,
-                "missing_worker_pipeline_states": owner_split.worker,
-                "missing_deploy_pipeline_states": owner_split.deploy,
-                "pipeline_owner_assumption": "default_openclaw_topology",
-                "review_packet_type": task.review_packet_type,
-                "validation_target": task.validation_target,
-                "in_progress_minutes": _in_progress_age_minutes(task, now=now),
-                "in_progress_grace_minutes": int(
-                    IN_PROGRESS_PIPELINE_NUDGE_GRACE.total_seconds() // 60
-                ),
-                "next_step": "inspect_pipeline_state_not_review_readiness",
-            },
+            details=details,
         )
 
     # Phase V — orphan children of terminal parents. Surface BEFORE
@@ -476,17 +520,22 @@ def select_lead_next_action(
             grace=IN_PROGRESS_PIPELINE_NUDGE_GRACE,
         ):
             continue
+        details = {
+            "in_progress_minutes": _in_progress_age_minutes(task, now=now),
+            "in_progress_grace_minutes": int(
+                IN_PROGRESS_PIPELINE_NUDGE_GRACE.total_seconds() // 60
+            ),
+        }
+        if gateway_session_by_agent_id is not None:
+            details["gateway_session"] = _gateway_session_details(
+                task, gateway_session_by_agent_id
+            )
         return _action(
             task=task,
             action_required=True,
             action="inspect_stale_in_progress",
             reason_code="in_progress_work_needs_health_check",
-            details={
-                "in_progress_minutes": _in_progress_age_minutes(task, now=now),
-                "in_progress_grace_minutes": int(
-                    IN_PROGRESS_PIPELINE_NUDGE_GRACE.total_seconds() // 60
-                ),
-            },
+            details=details,
         )
 
     return _action(
