@@ -235,6 +235,40 @@ async def test_cascade_no_op_for_non_terminal_trigger(
 
 
 @pytest.mark.asyncio
+async def test_cascade_records_activity_event(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Auto-cancel must leave an audit trail. Without it, dashboards
+    show a parent that mysteriously moved from inbox to cancelled
+    with no operator/agent attribution."""
+    from sqlmodel import col, select
+
+    from app.models.activity_events import ActivityEvent
+
+    board = await _seed_board(sqlite_session, slug="cascade-activity-event")
+    parent, children = await _seed_umbrella_with_children(
+        sqlite_session, board=board, n_children=1, child_status="done",
+    )
+    cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
+    assert cascaded is not None
+    await sqlite_session.commit()
+
+    events = list(
+        await sqlite_session.exec(
+            select(ActivityEvent)
+            .where(col(ActivityEvent.task_id) == parent.id)
+            .where(col(ActivityEvent.event_type) == "task.umbrella_auto_cascaded"),
+        ),
+    )
+    assert len(events) == 1, (
+        f"expected exactly one task.umbrella_auto_cascaded event for "
+        f"the cancelled parent, got {len(events)}"
+    )
+    msg = events[0].message or ""
+    assert str(children[-1].id) in msg, "message must reference the triggering child"
+
+
+@pytest.mark.asyncio
 async def test_cascade_recurses_through_multi_level_chain(
     sqlite_session: AsyncSession,
 ) -> None:

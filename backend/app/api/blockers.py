@@ -23,16 +23,13 @@ from app.api.deps import (
     get_board_for_actor_write,
     get_task_or_404,
 )
-from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.pagination import paginate
-from app.models.agents import Agent
 from app.models.blockers import Blocker
-from app.models.boards import Board
 from app.models.tasks import Task
 from app.schemas.blockers import BlockerCreate, BlockerRead, BlockerUpdate
 from app.schemas.pagination import DefaultLimitOffsetPage
-from app.services.openclaw.gateway_dispatch import GatewayDispatchService
+from app.services.lead_notify import notify_lead_after_blocker_resolved
 
 if TYPE_CHECKING:
     from fastapi_pagination.limit_offset import LimitOffsetPage
@@ -47,9 +44,6 @@ router = APIRouter(
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 TASK_DEP = Depends(get_task_or_404)
-
-
-logger = get_logger(__name__)
 
 
 async def _load_blocker(
@@ -82,56 +76,6 @@ async def _task_has_other_open_blockers(
         col(Blocker.resolved_at).is_(None),
     ).first(session)
     return other is not None
-
-
-async def _notify_lead_after_blocker_resolved(
-    *,
-    session: "AsyncSession",
-    task: Task,
-) -> None:
-    """Wake the board lead after the last open Blocker on a task resolves.
-
-    Symmetric with ``_notify_lead_on_end_work_event`` in tasks.py:
-    best-effort, swallows exceptions, rolls back on failure.
-    """
-    try:
-        if task.board_id is None:
-            return
-        lead = (
-            await Agent.objects.filter_by(board_id=task.board_id)
-            .filter(col(Agent.is_board_lead).is_(True))
-            .first(session)
-        )
-        if lead is None or not lead.openclaw_session_id:
-            return
-        dispatch = GatewayDispatchService(session)
-        board = await session.get(Board, task.board_id)
-        if board is None:
-            return
-        config = await dispatch.optional_gateway_config_for_board(board)
-        if config is None:
-            return
-        message = (
-            f"BLOCKER_RESOLVED: task {task.title} ({task.id}) is now actionable.\n"
-            f"Status: {task.status}. All open Blockers cleared.\n"
-            f"Route per lead-next-action skill."
-        )
-        await dispatch.try_send_agent_message(
-            session_key=lead.openclaw_session_id,
-            config=config,
-            agent_name=lead.name,
-            message=message,
-            deliver=True,
-        )
-    except Exception as exc:  # noqa: BLE001
-        # No rollback here: the resolve commit already succeeded before
-        # this notify call, so there's no pending DB state to discard.
-        # (Differs from _notify_lead_on_end_work_event in tasks.py where
-        # the helper itself may commit additional state.)
-        logger.warning(
-            "blocker-resolve notify suppressed: %s (task=%s)",
-            exc, task.id,
-        )
 
 
 @router.get("", response_model=DefaultLimitOffsetPage[BlockerRead])
@@ -228,9 +172,16 @@ async def create_task_blocker(
     if resolved_count:
         await session.commit()
         await session.refresh(blocker)
-    # Blocker columns are all Python-side defaults or payload copies
-    # — no server-side defaults, no triggers — so ``refresh()`` would
-    # just burn a round trip reading back what we already know.
+        # Mirror the wake hook on the explicit resolve PATCH path: if the
+        # auto-resolve closed the LAST open Blocker on this task, wake the
+        # lead. Without this, the retroactive race (events landed first,
+        # blocker filed second, auto-resolved immediately) silently leaves
+        # the task actionable but un-routed.
+        from app.services.blockers import task_has_open_blocker
+        if not await task_has_open_blocker(
+            session, board_id=board.id, task_id=task.id
+        ):
+            await notify_lead_after_blocker_resolved(session=session, task=task)
     return BlockerRead.model_validate(blocker, from_attributes=True)
 
 
@@ -297,5 +248,5 @@ async def update_task_blocker(
     if payload.status_transition == "resolve" and not await _task_has_other_open_blockers(
         session, task=task, exclude_blocker_id=blocker.id,
     ):
-        await _notify_lead_after_blocker_resolved(session=session, task=task)
+        await notify_lead_after_blocker_resolved(session=session, task=task)
     return BlockerRead.model_validate(blocker, from_attributes=True)

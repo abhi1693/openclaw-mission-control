@@ -152,7 +152,8 @@ def _patch_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
             )
             return None
 
-    monkeypatch.setattr(blockers_api, "GatewayDispatchService", _FakeDispatch)
+    import app.services.lead_notify as lead_notify
+    monkeypatch.setattr(lead_notify, "GatewayDispatchService", _FakeDispatch)
     return sent
 
 
@@ -292,7 +293,8 @@ async def test_blocker_resolve_succeeds_when_lead_wake_fails(
         async def try_send_agent_message(self, **_kwargs):
             raise RuntimeError("simulated dispatch failure")
 
-    monkeypatch.setattr(blockers_api, "GatewayDispatchService", _BoomDispatch)
+    import app.services.lead_notify as lead_notify
+    monkeypatch.setattr(lead_notify, "GatewayDispatchService", _BoomDispatch)
 
     created = await create_task_blocker(
         payload=BlockerCreate.model_validate(

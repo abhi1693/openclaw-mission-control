@@ -23,6 +23,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
 from app.models.tasks import Task
+from app.services.activity_log import record_activity
 
 TERMINAL_STATUSES: frozenset[str] = frozenset({"done", "cancelled"})
 
@@ -201,11 +202,25 @@ async def maybe_cascade_umbrella_close(
     parent.cancelled_at = utcnow()
     parent.updated_at = parent.cancelled_at
     session.add(parent)
+    # Audit row so dashboards / debug queries / lead-next-action can
+    # see the auto-cancel and don't mistake the parent for an unexplained
+    # operator decision. board_id may be None for legacy rows; record
+    # whatever is on the parent.
+    record_activity(
+        session,
+        event_type="task.umbrella_auto_cascaded",
+        task_id=parent.id,
+        board_id=parent.board_id,
+        message=(
+            f"Parent auto-cancelled by umbrella cascade after child "
+            f"{task.id} reached status={task.status}; all siblings terminal "
+            f"and parent had never executed."
+        ),
+    )
 
     # Recurse: if grandparent is also a retired umbrella whose only
     # non-terminal child was this parent, cancel it too. Without this,
-    # multi-level decomposition chains leak — operator sees the
-    # immediate parent close but the grandparent stays in inbox.
+    # multi-level decomposition chains leak.
     grandparent = await maybe_cascade_umbrella_close(session, task=parent)
     return grandparent if grandparent is not None else parent
 

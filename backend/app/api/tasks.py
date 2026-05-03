@@ -134,6 +134,7 @@ from app.services.task_dependencies import (
     replace_task_dependencies,
     validate_dependency_update,
 )
+from app.services.lead_notify import notify_lead_after_blocker_resolved
 from app.services.task_pipeline import (
     FRONTEND_REVIEW_PIPELINE_STATES,
     frontend_pipeline_required,
@@ -3070,6 +3071,12 @@ async def record_task_pipeline_event(
                 )
                 if merge_resolved_count:
                     await session.commit()
+                    if not await task_has_open_blocker(
+                        session, board_id=task.board_id, task_id=task.id
+                    ):
+                        await notify_lead_after_blocker_resolved(
+                            session=session, task=task
+                        )
                 return _task_pipeline_event_read(existing)
     event = TaskPipelineEvent(
         board_id=task.board_id,
@@ -3099,6 +3106,12 @@ async def record_task_pipeline_event(
     )
     if resolved_count:
         await session.commit()
+        if not await task_has_open_blocker(
+            session, board_id=task.board_id, task_id=task.id
+        ):
+            await notify_lead_after_blocker_resolved(
+                session=session, task=task
+            )
     return _task_pipeline_event_read(event)
 
 
@@ -4393,6 +4406,15 @@ async def _apply_lead_task_update(
     await session.commit()
     await session.refresh(update.task)
     await _lead_notify_new_assignee(session, update=update)
+    # Mirror the umbrella auto-cascade hook in _finalize_updated_task —
+    # without this, lead-driven terminal transitions silently leave
+    # retired umbrellas in inbox forever (codex review 2026-05-03).
+    if update.task.status in TERMINAL_STATUSES:
+        cascaded_parent = await maybe_cascade_umbrella_close(
+            session, task=update.task
+        )
+        if cascaded_parent is not None:
+            await session.commit()
     return await _task_read_response(
         session,
         task=update.task,
