@@ -378,7 +378,7 @@ def select_lead_next_action(
     # Phase V — orphan children of terminal parents. Surface BEFORE
     # rework/inbox routing so the lead retires obsolete decomposition
     # children rather than nudging owners to keep working on them.
-    # Iterates the full ``inputs.tasks`` list (not ``ordered``) because an
+    # Iterates the full ``tasks`` list (not ``ordered``) because an
     # orphan child can carry its own waiting flags — those don't
     # disqualify cleanup; the parent terminating already declared the
     # work moot. Orphans currently in ``review`` or ``in_progress``
@@ -412,7 +412,7 @@ def select_lead_next_action(
                 },
             )
 
-    # Inbox inputs.tasks already assigned to a reviewer/architect awaiting
+    # Inbox tasks already assigned to a reviewer/architect awaiting
     # Supervisor materialization. The ``lead-inbox-routing``
     # decomposition handshake is: (1) lead assigns task to Architect,
     # (2) Architect posts decomposition plan as a comment, (3) lead
@@ -451,14 +451,14 @@ def select_lead_next_action(
             },
         )
 
-    # Phase V §I9 Fix 3 — surface stale blocked inputs.tasks to the lead.
-    # ``_is_waiting()`` filters blocked inputs.tasks out of ``active_tasks``,
+    # Phase V §I9 Fix 3 — surface stale blocked tasks to the lead.
+    # ``_is_waiting()`` filters blocked tasks out of ``active_tasks``,
     # so without this tier the lead has no actionable signal for parked
     # work. AC5 incident at 2026-05-02 sat blocked + invisible for ~12h
     # because the gate's clear-fallback was the only path that
-    # acknowledged blocked inputs.tasks (and that path is non-actionable).
-    # Iterates the full ``inputs.tasks`` list (not ``ordered``) since blocked
-    # inputs.tasks were filtered out earlier. Sorted by id for deterministic
+    # acknowledged blocked tasks (and that path is non-actionable).
+    # Iterates the full ``tasks`` list (not ``ordered``) since blocked
+    # tasks were filtered out earlier. Sorted by id for deterministic
     # cleanup ordering across calls. Fires only after
     # ``STALE_BLOCKER_NUDGE_GRACE`` so owners get time to act before
     # the lead nudges. Above ``route_inbox`` so a stuck blocked

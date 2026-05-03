@@ -20,9 +20,12 @@ Design rationale: see
   re-subscribes.
 - SIGTERM / SIGINT → clean shutdown.
 
-What it does NOT do yet:
-- No `/agent/next-action` integration — slice 5 surfaces the projected
-  state in lead signals.
+Slice 5 wires the projected state into
+`/api/v1/agent/boards/{id}/lead/next-action` so
+`details.gateway_session` populates `inspect_stale_in_progress`
+actions; the lead playbook (`lead-next-action-gate` skill) reads it
+to distinguish "agent silent on the gateway" from "agent active but
+task DB unmoved".
 
 ## Install
 
@@ -81,9 +84,10 @@ On the host that hosts MC backend (`.64` in current topology):
 
 ## Periodic cleanup
 
-The projection table accumulates rows for hard-deleted MC agents
-(`mc-<uuid>` projection rows whose UUID has no matching `agents.id`).
-At the current scale (~100 active sessions) this is a slow leak, but
+The projection table accumulates rows for hard-deleted owners across
+all three projection namespaces (`mc-<uuid>` → `agents.id`,
+`mc-gateway-<uuid>` → `gateways.id`, `lead-<uuid>` → `boards.id`). At
+the current scale (~100 active sessions) this is a slow leak, but
 running the cleanup periodically keeps the table bounded:
 
 ```python
@@ -142,17 +146,10 @@ review.
 - `session_state_repo.py` — read/write layer for `gateway_session_state`
   rows. Tested by `tests/test_gateway_session_state_repo.py`.
 - `db_session_state_projector.py` — production projector. Persists
-  via `SessionStateRepo` with last-write-wins ts ordering and a
-  field-equal diff guard. Tested by
+  via the `session_state_repo` functions with last-write-wins ts
+  ordering. Tested by
   `tests/test_db_session_state_projector.py`.
 - `__main__.py` — operator entry point (env resolution, signal
   handlers, projector wiring). Tested by
   `tests/test_mc_gateway_subscriber_main.py`.
 - `mc-gateway-subscriber.service` — systemd unit.
-
-## Slices remaining
-
-- Slice 5: surface the projected state in `/agent/next-action` lead
-  signals so the lead can distinguish "agent is working" from "agent
-  is wedged" without polling the gateway directly. Adds a thin read
-  endpoint over `SessionStateRepo.list_for_agent`.

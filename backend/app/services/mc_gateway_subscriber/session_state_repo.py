@@ -14,15 +14,13 @@ writes in one event-loop tick can share a transaction.
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Iterable
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlmodel import col
+from sqlmodel import SQLModel, col
 
 from app.core.time import utcnow
 from app.models.agents import Agent
@@ -52,20 +50,6 @@ _DIALECT_INSERTS = {
     "sqlite": sqlite_insert,
 }
 
-
-async def _execute_non_select(session, stmt) -> Any:
-    """Run an INSERT/UPDATE/DELETE statement.
-
-    SQLModel's ``AsyncSession.execute`` emits a ``DeprecationWarning``
-    suggesting ``exec()`` — but ``exec()`` auto-scalars and is intended
-    for SELECTs, not write statements that return ``rowcount``. The
-    warning is wrong in this context, so suppress it locally rather
-    than rewrite the call site to avoid the misleading suggestion.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return await session.execute(stmt)
-
 # Each entry: (prefix, owning model). Cleanup walks the projection
 # table once per entry, parses the ``<prefix><uuid>`` tail, and deletes
 # rows whose UUID has no matching row in the owning model. The order
@@ -75,7 +59,7 @@ async def _execute_non_select(session, stmt) -> Any:
 _BOARD_AGENT_PREFIX = "mc-"
 _LEAD_AGENT_PREFIX = "lead-"
 
-_ORPHAN_OWNERSHIP: tuple[tuple[str, type, tuple[str, ...]], ...] = (
+_ORPHAN_OWNERSHIP: tuple[tuple[str, type[SQLModel], tuple[str, ...]], ...] = (
     (_BOARD_AGENT_PREFIX, Agent, (_GATEWAY_OPENCLAW_AGENT_PREFIX,)),
     (_GATEWAY_OPENCLAW_AGENT_PREFIX, Gateway, ()),
     (_LEAD_AGENT_PREFIX, Board, ()),
@@ -126,7 +110,7 @@ async def upsert_session_state(
         index_elements=["agent_id", "session_label"],
         set_={c: getattr(stmt.excluded, c) for c in _NON_PK_COLUMNS},
     )
-    await _execute_non_select(session, stmt)
+    await session.exec(stmt)
 
 
 async def get_session_state(
@@ -203,7 +187,7 @@ async def _orphan_agent_ids_for_owner(
     session,
     *,
     prefix: str,
-    owner_model: type,
+    owner_model: type[SQLModel],
     skip_prefixes: tuple[str, ...] = (),
 ) -> list[str]:
     """Find projection ``agent_id`` strings whose ``<prefix><tail>``
@@ -272,5 +256,5 @@ async def cleanup_orphaned_session_states(session) -> int:
     delete_stmt = delete(GatewaySessionState).where(
         col(GatewaySessionState.agent_id).in_(orphan_agent_ids),
     )
-    result = await _execute_non_select(session, delete_stmt)
+    result = await session.exec(delete_stmt)
     return int(result.rowcount or 0)
