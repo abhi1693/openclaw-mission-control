@@ -228,25 +228,29 @@ async def maybe_cascade_umbrella_close(
         )
         topmost_cancelled = parent
         cursor = parent
-    # Loop exhausted MAX_DEPTH without natural termination — pathological
-    # depth or a parent_task_id cycle. Record audit + warning so the
-    # operator can investigate.
-    logger.warning(
-        "umbrella cascade truncated at MAX_DEPTH=%d (last cancelled task=%s); "
-        "check parent_task_id chain for unexpected depth or cycles",
-        _UMBRELLA_CASCADE_MAX_DEPTH, cursor.id,
-    )
-    record_activity(
-        session,
-        event_type="task.umbrella_cascade_truncated",
-        task_id=cursor.id,
-        board_id=cursor.board_id,
-        message=(
-            f"Cascade depth cap ({_UMBRELLA_CASCADE_MAX_DEPTH}) reached "
-            f"during umbrella auto-cancel walk; check parent_task_id "
-            f"chain for unexpected depth or cycles."
-        ),
-    )
+    # Loop exhausted MAX_DEPTH. Look one step above the last cancelled
+    # parent: if there's still a qualifying ancestor we couldn't reach,
+    # the cascade was genuinely truncated; record the audit. If not,
+    # the chain was exactly MAX_DEPTH long and we processed it fully —
+    # no truncation, no audit.
+    next_qualifier = await _qualifying_umbrella_parent(session, task=cursor)
+    if next_qualifier is not None:
+        logger.warning(
+            "umbrella cascade truncated at MAX_DEPTH=%d (last cancelled task=%s); "
+            "check parent_task_id chain for unexpected depth or cycles",
+            _UMBRELLA_CASCADE_MAX_DEPTH, cursor.id,
+        )
+        record_activity(
+            session,
+            event_type="task.umbrella_cascade_truncated",
+            task_id=cursor.id,
+            board_id=cursor.board_id,
+            message=(
+                f"Cascade depth cap ({_UMBRELLA_CASCADE_MAX_DEPTH}) reached "
+                f"during umbrella auto-cancel walk; check parent_task_id "
+                f"chain for unexpected depth or cycles."
+            ),
+        )
     return topmost_cancelled
 
 

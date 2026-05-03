@@ -430,6 +430,68 @@ async def test_cascade_stops_at_max_depth(
 
 
 @pytest.mark.asyncio
+async def test_cascade_no_false_truncation_audit_when_chain_exactly_max_depth(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Codex 2026-05-03 follow-up: a chain with exactly MAX_DEPTH
+    qualifying ancestors gets fully cancelled — no truncation occurred.
+    The truncation audit must NOT fire (false-positive that confuses
+    operators investigating cascade behavior)."""
+    from sqlmodel import col, select
+
+    from app.models.activity_events import ActivityEvent
+
+    board = await _seed_board(sqlite_session, slug="cascade-exact-max")
+    chain: list[Task] = []
+    parent_id = None
+    # Build exactly 10 ancestors (chain[0]=top, chain[9]=immediate parent).
+    for i in range(10):
+        node = Task(
+            id=uuid4(), board_id=board.id, title=f"chain-{i}",
+            status="inbox", in_progress_at=None, previous_in_progress_at=None,
+            parent_task_id=parent_id,
+        )
+        sqlite_session.add(node)
+        chain.append(node)
+        sqlite_session.add(ActivityEvent(
+            event_type="task.comment", task_id=node.id, board_id=board.id,
+            message=f"UMBRELLA_RETIRED: chain level {i}.",
+        ))
+        parent_id = node.id
+    bottom = Task(
+        id=uuid4(), board_id=board.id, title="bottom",
+        status="done", parent_task_id=parent_id,
+    )
+    sqlite_session.add(bottom)
+    await sqlite_session.commit()
+    for n in chain + [bottom]:
+        await sqlite_session.refresh(n)
+
+    cascaded_top = await maybe_cascade_umbrella_close(sqlite_session, task=bottom)
+    assert cascaded_top is not None
+    # Caller (PATCH endpoint) is responsible for the commit; mirror
+    # that here so refresh() sees the persisted state, not the
+    # autoflushed-but-not-committed in-memory state.
+    await sqlite_session.commit()
+    # All 10 ancestors should be cancelled.
+    for i, n in enumerate(chain):
+        await sqlite_session.refresh(n)
+        assert n.status == "cancelled", f"chain[{i}] should be cancelled"
+
+    # No truncation audit row — chain was fully processed.
+    truncate_events = list(
+        await sqlite_session.exec(
+            select(ActivityEvent)
+            .where(col(ActivityEvent.event_type) == "task.umbrella_cascade_truncated"),
+        ),
+    )
+    assert truncate_events == [], (
+        f"chain of exactly MAX_DEPTH qualifying ancestors must not record a "
+        f"false-positive truncation audit; got {len(truncate_events)} event(s)"
+    )
+
+
+@pytest.mark.asyncio
 async def test_cascade_recurses_through_multi_level_chain(
     sqlite_session: AsyncSession,
 ) -> None:

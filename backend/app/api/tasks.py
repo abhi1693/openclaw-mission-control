@@ -2919,9 +2919,12 @@ _PIPELINE_EVENT_REJECTION_REASONS: Final[dict[str, str]] = {
 _PIPELINE_EVENT_REJECTED_STATUSES: Final[frozenset[str]] = frozenset(
     _PIPELINE_EVENT_REJECTION_REASONS,
 )
-assert _PIPELINE_EVENT_REJECTED_STATUSES == STATUS_GATES["pipeline_event_rejected"], (
-    "pipeline-event rejected statuses drifted from schemas.tasks.STATUS_GATES"
-)
+# `if ... raise` (not `assert`) so the invariant survives `python -O`,
+# which strips assertions.
+if _PIPELINE_EVENT_REJECTED_STATUSES != STATUS_GATES["pipeline_event_rejected"]:
+    raise RuntimeError(
+        "pipeline-event rejected statuses drifted from schemas.tasks.STATUS_GATES"
+    )
 
 
 def _pipeline_event_requires_in_progress_error(*, current_status: str) -> HTTPException:
