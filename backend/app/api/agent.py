@@ -69,7 +69,7 @@ from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, Ta
 from app.schemas.view_models import TaskCardRead
 from app.services.activity_log import record_activity
 from app.services.openclaw.coordination_service import GatewayCoordinationService
-from app.services.openclaw.internal.agent_key import agent_key
+from app.services.openclaw.internal.agent_key import projection_lookup_id
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.mc_gateway_subscriber.session_state_repo import (
@@ -885,11 +885,12 @@ async def get_lead_next_action(
     # action details so the lead can distinguish "agent silent on the
     # gateway" from "agent active but task DB unmoved."
     #
-    # ``agent_key()`` derives the gateway-side identifier from each
-    # agent's stored ``openclaw_session_id`` rather than open-coding
-    # ``f"mc-{aid}"``. Codex-finding fix: an inline ``mc-<uuid>``
-    # builder silently misses agents whose session_key follows a
-    # non-default prefix or was rewritten during reprovisioning.
+    # ``projection_lookup_id()`` strictly parses
+    # ``Agent.openclaw_session_id`` and returns ``None`` for any agent
+    # whose session_key is missing or malformed — never falls back to
+    # ``slugify(agent.name)``. Codex finding 2026-05-03: a slug
+    # fallback can collide with a real gateway-emitted agent_id from
+    # an UNRELATED projection row and silently match it.
     in_progress_agent_uuids = [
         task.assigned_agent_id
         for task in tasks
@@ -909,7 +910,9 @@ async def get_lead_next_action(
         else []
     )
     gateway_lookup_id_by_agent_uuid = {
-        a.id: agent_key(a) for a in in_progress_agents
+        a.id: lookup
+        for a in in_progress_agents
+        if (lookup := projection_lookup_id(a)) is not None
     }
     gateway_state_by_lookup_id = await SessionStateRepo.list_main_for_agent_ids(
         session, agent_ids=list(gateway_lookup_id_by_agent_uuid.values())

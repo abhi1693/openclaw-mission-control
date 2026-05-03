@@ -246,14 +246,15 @@ async def test_projected_sessions_agent_id_filter_cannot_widen_across_orgs(
 
 
 @pytest.mark.asyncio
-async def test_projected_sessions_excludes_gateway_internal_rows(
+async def test_projected_sessions_excludes_unregistered_agents(
     sqlite_session: AsyncSession,
     caller_org_ctx: OrganizationContext,
 ) -> None:
-    """Gateway-internal rows (mc-gateway-*) and lead-namespace rows
-    (lead-*) have no MC agents binding so the org-scoping naturally
-    drops them. Pinned because surfacing them would require a
-    different operator-internal scope."""
+    """Projection rows for agent_ids with no matching Agent row in
+    the caller's org are dropped — REGARDLESS of prefix. Includes
+    mc-gateway-* and lead-* unless the operator has registered an
+    MC agent for them under the caller's gateway. (Earlier docstring
+    incorrectly claimed those prefixes were permanently excluded.)"""
     await SessionStateRepo.upsert(
         sqlite_session,
         _state(agent_id="mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e"),
@@ -262,9 +263,63 @@ async def test_projected_sessions_excludes_gateway_internal_rows(
         sqlite_session,
         _state(agent_id="lead-some-board-uuid"),
     )
+    await SessionStateRepo.upsert(
+        sqlite_session,
+        _state(agent_id="mc-unregistered-1234"),
+    )
     await sqlite_session.commit()
 
     response = await projected_gateway_sessions(
         agent_id=None, session=sqlite_session, ctx=caller_org_ctx
     )
     assert response.sessions == []
+
+
+@pytest.mark.asyncio
+async def test_projected_sessions_no_slug_collision_leak(
+    sqlite_session: AsyncSession,
+    caller_org_ctx: OrganizationContext,
+) -> None:
+    """Codex finding: an Agent row whose ``openclaw_session_id`` is
+    ``None`` (not yet provisioned) used to produce a slugified gateway
+    lookup id from ``agent.name``. If the slug happened to collide
+    with an UNRELATED org's projection row, that row would leak.
+
+    Verify the strict ``projection_lookup_id`` helper drops the
+    unprovisioned agent entirely rather than slug-fallback.
+    """
+    # Caller-org agent with no openclaw_session_id and a name that
+    # would slugify to "qa-e2e".
+    gateway = (
+        (
+            await sqlite_session.exec(
+                __import__("sqlalchemy").select(Gateway).where(  # type: ignore[attr-defined]
+                    Gateway.organization_id == caller_org_ctx.organization.id
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert gateway is not None
+    sqlite_session.add(
+        Agent(
+            gateway_id=gateway.id,
+            name="QA E2E",
+            openclaw_session_id=None,
+        )
+    )
+    # Other-org projection row with agent_id="qa-e2e" — what the
+    # buggy slug fallback would have matched.
+    await SessionStateRepo.upsert(
+        sqlite_session,
+        _state(agent_id="qa-e2e"),
+    )
+    await sqlite_session.commit()
+
+    response = await projected_gateway_sessions(
+        agent_id=None, session=sqlite_session, ctx=caller_org_ctx
+    )
+    assert response.sessions == [], (
+        f"slug-collision leak: {[s.agent_id for s in response.sessions]}"
+    )

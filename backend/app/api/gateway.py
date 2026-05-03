@@ -31,7 +31,7 @@ from app.services.mc_gateway_subscriber.session_state_repo import (
     SessionStateRepo,
 )
 from app.services.openclaw.gateway_rpc import GATEWAY_EVENTS, GATEWAY_METHODS, PROTOCOL_VERSION
-from app.services.openclaw.internal.agent_key import agent_key
+from app.services.openclaw.internal.agent_key import projection_lookup_id
 from app.services.openclaw.runtime_status import collect_openclaw_status
 from app.services.openclaw.session_service import GatewaySessionService
 from app.services.organizations import OrganizationContext
@@ -293,15 +293,19 @@ async def projected_gateway_sessions(
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> ProjectedGatewaySessionsResponse:
     """Return projected gateway session state for the caller's
-    organization. Scopes via the org's ``agents`` rows: a row appears
-    only if its ``agent_id`` (e.g. ``mc-<uuid>``) matches the gateway
-    identity of an agent in the caller's org. Optional ``agent_id``
-    query param narrows further but cannot widen across orgs.
+    organization. Scoping rule: a projection row appears only if its
+    ``agent_id`` matches the strict-parse of ``openclaw_session_id``
+    on an MC ``agents`` row joined to the caller's org via
+    ``Agent → Gateway → Organization``. The optional ``agent_id``
+    query param is intersected with that set, so callers cannot
+    widen across orgs by guessing identifiers.
 
-    Gateway-internal rows (``mc-gateway-*``) and lead-namespace rows
-    (``lead-<board_id>``) are NOT returned by this endpoint — they
-    have no per-agent organization binding and need a separate
-    operator-internal scope to surface.
+    Rows for board leads (``lead-<board_id>``) and gateway-internal
+    workers (``mc-gateway-<gateway_id>``) ARE returned when the
+    operator has registered them as MC agents under the caller's
+    gateway — they are org-bound by virtue of the agent registration.
+    Projection rows with no matching Agent row in the caller's org
+    are dropped, regardless of prefix.
     """
     # Agents have no organization_id directly; scope via the gateway
     # they're paired against (Agent.gateway_id → Gateway.organization_id).
@@ -312,7 +316,15 @@ async def projected_gateway_sessions(
     )
     result = await session.exec(stmt)
     org_agents = list(result.scalars().all())
-    org_gateway_ids = {agent_key(a) for a in org_agents}
+    # Strict parser only — never fall back to slugify(agent.name).
+    # Codex finding: a slug fallback can collide with a real
+    # gateway-emitted agent_id from an UNRELATED org's session and
+    # leak the row through the org-scoping check.
+    org_gateway_ids = {
+        lookup
+        for a in org_agents
+        if (lookup := projection_lookup_id(a)) is not None
+    }
     if agent_id is not None:
         org_gateway_ids = org_gateway_ids & {agent_id}
     rows = await SessionStateRepo.list_for_agent_ids(
