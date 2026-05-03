@@ -1232,6 +1232,60 @@ async def _task_has_pending_linked_approval(
     return task_id in conflicts
 
 
+async def _require_validator_status_invariant(
+    session: AsyncSession, task: Task,
+) -> None:
+    """Reject the (assignee=review-only validator, status=in_progress)
+    state at write time.
+
+    Validators (Architect with ``dev_acp_flow=review_only``, QA with
+    ``validation_flow=qa_validation``) only process review-status tasks
+    — their ``HEARTBEAT.md`` task selector excludes ``in_progress``.
+    Letting the bad state persist produces a silently-stuck task that
+    the validator's heartbeat skips forever (production failure
+    2026-05-03 on QA gate 5b7abdd2 after operator manual route landed
+    ``status=in_progress``).
+
+    The lead-path inbox-shortcut auto-correct at ``_lead_apply_status``
+    prevents this state from being written by the lead. This invariant
+    catches every other write path (operator/admin, non-lead agent
+    self-claim, future ingest) so the rule lives in ONE place rather
+    than being duplicated across paths or encoded in agent prompts.
+    """
+    if task.status != "in_progress" or task.assigned_agent_id is None:
+        return
+    assignee = await Agent.objects.by_id(task.assigned_agent_id).first(session)
+    if assignee is None:
+        return
+    profile = (
+        assignee.identity_profile
+        if isinstance(assignee.identity_profile, dict)
+        else {}
+    )
+    is_validator = (
+        profile.get("validation_flow") == "qa_validation"
+        or profile.get("dev_acp_flow") == "review_only"
+    )
+    if not is_validator:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "message": (
+                f"Validator agents (`{assignee.name}`) only process "
+                f"`review`-status tasks; assigning them to an "
+                f"`in_progress` task leaves the work stuck because the "
+                f"validator's heartbeat selector skips `in_progress`. "
+                f"PATCH `status=review` instead when assigning to a "
+                f"validator."
+            ),
+            "code": "validator_cannot_be_in_progress",
+            "current_status": task.status,
+            "assignee_id": str(assignee.id),
+        },
+    )
+
+
 async def _require_approved_linked_approval_for_done(
     session: AsyncSession,
     *,
@@ -4371,6 +4425,7 @@ async def _apply_lead_task_update(
             actor_agent_id=_comment_actor_id(update.actor),
         )
 
+    await _require_validator_status_invariant(session, update.task)
     await _require_no_pending_approval_for_status_change_when_enabled(
         session,
         board_id=update.board_id,
@@ -5107,6 +5162,7 @@ async def _finalize_updated_task(
             task=update.task,
             actor_agent_id=_comment_actor_id(update.actor),
         )
+    await _require_validator_status_invariant(session, update.task)
     await _require_no_pending_approval_for_status_change_when_enabled(
         session,
         board_id=update.board_id,
