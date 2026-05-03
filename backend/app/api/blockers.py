@@ -23,12 +23,16 @@ from app.api.deps import (
     get_board_for_actor_write,
     get_task_or_404,
 )
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.pagination import paginate
+from app.models.agents import Agent
 from app.models.blockers import Blocker
+from app.models.boards import Board
 from app.models.tasks import Task
 from app.schemas.blockers import BlockerCreate, BlockerRead, BlockerUpdate
 from app.schemas.pagination import DefaultLimitOffsetPage
+from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 
 if TYPE_CHECKING:
     from fastapi_pagination.limit_offset import LimitOffsetPage
@@ -43,6 +47,9 @@ router = APIRouter(
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 TASK_DEP = Depends(get_task_or_404)
+
+
+logger = get_logger(__name__)
 
 
 async def _load_blocker(
@@ -60,6 +67,73 @@ async def _load_blocker(
     if blocker is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return blocker
+
+
+async def _task_has_other_open_blockers(
+    session: "AsyncSession", *, task: Task, exclude_blocker_id: UUID
+) -> bool:
+    """True iff the task has any open Blocker other than the one given.
+
+    Used to decide whether a resolve transition was the LAST open
+    Blocker on the task — only that case warrants the lead wake.
+    """
+    other = await Blocker.objects.filter_by(task_id=task.id).filter(
+        col(Blocker.id) != exclude_blocker_id,
+        col(Blocker.resolved_at).is_(None),
+    ).first(session)
+    return other is not None
+
+
+async def _notify_lead_after_blocker_resolved(
+    *,
+    session: "AsyncSession",
+    task: Task,
+) -> None:
+    """Wake the board lead after the last open Blocker on a task resolves.
+
+    Repro 2026-05-03: operator resolved Track B's operator-policy
+    Blocker; ``is_blocked`` flipped to False but no wake fired, so
+    the assigned Architect and the lead Supervisor stayed unaware.
+    Task sat for 50+ minutes blocking the entire downstream chain.
+
+    Best-effort: exceptions are caught so the caller (Blocker resolve
+    PATCH) never fails due to a notification issue. Mirrors the
+    contract of ``_notify_lead_on_end_work_event`` in tasks.py.
+    """
+    try:
+        if task.board_id is None:
+            return
+        lead = (
+            await Agent.objects.filter_by(board_id=task.board_id)
+            .filter(col(Agent.is_board_lead).is_(True))
+            .first(session)
+        )
+        if lead is None or not lead.openclaw_session_id:
+            return
+        dispatch = GatewayDispatchService(session)
+        board = await session.get(Board, task.board_id)
+        if board is None:
+            return
+        config = await dispatch.optional_gateway_config_for_board(board)
+        if config is None:
+            return
+        message = (
+            f"BLOCKER_RESOLVED: task {task.title} ({task.id}) is now actionable.\n"
+            f"Status: {task.status}. All open Blockers cleared.\n"
+            f"Route per lead-next-action skill."
+        )
+        await dispatch.try_send_agent_message(
+            session_key=lead.openclaw_session_id,
+            config=config,
+            agent_name=lead.name,
+            message=message,
+            deliver=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "blocker-resolve notify suppressed: %s (task=%s)",
+            exc, task.id,
+        )
 
 
 @router.get("", response_model=DefaultLimitOffsetPage[BlockerRead])
@@ -218,4 +292,15 @@ async def update_task_blocker(
     if mutated:
         session.add(blocker)
         await session.commit()
+    # Wake the lead when the resolve transition closes the LAST open
+    # Blocker on the task — at that moment the dep-graph derivation
+    # flips ``is_blocked`` from True to False and the task becomes
+    # actionable. Without this wake, the operator's resolve PATCH is a
+    # silent state-change with downstream impact (repro 2026-05-03
+    # Track B 50min stall). Symmetric with review-event PASS waking
+    # the next reviewer/lead in tasks.py.
+    if payload.status_transition == "resolve" and not await _task_has_other_open_blockers(
+        session, task=task, exclude_blocker_id=blocker.id,
+    ):
+        await _notify_lead_after_blocker_resolved(session=session, task=task)
     return BlockerRead.model_validate(blocker, from_attributes=True)
