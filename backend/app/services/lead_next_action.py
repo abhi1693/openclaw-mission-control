@@ -223,45 +223,31 @@ def select_lead_next_action(
     (likely just slow). Optional — omitting it preserves the pre-slice-5
     details shape.
     """
-
-    tasks = inputs.tasks
-    blocked_by_task_id = inputs.blocked_by_task_id
-    approval_state_by_task_id = inputs.approval_state_by_task_id
-    pipeline_missing_by_task_id = inputs.pipeline_missing_by_task_id
-    review_readiness_by_task_id = inputs.review_readiness_by_task_id
-    tasks_with_open_blocker = inputs.tasks_with_open_blocker
-    tasks_with_pending_operator_decision = inputs.tasks_with_pending_operator_decision
-    orphan_children_with_terminal_parent = inputs.orphan_children_with_terminal_parent
-    tasks_with_children = inputs.tasks_with_children
-    tasks_with_umbrella_retired_marker = inputs.tasks_with_umbrella_retired_marker
-    open_blockers_by_task_id = inputs.open_blockers_by_task_id
-    gateway_session_by_agent_id = inputs.gateway_session_by_agent_id
-
     if now is None:
         now = utcnow()
-    if tasks_with_open_blocker is None:
-        tasks_with_open_blocker = frozenset()
-    if tasks_with_pending_operator_decision is None:
-        tasks_with_pending_operator_decision = frozenset()
+    tasks_with_open_blocker = inputs.tasks_with_open_blocker or frozenset()
+    tasks_with_pending_operator_decision = (
+        inputs.tasks_with_pending_operator_decision or frozenset()
+    )
 
     active_tasks = [
         task
-        for task in tasks
+        for task in inputs.tasks
         if task.status in {"inbox", "in_progress", "review", "rework"}
         and not _is_waiting(
             task,
-            blocked_by_task_id,
+            inputs.blocked_by_task_id,
             tasks_with_open_blocker,
             tasks_with_pending_operator_decision,
         )
     ]
     ordered = sorted(active_tasks, key=_task_sort_key)
-    review_readiness_by_task_id = review_readiness_by_task_id or {}
+    review_readiness_by_task_id = inputs.review_readiness_by_task_id or {}
 
     for task in ordered:
         if task.status != "review":
             continue
-        if approval_state_by_task_id.get(task.id, "none") == "approved":
+        if inputs.approval_state_by_task_id.get(task.id, "none") == "approved":
             return _action(
                 task=task,
                 action_required=True,
@@ -276,9 +262,9 @@ def select_lead_next_action(
     for task in ordered:
         if task.status != "review":
             continue
-        approval_state = approval_state_by_task_id.get(task.id, "none")
+        approval_state = inputs.approval_state_by_task_id.get(task.id, "none")
         readiness = review_readiness_by_task_id.get(task.id)
-        missing_pipeline = list(pipeline_missing_by_task_id.get(task.id, []))
+        missing_pipeline = list(inputs.pipeline_missing_by_task_id.get(task.id, []))
         if (
             approval_state == "none"
             and _review_readiness_ready(readiness)
@@ -301,7 +287,7 @@ def select_lead_next_action(
     for task in ordered:
         if task.status != "review":
             continue
-        approval_state = approval_state_by_task_id.get(task.id, "none")
+        approval_state = inputs.approval_state_by_task_id.get(task.id, "none")
         # Pending approvals are operator-owned: the lead has no
         # further action until the operator approves, rejects, or
         # cancels. Falling through unblocks lower-tier work
@@ -312,7 +298,7 @@ def select_lead_next_action(
         # missing pipeline) is genuine lead-actionable friction.
         if approval_state == "pending":
             continue
-        missing_pipeline = list(pipeline_missing_by_task_id.get(task.id, []))
+        missing_pipeline = list(inputs.pipeline_missing_by_task_id.get(task.id, []))
         return _action(
             task=task,
             action_required=True,
@@ -330,9 +316,9 @@ def select_lead_next_action(
     for task in ordered:
         if task.status != "in_progress" or task.assigned_agent_id is None:
             continue
-        if task.id not in pipeline_missing_by_task_id:
+        if task.id not in inputs.pipeline_missing_by_task_id:
             continue
-        missing_pipeline = list(pipeline_missing_by_task_id.get(task.id, []))
+        missing_pipeline = list(inputs.pipeline_missing_by_task_id.get(task.id, []))
         if not missing_pipeline:
             details: dict[str, object] = {
                 "review_packet_type": task.review_packet_type,
@@ -345,9 +331,9 @@ def select_lead_next_action(
                 "next_step": "nudge_assigned_worker_to_patch_status_review",
                 "lead_may_not_patch_review": True,
             }
-            if gateway_session_by_agent_id is not None:
+            if inputs.gateway_session_by_agent_id is not None:
                 details["gateway_session"] = _gateway_session_details(
-                    task, gateway_session_by_agent_id
+                    task, inputs.gateway_session_by_agent_id
                 )
             return _action(
                 task=task,
@@ -377,9 +363,9 @@ def select_lead_next_action(
             ),
             "next_step": "inspect_pipeline_state_not_review_readiness",
         }
-        if gateway_session_by_agent_id is not None:
+        if inputs.gateway_session_by_agent_id is not None:
             details["gateway_session"] = _gateway_session_details(
-                task, gateway_session_by_agent_id
+                task, inputs.gateway_session_by_agent_id
             )
         return _action(
             task=task,
@@ -392,7 +378,7 @@ def select_lead_next_action(
     # Phase V — orphan children of terminal parents. Surface BEFORE
     # rework/inbox routing so the lead retires obsolete decomposition
     # children rather than nudging owners to keep working on them.
-    # Iterates the full ``tasks`` list (not ``ordered``) because an
+    # Iterates the full ``inputs.tasks`` list (not ``ordered``) because an
     # orphan child can carry its own waiting flags — those don't
     # disqualify cleanup; the parent terminating already declared the
     # work moot. Orphans currently in ``review`` or ``in_progress``
@@ -402,11 +388,11 @@ def select_lead_next_action(
     # transitioned during the tick). Sorted by id (not timestamp like
     # ``_task_sort_key``) because cleanup ordering is arbitrary as
     # long as it is deterministic across calls within the same tick.
-    if orphan_children_with_terminal_parent:
+    if inputs.orphan_children_with_terminal_parent:
         orphan_candidates = sorted(
             (
-                task for task in tasks
-                if task.id in orphan_children_with_terminal_parent
+                task for task in inputs.tasks
+                if task.id in inputs.orphan_children_with_terminal_parent
                 and task.status not in TERMINAL_STATUSES
                 and task.status not in {"review", "in_progress"}
             ),
@@ -414,7 +400,7 @@ def select_lead_next_action(
         )
         if orphan_candidates:
             orphan_task = orphan_candidates[0]
-            parent_id = orphan_children_with_terminal_parent[orphan_task.id]
+            parent_id = inputs.orphan_children_with_terminal_parent[orphan_task.id]
             return _action(
                 task=orphan_task,
                 action_required=True,
@@ -426,7 +412,7 @@ def select_lead_next_action(
                 },
             )
 
-    # Inbox tasks already assigned to a reviewer/architect awaiting
+    # Inbox inputs.tasks already assigned to a reviewer/architect awaiting
     # Supervisor materialization. The ``lead-inbox-routing``
     # decomposition handshake is: (1) lead assigns task to Architect,
     # (2) Architect posts decomposition plan as a comment, (3) lead
@@ -444,10 +430,10 @@ def select_lead_next_action(
     # ``UMBRELLA_RETIRED`` marker comment is present (covers
     # pre-Phase-V umbrellas where children predate ``parent_task_id``
     # and so don't show up in ``tasks_with_children``).
-    if tasks_with_children is None:
-        tasks_with_children = frozenset()
-    if tasks_with_umbrella_retired_marker is None:
-        tasks_with_umbrella_retired_marker = frozenset()
+    tasks_with_children = inputs.tasks_with_children or frozenset()
+    tasks_with_umbrella_retired_marker = (
+        inputs.tasks_with_umbrella_retired_marker or frozenset()
+    )
     for task in ordered:
         if task.status != "inbox" or task.assigned_agent_id is None:
             continue
@@ -465,36 +451,36 @@ def select_lead_next_action(
             },
         )
 
-    # Phase V §I9 Fix 3 — surface stale blocked tasks to the lead.
-    # ``_is_waiting()`` filters blocked tasks out of ``active_tasks``,
+    # Phase V §I9 Fix 3 — surface stale blocked inputs.tasks to the lead.
+    # ``_is_waiting()`` filters blocked inputs.tasks out of ``active_tasks``,
     # so without this tier the lead has no actionable signal for parked
     # work. AC5 incident at 2026-05-02 sat blocked + invisible for ~12h
     # because the gate's clear-fallback was the only path that
-    # acknowledged blocked tasks (and that path is non-actionable).
-    # Iterates the full ``tasks`` list (not ``ordered``) since blocked
-    # tasks were filtered out earlier. Sorted by id for deterministic
+    # acknowledged blocked inputs.tasks (and that path is non-actionable).
+    # Iterates the full ``inputs.tasks`` list (not ``ordered``) since blocked
+    # inputs.tasks were filtered out earlier. Sorted by id for deterministic
     # cleanup ordering across calls. Fires only after
     # ``STALE_BLOCKER_NUDGE_GRACE`` so owners get time to act before
     # the lead nudges. Above ``route_inbox`` so a stuck blocked
     # closer-to-done task wins over fresh untriaged inbox arrivals.
-    if open_blockers_by_task_id:
+    if inputs.open_blockers_by_task_id:
         stale_threshold = now - STALE_BLOCKER_NUDGE_GRACE
         stale_candidates = sorted(
             (
                 task
-                for task in tasks
+                for task in inputs.tasks
                 if task.status in {"inbox", "in_progress", "review", "rework"}
-                and task.id in open_blockers_by_task_id
+                and task.id in inputs.open_blockers_by_task_id
                 and any(
                     blocker.created_at < stale_threshold
-                    for blocker in open_blockers_by_task_id.get(task.id, ())
+                    for blocker in inputs.open_blockers_by_task_id.get(task.id, ())
                 )
             ),
             key=lambda t: str(t.id),
         )
         if stale_candidates:
             stale_task = stale_candidates[0]
-            blockers = list(open_blockers_by_task_id.get(stale_task.id, ()))
+            blockers = list(inputs.open_blockers_by_task_id.get(stale_task.id, ()))
             oldest = min(blockers, key=lambda b: b.created_at)
             return _action(
                 task=stale_task,
@@ -556,9 +542,9 @@ def select_lead_next_action(
                 IN_PROGRESS_PIPELINE_NUDGE_GRACE.total_seconds() // 60
             ),
         }
-        if gateway_session_by_agent_id is not None:
+        if inputs.gateway_session_by_agent_id is not None:
             details["gateway_session"] = _gateway_session_details(
-                task, gateway_session_by_agent_id
+                task, inputs.gateway_session_by_agent_id
             )
         return _action(
             task=task,

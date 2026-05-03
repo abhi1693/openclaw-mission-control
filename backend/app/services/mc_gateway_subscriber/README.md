@@ -120,11 +120,17 @@ OnCalendar=daily
 WantedBy=timers.target
 ```
 
-`mc-gateway-*` and `lead-*` rows are intentionally preserved — they
-represent gateway-internal and lead-namespace sessions with no MC
-agents row to JOIN against, and operators typically want the
-historical record to persist. Operator must clear them manually if
-no longer wanted.
+All three projection namespaces are tracked symmetrically:
+
+| Prefix | Owning model | Cleaned when… |
+|---|---|---|
+| `mc-<uuid>` | `agents.id` | the agent is hard-deleted |
+| `mc-gateway-<uuid>` | `gateways.id` | the gateway is hard-deleted |
+| `lead-<uuid>` | `boards.id` | the board is hard-deleted |
+
+Rows whose `agent_id` doesn't match one of these prefixes — or whose
+tail isn't a parseable UUID — are left alone for manual operator
+review.
 
 ## Module map
 

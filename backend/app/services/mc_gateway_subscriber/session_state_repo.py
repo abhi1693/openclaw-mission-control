@@ -14,7 +14,9 @@ writes in one event-loop tick can share a transaction.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -24,7 +26,9 @@ from sqlmodel import col
 
 from app.core.time import utcnow
 from app.models.agents import Agent
+from app.models.boards import Board
 from app.models.gateway_session_state import GatewaySessionState
+from app.models.gateways import Gateway
 from app.services.mc_gateway_subscriber.session_state_projector import (
     SessionState,
 )
@@ -48,15 +52,34 @@ _DIALECT_INSERTS = {
     "sqlite": sqlite_insert,
 }
 
-# ``mc-<uuid>`` rows are MC-tracked agent sessions and become orphans
-# when their ``agents`` row is hard-deleted; cleanup_orphaned_session_states
-# purges those. Rows whose agent_id starts with ``mc-gateway-`` are the
-# gateway's own internal sessions — preserved by exclusion from the
-# orphan candidate set, NOT by the JOIN. ``lead-<board_id>`` rows never
-# enter the candidate set because the candidate query filters by
-# ``mc-`` prefix.
-_ORPHAN_AGENT_CANDIDATE_PREFIX = "mc-"
-_ORPHAN_PRESERVED_PREFIXES = (_GATEWAY_OPENCLAW_AGENT_PREFIX,)
+
+async def _execute_non_select(session, stmt) -> Any:
+    """Run an INSERT/UPDATE/DELETE statement.
+
+    SQLModel's ``AsyncSession.execute`` emits a ``DeprecationWarning``
+    suggesting ``exec()`` — but ``exec()`` auto-scalars and is intended
+    for SELECTs, not write statements that return ``rowcount``. The
+    warning is wrong in this context, so suppress it locally rather
+    than rewrite the call site to avoid the misleading suggestion.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return await session.execute(stmt)
+
+# Each entry: (prefix, owning model). Cleanup walks the projection
+# table once per entry, parses the ``<prefix><uuid>`` tail, and deletes
+# rows whose UUID has no matching row in the owning model. The order
+# inside the tuple matters for the inner ``mc-`` scan: we skip
+# ``mc-gateway-`` candidates so they're attributed to the Gateway entry
+# rather than failing the Agent JOIN.
+_BOARD_AGENT_PREFIX = "mc-"
+_LEAD_AGENT_PREFIX = "lead-"
+
+_ORPHAN_OWNERSHIP: tuple[tuple[str, type, tuple[str, ...]], ...] = (
+    (_BOARD_AGENT_PREFIX, Agent, (_GATEWAY_OPENCLAW_AGENT_PREFIX,)),
+    (_GATEWAY_OPENCLAW_AGENT_PREFIX, Gateway, ()),
+    (_LEAD_AGENT_PREFIX, Board, ()),
+)
 
 
 async def upsert_session_state(
@@ -103,7 +126,7 @@ async def upsert_session_state(
         index_elements=["agent_id", "session_label"],
         set_={c: getattr(stmt.excluded, c) for c in _NON_PK_COLUMNS},
     )
-    await session.execute(stmt)
+    await _execute_non_select(session, stmt)
 
 
 async def get_session_state(
@@ -176,49 +199,78 @@ async def list_session_states_for_agent_ids(
     return list(result.scalars().all())
 
 
-async def cleanup_orphaned_session_states(session) -> int:
-    """Delete projection rows whose ``agent_id`` is ``mc-<uuid>`` and
-    whose UUID has no matching ``agents.id`` row. Returns the number
-    of rows deleted. See ``_ORPHAN_PRESERVED_PREFIXES`` for the skip
-    list (gateway-internal sessions stay because they have no MC
-    agents row to JOIN against).
-
-    Caller owns transaction commit. Designed for periodic invocation
-    (systemd timer / cron / manual operator script) — see README.
+async def _orphan_agent_ids_for_owner(
+    session,
+    *,
+    prefix: str,
+    owner_model: type,
+    skip_prefixes: tuple[str, ...] = (),
+) -> list[str]:
+    """Find projection ``agent_id`` strings whose ``<prefix><tail>``
+    parses to a UUID that no longer exists in ``owner_model.id``.
+    ``skip_prefixes`` excludes more-specific namespaces from the
+    candidate set (so a ``mc-`` scan skips ``mc-gateway-`` rows that
+    are owned by a different model).
     """
-    candidate_rows_stmt = select(GatewaySessionState.agent_id).where(
-        col(GatewaySessionState.agent_id).startswith(_ORPHAN_AGENT_CANDIDATE_PREFIX),
+    candidate_stmt = select(GatewaySessionState.agent_id).where(
+        col(GatewaySessionState.agent_id).startswith(prefix),
     )
-    candidate_result = await session.exec(candidate_rows_stmt)
-    candidate_ids = list(candidate_result.scalars().all())
+    candidate_result = await session.exec(candidate_stmt)
+    candidates = list(candidate_result.scalars().all())
     parsed_uuid_by_agent_id: dict[str, UUID] = {}
-    for agent_id in candidate_ids:
-        if any(agent_id.startswith(p) for p in _ORPHAN_PRESERVED_PREFIXES):
+    for agent_id in candidates:
+        if any(agent_id.startswith(p) for p in skip_prefixes):
             continue
-        # Defensive: a malformed mc-<tail> row is left for manual operator
-        # review, not silently deleted.
+        # Defensive: a malformed <prefix><tail> row is left for manual
+        # operator review, not silently deleted.
         try:
-            parsed_uuid_by_agent_id[agent_id] = UUID(
-                agent_id[len(_ORPHAN_AGENT_CANDIDATE_PREFIX):]
-            )
+            parsed_uuid_by_agent_id[agent_id] = UUID(agent_id[len(prefix):])
         except ValueError:
             continue
     if not parsed_uuid_by_agent_id:
-        return 0
-    existing_agents_stmt = select(Agent.id).where(
-        col(Agent.id).in_(parsed_uuid_by_agent_id.values()),
+        return []
+    existing_stmt = select(owner_model.id).where(
+        col(owner_model.id).in_(parsed_uuid_by_agent_id.values()),
     )
-    existing_result = await session.exec(existing_agents_stmt)
+    existing_result = await session.exec(existing_stmt)
     existing_uuids = set(existing_result.scalars().all())
-    orphan_agent_ids = [
+    return [
         agent_id
         for agent_id, parsed in parsed_uuid_by_agent_id.items()
         if parsed not in existing_uuids
     ]
+
+
+async def cleanup_orphaned_session_states(session) -> int:
+    """Delete projection rows whose ``agent_id`` namespace points at a
+    no-longer-existent owning row. Three namespaces are tracked
+    symmetrically:
+
+    * ``mc-<uuid>``         → ``agents.id``   (board agent sessions)
+    * ``mc-gateway-<uuid>`` → ``gateways.id`` (gateway-internal sessions)
+    * ``lead-<uuid>``       → ``boards.id``   (board lead sessions)
+
+    Any agent_id that doesn't match one of these prefixes — or whose
+    tail isn't a parseable UUID — is left alone for manual operator
+    review. Returns the total number of rows deleted.
+
+    Caller owns transaction commit. Designed for periodic invocation
+    (systemd timer / cron / manual operator script) — see README.
+    """
+    orphan_agent_ids: list[str] = []
+    for prefix, owner_model, skip_prefixes in _ORPHAN_OWNERSHIP:
+        orphan_agent_ids.extend(
+            await _orphan_agent_ids_for_owner(
+                session,
+                prefix=prefix,
+                owner_model=owner_model,
+                skip_prefixes=skip_prefixes,
+            )
+        )
     if not orphan_agent_ids:
         return 0
     delete_stmt = delete(GatewaySessionState).where(
         col(GatewaySessionState.agent_id).in_(orphan_agent_ids),
     )
-    result = await session.execute(delete_stmt)
+    result = await _execute_non_select(session, delete_stmt)
     return int(result.rowcount or 0)

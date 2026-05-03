@@ -318,20 +318,28 @@ async def test_cleanup_deletes_mc_uuid_rows_with_no_matching_agent(
 
 
 @pytest.mark.asyncio
-async def test_cleanup_preserves_gateway_internal_rows(
+async def test_cleanup_preserves_gateway_internal_rows_when_gateway_exists(
     sqlite_session: AsyncSession,
 ) -> None:
-    """``mc-gateway-<uuid>`` rows are gateway-internal sessions —
-    cleanup must NOT touch them on the basis of "no agents row". The
-    operator needs them to stay until they explicitly clear gateway
-    state. Same rule for ``lead-<board_id>``."""
-    await upsert_session_state(
-        sqlite_session,
-        _state(agent_id="mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e"),
+    """``mc-gateway-<uuid>`` rows are kept while their owning Gateway
+    row still exists — cleanup tracks the same lifecycle for gateway-
+    internal sessions as it does for board agents."""
+    org = Organization(name="cleanup-org")
+    sqlite_session.add(org)
+    await sqlite_session.flush()
+    gateway_uuid = uuid4()
+    sqlite_session.add(
+        Gateway(
+            id=gateway_uuid,
+            organization_id=org.id,
+            name="gw",
+            url="ws://x",
+            workspace_root="/tmp",
+        )
     )
     await upsert_session_state(
         sqlite_session,
-        _state(agent_id="lead-some-board-uuid-1234"),
+        _state(agent_id=f"mc-gateway-{gateway_uuid}"),
     )
     await sqlite_session.commit()
 
@@ -340,7 +348,84 @@ async def test_cleanup_preserves_gateway_internal_rows(
 
     assert deleted_count == 0
     rows = await list_all_session_states(sqlite_session)
-    assert len(rows) == 2
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_deletes_gateway_internal_rows_with_no_matching_gateway(
+    sqlite_session: AsyncSession,
+) -> None:
+    """When a Gateway is hard-deleted from MC, its ``mc-gateway-<uuid>``
+    projection row is now an orphan and must be purged. Earlier slices
+    deliberately preserved these because there was no JOIN target —
+    operator follow-up: widen the cleanup to handle the gateway-internal
+    namespace too."""
+    await upsert_session_state(
+        sqlite_session,
+        _state(agent_id="mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e"),
+    )
+    await sqlite_session.commit()
+
+    deleted_count = await cleanup_orphaned_session_states(sqlite_session)
+    await sqlite_session.commit()
+
+    assert deleted_count == 1
+    rows = await list_all_session_states(sqlite_session)
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_cleanup_preserves_lead_rows_when_board_exists(
+    sqlite_session: AsyncSession,
+) -> None:
+    """``lead-<board_id>`` rows are kept while their owning Board row
+    still exists — same lifecycle rule as the other two namespaces."""
+    from app.models.boards import Board
+
+    org = Organization(name="cleanup-org-2")
+    sqlite_session.add(org)
+    await sqlite_session.flush()
+    board_uuid = uuid4()
+    sqlite_session.add(
+        Board(
+            id=board_uuid,
+            organization_id=org.id,
+            name="b",
+            slug="b",
+        )
+    )
+    await upsert_session_state(
+        sqlite_session,
+        _state(agent_id=f"lead-{board_uuid}"),
+    )
+    await sqlite_session.commit()
+
+    deleted_count = await cleanup_orphaned_session_states(sqlite_session)
+    await sqlite_session.commit()
+
+    assert deleted_count == 0
+    rows = await list_all_session_states(sqlite_session)
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_deletes_lead_rows_with_no_matching_board(
+    sqlite_session: AsyncSession,
+) -> None:
+    """When a Board is hard-deleted from MC, its ``lead-<board_id>``
+    projection row is now an orphan and must be purged."""
+    await upsert_session_state(
+        sqlite_session,
+        _state(agent_id=f"lead-{uuid4()}"),
+    )
+    await sqlite_session.commit()
+
+    deleted_count = await cleanup_orphaned_session_states(sqlite_session)
+    await sqlite_session.commit()
+
+    assert deleted_count == 1
+    rows = await list_all_session_states(sqlite_session)
+    assert rows == []
 
 
 @pytest.mark.asyncio
