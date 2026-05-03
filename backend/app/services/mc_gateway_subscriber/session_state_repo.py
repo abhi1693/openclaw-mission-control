@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from sqlalchemy import select
 
 from app.core.time import utcnow
+from app.db import crud
 from app.models.gateway_session_state import GatewaySessionState
 from app.services.mc_gateway_subscriber.session_state_projector import (
     SessionState,
@@ -31,42 +32,38 @@ class SessionStateRepo:
         state: SessionState,
     ) -> None:
         """Insert or overwrite the row keyed by
-        ``(state.agent_id, state.session_label)``. Caller is responsible
-        for ``await session.commit()`` so multiple upserts in one event
-        loop tick can share a transaction."""
-        existing = await cls.get(
+        ``(state.agent_id, state.session_label)``. Caller owns
+        ``await session.commit()`` so multiple upserts in one event-loop
+        tick can share a transaction.
+
+        Delegates to ``crud.get_or_create`` for the lookup-then-create
+        path so the race-safe IntegrityError fallback is preserved if
+        a future deploy ever runs more than one subscriber instance
+        against the same DB. Today's contract is single-writer; the
+        race-safety is cheap insurance, not a performance burden."""
+        payload = {
+            "session_id": state.session_id,
+            "last_phase": state.last_phase,
+            "last_message_seq": state.last_message_seq,
+            "last_changed_at_ms": state.last_changed_at_ms,
+            "input_tokens": state.input_tokens,
+            "output_tokens": state.output_tokens,
+            "total_tokens": state.total_tokens,
+            "channel": state.channel,
+            "aborted_last_run": state.aborted_last_run,
+            "updated_at": utcnow(),
+        }
+        obj, created = await crud.get_or_create(
             session,
+            GatewaySessionState,
             agent_id=state.agent_id,
             session_label=state.session_label,
+            defaults=payload,
+            commit=False,
+            refresh=False,
         )
-        now = utcnow()
-        if existing is None:
-            row = GatewaySessionState(
-                agent_id=state.agent_id,
-                session_label=state.session_label,
-                session_id=state.session_id,
-                last_phase=state.last_phase,
-                last_message_seq=state.last_message_seq,
-                last_changed_at_ms=state.last_changed_at_ms,
-                input_tokens=state.input_tokens,
-                output_tokens=state.output_tokens,
-                total_tokens=state.total_tokens,
-                channel=state.channel,
-                aborted_last_run=state.aborted_last_run,
-                updated_at=now,
-            )
-            session.add(row)
-            return
-        existing.session_id = state.session_id
-        existing.last_phase = state.last_phase
-        existing.last_message_seq = state.last_message_seq
-        existing.last_changed_at_ms = state.last_changed_at_ms
-        existing.input_tokens = state.input_tokens
-        existing.output_tokens = state.output_tokens
-        existing.total_tokens = state.total_tokens
-        existing.channel = state.channel
-        existing.aborted_last_run = state.aborted_last_run
-        existing.updated_at = now
+        if not created:
+            crud.apply_updates(obj, payload)
 
     @classmethod
     async def get(

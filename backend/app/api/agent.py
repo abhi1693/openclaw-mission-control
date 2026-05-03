@@ -902,9 +902,7 @@ async def get_lead_next_action(
                 await session.exec(
                     select(Agent).where(col(Agent.id).in_(in_progress_agent_uuids))
                 )
-            )
-            .scalars()
-            .all()
+            ).all()
         )
         if in_progress_agent_uuids
         else []

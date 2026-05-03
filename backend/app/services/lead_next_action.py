@@ -150,6 +150,11 @@ def _in_progress_is_fresh(
     return age < grace
 
 
+_GATEWAY_SESSION_DETAIL_FIELDS = frozenset(
+    {"session_id", "last_phase", "last_changed_at_ms", "aborted_last_run"}
+)
+
+
 def _gateway_session_details(
     task: Task,
     gateway_session_by_agent_id: Mapping[UUID, GatewaySessionState],
@@ -165,12 +170,7 @@ def _gateway_session_details(
     state = gateway_session_by_agent_id.get(task.assigned_agent_id)
     if state is None:
         return None
-    return {
-        "session_id": state.session_id,
-        "last_phase": state.last_phase,
-        "last_changed_at_ms": state.last_changed_at_ms,
-        "aborted_last_run": state.aborted_last_run,
-    }
+    return state.model_dump(include=_GATEWAY_SESSION_DETAIL_FIELDS)
 
 
 def _in_progress_age_minutes(task: Task, *, now: datetime) -> int | None:
