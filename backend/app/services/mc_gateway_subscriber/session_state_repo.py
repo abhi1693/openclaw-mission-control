@@ -17,6 +17,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.core.time import utcnow
 from app.db import crud
@@ -25,18 +27,40 @@ from app.services.mc_gateway_subscriber.session_state_projector import (
     SessionState,
 )
 
+_NON_PK_COLUMNS = (
+    "session_id",
+    "last_phase",
+    "last_message_seq",
+    "last_changed_at_ms",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "channel",
+    "aborted_last_run",
+    "updated_at",
+)
+
 
 async def upsert_session_state(
     session,  # AsyncSession; annotated dynamically to keep import surface minimal
     state: SessionState,
 ) -> None:
     """Insert or overwrite the row keyed by
-    ``(state.agent_id, state.session_label)``.
+    ``(state.agent_id, state.session_label)`` in a single statement
+    via ``INSERT ... ON CONFLICT (agent_id, session_label) DO UPDATE``.
 
-    Delegates to ``crud.get_or_create`` for the lookup-then-create
-    path so the race-safe IntegrityError fallback is preserved if a
-    future deploy ever runs more than one subscriber instance against
-    the same DB. Today's contract is single-writer."""
+    Atomic — no separate SELECT round-trip per event, and no
+    application-side race window between get-then-mutate. Postgres and
+    SQLite both expose the same ``on_conflict_do_update`` API on their
+    dialect-specific ``Insert`` statement, so production and tests
+    exercise identical semantics.
+
+    Other dialects fall back to the lookup-then-create path via
+    ``crud.get_or_create`` — preserves correctness if MC ever points
+    at a non-PG/SQLite store, at the cost of the original two-trip
+    round-trip behaviour. No production target uses anything else
+    today.
+    """
     payload = {
         "session_id": state.session_id,
         "last_phase": state.last_phase,
@@ -49,17 +73,35 @@ async def upsert_session_state(
         "aborted_last_run": state.aborted_last_run,
         "updated_at": utcnow(),
     }
-    obj, created = await crud.get_or_create(
-        session,
-        GatewaySessionState,
+    dialect_name = session.bind.dialect.name if session.bind is not None else None
+    if dialect_name == "postgresql":
+        insert = pg_insert
+    elif dialect_name == "sqlite":
+        insert = sqlite_insert
+    else:
+        obj, created = await crud.get_or_create(
+            session,
+            GatewaySessionState,
+            agent_id=state.agent_id,
+            session_label=state.session_label,
+            defaults=payload,
+            commit=False,
+            refresh=False,
+        )
+        if not created:
+            crud.apply_updates(obj, payload)
+        return
+
+    stmt = insert(GatewaySessionState).values(
         agent_id=state.agent_id,
         session_label=state.session_label,
-        defaults=payload,
-        commit=False,
-        refresh=False,
+        **payload,
     )
-    if not created:
-        crud.apply_updates(obj, payload)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["agent_id", "session_label"],
+        set_={col: getattr(stmt.excluded, col) for col in _NON_PK_COLUMNS},
+    )
+    await session.execute(stmt)
 
 
 async def get_session_state(
