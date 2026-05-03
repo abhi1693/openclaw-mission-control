@@ -173,6 +173,15 @@ STATUS_GATES: dict[str, frozenset[str]] = {
     # Review transitions use async deploy parity check instead
     # (pipeline-transition-gates design, 2026-04-25).
     "deploy_truth": frozenset({"done"}),
+    # Pipeline-event POST gate: these statuses lack a valid in_progress
+    # cycle anchor (rework/inbox) or are out of scope (cancelled), so
+    # events posted under them are silently discarded or pollute audit
+    # trails on dead work.
+    "pipeline_event_rejected": frozenset({"rework", "inbox", "cancelled"}),
+    # /deploy/notify webhook hard-rejects only cancelled (task removed
+    # from scope; QA-ing it is unambiguously wrong). Other non-active
+    # statuses (inbox/rework) are accepted with an audit row.
+    "deploy_notify_rejected": frozenset({"cancelled"}),
 }
 
 DELIVERY_CONTRACT_REQUIRED_STATUSES = STATUS_GATES["delivery_contract"]

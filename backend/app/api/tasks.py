@@ -2894,19 +2894,10 @@ def _pipeline_event_missing_required_fields_error(
     )
 
 
-# Statuses where posting pipeline events is rejected because the task
-# has no valid in_progress cycle anchor (or has been removed from scope).
-# - rework: events posted here get silently discarded by the next cycle
-#   reset on rework→in_progress (E.3 incident 2026-05-03).
-# - inbox: same cycle-anchor problem; agent should PATCH inbox→in_progress
-#   first.
-# - cancelled: task is dead; new pipeline events would pollute audit
-#   trails on work the operator/lead explicitly removed from scope.
-_PIPELINE_EVENT_REJECTED_STATUSES: Final[frozenset[str]] = frozenset(
-    {"rework", "inbox", "cancelled"},
-)
-
-
+# Per-status rejection messages. Dict keys ARE the rejected-status set
+# (single source of truth — _PIPELINE_EVENT_REJECTED_STATUSES is derived
+# from these keys and asserted equal to the canonical
+# ``schemas.tasks.STATUS_GATES["pipeline_event_rejected"]`` at import).
 _PIPELINE_EVENT_REJECTION_REASONS: Final[dict[str, str]] = {
     "rework": (
         "Task is in rework — PATCH `rework → in_progress` first so the new "
@@ -2925,6 +2916,12 @@ _PIPELINE_EVENT_REJECTION_REASONS: Final[dict[str, str]] = {
         "posting events."
     ),
 }
+_PIPELINE_EVENT_REJECTED_STATUSES: Final[frozenset[str]] = frozenset(
+    _PIPELINE_EVENT_REJECTION_REASONS,
+)
+assert _PIPELINE_EVENT_REJECTED_STATUSES == STATUS_GATES["pipeline_event_rejected"], (
+    "pipeline-event rejected statuses drifted from schemas.tasks.STATUS_GATES"
+)
 
 
 def _pipeline_event_requires_in_progress_error(*, current_status: str) -> HTTPException:

@@ -200,40 +200,64 @@ async def maybe_cascade_umbrella_close(
 
     Caller must ``session.commit()`` if the result is non-None.
     """
-    return await _maybe_cascade_umbrella_close(session, task=task, depth=0)
+    if task.status not in TERMINAL_STATUSES:
+        return None
+    cursor: Task = task
+    topmost_cancelled: Task | None = None
+    # Iterative walk caps depth without exposing a kwarg an external
+    # caller could pass to bypass it. Each loop step closes one parent
+    # (if it qualifies) and advances to that parent for the next round.
+    for _ in range(_UMBRELLA_CASCADE_MAX_DEPTH):
+        parent = await _qualifying_umbrella_parent(session, task=cursor)
+        if parent is None:
+            return topmost_cancelled
+        parent.status = "cancelled"
+        parent.cancelled_at = utcnow()
+        parent.updated_at = parent.cancelled_at
+        session.add(parent)
+        record_activity(
+            session,
+            event_type="task.umbrella_auto_cascaded",
+            task_id=parent.id,
+            board_id=parent.board_id,
+            message=(
+                f"Parent auto-cancelled by umbrella cascade after child "
+                f"{cursor.id} reached status={cursor.status}; all siblings "
+                f"terminal and parent had never executed."
+            ),
+        )
+        topmost_cancelled = parent
+        cursor = parent
+    # Loop exhausted MAX_DEPTH without natural termination — pathological
+    # depth or a parent_task_id cycle. Record audit + warning so the
+    # operator can investigate.
+    logger.warning(
+        "umbrella cascade truncated at MAX_DEPTH=%d (last cancelled task=%s); "
+        "check parent_task_id chain for unexpected depth or cycles",
+        _UMBRELLA_CASCADE_MAX_DEPTH, cursor.id,
+    )
+    record_activity(
+        session,
+        event_type="task.umbrella_cascade_truncated",
+        task_id=cursor.id,
+        board_id=cursor.board_id,
+        message=(
+            f"Cascade depth cap ({_UMBRELLA_CASCADE_MAX_DEPTH}) reached "
+            f"during umbrella auto-cancel walk; check parent_task_id "
+            f"chain for unexpected depth or cycles."
+        ),
+    )
+    return topmost_cancelled
 
 
-async def _maybe_cascade_umbrella_close(
+async def _qualifying_umbrella_parent(
     session: AsyncSession,
     *,
     task: Task,
-    depth: int,
 ) -> Task | None:
-    """Internal recursion implementation. Depth tracked here so external
-    callers cannot pass ``depth=999`` (or negative) to bypass the cap."""
-    if depth >= _UMBRELLA_CASCADE_MAX_DEPTH:
-        # Pin observability when the cap fires so operators don't
-        # silently lose part of a deep cascade. board_id may be None
-        # for legacy rows; record whatever is on the task.
-        logger.warning(
-            "umbrella cascade truncated at MAX_DEPTH=%d (task=%s); "
-            "remaining ancestors not auto-cancelled",
-            _UMBRELLA_CASCADE_MAX_DEPTH, task.id,
-        )
-        record_activity(
-            session,
-            event_type="task.umbrella_cascade_truncated",
-            task_id=task.id,
-            board_id=task.board_id,
-            message=(
-                f"Cascade depth cap ({_UMBRELLA_CASCADE_MAX_DEPTH}) reached "
-                f"during umbrella auto-cancel walk; check parent_task_id "
-                f"chain for unexpected depth or cycles."
-            ),
-        )
-        return None
-    if task.status not in TERMINAL_STATUSES:
-        return None
+    """Return the parent of ``task`` if it qualifies as a retired umbrella
+    ready for auto-cancel — else None. All cheap checks first, then the
+    DB hits, then the marker query (most expensive)."""
     parent_id = task.parent_task_id
     if parent_id is None:
         return None
@@ -256,12 +280,9 @@ async def _maybe_cascade_umbrella_close(
     if any(sib.status not in TERMINAL_STATUSES for sib in siblings):
         return None
 
-    # Tightening (codex 2026-05-03): require explicit UMBRELLA_RETIRED
-    # marker before auto-cancelling. The never-executed heuristic alone
-    # is too broad — a parent that was simply never picked up but
-    # intends to do real post-child integration work would be silently
-    # cancelled. The marker is the lead's commitment that the parent
-    # is decomposition-completed and its work shipped via children.
+    # The lead-posted UMBRELLA_RETIRED marker is the explicit "this
+    # parent is decomposition-completed and its work shipped via
+    # children" signal. The never-executed heuristic alone is too broad.
     if parent.board_id is not None:
         retired_ids = await task_ids_with_umbrella_retired_marker(
             session, board_id=parent.board_id, task_ids=[parent.id],
@@ -269,33 +290,7 @@ async def _maybe_cascade_umbrella_close(
         if parent.id not in retired_ids:
             return None
 
-    parent.status = "cancelled"
-    parent.cancelled_at = utcnow()
-    parent.updated_at = parent.cancelled_at
-    session.add(parent)
-    # Audit row so dashboards / debug queries / lead-next-action can
-    # see the auto-cancel and don't mistake the parent for an unexplained
-    # operator decision. board_id may be None for legacy rows; record
-    # whatever is on the parent.
-    record_activity(
-        session,
-        event_type="task.umbrella_auto_cascaded",
-        task_id=parent.id,
-        board_id=parent.board_id,
-        message=(
-            f"Parent auto-cancelled by umbrella cascade after child "
-            f"{task.id} reached status={task.status}; all siblings terminal "
-            f"and parent had never executed."
-        ),
-    )
-
-    # Recurse: if grandparent is also a retired umbrella whose only
-    # non-terminal child was this parent, cancel it too. Without this,
-    # multi-level decomposition chains leak.
-    grandparent = await _maybe_cascade_umbrella_close(
-        session, task=parent, depth=depth + 1
-    )
-    return grandparent if grandparent is not None else parent
+    return parent
 
 
 async def maybe_cascade_umbrella_close_by_id(

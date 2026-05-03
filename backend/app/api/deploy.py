@@ -19,6 +19,7 @@ from app.models.board_memory import BoardMemory
 from app.models.boards import Board
 from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.tasks import Task
+from app.schemas.tasks import STATUS_GATES
 from app.services.activity_log import record_activity
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 
@@ -28,17 +29,14 @@ router = APIRouter(tags=["deploy"])
 TARGET_QA_AGENT_NAME = "QA-E2E"
 DEFAULT_BOARD_NAME = "Dev Squad"
 
-# Statuses where deploy_notify rejects outright (vs records an audit
-# and proceeds). cancelled = task removed from scope, kicking off QA
-# would be pointless and pollute audit trails. Other non-active
-# statuses (inbox, rework) are accepted but audited so operators can
-# see if real CI workflows fire on those statuses before tightening.
-_DEPLOY_NOTIFY_REJECTED_STATUSES: frozenset[str] = frozenset({"cancelled"})
-# Active statuses are the canonical webhook targets — silent fast path,
-# no audit needed.
-_DEPLOY_NOTIFY_ACTIVE_STATUSES: frozenset[str] = frozenset(
-    {"in_progress", "review", "done"},
-)
+# Status policy lives in the canonical taxonomy hub
+# (``schemas.tasks.STATUS_GATES``). ``deploy_notify_rejected`` = hard
+# reject (cancelled — task removed from scope). ``delivery_contract``
+# doubles as the active-webhook-target set — silent fast path. Anything
+# in neither set (inbox, rework) is accepted with an audit row so
+# operators can see drift before tightening further.
+_DEPLOY_NOTIFY_REJECTED_STATUSES = STATUS_GATES["deploy_notify_rejected"]
+_DEPLOY_NOTIFY_ACTIVE_STATUSES = STATUS_GATES["delivery_contract"]
 
 
 class DeployNotifyPayload(BaseModel):
@@ -140,7 +138,7 @@ async def api_deploy_notify(payload: DeployNotifyPayload = Body(...)) -> DeployN
                         f"recorded; ask operator to reactivate the task before "
                         f"firing the webhook."
                     ),
-                    "code": "deploy_notify_task_cancelled",
+                    "code": "task_cancelled_deploy_notify_rejected",
                     "current_status": task.status,
                 },
             )
@@ -218,6 +216,13 @@ async def api_deploy_notify(payload: DeployNotifyPayload = Body(...)) -> DeployN
                 error,
             )
             dispatch_result["error"] = str(error)
+
+        # Commit pipeline events + audit row (if any) BEFORE the
+        # BoardMemory write. Without this, a failure in BoardMemory
+        # construction or commit would silently lose the pipeline
+        # events and the audit — both are authoritative records that
+        # must survive a memory-write failure.
+        await session.commit()
 
         try:
             memory = BoardMemory(

@@ -144,7 +144,7 @@ async def test_deploy_notify_rejects_cancelled_task(
     assert exc_info.value.status_code == 409
     detail = exc_info.value.detail
     assert isinstance(detail, dict)
-    assert detail.get("code") == "deploy_notify_task_cancelled"
+    assert detail.get("code") == "task_cancelled_deploy_notify_rejected"
     assert detail.get("current_status") == "cancelled"
 
     # Pipeline events must NOT have been written.
