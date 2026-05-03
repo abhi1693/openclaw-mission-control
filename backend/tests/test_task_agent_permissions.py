@@ -2221,6 +2221,365 @@ async def test_lead_inbox_to_in_progress_shortcut_stamps_in_progress_at() -> Non
 
 
 @pytest.mark.asyncio
+async def test_lead_inbox_to_in_progress_auto_corrects_to_review_for_validator() -> None:
+    """Production failure 2026-05-03 on QA gate 5b7abdd2: the
+    lead-inbox-routing skill instructed Supervisor to PATCH
+    ``status="review"`` on inbox tasks routed to Architect, which the
+    lead-path validator rejects (only ``inbox → in_progress`` is valid
+    on the lead-shortcut). The skill was fixed to use
+    ``status="in_progress"``; this test pins the backend's
+    auto-correct contract that converts the target to ``review`` when
+    the assignee is a review-only validator."""
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            lead_id = uuid4()
+            architect_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id,
+                    name="Supervisor",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
+                ),
+            )
+            # Architect: review-only validator. The auto-correct keys off
+            # identity_profile.dev_acp_flow == "review_only".
+            session.add(
+                Agent(
+                    id=architect_id,
+                    name="Architect",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    identity_profile={"dev_acp_flow": "review_only"},
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id,
+                    board_id=board_id,
+                    title="QA gate",
+                    description="",
+                    status="inbox",
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
+            assert lead is not None
+
+            # Lead PATCHes inbox→in_progress + assignee=Architect.
+            # Backend MUST auto-correct target to "review" because the
+            # assignee is a review-only validator.
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(
+                    status="in_progress",
+                    assigned_agent_id=architect_id,
+                ),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=lead),
+            )
+            assert updated.status == "review", (
+                f"backend must auto-correct in_progress→review for review-only "
+                f"assignee; got status={updated.status}"
+            )
+            assert updated.assigned_agent_id == architect_id
+    finally:
+        await engine.dispose()
+
+
+async def _seed_validator_invariant_setup(
+    session: AsyncSession,
+    *,
+    profile: dict[str, str],
+) -> tuple[UUID, UUID, UUID]:
+    """Seed an org/gateway/board + a validator agent + an inbox task
+    pre-assigned to that validator.
+
+    Returns (board_id, validator_id, task_id). ``profile`` selects the
+    validator shape: ``{"dev_acp_flow": "review_only"}`` for Architect,
+    ``{"validation_flow": "qa_validation"}`` for QA.
+    """
+    org_id = uuid4()
+    board_id = uuid4()
+    gateway_id = uuid4()
+    validator_id = uuid4()
+    task_id = uuid4()
+
+    session.add(Organization(id=org_id, name="org"))
+    session.add(
+        Gateway(
+            id=gateway_id, organization_id=org_id, name="gateway",
+            url="https://gateway.local", workspace_root="/tmp/workspace",
+        ),
+    )
+    session.add(
+        Board(
+            id=board_id, organization_id=org_id, name="board",
+            slug="board", gateway_id=gateway_id,
+        ),
+    )
+    session.add(
+        Agent(
+            id=validator_id, name="Validator", board_id=board_id,
+            gateway_id=gateway_id, status="online",
+            identity_profile=profile,
+        ),
+    )
+    session.add(
+        Task(
+            id=task_id, board_id=board_id, title="task",
+            description="", status="inbox",
+            assigned_agent_id=validator_id,
+            review_packet_type="review_only",
+        ),
+    )
+    await session.commit()
+    return board_id, validator_id, task_id
+
+
+@pytest.mark.asyncio
+async def test_validator_self_claim_inbox_to_in_progress_rejects() -> None:
+    """Production failure 2026-05-03 on QA gate 5b7abdd2: operator
+    manual route landed status=in_progress for a validator (Architect)
+    and the validator's HEARTBEAT.md selector silently skipped it.
+
+    Option A enforcement: when a task transitions into status=in_progress
+    while assigned to a review-only validator, the backend rejects with
+    409 ``code=validator_cannot_be_in_progress`` at write time. This
+    fires regardless of who PATCHes (validator agent self-claim, lead,
+    operator). Single source of truth for the (assignee, status)
+    invariant — no per-path duplication, no agent-prompt encoding.
+
+    This test covers the agent-path branch: validator PATCHes their
+    own inbox→in_progress (a legal ``_AGENT_PATH_VALID_TRANSITIONS``
+    move) and the post-mutation invariant catches it.
+    """
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board_id, validator_id, task_id = (
+                await _seed_validator_invariant_setup(
+                    session, profile={"dev_acp_flow": "review_only"},
+                )
+            )
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            validator = (
+                await session.exec(select(Agent).where(col(Agent.id) == validator_id))
+            ).first()
+            assert validator is not None
+
+            with pytest.raises(HTTPException) as exc_info:
+                await tasks_api.update_task(
+                    payload=TaskUpdate(status="in_progress"),
+                    task=task,
+                    session=session,
+                    actor=ActorContext(actor_type="agent", agent=validator),
+                )
+            assert exc_info.value.status_code == 409
+            detail = exc_info.value.detail
+            assert isinstance(detail, dict)
+            assert detail.get("code") == "validator_cannot_be_in_progress"
+            assert "review" in str(detail.get("message", "")).lower()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_validator_self_claim_inbox_to_in_progress_qa_flow_rejects() -> None:
+    """Same invariant for QA-shape validators (validation_flow=qa_validation)."""
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board_id, validator_id, task_id = (
+                await _seed_validator_invariant_setup(
+                    session, profile={"validation_flow": "qa_validation"},
+                )
+            )
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            validator = (
+                await session.exec(select(Agent).where(col(Agent.id) == validator_id))
+            ).first()
+            assert validator is not None
+
+            with pytest.raises(HTTPException) as exc_info:
+                await tasks_api.update_task(
+                    payload=TaskUpdate(status="in_progress"),
+                    task=task,
+                    session=session,
+                    actor=ActorContext(actor_type="agent", agent=validator),
+                )
+            assert exc_info.value.status_code == 409
+            detail = exc_info.value.detail
+            assert isinstance(detail, dict)
+            assert detail.get("code") == "validator_cannot_be_in_progress"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_implementer_self_claim_inbox_to_in_progress_succeeds() -> None:
+    """Positive control: implementer (no validator profile) can claim
+    their own inbox task to in_progress without hitting the invariant.
+    """
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            worker_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id, organization_id=org_id, name="gateway",
+                    url="https://gateway.local", workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id, organization_id=org_id, name="board",
+                    slug="board", gateway_id=gateway_id,
+                ),
+            )
+            # Implementer agent (no validation_flow / dev_acp_flow markers).
+            session.add(
+                Agent(
+                    id=worker_id, name="Programmer-Frontend", board_id=board_id,
+                    gateway_id=gateway_id, status="online",
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id, board_id=board_id, title="impl task",
+                    description="", status="inbox",
+                    assigned_agent_id=worker_id,
+                    review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            worker = (
+                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
+            ).first()
+            assert worker is not None
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(status="in_progress"),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=worker),
+            )
+            assert updated.status == "in_progress"
+            assert updated.assigned_agent_id == worker_id
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_lead_inbox_to_in_progress_auto_corrects_to_review_for_qa_validation() -> None:
+    """Same auto-correct path for QA validators (validation_flow=qa_validation)."""
+
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            org_id = uuid4()
+            board_id = uuid4()
+            gateway_id = uuid4()
+            lead_id = uuid4()
+            qa_id = uuid4()
+            task_id = uuid4()
+
+            session.add(Organization(id=org_id, name="org"))
+            session.add(
+                Gateway(
+                    id=gateway_id, organization_id=org_id, name="gateway",
+                    url="https://gateway.local", workspace_root="/tmp/workspace",
+                ),
+            )
+            session.add(
+                Board(
+                    id=board_id, organization_id=org_id, name="board",
+                    slug="board", gateway_id=gateway_id,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=lead_id, name="Supervisor", board_id=board_id,
+                    gateway_id=gateway_id, status="online", is_board_lead=True,
+                ),
+            )
+            session.add(
+                Agent(
+                    id=qa_id, name="QA-E2E", board_id=board_id,
+                    gateway_id=gateway_id, status="online",
+                    identity_profile={"validation_flow": "qa_validation"},
+                ),
+            )
+            session.add(
+                Task(
+                    id=task_id, board_id=board_id, title="qa task",
+                    description="", status="inbox", review_packet_type="review_only",
+                ),
+            )
+            await session.commit()
+
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
+            assert task is not None
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
+            assert lead is not None
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(status="in_progress", assigned_agent_id=qa_id),
+                task=task,
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=lead),
+            )
+            assert updated.status == "review"
+            assert updated.assigned_agent_id == qa_id
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_non_lead_agent_noop_in_progress_still_claims_unowned_task() -> None:
     """Codex review 2026-04-24 (second pass): a no-op
     ``status=in_progress`` PATCH on an already-in_progress, unowned
