@@ -293,6 +293,45 @@ async def test_cascade_records_activity_event(
 
 
 @pytest.mark.asyncio
+async def test_cascade_skips_parent_with_only_conversational_umbrella_retired_mention(
+    sqlite_session: AsyncSession,
+) -> None:
+    """A comment that mentions UMBRELLA_RETIRED in conversational context
+    (e.g. 'this is NOT an UMBRELLA_RETIRED case') must NOT qualify the
+    parent for cascade. The marker must be a canonical prefix at the
+    start of the comment, not a substring match anywhere."""
+    from app.models.activity_events import ActivityEvent
+
+    board = await _seed_board(sqlite_session, slug="cascade-conversational-mention")
+    parent, children = await _seed_umbrella_with_children(
+        sqlite_session, board=board, n_children=1, child_status="done",
+        add_retired_marker=False,
+    )
+    # Conversational mention — NOT a real retirement marker.
+    sqlite_session.add(
+        ActivityEvent(
+            event_type="task.comment",
+            task_id=parent.id,
+            board_id=board.id,
+            message=(
+                "Discussed with operator: this is NOT an UMBRELLA_RETIRED "
+                "case because the parent still needs integration work after "
+                "the children land."
+            ),
+        ),
+    )
+    await sqlite_session.commit()
+
+    cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
+    assert cascaded is None, (
+        "conversational mention of 'UMBRELLA_RETIRED' must not qualify the "
+        "parent; only the canonical prefix marker counts"
+    )
+    await sqlite_session.refresh(parent)
+    assert parent.status == "inbox"
+
+
+@pytest.mark.asyncio
 async def test_cascade_skips_parent_without_umbrella_retired_marker(
     sqlite_session: AsyncSession,
 ) -> None:
@@ -372,6 +411,21 @@ async def test_cascade_stops_at_max_depth(
     assert chain[0].status == "inbox", (
         "max-depth safety must stop recursion before walking all 11 levels; "
         f"top ancestor chain[0].status={chain[0].status}"
+    )
+
+    # Audit event for the truncation must exist.
+    from sqlmodel import col, select
+
+    from app.models.activity_events import ActivityEvent
+    truncate_events = list(
+        await sqlite_session.exec(
+            select(ActivityEvent)
+            .where(col(ActivityEvent.event_type) == "task.umbrella_cascade_truncated"),
+        ),
+    )
+    assert len(truncate_events) >= 1, (
+        "depth-cap firing must record a task.umbrella_cascade_truncated event "
+        "so operators can see truncation"
     )
 
 

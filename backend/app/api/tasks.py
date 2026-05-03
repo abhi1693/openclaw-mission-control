@@ -2907,17 +2907,35 @@ _PIPELINE_EVENT_REJECTED_STATUSES: Final[frozenset[str]] = frozenset(
 )
 
 
+_PIPELINE_EVENT_REJECTION_REASONS: Final[dict[str, str]] = {
+    "rework": (
+        "Task is in rework — PATCH `rework → in_progress` first so the new "
+        "cycle anchor is in place. Events posted under rework are silently "
+        "discarded by the next cycle reset."
+    ),
+    "inbox": (
+        "Task is in inbox — PATCH `inbox → in_progress` first to start the "
+        "work cycle. Events posted under inbox have no cycle anchor and "
+        "are silently discarded by the first cycle reset."
+    ),
+    "cancelled": (
+        "Task is cancelled — operator/lead has removed it from scope. New "
+        "pipeline events on a cancelled task pollute audit trails on dead "
+        "work. Ask the operator to reactivate (uncancel) the task before "
+        "posting events."
+    ),
+}
+
+
 def _pipeline_event_requires_in_progress_error(*, current_status: str) -> HTTPException:
+    message = _PIPELINE_EVENT_REJECTION_REASONS.get(
+        current_status,
+        f"Pipeline events cannot be recorded while task status is `{current_status}`.",
+    )
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={
-            "message": (
-                f"Pipeline events cannot be recorded while task status is "
-                f"`{current_status}`. PATCH the task to `in_progress` first "
-                f"so the new cycle anchor is in place; events posted under "
-                f"non-active statuses are silently discarded or pollute "
-                f"audit trails on dead work."
-            ),
+            "message": message,
             "code": "pipeline_event_requires_in_progress",
             "current_status": current_status,
         },
