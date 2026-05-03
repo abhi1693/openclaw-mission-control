@@ -91,14 +91,8 @@ async def _notify_lead_after_blocker_resolved(
 ) -> None:
     """Wake the board lead after the last open Blocker on a task resolves.
 
-    Repro 2026-05-03: operator resolved Track B's operator-policy
-    Blocker; ``is_blocked`` flipped to False but no wake fired, so
-    the assigned Architect and the lead Supervisor stayed unaware.
-    Task sat for 50+ minutes blocking the entire downstream chain.
-
-    Best-effort: exceptions are caught so the caller (Blocker resolve
-    PATCH) never fails due to a notification issue. Mirrors the
-    contract of ``_notify_lead_on_end_work_event`` in tasks.py.
+    Symmetric with ``_notify_lead_on_end_work_event`` in tasks.py:
+    best-effort, swallows exceptions, rolls back on failure.
     """
     try:
         if task.board_id is None:
@@ -130,6 +124,10 @@ async def _notify_lead_after_blocker_resolved(
             deliver=True,
         )
     except Exception as exc:  # noqa: BLE001
+        # No rollback here: the resolve commit already succeeded before
+        # this notify call, so there's no pending DB state to discard.
+        # (Differs from _notify_lead_on_end_work_event in tasks.py where
+        # the helper itself may commit additional state.)
         logger.warning(
             "blocker-resolve notify suppressed: %s (task=%s)",
             exc, task.id,
@@ -292,13 +290,10 @@ async def update_task_blocker(
     if mutated:
         session.add(blocker)
         await session.commit()
-    # Wake the lead when the resolve transition closes the LAST open
-    # Blocker on the task — at that moment the dep-graph derivation
-    # flips ``is_blocked`` from True to False and the task becomes
-    # actionable. Without this wake, the operator's resolve PATCH is a
-    # silent state-change with downstream impact (repro 2026-05-03
-    # Track B 50min stall). Symmetric with review-event PASS waking
-    # the next reviewer/lead in tasks.py.
+    # Closing the LAST open Blocker flips is_blocked from True to False;
+    # wake the lead so the drain loop picks up the now-actionable task
+    # instead of waiting for the next 5min heartbeat tick. Symmetric
+    # with review-event PASS waking the next reviewer in tasks.py.
     if payload.status_transition == "resolve" and not await _task_has_other_open_blockers(
         session, task=task, exclude_blocker_id=blocker.id,
     ):

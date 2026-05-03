@@ -30,7 +30,7 @@ from app.models.boards import Board
 from app.models.gateways import Gateway
 from app.models.organizations import Organization
 from app.models.tasks import Task
-from app.services.umbrella_cascade import maybe_cascade_umbrella_close
+from app.services.parent_cascade import maybe_cascade_umbrella_close
 
 
 async def _seed_board(session: AsyncSession, *, slug: str) -> Board:
@@ -232,3 +232,47 @@ async def test_cascade_no_op_for_non_terminal_trigger(
     await sqlite_session.refresh(children[-1])
     cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
     assert cascaded is None
+
+
+@pytest.mark.asyncio
+async def test_cascade_recurses_through_multi_level_chain(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Grandparent umbrella retires too when its only non-terminal
+    child (the parent) was just auto-cancelled. Without recursion,
+    multi-level decomposition chains leak — the immediate parent
+    closes but the grandparent stays in inbox forever."""
+    board = await _seed_board(sqlite_session, slug="cascade-multi-level")
+
+    # Build: grandparent -> parent -> child (all never-executed)
+    grandparent = Task(
+        id=uuid4(), board_id=board.id, title="grandparent",
+        status="inbox", in_progress_at=None, previous_in_progress_at=None,
+    )
+    parent = Task(
+        id=uuid4(), board_id=board.id, title="parent",
+        status="inbox", in_progress_at=None, previous_in_progress_at=None,
+        parent_task_id=grandparent.id,
+    )
+    child = Task(
+        id=uuid4(), board_id=board.id, title="child",
+        status="done", parent_task_id=parent.id,
+    )
+    sqlite_session.add(grandparent)
+    sqlite_session.add(parent)
+    sqlite_session.add(child)
+    await sqlite_session.commit()
+    await sqlite_session.refresh(grandparent)
+    await sqlite_session.refresh(parent)
+    await sqlite_session.refresh(child)
+
+    cascaded_top = await maybe_cascade_umbrella_close(sqlite_session, task=child)
+
+    # Grandparent is the topmost cascade target.
+    assert cascaded_top is not None
+    assert cascaded_top.id == grandparent.id
+    # Both parent AND grandparent must have flipped to cancelled.
+    await sqlite_session.refresh(parent)
+    await sqlite_session.refresh(grandparent)
+    assert parent.status == "cancelled"
+    assert grandparent.status == "cancelled"
