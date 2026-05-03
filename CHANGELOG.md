@@ -2,6 +2,17 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-05-03
+
+### Fixed
+- **Architect PASS write-time invariant on `review_only` packets**: `POST /review-events` now rejects Architect PASS payloads that lack child-task evidence with three distinct 422 codes mirroring the read-side `_review_only_artifact_state`: malformed/missing `planned_child_task_ids` (`review_only_pass_requires_child_task_evidence`), the parent task listed as its own child (`review_only_pass_includes_parent_task_id`), and declared child IDs that do not exist on the parent's board (`review_only_pass_child_tasks_not_found`). The board-membership check uses a targeted `WHERE id IN (declared)` query bounded by the declared list.
+- **QA-E2E PASS write-time invariant**: `POST /review-events` now rejects `qa_e2e` PASS payloads on packet types that require QA-E2E (`frontend_ui`, `mixed`) when the structured evidence is incomplete (wrong `evidence_type`, missing `target`/`build_hash`, missing/failing `ac_rows`, missing/failing `browser_matrix`). Read-side `_qa_e2e_pass_artifact_issues` and write-side share the new pure helper `qa_e2e_pass_evidence_issues` so they cannot drift. Returns 422 with `code=qa_e2e_pass_invalid_evidence` and the issue list.
+- **Universal pipeline gate on status→review**: `PATCH /tasks` now rejects any actor (worker, lead auto-correct path, admin) that pushes a task into `status=review` without a complete structured pipeline for `frontend_ui`/`mixed` packets. Replaces the worker-only `_require_worker_review_evidence_packet` pipeline branch + the reactive `pipeline_missing_review_gate` Blocker pattern with a single write-time 409 `task_pipeline_incomplete`. The gate also fires when an already-`review` task's `review_packet_type` transitions into a pipeline-required contract (e.g., lead PATCH `review_only` → `frontend_ui`).
+- **Lead-health-scan operator visibility**: When the lead files a structured `Blocker` or first-class `OperatorDecision` via API, the skill now mandates a paired human-readable task comment (`BLOCKER FILED:` / `OPERATOR DECISION FILED:` with reason_code, owner, required_artifact, reopen_condition, citation) so dashboards/operators reading the prose comment scroll see context for the new entity instead of an unexplained `is_blocked=true` transition.
+
+### Changed
+- **`_TaskUpdateInput.previous_review_packet_type` required field**: All direct constructors of the internal task-update DTO must now pass the pre-mutation `review_packet_type` so the universal pipeline gate can detect contract transitions correctly. Pyright enforces this at every call site (HTTP handler, admin script, test fixtures).
+
 ## 2026-05-01
 
 ### Fixed
