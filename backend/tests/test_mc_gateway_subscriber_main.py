@@ -97,6 +97,7 @@ class TestConfigResolution:
         env_file.write_text("OPENCLAW_GATEWAY_TOKEN=from-file\n", encoding="utf-8")
         monkeypatch.setenv("OPENCLAW_GATEWAY_WS_URL", "ws://from-env")
         monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "from-env")
+        monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
         cfg = entry.resolve_config(env_file_path=str(env_file))
         assert cfg.url == "ws://from-env"
         assert cfg.token == "from-env"
@@ -106,10 +107,12 @@ class TestConfigResolution:
     ) -> None:
         monkeypatch.delenv("OPENCLAW_GATEWAY_WS_URL", raising=False)
         monkeypatch.delenv("OPENCLAW_GATEWAY_TOKEN", raising=False)
+        monkeypatch.delenv("DATABASE_URL", raising=False)
         env_file = tmp_path / "env"
         env_file.write_text(
             "OPENCLAW_GATEWAY_WS_URL=ws://from-file\n"
-            "OPENCLAW_GATEWAY_TOKEN=from-file\n",
+            "OPENCLAW_GATEWAY_TOKEN=from-file\n"
+            "DATABASE_URL=sqlite+aiosqlite:///:memory:\n",
             encoding="utf-8",
         )
         cfg = entry.resolve_config(env_file_path=str(env_file))
@@ -126,6 +129,7 @@ class TestConfigResolution:
         """
         monkeypatch.setenv("OPENCLAW_GATEWAY_WS_URL", "ws://x")
         monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "t")
+        monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
         cfg = entry.resolve_config(env_file_path=str(tmp_path / "no-such"))
         # Subscriber sends a ``sessions.subscribe`` RPC to start the
         # event stream; the events of interest (sessions.changed,
@@ -149,6 +153,47 @@ class TestConfigResolution:
         with pytest.raises(SystemExit) as exc:
             entry.resolve_config(env_file_path=str(tmp_path / "no-such"))
         assert "OPENCLAW_GATEWAY_TOKEN" in str(exc.value)
+
+    def test_resolves_database_url_from_env(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Slice 4-cleanup: the worker now constructs its own DB engine
+        from a single DATABASE_URL env var rather than dragging in
+        ``app.core.config.settings``. Resolve order matches the other
+        keys: env var > env file > error."""
+        monkeypatch.setenv("OPENCLAW_GATEWAY_WS_URL", "ws://x")
+        monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "t")
+        monkeypatch.setenv("DATABASE_URL", "postgresql://user:pw@h/db")
+        cfg = entry.resolve_config(env_file_path=str(tmp_path / "no-such"))
+        assert cfg.database_url == "postgresql://user:pw@h/db"
+
+    def test_database_url_from_file_when_env_absent(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        env_file = tmp_path / "env"
+        env_file.write_text(
+            "OPENCLAW_GATEWAY_WS_URL=ws://x\n"
+            "OPENCLAW_GATEWAY_TOKEN=t\n"
+            "DATABASE_URL=postgresql+asyncpg://h/db\n"
+        )
+        monkeypatch.delenv("OPENCLAW_GATEWAY_WS_URL", raising=False)
+        monkeypatch.delenv("OPENCLAW_GATEWAY_TOKEN", raising=False)
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        cfg = entry.resolve_config(env_file_path=str(env_file))
+        assert cfg.database_url == "postgresql+asyncpg://h/db"
+
+    def test_missing_database_url_exits(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Worker fails closed with a clear, targeted error when
+        DATABASE_URL is absent — NOT a generic pydantic validation
+        traceback for unrelated MC settings keys (AUTH_MODE etc.)."""
+        monkeypatch.setenv("OPENCLAW_GATEWAY_WS_URL", "ws://x")
+        monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "t")
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        with pytest.raises(SystemExit) as exc:
+            entry.resolve_config(env_file_path=str(tmp_path / "no-such"))
+        assert "DATABASE_URL" in str(exc.value)
 
 
 # --- main() lifecycle: signal handlers stop the worker cleanly ---
@@ -180,6 +225,7 @@ class TestMainLifecycle:
         cfg = entry.SubscriberConfig(
             url="ws://x",
             token="t",
+            database_url="sqlite+aiosqlite:///:memory:",
             subscriptions=("sessions.subscribe",),
         )
         stop = asyncio.Event()
@@ -216,7 +262,10 @@ class TestMainLifecycle:
         monkeypatch.setattr(entry, "Subscriber", _StubSubscriber)
 
         cfg = entry.SubscriberConfig(
-            url="ws://x", token="t", subscriptions=("sessions.subscribe",)
+            url="ws://x",
+            token="t",
+            database_url="sqlite+aiosqlite:///:memory:",
+            subscriptions=("sessions.subscribe",),
         )
         stop = asyncio.Event()
 

@@ -23,14 +23,7 @@ if TYPE_CHECKING:
 _MODEL_REGISTRY = _models
 
 
-def _normalize_database_url(database_url: str) -> str:
-    if "://" not in database_url:
-        return database_url
-    scheme, rest = database_url.split("://", 1)
-    if scheme in ("postgresql", "postgres"):
-        return f"postgresql+psycopg://{rest}"
-    return database_url
-
+from app.db.url import normalize_database_url as _normalize_database_url
 
 async_engine: AsyncEngine = create_async_engine(
     _normalize_database_url(settings.database_url),

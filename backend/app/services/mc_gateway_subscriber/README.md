@@ -34,15 +34,15 @@ On the host that hosts MC backend (`.64` in current topology):
    ```
    OPENCLAW_GATEWAY_WS_URL=ws://192.168.2.60:18789/ws
    OPENCLAW_GATEWAY_TOKEN=<paired-operator-token>
-
-   # Slice 4 added DB writes. The worker imports `app.db.session` so it
-   # needs the same MC settings the API process consumes; copy them
-   # from `/etc/mc/env` (or symlink the same file as the API uses):
-   DATABASE_URL=postgresql+asyncpg://...
-   AUTH_MODE=local
-   LOCAL_AUTH_TOKEN=<token>
-   BASE_URL=http://localhost:8000
+   DATABASE_URL=postgresql://mcontrol:<pw>@192.168.2.66/mission_control
    ```
+
+   That's the full set. The worker constructs its own DB engine from
+   `DATABASE_URL` — it does NOT load `app.core.config.settings`, so
+   `AUTH_MODE` / `LOCAL_AUTH_TOKEN` / `BASE_URL` (the HTTP-layer
+   keys the API process needs) are not required and not consulted.
+   Use the same `DATABASE_URL` the API process writes to so the
+   projector lands in the production `gateway_session_state` table.
 
    The gateway token comes from a paired operator device. To mint one:
    ```
