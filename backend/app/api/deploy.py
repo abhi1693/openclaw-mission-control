@@ -19,6 +19,7 @@ from app.models.board_memory import BoardMemory
 from app.models.boards import Board
 from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.tasks import Task
+from app.services.activity_log import record_activity
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 
 logger = get_logger(__name__)
@@ -26,6 +27,18 @@ router = APIRouter(tags=["deploy"])
 
 TARGET_QA_AGENT_NAME = "QA-E2E"
 DEFAULT_BOARD_NAME = "Dev Squad"
+
+# Statuses where deploy_notify rejects outright (vs records an audit
+# and proceeds). cancelled = task removed from scope, kicking off QA
+# would be pointless and pollute audit trails. Other non-active
+# statuses (inbox, rework) are accepted but audited so operators can
+# see if real CI workflows fire on those statuses before tightening.
+_DEPLOY_NOTIFY_REJECTED_STATUSES: frozenset[str] = frozenset({"cancelled"})
+# Active statuses are the canonical webhook targets — silent fast path,
+# no audit needed.
+_DEPLOY_NOTIFY_ACTIVE_STATUSES: frozenset[str] = frozenset(
+    {"in_progress", "review", "done"},
+)
 
 
 class DeployNotifyPayload(BaseModel):
@@ -116,6 +129,38 @@ async def api_deploy_notify(payload: DeployNotifyPayload = Body(...)) -> DeployN
     async with async_session_maker() as session:
         board, agent = await _resolve_target_agent(session)
         task = await _require_board_task(session, board_id=board.id, task_id=payload.task_id)
+
+        if task.status in _DEPLOY_NOTIFY_REJECTED_STATUSES:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": (
+                        f"Task is `{task.status}` — operator/lead has removed "
+                        f"it from scope. Deploy notification will not be "
+                        f"recorded; ask operator to reactivate the task before "
+                        f"firing the webhook."
+                    ),
+                    "code": "deploy_notify_task_cancelled",
+                    "current_status": task.status,
+                },
+            )
+        if task.status not in _DEPLOY_NOTIFY_ACTIVE_STATUSES:
+            # Audit only — accept the deploy_notify but record so
+            # operators can see if real CI workflows are firing on
+            # non-active statuses (e.g. inbox/rework). If observed
+            # traffic shows none of these are legitimate, the gate
+            # can be tightened in a follow-up.
+            record_activity(
+                session,
+                event_type="task.deploy_notify_on_non_active_status",
+                task_id=task.id,
+                board_id=board.id,
+                message=(
+                    f"deploy_notify fired while task.status={task.status}. "
+                    f"build_hash={payload.build_hash} commit={payload.commit_sha}. "
+                    f"Active webhook targets are in_progress/review/done."
+                ),
+            )
 
         dispatch_payload = {
             "task_id": str(payload.task_id),
