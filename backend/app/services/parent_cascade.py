@@ -2,16 +2,14 @@
 
 When a parent task reaches a terminal state (``done``/``cancelled``),
 its non-terminal children become *orphans* — work items whose
-reason-for-being just evaporated. Without explicit propagation, those
-children outlive the parent and accumulate as background friction
-(see the 2026-05-01 ``Hero accent → Deploy artifact parity`` case).
+reason-for-being just evaporated. Conversely, when the LAST non-terminal
+child of a never-executed parent reaches terminal status, the parent
+itself can be retired (umbrella auto-cascade).
 
-This module provides batch + scalar lookups so the read-side response
-can surface ``orphan_child_task_ids`` and the lead-next-action gate
-can route cleanup actions. The module deliberately does NOT mutate
-state — propagation happens in the API layer (activity events,
-optional lead-cancel narrow exception in a follow-up PR) so the
-audit trail stays explicit.
+Read helpers (``orphan_*``, ``task_ids_with_*``) are pure projections
+for the lead-next-action gate. The mutating ``maybe_cascade_umbrella_close``
+fires from the PATCH endpoint after a terminal status transition; it
+auto-cancels never-executed parents whose children are all terminal.
 """
 
 from __future__ import annotations
@@ -23,6 +21,7 @@ from uuid import UUID
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.time import utcnow
 from app.models.tasks import Task
 
 TERMINAL_STATUSES: frozenset[str] = frozenset({"done", "cancelled"})
@@ -146,6 +145,83 @@ async def task_ids_with_children(
         parent_id for parent_id in (await session.exec(stmt)).all()
         if parent_id is not None
     )
+
+
+async def maybe_cascade_umbrella_close(
+    session: AsyncSession,
+    *,
+    task: Task,
+) -> Task | None:
+    """Auto-cancel a never-executed parent when its last child terminates.
+
+    Fires from ``_finalize_updated_task`` after a status transition into
+    ``TERMINAL_STATUSES``. Walks up the parent chain: if grandparent is
+    also a retired umbrella whose only remaining child was the parent
+    we just cancelled, cascade again. Returns the topmost parent that
+    was cancelled, or None if no cascade fired.
+
+    **Why ``cancelled`` (not ``done``):** the umbrella never executed,
+    its work shipped via children. ``done`` claims completion of
+    work-on-this-row (false); ``cancelled`` says "no longer needs to
+    happen here" (true).
+
+    **Safety net** — the cascade only fires when
+    ``parent.in_progress_at IS NULL AND parent.previous_in_progress_at IS NULL``.
+    A parent with execution history may be a regular task that intends to
+    do work after its children; auto-cancelling it would silently delete
+    operator-attributed work.
+
+    Caller must ``session.commit()`` if the result is non-None.
+    """
+    if task.status not in TERMINAL_STATUSES:
+        return None
+    parent_id = task.parent_task_id
+    if parent_id is None:
+        return None
+
+    parent = (
+        await session.exec(select(Task).where(col(Task.id) == parent_id))
+    ).first()
+    if parent is None:
+        return None
+    if parent.status != "inbox":
+        return None
+    if parent.in_progress_at is not None or parent.previous_in_progress_at is not None:
+        return None
+
+    siblings = list(
+        await session.exec(select(Task).where(col(Task.parent_task_id) == parent_id)),
+    )
+    if not siblings:
+        return None
+    if any(sib.status not in TERMINAL_STATUSES for sib in siblings):
+        return None
+
+    parent.status = "cancelled"
+    parent.cancelled_at = utcnow()
+    parent.updated_at = parent.cancelled_at
+    session.add(parent)
+
+    # Recurse: if grandparent is also a retired umbrella whose only
+    # non-terminal child was this parent, cancel it too. Without this,
+    # multi-level decomposition chains leak — operator sees the
+    # immediate parent close but the grandparent stays in inbox.
+    grandparent = await maybe_cascade_umbrella_close(session, task=parent)
+    return grandparent if grandparent is not None else parent
+
+
+async def maybe_cascade_umbrella_close_by_id(
+    session: AsyncSession,
+    *,
+    task_id: UUID,
+) -> Task | None:
+    """Convenience wrapper for paths that only carry the task id."""
+    task = (
+        await session.exec(select(Task).where(col(Task.id) == task_id))
+    ).first()
+    if task is None:
+        return None
+    return await maybe_cascade_umbrella_close(session, task=task)
 
 
 async def orphan_children_with_terminal_parent(

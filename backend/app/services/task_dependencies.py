@@ -14,14 +14,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.db import crud
 from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
+from app.services.parent_cascade import TERMINAL_STATUSES
 
 DONE_STATUS: Final[str] = "done"
-# Statuses that satisfy a dependency. ``cancelled`` belongs here because
-# a cancelled task is "removed from scope" — keeping it as a blocker
-# pins entire downstream chains forever (repro 2026-05-03 board chain:
-# Phase 2 QA gate -> Phase 2 umbrella -> Phase 3 umbrella all stalled
-# behind a single cancelled dep).
-TERMINAL_DEPENDENCY_STATUSES: Final[frozenset[str]] = frozenset({"done", "cancelled"})
 _RUNTIME_TYPE_REFERENCES = (UUID, AsyncSession, Mapping, Sequence)
 
 
@@ -86,15 +81,15 @@ def blocked_by_dependency_ids(
 ) -> list[UUID]:
     """Return dependency ids that are not yet in a terminal status.
 
-    Terminal here means ``done`` (work completed) or ``cancelled``
-    (removed from scope). Both satisfy the dependency contract — a
-    cancelled dep cannot block downstream because by definition it
-    will never complete.
+    Terminal means ``done`` or ``cancelled`` — both satisfy the
+    dependency contract. A cancelled dep is "removed from scope" and
+    must not block downstream (otherwise entire chains pin behind a
+    cancelled task that will never complete).
     """
     return [
         dep_id
         for dep_id in dependency_ids
-        if status_by_id.get(dep_id) not in TERMINAL_DEPENDENCY_STATUSES
+        if status_by_id.get(dep_id) not in TERMINAL_STATUSES
     ]
 
 

@@ -122,6 +122,7 @@ from app.services.operator_decisions import (
 )
 from app.services.parent_cascade import (
     TERMINAL_STATUSES,
+    maybe_cascade_umbrella_close,
     non_terminal_children_of,
     orphan_children_by_parent_id,
 )
@@ -143,7 +144,6 @@ from app.services.task_pipeline import (
     pipeline_present_states,
     require_frontend_pipeline_ready_for_review,
 )
-from app.services.umbrella_cascade import maybe_cascade_umbrella_close
 from app.services.task_review_events import (
     get_task_review_readiness,
     task_review_event_read,
@@ -2894,16 +2894,10 @@ def _pipeline_event_missing_required_fields_error(
 
 
 def _pipeline_event_requires_in_progress_error(*, current_status: str) -> HTTPException:
-    # E.3 incident 2026-05-03: PF posted six pipeline events while
-    # status="rework" (200 OK on each), then PATCHed rework→in_progress.
-    # The cycle anchor reset to the new in_progress_at and the
-    # previously-posted events fell outside the new window, silently
-    # invisible to pipeline.ready. Closing the silent-discard footgun:
-    # surface the workflow violation at the FIRST offending event so the
-    # agent retries with the correct sequence (rework → in_progress, then
-    # post events under the fresh cycle anchor). Cycle scope itself
-    # (Phase V §I9 Fix 2) stays — it's load-bearing against stale-event
-    # auto-resolve.
+    # rework → in_progress resets the cycle anchor; events posted under
+    # rework are silently discarded by the next cycle reset. Surface
+    # the violation at the first offending POST instead of letting it
+    # land as a phantom 200.
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={
@@ -5153,12 +5147,10 @@ async def _finalize_updated_task(
             task=update.task,
             reason=f"task moved from {update.previous_status} to review",
         )
-    # Umbrella auto-cascade: when the just-committed terminal status
-    # closes the last open child of a never-executed parent, retire the
-    # parent too. Closes the 2026-05-03 ``a8a67bc8`` failure mode where
-    # an explicitly retired umbrella sat in inbox indefinitely with
-    # is_blocked=False after its 5 children all reached done.
-    if update.task.status in ("done", "cancelled"):
+    # Umbrella auto-cascade: closing the last child of a never-executed
+    # parent retires the parent (and its grandparent, recursively).
+    # Without this, retired-umbrella rows accumulate in inbox forever.
+    if update.task.status in TERMINAL_STATUSES:
         cascaded_parent = await maybe_cascade_umbrella_close(
             session, task=update.task
         )
