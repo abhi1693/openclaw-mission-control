@@ -100,7 +100,11 @@ def build_state_from_frame(frame: dict[str, Any]) -> SessionState | None:
         output_tokens=_optional_int(session.get("outputTokens")),
         total_tokens=_optional_int(session.get("totalTokens")),
         channel=_optional_str(session.get("channel")),
-        aborted_last_run=bool(session.get("abortedLastRun", False)),
+        # Strict identity-compare to True: a string field carrying
+        # "false" (or any non-empty string) is truthy under bool() and
+        # would silently flip aborted_last_run to True. Mirror the
+        # _optional_int defensive pattern.
+        aborted_last_run=session.get("abortedLastRun") is True,
     )
 
 

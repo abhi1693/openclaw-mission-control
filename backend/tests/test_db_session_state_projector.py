@@ -146,33 +146,25 @@ async def test_db_projector_drops_older_or_equal_timestamp(
 
 
 @pytest.mark.asyncio
-async def test_db_projector_skips_redundant_no_op_writes(
+async def test_db_projector_advances_ts_on_same_field_newer_event(
     session_factory,
     sqlite_session: AsyncSession,
 ) -> None:
-    """Heartbeat ticks emit sessions.changed every ~10s with identical
-    field values. The projector must NOT issue a DB write when the
-    incoming state is field-equal to the persisted row — otherwise the
-    Postgres write rate scales with heartbeat tick count, not with
-    actual session activity."""
+    """Codex-finding regression: an earlier slice carried a "skip if
+    every projected field equals the existing row" diff guard intended
+    to cut heartbeat-tick write amplification. The guard was unsafe —
+    when a same-field newer event was dropped, the persisted
+    last_changed_at_ms stayed at the older value, so a later
+    out-of-order frame with truly-older content but a slightly newer
+    ts than the persisted one could pass the ts compare and overwrite
+    the row with stale state. Verify the guard is gone: same-field
+    newer events MUST still advance last_changed_at_ms."""
     p = DbSessionStateProjector(session_factory=session_factory)
-    await p(_frame(ts=1, total_tokens=100))
-    first_updated_at = (await SessionStateRepo.list_all(sqlite_session))[0].updated_at
-
-    # Same fields except a strictly-newer ts (the only field that must
-    # advance to make the projector consider the event "new"). With
-    # strict diff, this still counts as no-op because the new last-known
-    # gateway-side fields are unchanged. Behaviour we want: skip.
-    # ALTERNATIVELY: ts itself is a meaningful field, so a newer ts +
-    # all-other-fields-equal might still be considered worth recording.
-    # Decision: ts is the gateway's clock, not a meaningful state field,
-    # so skip if every other field equals existing.
-    await asyncio.sleep(0.01)
-    await p(_frame(ts=2, total_tokens=100))
-    second_updated_at = (await SessionStateRepo.list_all(sqlite_session))[0].updated_at
-    assert first_updated_at == second_updated_at, (
-        "no-op event (only ts changed) must not bump updated_at"
-    )
+    await p(_frame(ts=100, total_tokens=100))
+    await p(_frame(ts=200, total_tokens=100))  # same fields, newer ts
+    rows = await SessionStateRepo.list_all(sqlite_session)
+    assert len(rows) == 1
+    assert rows[0].last_changed_at_ms == 200
 
 
 @pytest.mark.asyncio

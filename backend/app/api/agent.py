@@ -69,6 +69,7 @@ from app.schemas.tasks import TaskCommentCreate, TaskCommentRead, TaskCreate, Ta
 from app.schemas.view_models import TaskCardRead
 from app.services.activity_log import record_activity
 from app.services.openclaw.coordination_service import GatewayCoordinationService
+from app.services.openclaw.internal.agent_key import agent_key
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.mc_gateway_subscriber.session_state_repo import (
@@ -880,23 +881,43 @@ async def get_lead_next_action(
         session, board_id=board.id, task_ids=task_ids,
     )
     # Slice 5: gateway session projection for in-progress tasks. The
-    # selector adds `gateway_session` to inspect_stale_in_progress
+    # selector adds ``gateway_session`` to inspect_stale_in_progress
     # action details so the lead can distinguish "agent silent on the
-    # gateway" from "agent active but task DB unmoved." Worker-side
-    # mc-<uuid> identifier maps back to UUID for the selector.
+    # gateway" from "agent active but task DB unmoved."
+    #
+    # ``agent_key()`` derives the gateway-side identifier from each
+    # agent's stored ``openclaw_session_id`` rather than open-coding
+    # ``f"mc-{aid}"``. Codex-finding fix: an inline ``mc-<uuid>``
+    # builder silently misses agents whose session_key follows a
+    # non-default prefix or was rewritten during reprovisioning.
     in_progress_agent_uuids = [
         task.assigned_agent_id
         for task in tasks
         if task.status == "in_progress" and task.assigned_agent_id is not None
     ]
-    gateway_lookup_ids = [f"mc-{aid}" for aid in in_progress_agent_uuids]
+    in_progress_agents = (
+        list(
+            (
+                await session.exec(
+                    select(Agent).where(col(Agent.id).in_(in_progress_agent_uuids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if in_progress_agent_uuids
+        else []
+    )
+    gateway_lookup_id_by_agent_uuid = {
+        a.id: agent_key(a) for a in in_progress_agents
+    }
     gateway_state_by_lookup_id = await SessionStateRepo.list_main_for_agent_ids(
-        session, agent_ids=gateway_lookup_ids
+        session, agent_ids=list(gateway_lookup_id_by_agent_uuid.values())
     )
     gateway_session_by_agent_id = {
-        aid: gateway_state_by_lookup_id[f"mc-{aid}"]
-        for aid in in_progress_agent_uuids
-        if f"mc-{aid}" in gateway_state_by_lookup_id
+        aid: gateway_state_by_lookup_id[lookup_id]
+        for aid, lookup_id in gateway_lookup_id_by_agent_uuid.items()
+        if lookup_id in gateway_state_by_lookup_id
     }
     return select_lead_next_action(
         tasks=tasks,

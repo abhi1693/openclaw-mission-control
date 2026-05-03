@@ -5,10 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 
 from app.api.deps import require_org_admin
 from app.core.auth import AuthContext, get_auth_context
 from app.db.session import get_session
+from app.models.agents import Agent
+from app.models.gateways import Gateway
 from app.schemas.common import OkResponse
 from app.schemas.gateway_api import (
     GatewayCommandsResponse,
@@ -28,6 +31,7 @@ from app.services.mc_gateway_subscriber.session_state_repo import (
     SessionStateRepo,
 )
 from app.services.openclaw.gateway_rpc import GATEWAY_EVENTS, GATEWAY_METHODS, PROTOCOL_VERSION
+from app.services.openclaw.internal.agent_key import agent_key
 from app.services.openclaw.runtime_status import collect_openclaw_status
 from app.services.openclaw.session_service import GatewaySessionService
 from app.services.organizations import OrganizationContext
@@ -286,32 +290,37 @@ async def projected_gateway_sessions(
     agent_id: str | None = Query(default=None),
     session: AsyncSession = SESSION_DEP,
     _auth: AuthContext = AUTH_DEP,
-    _ctx: OrganizationContext = ORG_ADMIN_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> ProjectedGatewaySessionsResponse:
-    """Return the latest projected state of every gateway session bucket
-    written by the ``mc_gateway_subscriber`` worker. Optional
-    ``agent_id`` filter narrows to one agent's session_label rows.
+    """Return projected gateway session state for the caller's
+    organization. Scopes via the org's ``agents`` rows: a row appears
+    only if its ``agent_id`` (e.g. ``mc-<uuid>``) matches the gateway
+    identity of an agent in the caller's org. Optional ``agent_id``
+    query param narrows further but cannot widen across orgs.
+
+    Gateway-internal rows (``mc-gateway-*``) and lead-namespace rows
+    (``lead-<board_id>``) are NOT returned by this endpoint — they
+    have no per-agent organization binding and need a separate
+    operator-internal scope to surface.
     """
-    if agent_id is None:
-        rows = await SessionStateRepo.list_all(session)
-    else:
-        rows = await SessionStateRepo.list_for_agent(session, agent_id=agent_id)
+    # Agents have no organization_id directly; scope via the gateway
+    # they're paired against (Agent.gateway_id → Gateway.organization_id).
+    stmt = (
+        select(Agent)
+        .join(Gateway, Gateway.id == Agent.gateway_id)
+        .where(Gateway.organization_id == ctx.organization.id)
+    )
+    result = await session.exec(stmt)
+    org_agents = list(result.scalars().all())
+    org_gateway_ids = {agent_key(a) for a in org_agents}
+    if agent_id is not None:
+        org_gateway_ids = org_gateway_ids & {agent_id}
+    rows = await SessionStateRepo.list_for_agent_ids(
+        session, agent_ids=org_gateway_ids
+    )
     return ProjectedGatewaySessionsResponse(
         sessions=[
-            ProjectedGatewaySession(
-                agent_id=row.agent_id,
-                session_label=row.session_label,
-                session_id=row.session_id,
-                last_phase=row.last_phase,
-                last_message_seq=row.last_message_seq,
-                last_changed_at_ms=row.last_changed_at_ms,
-                input_tokens=row.input_tokens,
-                output_tokens=row.output_tokens,
-                total_tokens=row.total_tokens,
-                channel=row.channel,
-                aborted_last_run=row.aborted_last_run,
-                updated_at=row.updated_at,
-            )
+            ProjectedGatewaySession.model_validate(row, from_attributes=True)
             for row in rows
         ],
     )

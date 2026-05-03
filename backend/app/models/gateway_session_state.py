@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from sqlalchemy import BigInteger
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -34,7 +35,10 @@ class GatewaySessionState(QueryModel, table=True):
     # Gateway-source-of-truth millisecond timestamp from the
     # ``sessions.changed`` event. Used by the projector for the
     # last-write-wins guard so reconnect replays don't regress state.
-    last_changed_at_ms: int = Field(index=True)
+    # ``sa_type=BigInteger`` matches the migration; ms-since-epoch
+    # exceeds INT4 range so the default Integer mapping would silently
+    # truncate after 2038 and fail tests with sane fixtures sooner.
+    last_changed_at_ms: int = Field(index=True, sa_type=BigInteger)
     input_tokens: int | None = Field(default=None)
     output_tokens: int | None = Field(default=None)
     total_tokens: int | None = Field(default=None)

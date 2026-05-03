@@ -122,3 +122,23 @@ class SessionStateRepo:
         )
         result = await session.exec(stmt)
         return {row.agent_id: row for row in result.scalars().all()}
+
+    @classmethod
+    async def list_for_agent_ids(
+        cls,
+        session,
+        *,
+        agent_ids: Iterable[str],
+    ) -> list[GatewaySessionState]:
+        """Batched lookup of every session_label row for each gateway
+        agent_id. Used by the operator read endpoint to scope the
+        result set to the caller's organization without leaking
+        cross-org rows."""
+        ids = list(agent_ids)
+        if not ids:
+            return []
+        stmt = select(GatewaySessionState).where(
+            GatewaySessionState.agent_id.in_(ids),  # type: ignore[attr-defined]
+        )
+        result = await session.exec(stmt)
+        return list(result.scalars().all())
