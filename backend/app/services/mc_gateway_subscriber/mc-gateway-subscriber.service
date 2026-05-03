@@ -1,0 +1,31 @@
+[Unit]
+Description=MC Gateway Event Subscriber
+Documentation=https://github.com/Foxsky/openclaw-mission-control
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mcontrol
+Group=mcontrol
+WorkingDirectory=/home/mcontrol/openclaw-mission-control/backend
+EnvironmentFile=/etc/mc-gateway-subscriber/env
+ExecStart=/home/mcontrol/openclaw-mission-control/backend/.venv/bin/python -m app.services.mc_gateway_subscriber
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=78
+
+# Allow the worker to read its env file and write logs, but nothing else.
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/log/mc-gateway-subscriber
+
+# Log to systemd journal — operators tail with:
+#   journalctl -u mc-gateway-subscriber.service -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
