@@ -143,6 +143,7 @@ from app.services.task_pipeline import (
     pipeline_present_states,
     require_frontend_pipeline_ready_for_review,
 )
+from app.services.umbrella_cascade import maybe_cascade_umbrella_close
 from app.services.task_review_events import (
     get_task_review_readiness,
     task_review_event_read,
@@ -5152,6 +5153,17 @@ async def _finalize_updated_task(
             task=update.task,
             reason=f"task moved from {update.previous_status} to review",
         )
+    # Umbrella auto-cascade: when the just-committed terminal status
+    # closes the last open child of a never-executed parent, retire the
+    # parent too. Closes the 2026-05-03 ``a8a67bc8`` failure mode where
+    # an explicitly retired umbrella sat in inbox indefinitely with
+    # is_blocked=False after its 5 children all reached done.
+    if update.task.status in ("done", "cancelled"):
+        cascaded_parent = await maybe_cascade_umbrella_close(
+            session, task=update.task
+        )
+        if cascaded_parent is not None:
+            await session.commit()
 
     return await _task_read_response(
         session,

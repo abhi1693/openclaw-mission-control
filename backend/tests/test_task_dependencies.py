@@ -36,6 +36,31 @@ def test_blocked_by_dependency_ids_flags_not_done_and_missing_status():
     ) == [b, c]
 
 
+def test_blocked_by_dependency_ids_treats_cancelled_as_satisfied():
+    """Repro 2026-05-03 board chain: 5b7abdd2 (Phase 2 QA gate) showed
+    blocked_by=[5f847e51, 5b261dfc] where 5b261dfc was status=cancelled.
+    Cancelled means "removed from scope" — it must NOT block downstream.
+    Treating cancelled as still-blocking pinned the entire QA-gate ->
+    Phase 2 umbrella -> Phase 3 umbrella chain forever."""
+    done_dep = uuid4()
+    cancelled_dep = uuid4()
+    in_progress_dep = uuid4()
+    inbox_dep = uuid4()
+
+    status_by_id = {
+        done_dep: "done",
+        cancelled_dep: "cancelled",
+        in_progress_dep: "in_progress",
+        inbox_dep: "inbox",
+    }
+
+    # Only in_progress + inbox should block; done + cancelled are terminal/satisfied.
+    assert task_dependencies.blocked_by_dependency_ids(
+        dependency_ids=[done_dep, cancelled_dep, in_progress_dep, inbox_dep],
+        status_by_id=status_by_id,
+    ) == [in_progress_dep, inbox_dep]
+
+
 @pytest.mark.parametrize(
     ("nodes", "edges", "expected"),
     [
