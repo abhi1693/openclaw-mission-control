@@ -77,6 +77,26 @@ before guessing an endpoint.
   reason_code the task has been `in_progress` long enough to nudge — do not
   second-guess the threshold; record `details.in_progress_minutes` in the
   nudge comment for context.
+
+  **Gateway session signal.** `details.gateway_session` is the
+  slice-4 projection of the agent's OpenClaw gateway session and tells
+  you whether the worker is actually exchanging messages with the
+  gateway right now or has gone silent. Branch:
+
+  | `gateway_session` | What it means | Action |
+  |---|---|---|
+  | absent (key missing) | The MC backend wasn't built with slice-5 wiring. Treat as `null`. | Default nudge behaviour above. |
+  | `null` | The subscriber has no row for this agent yet — newly-paired agent, subscriber recently restarted, or agent never opened a session. | Default nudge behaviour above. Do not infer agent health from absence. |
+  | `aborted_last_run: true` | The agent's last gateway turn aborted (process crash, OOM, or gateway-side failure). Cite this in the nudge so the worker knows to recover, not just resume. | Nudge once with the abort context. If the same task surfaces with `aborted_last_run: true` on the next two heartbeats, escalate to a `Blocker` (`reason_code=worker_session_aborted`) and stop nudging. |
+  | `last_changed_at_ms` recent (within ~2× heartbeat interval) | The agent IS actively working on the gateway side; the task DB just hasn't moved. | Pure nudge — the worker is alive, just slow. Do NOT reassign on this tick. |
+  | `last_changed_at_ms` stale (>10 min, regardless of `last_phase`) | The agent is silent on the gateway. Combined with stale `in_progress_at`, the worker is likely wedged. | Nudge once, then watch. If `last_changed_at_ms` doesn't advance by the next heartbeat, escalate via `Blocker` (`reason_code=worker_silent_on_gateway`) and let DevOps recovery take over. |
+
+  Convert `last_changed_at_ms` to America/Fortaleza pt-BR when posting
+  the comment so the operator can read it directly. Never act on a
+  partial signal: if `gateway_session` is present but you can't
+  interpret the values (e.g. `last_phase` is unrecognised), proceed
+  with default nudge behaviour and flag the unknown phase to the
+  operator.
 - `inspect_stale_blocker`: the returned task has at least one open
   structured `Blocker` aged past `details.stale_blocker_grace_minutes`
   (currently 20 min, aligned with the in_progress nudge grace).

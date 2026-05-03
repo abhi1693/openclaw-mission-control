@@ -1103,6 +1103,13 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "create exactly" in next_action
     assert "assigned_inbox_needs_lead_triage" in next_action
     assert "assigned inbox" in next_action.lower()
+    # Slice 5: lead must know how to read details.gateway_session and
+    # branch on aborted_last_run / last_changed_at_ms staleness.
+    assert "gateway_session" in next_action
+    assert "aborted_last_run" in next_action
+    assert "last_changed_at_ms" in next_action
+    assert "worker_session_aborted" in next_action
+    assert "worker_silent_on_gateway" in next_action
 
     health = _read_skill_text_or_skip("lead-health-scan")
     assert "LEAD_TASKS_JSON" in health
