@@ -359,10 +359,14 @@ async def test_projector_records_parent_session_key_for_acp_child() -> None:
 
 @pytest.mark.asyncio
 async def test_projector_records_status_and_reason_for_acp_completion() -> None:
-    """Live capture (2026-05-03) showed PB lifecycle events fire with
-    ``status="done"`` and ``reason="completed"`` when a session run
-    finishes. The two together are how MC derives "this ACP child
-    finished" without inferring from session-jsonl mtimes."""
+    """ACP child completion lands as ``reason="subagent-status"`` (the
+    gateway's only broadcast on child status mutations, verified at
+    subagent-registry-lifecycle.ts:606) carrying the terminal status
+    in the same payload. MC derives "this ACP child finished" by
+    matching the terminal ``status`` (``done``/``failed``/``timed_out``)
+    rather than by ``reason`` — the ``endedReason`` enum
+    (``completed``/``expiry``/``spawn-failed``/``retry-limit``) stays
+    local to the gateway and never reaches subscribers."""
     p = SessionStateProjector()
     await p(
         _make_event(
@@ -370,37 +374,53 @@ async def test_projector_records_status_and_reason_for_acp_completion() -> None:
             parent_session_key="agent:mc-parent-5678:main",
             phase="end",
             status="done",
-            reason="completed",
+            reason="subagent-status",
         )
     )
     states = p.get("mc-child-1234")
     assert len(states) == 1
     assert states[0].last_status == "done"
-    assert states[0].last_lifecycle_reason == "completed"
+    assert states[0].last_lifecycle_reason == "subagent-status"
 
 
 @pytest.mark.asyncio
 async def test_projector_records_actually_broadcast_lifecycle_reasons() -> None:
-    """Verified by grep against gateway source on .60: the actual
-    broadcast vocabulary for lifecycle reasons is the union of:
+    """Verified 5.3 broadcast vocabulary is 12 strings from 3 source
+    files (every ``emitSessionLifecycleEvent``/``emitSessionsChanged``
+    call site enumerated 2026-05-04 against gateway source on .60):
 
-    * ``"create"`` — top-level session start (sessions.ts:943,
-      agent.ts:810) and subagent spawn (subagent-spawn.ts:877).
-    * ``"subagent-status"`` — every status mutation on a child
-      session (subagent-registry-lifecycle.ts:604).
-    * ``"abort"`` — explicit session abort (sessions.ts:1253).
-    * ``"reset"`` — session reset (session-reset-service.ts:661).
-    * ``"patch"`` — session patch (sessions.ts:1319).
-    * ``"deleted"`` — session deletion.
+    * ``sessions.ts`` (10): send, steer, create, patch, new, reset,
+      abort, delete, checkpoint-branch, checkpoint-restore, compact.
+    * ``subagent-spawn.ts`` (1): create (dedup with sessions.ts).
+    * ``subagent-registry-lifecycle.ts`` (1): subagent-status.
 
-    The internal ``endedReason`` strings (``completed`` / ``expiry`` /
-    ``spawn-failed`` / ``retry-limit``) are stored on the gateway side
-    but NEVER broadcast — projector callers can't see them. Pin the
-    actually-observed vocabulary so the round-trip contract is clear.
-    Use a 3-segment session key per spawn so the slice-6 cardinality
-    guard (``acp:`` 4-segment drop) doesn't reject the test fixture.
+    Earlier audits incorrectly listed ``"deleted"`` (past tense) as
+    broadcast from ``session-reset-service.ts``; verified that file
+    has zero broadcast call sites. Only ``"delete"`` (no ``d``) hits
+    the wire, from sessions.delete RPC. The internal ``endedReason``
+    enum (``completed``/``expiry``/``spawn-failed``/``retry-limit``)
+    stays local to the gateway and never reaches subscribers.
+
+    Pin the actually-observed vocabulary so the round-trip contract
+    is clear. Use a 3-segment session key per spawn so the slice-6
+    cardinality guard (``acp:`` 4-segment drop) doesn't reject the
+    test fixture.
     """
-    for reason in ("create", "subagent-status", "abort", "reset", "patch", "deleted"):
+    broadcast_reasons = (
+        "send",
+        "steer",
+        "create",
+        "patch",
+        "new",
+        "reset",
+        "abort",
+        "delete",
+        "checkpoint-branch",
+        "checkpoint-restore",
+        "compact",
+        "subagent-status",
+    )
+    for reason in broadcast_reasons:
         p = SessionStateProjector()
         await p(
             _make_event(

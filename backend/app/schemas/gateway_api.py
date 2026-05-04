@@ -12,9 +12,18 @@ RUNTIME_ANNOTATION_TYPES = (NonEmptyStr, datetime)
 
 
 class GatewaySessionMessageRequest(SQLModel):
-    """Request payload for sending a message into a gateway session."""
+    """Request payload for sending a message into a gateway session.
+
+    ``interrupt_if_active`` (OpenClaw 2026.5.3+) routes through the
+    ``sessions.steer`` RPC instead of plain ``chat.send`` — the gateway
+    aborts active work and clears the queue before delivering, with a
+    15s grace period for the prior turn to settle. Use from the operator
+    UI's "stop and steer" affordance; default off keeps the legacy
+    queue-and-deliver semantics.
+    """
 
     content: NonEmptyStr
+    interrupt_if_active: bool = False
 
 
 class GatewayEvalApprovalResolveRequest(SQLModel):

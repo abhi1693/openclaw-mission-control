@@ -37,6 +37,7 @@ from app.services.openclaw.gateway_rpc import (
     get_chat_history,
     openclaw_call,
     send_message,
+    steer_session,
 )
 from app.services.openclaw.internal.agent_key import agent_key
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
@@ -468,9 +469,24 @@ class GatewaySessionService(OpenClawDBService):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         await require_board_access(self.session, user=user, board=board, write=True)
         try:
-            if main_session and session_id == main_session:
-                await ensure_session(main_session, config=config, label="Gateway Agent")
-            await send_message(payload.content, session_key=session_id, config=config)
+            if payload.interrupt_if_active:
+                # sessions.steer requires an existing live session; ensuring
+                # one would create an empty session just to abort nothing,
+                # plus the extra sessions.patch broadcast delays the
+                # time-sensitive interrupt by one RTT.
+                await steer_session(
+                    payload.content,
+                    session_key=session_id,
+                    config=config,
+                )
+            else:
+                if main_session and session_id == main_session:
+                    await ensure_session(main_session, config=config, label="Gateway Agent")
+                await send_message(
+                    payload.content,
+                    session_key=session_id,
+                    config=config,
+                )
         except OpenClawGatewayError as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,

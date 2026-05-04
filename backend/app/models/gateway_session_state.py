@@ -48,19 +48,23 @@ class GatewaySessionState(QueryModel, table=True):
     # this row to the parent agent's session when this session is an
     # ACP child; null for top-level sessions. Indexed because the lead
     # next-action surface (slice 7+) will filter on it.
-    # ``last_status`` is the per-run state from the broadcast snapshot
-    # (``"running"`` / ``"done"`` / ...).
-    # ``last_lifecycle_reason`` captures the gateway's broadcast
-    # lifecycle vocabulary, verified against the source on .60:
-    # ``"create"``, ``"subagent-status"``, ``"abort"``, ``"reset"``,
-    # ``"patch"``, ``"deleted"``. NOTE: the gateway's INTERNAL
-    # ``endedReason`` ("completed"|"expiry"|"spawn-failed"|"retry-limit")
-    # is NOT broadcast — slice 6 cannot fully replace MC's "infer ACP
-    # done from session jsonl mtimes" hack on its own; the broadcast
-    # signals "child status changed" via ``"subagent-status"``, but the
-    # rich completion outcome stays local to the gateway. Treat this
-    # field as raw telemetry; the lead playbook derivation rule is
-    # under design.
+    #
+    # ``last_status`` — per-run state from the broadcast snapshot
+    # (sessions.ts:200 spreads ``status: sessionRow.status``).
+    # Live values: ``running`` / ``done`` / ``failed`` / ``timed_out``.
+    # THIS is the field that distinguishes success-vs-failure for ACP
+    # children under ``last_lifecycle_reason="subagent-status"`` —
+    # match on the terminal status, not the reason.
+    #
+    # ``last_lifecycle_reason`` — gateway 5.3 broadcast vocabulary is
+    # 12 strings from 3 source files: send, steer, create, patch, new,
+    # reset, abort, delete, checkpoint-branch, checkpoint-restore,
+    # compact (sessions.ts) + create (subagent-spawn.ts dedup) +
+    # subagent-status (subagent-registry-lifecycle.ts). The
+    # ``endedReason`` enum (completed/expiry/spawn-failed/retry-limit/
+    # deleted) is internal — passed to runSubagentEnded hooks only,
+    # never broadcast. Note: ``delete`` (no ``d``) on the wire, NOT
+    # ``deleted``.
     parent_session_key: str | None = Field(default=None, index=True)
     last_status: str | None = Field(default=None)
     last_lifecycle_reason: str | None = Field(default=None)

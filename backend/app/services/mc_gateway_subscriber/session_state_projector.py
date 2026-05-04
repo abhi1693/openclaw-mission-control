@@ -49,13 +49,24 @@ class SessionState:
     # Slice-6 lifecycle-projection fields captured from
     # ``sessions.changed`` events. ``parent_session_key`` links a child
     # session to its parent agent's session (null for top-level).
-    # ``last_status`` carries the per-run state from the broadcast
-    # snapshot. ``last_lifecycle_reason`` carries the gateway's
-    # actually-broadcast vocabulary (create / subagent-status / abort /
-    # reset / patch / deleted) — verified against gateway source on
-    # .60. The internal ``endedReason`` outcomes ("completed"/"expiry"/
-    # "spawn-failed"/"retry-limit") are NOT broadcast, so this field
-    # alone can't tell success-vs-failure for child completion.
+    #
+    # ``last_lifecycle_reason`` — gateway 5.3 broadcast reason. 12
+    # strings from 3 source files (every ``emitSessionLifecycleEvent``/
+    # ``emitSessionsChanged`` call site): send / steer / create / patch /
+    # new / reset / abort / delete / checkpoint-branch /
+    # checkpoint-restore / compact (sessions.ts) + create
+    # (subagent-spawn.ts, dedup) + subagent-status
+    # (subagent-registry-lifecycle.ts). The ``endedReason`` enum
+    # ("completed"/"expiry"/"spawn-failed"/"retry-limit"/"deleted") is
+    # internal — hook payloads only, never on the wire. Note: ``delete``
+    # (no ``d``) on the wire, NOT ``deleted``.
+    #
+    # ``last_status`` — per-run state from the broadcast payload
+    # (sessions.ts:200 spreads ``status: sessionRow.status``). Live
+    # values: running / done / failed / timed_out. THIS field
+    # distinguishes success-vs-failure for ACP children under
+    # ``reason="subagent-status"`` — match on terminal status, not
+    # reason.
     parent_session_key: str | None = None
     last_status: str | None = None
     last_lifecycle_reason: str | None = None
