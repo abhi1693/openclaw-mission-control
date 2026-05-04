@@ -941,6 +941,7 @@ async def get_lead_next_action(
             tasks_with_umbrella_retired_marker=parents_with_retired_marker,
             open_blockers_by_task_id=open_blockers_by_task_id_typed,
             gateway_session_by_agent_id=gateway_session_by_agent_id,
+            lead_agent_id=agent_ctx.agent.id,
         ),
     )
 
@@ -1678,8 +1679,14 @@ async def reconcile_board_memory_intake_endpoint(
     ``lead-memory-intake`` skill calls this before its verification
     pass; without it, the skill's ``curl -fsS`` exits non-zero on 404
     and the Supervisor heartbeat reports ``HEARTBEAT_FAILED``.
+
+    Lead-only: the OpenAPI hint declares ``required_privilege=board_lead``
+    because materializing operator findings into inbox tasks is a
+    board-level write that the lead owns. Worker agents must not
+    trigger this; codex review 2026-05-04 caught the missing guard.
     """
     _guard_board_access(agent_ctx, board)
+    _require_board_lead(agent_ctx)
     if board.id is None:
         from fastapi import HTTPException, status as http_status
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND)

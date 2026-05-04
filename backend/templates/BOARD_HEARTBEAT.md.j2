@@ -96,8 +96,14 @@ or records the first concrete friction that prevents it.
 
 **Mandatory evidence (anti-hallucination):** every heartbeat reply that
 references a Lead Next Action Gate outcome MUST quote the
-`response_id` from the response headers AND the literal
-`task_id`/`blocker_ids` returned by the just-fired curl. Past
+`x-request-id` (the `LEAD_NEXT_ACTION_REQUEST_ID` env var the gate
+script captures from the response headers) AND the literal
+`task_id`/`blocker_ids` returned by the just-fired curl. Note: the
+request_id is operator-audit signal (post-hoc check that an `exec`
+tool ran on this tick), not cryptographic proof — the FastAPI
+middleware accepts client-overridable inbound headers, so a model
+*could* fabricate a 32-hex string. The deterrent is the
+`toolMetas` audit, not the id format itself. Past
 incident 2026-05-04: a Supervisor turn returned `HEARTBEAT_FAILED:
 inspect_stale_blocker for blocker 64c0d937` while the trajectory
 showed zero curl invocations — the model fabricated the failure

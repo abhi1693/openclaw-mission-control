@@ -783,6 +783,93 @@ def _fresh_blocker_age_at() -> datetime:
     return utcnow() - timedelta(minutes=2)
 
 
+def test_inspect_stale_blocker_ignores_self_ack_by_lead() -> None:
+    """Codex review 2026-05-04: skill-doc-only prevention of lead
+    self-ack is insufficient because cached prompts may miss the
+    new rule. Code-level guard: when the acker IS the lead agent,
+    treat the blocker as if not acknowledged (effective age =
+    created_at). This catches the production loop where Supervisor
+    self-ack'd both parent blocker 64c0d937 and AC6 child blocker
+    f7529869 to silence the gate temporarily, then re-fired every
+    grace cycle.
+    """
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Self-acked by lead, should still fire stale",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    lead_id = uuid4()
+    blocker_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="deploy_drift",
+        owner_role="DevOps",
+        acknowledged_by_agent_id=lead_id,  # lead acked
+        created_at=_stale_blocker_age_at(),  # past grace
+        acknowledged_at=utcnow() - timedelta(minutes=2),  # fresh ack
+    )
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({task.id}),
+            open_blockers_by_task_id={task.id: [blocker_row]},
+            lead_agent_id=lead_id,
+        ),
+    )
+
+    # Despite the fresh ack, the tier fires because the acker was the
+    # lead themselves — the misuse pattern. The lead is routed back
+    # to the actual owner_role (DevOps).
+    assert action.action == "inspect_stale_blocker"
+    assert action.reason_code == "stale_open_blocker_needs_owner_followup"
+
+
+def test_inspect_stale_blocker_respects_owner_ack() -> None:
+    """Counterpart to the lead-self-ack test: when the acker is the
+    OWNER (not the lead), the ack is legitimate and resets the
+    grace clock as designed."""
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Acked by owner, should NOT fire stale",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    lead_id = uuid4()
+    owner_id = uuid4()
+    blocker_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="deploy_drift",
+        owner_role="DevOps",
+        acknowledged_by_agent_id=owner_id,  # owner acked, not lead
+        created_at=_stale_blocker_age_at(),
+        acknowledged_at=utcnow() - timedelta(minutes=2),
+    )
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({task.id}),
+            open_blockers_by_task_id={task.id: [blocker_row]},
+            lead_agent_id=lead_id,
+        ),
+    )
+
+    assert action.action != "inspect_stale_blocker", (
+        f"owner-acked blocker still fired stale; action={action.action}"
+    )
+
+
 def test_inspect_stale_blocker_resets_clock_on_acknowledgement() -> None:
     """Production gap 2026-05-04 (parent QA gate AC6 blocker 64c0d937):
     Supervisor acknowledged the blocker, but the stale-blocker tier

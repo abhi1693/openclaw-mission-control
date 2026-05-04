@@ -71,6 +71,16 @@ class LeadInputs:
     tasks_with_umbrella_retired_marker: frozenset[UUID] | set[UUID] | None = None
     open_blockers_by_task_id: Mapping[UUID, Sequence[OpenBlockerRow]] | None = None
     gateway_session_by_agent_id: Mapping[UUID, GatewaySessionState] | None = None
+    # Verified lead agent id for the current request (per
+    # ``_require_board_lead`` upstream). When non-null, the
+    # stale-blocker tier ignores ``acknowledged_at`` on blockers
+    # acked by this id — lead self-ack on a worker-owned blocker is
+    # a misuse pattern that just resets the grace clock without
+    # actually progressing the work. Codex review 2026-05-04 caught
+    # the production loop. Optional so legacy/test callers without
+    # an authenticated lead still work; in that mode self-ack
+    # detection is disabled.
+    lead_agent_id: UUID | None = None
 
 
 # Grace window after a worker picks up an in_progress task before the lead is
@@ -218,19 +228,44 @@ def _in_progress_age_minutes(task: Task, *, now: datetime) -> int | None:
     return max(0, int(age.total_seconds() // 60))
 
 
-def _blocker_effective_age_at(blocker: OpenBlockerRow) -> datetime:
+def _blocker_effective_age_at(
+    blocker: OpenBlockerRow,
+    *,
+    lead_agent_id: UUID | None = None,
+) -> datetime:
     """Return the timestamp the stale-blocker tier should age against.
 
     Acknowledgement is the owner's "I'm on it" signal — once recorded,
-    the lead waits another grace window before re-nudging. If the
-    owner goes silent again, the tier still re-fires (the timestamp
-    reflects whichever check-in is more recent). Pre-ack blockers age
-    from creation. All datetimes are coerced to naive UTC because
-    PostgreSQL ``TIMESTAMP WITH TIME ZONE`` returns aware while
-    ``utcnow()`` is naive.
+    the lead waits another grace window before re-nudging. The
+    "fresher" of the two timestamps wins so the tier reflects
+    whichever check-in is more recent. Pre-ack blockers age from
+    creation. Codex review 2026-05-04 flagged that
+    ``acknowledged_at OR created_at`` would mis-age a blocker if
+    ``acknowledged_at < created_at`` (corrupted/replayed data); use
+    ``max`` to be defensive. All datetimes coerced to naive UTC
+    because PostgreSQL ``TIMESTAMP WITH TIME ZONE`` returns aware
+    while ``utcnow()`` is naive.
+
+    ``lead_agent_id``: when non-null AND
+    ``blocker.acknowledged_by_agent_id`` matches it, the
+    acknowledgement is treated as if absent (effective age =
+    created_at). Lead self-ack on a worker-owned blocker is the
+    production-gap pattern from 2026-05-04 — Supervisor self-acked
+    parent blocker 64c0d937 and AC6 child f7529869 to silence the
+    gate temporarily, but the gate re-fired on every grace cycle
+    because the acker couldn't actually do the unblock work.
+    Code-level enforcement complements the ``lead-health-scan``
+    skill rule (cached prompts may miss the doc).
     """
-    effective = blocker.acknowledged_at or blocker.created_at
-    return as_naive_utc(effective)
+    created = as_naive_utc(blocker.created_at)
+    if blocker.acknowledged_at is None:
+        return created
+    if (
+        lead_agent_id is not None
+        and blocker.acknowledged_by_agent_id == lead_agent_id
+    ):
+        return created
+    return max(created, as_naive_utc(blocker.acknowledged_at))
 
 
 def select_lead_next_action(
@@ -517,7 +552,9 @@ def select_lead_next_action(
                 if task.status in {"inbox", "in_progress", "review", "rework"}
                 and task.id in inputs.open_blockers_by_task_id
                 and any(
-                    _blocker_effective_age_at(blocker) < stale_threshold
+                    _blocker_effective_age_at(
+                        blocker, lead_agent_id=inputs.lead_agent_id,
+                    ) < stale_threshold
                     for blocker in inputs.open_blockers_by_task_id.get(task.id, ())
                 )
             ),
@@ -526,7 +563,12 @@ def select_lead_next_action(
         if stale_candidates:
             stale_task = stale_candidates[0]
             blockers = list(inputs.open_blockers_by_task_id.get(stale_task.id, ()))
-            oldest = min(blockers, key=_blocker_effective_age_at)
+            oldest = min(
+                blockers,
+                key=lambda b: _blocker_effective_age_at(
+                    b, lead_agent_id=inputs.lead_agent_id,
+                ),
+            )
             return _action(
                 task=stale_task,
                 action_required=True,

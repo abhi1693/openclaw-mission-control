@@ -175,3 +175,34 @@ async def test_reconcile_skips_non_operator_memory(
     assert result.scanned == 2
     assert result.created == 0
     assert result.skipped_non_actionable == 2
+
+
+@pytest.mark.asyncio
+async def test_reconcile_endpoint_rejects_non_lead_agent_with_403(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Codex review 2026-05-04: the reconcile endpoint claims
+    ``required_privilege=board_lead`` in its OpenAPI hint but only
+    called ``_guard_board_access``, letting any worker on the board
+    trigger operator-memory→task materialization. Add a board-lead
+    guard and assert the 403 here."""
+    from fastapi import HTTPException
+
+    board = await _seed_board(sqlite_session)
+    worker_ctx = AgentAuthContext(
+        actor_type="agent",
+        agent=Agent(
+            id=uuid4(),
+            board_id=board.id,
+            gateway_id=board.gateway_id,
+            name="Programmer-Frontend",
+            status="online",
+            is_board_lead=False,
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await agent_api.reconcile_board_memory_intake_endpoint(
+            board=board, session=sqlite_session, agent_ctx=worker_ctx,
+        )
+    assert exc.value.status_code == 403
