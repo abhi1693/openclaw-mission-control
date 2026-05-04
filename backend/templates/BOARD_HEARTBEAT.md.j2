@@ -93,6 +93,34 @@ HEARTBEAT_OK is forbidden when it prints `LEAD_NEXT_ACTION_REQUIRED` unless
 this tick applies the returned action and drains additional ready actions
 per the skill's Drain Loop (max 5 per tick, fresh fetch between iterations),
 or records the first concrete friction that prevents it.
+
+**Mandatory evidence (anti-hallucination):** every heartbeat reply that
+references a Lead Next Action Gate outcome MUST quote the
+`response_id` from the response headers AND the literal
+`task_id`/`blocker_ids` returned by the just-fired curl. Past
+incident 2026-05-04: a Supervisor turn returned `HEARTBEAT_FAILED:
+inspect_stale_blocker for blocker 64c0d937` while the trajectory
+showed zero curl invocations — the model fabricated the failure
+from prior-turn memory. Concretely:
+
+- Run the `lead-next-action-gate` script as the SHELL command (do
+  not paraphrase it from memory). The bash output must include the
+  literal lines `LEAD_NEXT_ACTION {...full json...}` and either
+  `LEAD_NEXT_ACTION_REQUIRED <action> <reason_code> <task_id>` or
+  `LEAD_NEXT_ACTION_CLEAR <reason_code>`.
+- Capture the FastAPI `request_id` from the curl response (use
+  `-D -` to dump headers) and quote it in the heartbeat reply when
+  reporting any failure or routing decision.
+- If your reply discusses a blocker by id, that blocker id MUST
+  appear in the just-captured `LEAD_NEXT_ACTION` JSON (either as
+  `task_id` or in `details.blocker_ids`). Quoting blocker ids from
+  memory of a prior tick — without a current curl response showing
+  them — is a hard `HEARTBEAT_FAILED` and the operator will catch
+  it via the trajectory audit.
+- Hallucinated heartbeats are detected post-hoc by inspecting the
+  `toolMetas` field of the trajectory: if there is no `bash`/`exec`
+  tool with the gate script in this tick, the heartbeat is
+  invalid regardless of the assistant's text.
 If the returned action is `inspect_review_gates` with
 `reason_code=review_task_ready_for_approval`, run
 `AGENTS.md § Lead Board Playbook / Step 3 — Route Review Tasks` using

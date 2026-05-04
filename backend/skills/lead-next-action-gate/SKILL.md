@@ -19,8 +19,12 @@ friction that prevents it.
 
 ```bash
 LEAD_NEXT_ACTION_JSON="$(mktemp "${TMPDIR:-/tmp}/mc-lead-next-action-${BOARD_ID}-${AGENT_ID}.XXXXXX.json")"
-export LEAD_NEXT_ACTION_JSON
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/lead/next-action" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_NEXT_ACTION_JSON"
+LEAD_NEXT_ACTION_HDRS="$(mktemp "${TMPDIR:-/tmp}/mc-lead-next-action-hdrs-${BOARD_ID}-${AGENT_ID}.XXXXXX.txt")"
+export LEAD_NEXT_ACTION_JSON LEAD_NEXT_ACTION_HDRS
+curl -fsS -D "$LEAD_NEXT_ACTION_HDRS" "$BASE_URL/api/v1/agent/boards/$BOARD_ID/lead/next-action" -H "X-Agent-Token: $AUTH_TOKEN" -o "$LEAD_NEXT_ACTION_JSON"
+LEAD_NEXT_ACTION_REQUEST_ID="$(grep -i '^x-request-id:' "$LEAD_NEXT_ACTION_HDRS" | head -1 | awk '{print $2}' | tr -d '\r')"
+export LEAD_NEXT_ACTION_REQUEST_ID
+echo "LEAD_NEXT_ACTION_REQUEST_ID $LEAD_NEXT_ACTION_REQUEST_ID"
 python3 - <<'PY'
 import json, os
 action=json.load(open(os.environ["LEAD_NEXT_ACTION_JSON"]))
@@ -31,6 +35,16 @@ if action.get("action_required"):
 print("LEAD_NEXT_ACTION_CLEAR", action.get("reason_code"))
 PY
 ```
+
+The `LEAD_NEXT_ACTION_REQUEST_ID` echoed by the gate script is a
+unique-per-call value the FastAPI middleware stamps on every
+response. It is **not derivable from prior context** — every fresh
+curl produces a new id. Quoting it in the heartbeat reply proves
+the gate actually ran on this tick. If you ever produce a
+heartbeat reply that names a blocker id from a `LEAD_NEXT_ACTION`
+response without also quoting the matching `LEAD_NEXT_ACTION_REQUEST_ID`,
+the operator's trajectory audit will catch it as fabricated
+(see HEARTBEAT.md § Lead Next Action Gate / Mandatory evidence).
 
 If the curl returns 401/403/404/429, 5xx, or a schema mismatch, report
 `HEARTBEAT_FAILED` with the status/body and refresh OpenAPI per `TOOLS.md`
