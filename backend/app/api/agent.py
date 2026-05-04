@@ -869,8 +869,9 @@ async def get_lead_next_action(
                 owner_role=owner_role,
                 acknowledged_by_agent_id=acknowledged_by_agent_id,
                 created_at=created_at,
+                acknowledged_at=acknowledged_at,
             )
-            for blocker_id, reason_code, owner_role, acknowledged_by_agent_id, created_at in rows
+            for blocker_id, reason_code, owner_role, acknowledged_by_agent_id, created_at, acknowledged_at in rows
         ]
         for task_id, rows in open_blocker_rows_raw.items()
     }

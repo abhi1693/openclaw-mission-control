@@ -69,13 +69,18 @@ async def open_blocker_rows_by_task_id(
     *,
     board_id: UUID,
     task_ids: Iterable[UUID],
-) -> dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime]]]:
+) -> dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime, datetime | None]]]:
     """Batched projection of open Blockers grouped by task_id.
 
     Each value is a list of
-    ``(blocker_id, reason_code, owner_role, acknowledged_by_agent_id, created_at)``
+    ``(blocker_id, reason_code, owner_role, acknowledged_by_agent_id, created_at, acknowledged_at)``
     tuples ordered by ``created_at`` ascending so the caller can pick
     the oldest blocker without re-sorting.
+
+    ``acknowledged_at`` lets the lead's stale-blocker tier reset its
+    clock on owner acknowledgement: once the owner has explicitly
+    claimed the blocker, the lead waits another grace window before
+    re-nudging.
 
     Used by the lead next-action endpoint to feed the new
     ``open_blockers_by_task_id`` parameter for the stale-blocker tier
@@ -93,17 +98,18 @@ async def open_blocker_rows_by_task_id(
             col(Blocker.owner_role),
             col(Blocker.acknowledged_by_agent_id),
             col(Blocker.created_at),
+            col(Blocker.acknowledged_at),
         )
         .where(col(Blocker.board_id) == board_id)
         .where(col(Blocker.task_id).in_(task_id_list))
         .where(col(Blocker.resolved_at).is_(None))
         .order_by(col(Blocker.task_id), col(Blocker.created_at))
     )
-    grouped: dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime]]] = {}
+    grouped: dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime, datetime | None]]] = {}
     for row in (await session.exec(stmt)).all():
-        task_id, blocker_id, reason_code, owner_role, owner_agent_id, created_at = row
+        task_id, blocker_id, reason_code, owner_role, owner_agent_id, created_at, acknowledged_at = row
         grouped.setdefault(task_id, []).append(
-            (blocker_id, reason_code, owner_role, owner_agent_id, created_at),
+            (blocker_id, reason_code, owner_role, owner_agent_id, created_at, acknowledged_at),
         )
     return grouped
 

@@ -783,6 +783,108 @@ def _fresh_blocker_age_at() -> datetime:
     return utcnow() - timedelta(minutes=2)
 
 
+def test_inspect_stale_blocker_resets_clock_on_acknowledgement() -> None:
+    """Production gap 2026-05-04 (parent QA gate AC6 blocker 64c0d937):
+    Supervisor acknowledged the blocker, but the stale-blocker tier
+    kept firing because the comparison only checked ``created_at``.
+    The lead then re-nudged on every heartbeat, bursting POST /comments
+    past the per-IP rate-limit and getting 429s.
+
+    Acknowledgement is the explicit "owner is on it" signal — it
+    should reset the stale clock so the lead waits ANOTHER grace
+    window before re-nudging. If the owner goes silent post-ack,
+    the tier still fires (defensively), but only after the new window.
+    """
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Acknowledged blocker, owner on it",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    blocker_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="deploy_drift",
+        owner_role="DevOps",
+        acknowledged_by_agent_id=uuid4(),
+        created_at=_stale_blocker_age_at(),
+    )
+    # Override the NamedTuple's missing acknowledged_at field by extending the type.
+    # If the production OpenBlockerRow doesn't carry acknowledged_at, the test
+    # fails at construction — that fail tells us we need to add it.
+    fresh_ack_at = utcnow() - timedelta(minutes=2)
+    blocker_row = blocker_row._replace()  # baseline shape
+    # Construct the variant that carries the ack timestamp:
+    object.__setattr__ if False else None  # keep linter quiet
+    # Use field-by-field new instance (NamedTuple doesn't accept arbitrary kwargs):
+    fields = {
+        "id": blocker_row.id,
+        "reason_code": blocker_row.reason_code,
+        "owner_role": blocker_row.owner_role,
+        "acknowledged_by_agent_id": blocker_row.acknowledged_by_agent_id,
+        "created_at": blocker_row.created_at,
+        "acknowledged_at": fresh_ack_at,
+    }
+    blocker_row = OpenBlockerRow(**fields)
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({task.id}),
+            open_blockers_by_task_id={task.id: [blocker_row]},
+        ),
+    )
+
+    # Acknowledgement is fresh; stale tier should NOT fire on this task.
+    # The lead falls through to other tiers (no inbox routing here either,
+    # so the action should be ``clear`` — owner has the ack and is working).
+    assert action.action != "inspect_stale_blocker", (
+        f"acknowledged blocker still firing stale tier; action={action.action} "
+        f"reason={action.reason_code}"
+    )
+
+
+def test_inspect_stale_blocker_re_fires_when_acknowledgement_aged() -> None:
+    """Counterpart to the ack-resets-clock test: if the owner ACKed but
+    then went silent past the grace window, the tier must fire again so
+    the lead can chase. Acknowledgement is a fresh-clock signal, not a
+    permanent silencer."""
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Acknowledged but owner silent",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    blocker_row = OpenBlockerRow(
+        id=uuid4(),
+        reason_code="deploy_drift",
+        owner_role="DevOps",
+        acknowledged_by_agent_id=uuid4(),
+        created_at=_stale_blocker_age_at(),
+        acknowledged_at=_stale_blocker_age_at(),  # ack itself is past grace
+    )
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({task.id}),
+            open_blockers_by_task_id={task.id: [blocker_row]},
+        ),
+    )
+
+    assert action.action == "inspect_stale_blocker"
+    assert action.reason_code == "stale_open_blocker_needs_owner_followup"
+
+
 def test_inspect_stale_blocker_tolerates_tz_aware_created_at() -> None:
     """Production gap 2026-05-04 (request 2f667e65): the lead-next-action
     endpoint returned 500 with ``TypeError: can't compare offset-naive

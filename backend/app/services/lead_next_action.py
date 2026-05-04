@@ -27,6 +27,16 @@ class OpenBlockerRow(NamedTuple):
     window) and owner attribution (to surface who should resolve it)
     — the prior ``tasks_with_open_blocker: frozenset[UUID]`` only
     carried task ids and was insufficient.
+
+    ``acknowledged_at`` is the timestamp the owner accepted the
+    blocker (PATCH ``status_transition=acknowledge``). When non-null,
+    the stale-blocker tier resets its clock against the ack time
+    instead of ``created_at`` — once the owner has explicitly claimed
+    the work, the lead waits another grace window before re-nudging.
+    Production gap 2026-05-04 (parent QA gate AC6 blocker 64c0d937):
+    Supervisor acknowledged the blocker but the tier kept firing
+    because ack was ignored, bursting the comment endpoint past the
+    per-IP rate-limit.
     """
 
     id: UUID
@@ -34,6 +44,7 @@ class OpenBlockerRow(NamedTuple):
     owner_role: str | None
     acknowledged_by_agent_id: UUID | None
     created_at: datetime
+    acknowledged_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +216,21 @@ def _in_progress_age_minutes(task: Task, *, now: datetime) -> int | None:
     if age is None:
         return None
     return max(0, int(age.total_seconds() // 60))
+
+
+def _blocker_effective_age_at(blocker: OpenBlockerRow) -> datetime:
+    """Return the timestamp the stale-blocker tier should age against.
+
+    Acknowledgement is the owner's "I'm on it" signal — once recorded,
+    the lead waits another grace window before re-nudging. If the
+    owner goes silent again, the tier still re-fires (the timestamp
+    reflects whichever check-in is more recent). Pre-ack blockers age
+    from creation. All datetimes are coerced to naive UTC because
+    PostgreSQL ``TIMESTAMP WITH TIME ZONE`` returns aware while
+    ``utcnow()`` is naive.
+    """
+    effective = blocker.acknowledged_at or blocker.created_at
+    return as_naive_utc(effective)
 
 
 def select_lead_next_action(
@@ -466,13 +492,23 @@ def select_lead_next_action(
     if inputs.open_blockers_by_task_id:
         # PostgreSQL ``TIMESTAMP WITH TIME ZONE`` columns return tz-aware
         # datetimes via asyncpg, while ``utcnow()`` is tz-naive (project
-        # convention; see ``app.core.time``). Coerce blocker.created_at
+        # convention; see ``app.core.time``). Coerce blocker timestamps
         # to naive UTC before comparing so production deploys (PG, aware)
         # and local tests (SQLite, sometimes naive) both work without
         # raising ``TypeError: can't compare offset-naive and
         # offset-aware datetimes``. Production gap 2026-05-04 (req
-        # 2f667e65): the stale-blocker tier 500'd here, blocking every
-        # Supervisor heartbeat for ~12 minutes until the bug was found.
+        # 2f667e65): the stale-blocker tier 500'd here.
+        #
+        # ``_blocker_effective_age_at`` returns the freshness clock —
+        # acknowledged_at when the owner explicitly claimed the work,
+        # else created_at. Acknowledgement resets the stale clock so the
+        # lead waits another grace window before re-nudging an owner
+        # who has confirmed they're on it. If the owner goes silent
+        # post-ack the tier still re-fires (defensively) once the new
+        # window expires. Production gap 2026-05-04 (parent QA gate
+        # blocker 64c0d937): Supervisor acknowledged the blocker but
+        # the tier kept firing because ack was ignored, bursting the
+        # comment endpoint past per-IP rate-limit (e0ce97132).
         stale_threshold = now - STALE_BLOCKER_NUDGE_GRACE
         stale_candidates = sorted(
             (
@@ -481,7 +517,7 @@ def select_lead_next_action(
                 if task.status in {"inbox", "in_progress", "review", "rework"}
                 and task.id in inputs.open_blockers_by_task_id
                 and any(
-                    as_naive_utc(blocker.created_at) < stale_threshold
+                    _blocker_effective_age_at(blocker) < stale_threshold
                     for blocker in inputs.open_blockers_by_task_id.get(task.id, ())
                 )
             ),
@@ -490,7 +526,7 @@ def select_lead_next_action(
         if stale_candidates:
             stale_task = stale_candidates[0]
             blockers = list(inputs.open_blockers_by_task_id.get(stale_task.id, ()))
-            oldest = min(blockers, key=lambda b: as_naive_utc(b.created_at))
+            oldest = min(blockers, key=_blocker_effective_age_at)
             return _action(
                 task=stale_task,
                 action_required=True,
