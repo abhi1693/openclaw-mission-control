@@ -88,6 +88,28 @@ agent UUIDs from the scan, not `$AGENT_ID`.
   then move exactly that task through `rework -> in_progress -> review`.
 - Offline agent with live task: recover once, then assign the task elsewhere if
   it still cannot move.
+- **Never acknowledge a Blocker on someone else's behalf.**
+  ``PATCH /blockers/{id}`` with ``status_transition=acknowledge`` records
+  ``acknowledged_by_agent_id=<you>`` and asserts "I, the acknowledger,
+  am claiming responsibility to resolve this." If the
+  ``owner_role`` is ``programmer_frontend``/``DevOps``/``QA-*``/etc.,
+  the owner agent — not the lead — is the only valid acknowledger.
+  Lead self-ack on a worker-owned blocker is a misuse: it temporarily
+  resets the stale-blocker clock, the gate goes silent for 20 min,
+  then re-fires when the ack ages out — and the lead can't act
+  because they don't own the unblock work. The correct lead behavior
+  is to route to the owner (direct-message via ``/agents/{id}/nudge``
+  or post one ``@<owner_role>`` comment) and stop touching the
+  blocker. Acknowledgement is an owner-claim signal, not a tracking
+  marker. Production gap 2026-05-04 (parent blocker 64c0d937 + AC6
+  child blocker f7529869): Supervisor self-ack'd both, the lead-next-action
+  stale tier kept re-firing every grace-window cycle, and the
+  heartbeat looped on HEARTBEAT_FAILED until operator resolved the
+  parent blocker manually.
+- If you genuinely need to track a blocker passively without
+  claiming ownership, leave ``acknowledged_at`` null and rely on
+  the ``inspect_stale_blocker`` action's ``owner_role`` field to
+  route to the right agent each time.
 
 Do not post another "still blocked" comment. A comment is not routing.
 

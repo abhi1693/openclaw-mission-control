@@ -122,6 +122,10 @@ before guessing an endpoint.
   1. `details.acknowledged_by_agent_id` if non-null — that's the agent
      who claimed responsibility via PATCH `/blockers/{id}` with
      `status_transition=acknowledge`. Nudge them by direct message.
+     **Do not self-ack as the lead** to silence this tier. Self-ack
+     resets the 20-min grace clock and the tier re-fires when the ack
+     ages out, looping the heartbeat indefinitely. See
+     `lead-health-scan/SKILL.md § Routing Rules` for the full rule.
   2. Else `details.owner_role` if non-null — POST a comment on the
      task tagging the role (`@Programmer-Frontend`, `@DevOps`, etc.).
   3. Else fall back to the task's `assigned_agent_id` — open the task
