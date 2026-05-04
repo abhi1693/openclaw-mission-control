@@ -783,6 +783,53 @@ def _fresh_blocker_age_at() -> datetime:
     return utcnow() - timedelta(minutes=2)
 
 
+def test_inspect_stale_blocker_tolerates_tz_aware_created_at() -> None:
+    """Production gap 2026-05-04 (request 2f667e65): the lead-next-action
+    endpoint returned 500 with ``TypeError: can't compare offset-naive
+    and offset-aware datetimes`` because PostgreSQL ``TIMESTAMP WITH TIME
+    ZONE`` columns return tz-aware datetimes via asyncpg, while
+    ``utcnow()`` is tz-naive. The stale-blocker tier compared
+    ``blocker.created_at < (now - GRACE)`` and crashed.
+
+    Cover both comparison sites (line 475 and line 504 in lead_next_action.py)
+    by feeding an OpenBlockerRow whose ``created_at`` carries ``tzinfo=UTC``.
+    The selector must coerce to a comparable shape and not raise.
+    """
+    from datetime import UTC
+
+    from app.services.lead_next_action import OpenBlockerRow
+
+    task = _task(
+        status="in_progress",
+        title="Blocked with tz-aware blocker",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+    blocker_id = uuid4()
+    aware_created_at = (utcnow() - timedelta(hours=1)).replace(tzinfo=UTC)
+    blocker_row = OpenBlockerRow(
+        id=blocker_id,
+        reason_code="operator_reject_demo",
+        owner_role="Programmer-Frontend",
+        acknowledged_by_agent_id=None,
+        created_at=aware_created_at,
+    )
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({task.id}),
+            open_blockers_by_task_id={task.id: [blocker_row]},
+        ),
+    )
+
+    assert action.action == "inspect_stale_blocker"
+    assert action.details["oldest_blocker_age_minutes"] >= 0
+
+
 def test_inspect_stale_blocker_fires_for_aged_blocker_on_active_task() -> None:
     """Phase V §I9 Fix 3: blocked tasks aged past the stale-blocker
     grace window must surface as ``inspect_stale_blocker`` so the lead

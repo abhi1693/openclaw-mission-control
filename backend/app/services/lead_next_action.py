@@ -464,6 +464,15 @@ def select_lead_next_action(
     # the lead nudges. Above ``route_inbox`` so a stuck blocked
     # closer-to-done task wins over fresh untriaged inbox arrivals.
     if inputs.open_blockers_by_task_id:
+        # PostgreSQL ``TIMESTAMP WITH TIME ZONE`` columns return tz-aware
+        # datetimes via asyncpg, while ``utcnow()`` is tz-naive (project
+        # convention; see ``app.core.time``). Coerce blocker.created_at
+        # to naive UTC before comparing so production deploys (PG, aware)
+        # and local tests (SQLite, sometimes naive) both work without
+        # raising ``TypeError: can't compare offset-naive and
+        # offset-aware datetimes``. Production gap 2026-05-04 (req
+        # 2f667e65): the stale-blocker tier 500'd here, blocking every
+        # Supervisor heartbeat for ~12 minutes until the bug was found.
         stale_threshold = now - STALE_BLOCKER_NUDGE_GRACE
         stale_candidates = sorted(
             (
@@ -472,7 +481,7 @@ def select_lead_next_action(
                 if task.status in {"inbox", "in_progress", "review", "rework"}
                 and task.id in inputs.open_blockers_by_task_id
                 and any(
-                    blocker.created_at < stale_threshold
+                    as_naive_utc(blocker.created_at) < stale_threshold
                     for blocker in inputs.open_blockers_by_task_id.get(task.id, ())
                 )
             ),
@@ -481,7 +490,7 @@ def select_lead_next_action(
         if stale_candidates:
             stale_task = stale_candidates[0]
             blockers = list(inputs.open_blockers_by_task_id.get(stale_task.id, ()))
-            oldest = min(blockers, key=lambda b: b.created_at)
+            oldest = min(blockers, key=lambda b: as_naive_utc(b.created_at))
             return _action(
                 task=stale_task,
                 action_required=True,
@@ -501,7 +510,7 @@ def select_lead_next_action(
                     ),
                     "oldest_blocker_age_minutes": max(
                         0,
-                        int((now - oldest.created_at).total_seconds() // 60),
+                        int((now - as_naive_utc(oldest.created_at)).total_seconds() // 60),
                     ),
                     "stale_blocker_grace_minutes": int(
                         STALE_BLOCKER_NUDGE_GRACE.total_seconds() // 60
