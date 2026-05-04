@@ -16,7 +16,7 @@ from app.models.boards import Board
 from app.models.gateways import Gateway
 from app.models.organizations import Organization
 from app.models.tasks import Task
-from app.services.lead_next_action import select_lead_next_action
+from app.services.lead_next_action import LeadInputs, select_lead_next_action
 from app.services.parent_cascade import non_terminal_children_of
 
 
@@ -80,11 +80,13 @@ def test_orphan_child_action_returned_when_parent_terminal_and_child_active() ->
     child = _task(status="rework", title="Obsolete child", assigned=True)
 
     action = select_lead_next_action(
-        tasks=[parent, child],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        orphan_children_with_terminal_parent={child.id: parent.id},
+        LeadInputs(
+            tasks=[parent, child],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            orphan_children_with_terminal_parent={child.id: parent.id},
+        ),
     )
 
     assert action.action_required is True
@@ -104,11 +106,13 @@ def test_orphan_action_overrides_route_inbox() -> None:
     fresh_inbox = _task(status="inbox", title="Fresh routable inbox")
 
     action = select_lead_next_action(
-        tasks=[parent, orphan, fresh_inbox],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        orphan_children_with_terminal_parent={orphan.id: parent.id},
+        LeadInputs(
+            tasks=[parent, orphan, fresh_inbox],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            orphan_children_with_terminal_parent={orphan.id: parent.id},
+        ),
     )
 
     assert action.action == "cancel_orphan_child"
@@ -122,12 +126,14 @@ def test_review_action_still_wins_over_orphan() -> None:
     review_task = _task(status="review", title="Real review work")
 
     action = select_lead_next_action(
-        tasks=[parent, orphan, review_task],
-        blocked_by_task_id={},
-        approval_state_by_task_id={review_task.id: "none"},
-        pipeline_missing_by_task_id={},
-        review_readiness_by_task_id={review_task.id: {"ready": True}},
-        orphan_children_with_terminal_parent={orphan.id: parent.id},
+        LeadInputs(
+            tasks=[parent, orphan, review_task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={review_task.id: "none"},
+            pipeline_missing_by_task_id={},
+            review_readiness_by_task_id={review_task.id: {"ready": True}},
+            orphan_children_with_terminal_parent={orphan.id: parent.id},
+        ),
     )
 
     assert action.action == "inspect_review_gates"
@@ -138,11 +144,13 @@ def test_orphan_action_skipped_when_orphan_map_empty() -> None:
     inbox_task = _task(status="inbox")
 
     action = select_lead_next_action(
-        tasks=[inbox_task],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        orphan_children_with_terminal_parent={},
+        LeadInputs(
+            tasks=[inbox_task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            orphan_children_with_terminal_parent={},
+        ),
     )
 
     assert action.action == "route_inbox"
@@ -154,10 +162,12 @@ def test_orphan_action_skipped_when_kwarg_omitted() -> None:
     inbox_task = _task(status="inbox")
 
     action = select_lead_next_action(
-        tasks=[inbox_task],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
+        LeadInputs(
+            tasks=[inbox_task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+        ),
     )
 
     assert action.action == "route_inbox"
@@ -172,14 +182,16 @@ def test_orphan_action_uses_lowest_id_for_determinism() -> None:
     smaller = sorted([orphan_a, orphan_b], key=lambda t: str(t.id))[0]
 
     action = select_lead_next_action(
-        tasks=[parent, orphan_a, orphan_b],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        orphan_children_with_terminal_parent={
+        LeadInputs(
+            tasks=[parent, orphan_a, orphan_b],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            orphan_children_with_terminal_parent={
             orphan_a.id: parent.id,
             orphan_b.id: parent.id,
         },
+        ),
     )
 
     assert action.action == "cancel_orphan_child"
@@ -195,12 +207,14 @@ def test_orphan_with_blocker_still_surfaces() -> None:
     orphan = _task(status="rework", assigned=True)
 
     action = select_lead_next_action(
-        tasks=[parent, orphan],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        tasks_with_open_blocker=frozenset({orphan.id}),
-        orphan_children_with_terminal_parent={orphan.id: parent.id},
+        LeadInputs(
+            tasks=[parent, orphan],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({orphan.id}),
+            orphan_children_with_terminal_parent={orphan.id: parent.id},
+        ),
     )
 
     assert action.action == "cancel_orphan_child"
@@ -217,11 +231,13 @@ def test_pending_approval_review_falls_through_to_inbox_routing() -> None:
     routable_inbox = _task(status="inbox", title="14d-old unblocked inbox")
 
     action = select_lead_next_action(
-        tasks=[review_pending, routable_inbox],
-        blocked_by_task_id={},
-        approval_state_by_task_id={review_pending.id: "pending"},
-        pipeline_missing_by_task_id={},
-        review_readiness_by_task_id={review_pending.id: {"ready": True}},
+        LeadInputs(
+            tasks=[review_pending, routable_inbox],
+            blocked_by_task_id={},
+            approval_state_by_task_id={review_pending.id: "pending"},
+            pipeline_missing_by_task_id={},
+            review_readiness_by_task_id={review_pending.id: {"ready": True}},
+        ),
     )
 
     assert action.action == "route_inbox"
@@ -237,11 +253,13 @@ def test_pending_approval_review_does_not_block_orphan_cleanup() -> None:
     orphan = _task(status="rework", assigned=True)
 
     action = select_lead_next_action(
-        tasks=[review_pending, parent, orphan],
-        blocked_by_task_id={},
-        approval_state_by_task_id={review_pending.id: "pending"},
-        pipeline_missing_by_task_id={},
-        orphan_children_with_terminal_parent={orphan.id: parent.id},
+        LeadInputs(
+            tasks=[review_pending, parent, orphan],
+            blocked_by_task_id={},
+            approval_state_by_task_id={review_pending.id: "pending"},
+            pipeline_missing_by_task_id={},
+            orphan_children_with_terminal_parent={orphan.id: parent.id},
+        ),
     )
 
     assert action.action == "cancel_orphan_child"
@@ -256,11 +274,13 @@ def test_review_with_missing_pipeline_still_traps_inbox_routing() -> None:
     routable_inbox = _task(status="inbox", title="should wait")
 
     action = select_lead_next_action(
-        tasks=[review_missing_pipeline, routable_inbox],
-        blocked_by_task_id={},
-        approval_state_by_task_id={review_missing_pipeline.id: "none"},
-        pipeline_missing_by_task_id={review_missing_pipeline.id: ["built", "deployed"]},
-        review_readiness_by_task_id={review_missing_pipeline.id: {"ready": False}},
+        LeadInputs(
+            tasks=[review_missing_pipeline, routable_inbox],
+            blocked_by_task_id={},
+            approval_state_by_task_id={review_missing_pipeline.id: "none"},
+            pipeline_missing_by_task_id={review_missing_pipeline.id: ["built", "deployed"]},
+            review_readiness_by_task_id={review_missing_pipeline.id: {"ready": False}},
+        ),
     )
 
     assert action.action == "inspect_review_gates"
@@ -276,11 +296,13 @@ def test_materialize_decomposition_plan_fires_for_inbox_assigned_no_children() -
     architect_assigned_inbox = _task(status="inbox", assigned=True)
 
     action = select_lead_next_action(
-        tasks=[architect_assigned_inbox],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        tasks_with_children=frozenset(),
+        LeadInputs(
+            tasks=[architect_assigned_inbox],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_children=frozenset(),
+        ),
     )
 
     assert action.action == "materialize_decomposition_plan"
@@ -297,11 +319,13 @@ def test_materialize_skipped_when_already_has_children() -> None:
     parent = _task(status="inbox", assigned=True)
 
     action = select_lead_next_action(
-        tasks=[parent],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        tasks_with_children=frozenset({parent.id}),
+        LeadInputs(
+            tasks=[parent],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_children=frozenset({parent.id}),
+        ),
     )
 
     assert action.action == "clear"
@@ -316,11 +340,13 @@ def test_materialize_wins_over_route_inbox() -> None:
     architect_assigned = _task(status="inbox", assigned=True, title="awaiting plan materialization")
 
     action = select_lead_next_action(
-        tasks=[unassigned, architect_assigned],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        tasks_with_children=frozenset(),
+        LeadInputs(
+            tasks=[unassigned, architect_assigned],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_children=frozenset(),
+        ),
     )
 
     assert action.action == "materialize_decomposition_plan"
@@ -335,12 +361,14 @@ def test_materialize_skipped_when_umbrella_retired_marker_present() -> None:
     architect_assigned = _task(status="inbox", assigned=True)
 
     action = select_lead_next_action(
-        tasks=[architect_assigned],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        tasks_with_children=frozenset(),
-        tasks_with_umbrella_retired_marker=frozenset({architect_assigned.id}),
+        LeadInputs(
+            tasks=[architect_assigned],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            tasks_with_children=frozenset(),
+            tasks_with_umbrella_retired_marker=frozenset({architect_assigned.id}),
+        ),
     )
 
     assert action.action == "clear"
@@ -353,11 +381,13 @@ def test_orphan_action_skipped_when_child_already_terminal() -> None:
     already_done_child = _task(status="cancelled")
 
     action = select_lead_next_action(
-        tasks=[parent, already_done_child],
-        blocked_by_task_id={},
-        approval_state_by_task_id={},
-        pipeline_missing_by_task_id={},
-        orphan_children_with_terminal_parent={already_done_child.id: parent.id},
+        LeadInputs(
+            tasks=[parent, already_done_child],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+            orphan_children_with_terminal_parent={already_done_child.id: parent.id},
+        ),
     )
 
     assert action.action == "clear"

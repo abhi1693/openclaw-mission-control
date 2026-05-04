@@ -223,7 +223,7 @@ def test_frontend_parallel_heartbeat_schedules_worktree_acp_children() -> None:
 
     assert "Frontend Parallel Scheduler Gate" in rendered
     assert "- `WORKSPACE_PATH` when `identity.frontend_parallel_mode` is worktree" in rendered
-    assert "Maintain up to 4 active implementation tasks" in rendered
+    assert "Maintain up to 5 active implementation tasks" in rendered
     assert "def unfinished_child" in rendered
     assert "/tmp/mc-frontend-scheduler.env" in rendered
     assert 'WT_PATH="/tmp/wt-$TASK_SHORT"' in rendered
@@ -1048,7 +1048,9 @@ def test_frontend_heartbeat_allows_explicit_worktree_parallelism_only_by_profile
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
     assert "Experimental opt-in worktree task parallelism is enabled" in heartbeat
-    assert "Cap at 4 active implementation tasks" in heartbeat
+    assert "Cap at 5 active implementation tasks" in heartbeat
+    assert "concurrent-max, not a per-tick spawn budget" in heartbeat
+    assert "WT_MERGE_LOCK" in heartbeat
     assert "`acp-delegation` § Worktree Task Mode" in heartbeat
     assert "Completion-woken ticks process child results only" in heartbeat
     assert "sessions_spawn({" not in heartbeat
@@ -1117,6 +1119,11 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "last_changed_at_ms" in next_action
     assert "worker_session_aborted" in next_action
     assert "worker_silent_on_gateway" in next_action
+    assert "Do not leave" in next_action
+    assert "`is_blocked=false` parked inbox tasks" in next_action
+    assert "Drain Loop" in next_action
+    assert "per-tick cap of **5 applied actions**" in next_action
+    assert "Do not exit to Memory Intake after the first" in next_action
 
     health = _read_skill_text_or_skip("lead-health-scan")
     assert "LEAD_TASKS_JSON" in health

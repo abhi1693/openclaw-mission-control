@@ -554,9 +554,69 @@ def select_lead_next_action(
             details=details,
         )
 
+    # Classify the empty-queue ``clear`` so the Supervisor's drain loop
+    # can distinguish "idle, no work" from "all work is waiting on
+    # operator approval / structured blocker / fresh in_progress grace".
+    # All four sub-states still return ``action_required=False``; only
+    # the reason_code and details differ. Precedence is "most actionable
+    # for the operator first" — pending approval surfaces above blocked
+    # because the operator can resolve it directly.
+    pending_approval_count = 0
+    blocked_count = 0
+    fresh_in_progress_count = 0
+    active_state_count = 0
+    for task in inputs.tasks:
+        if task.status not in {"inbox", "in_progress", "review", "rework"}:
+            continue
+        active_state_count += 1
+        if _is_waiting(
+            task,
+            inputs.blocked_by_task_id,
+            tasks_with_open_blocker,
+            tasks_with_pending_operator_decision,
+        ):
+            blocked_count += 1
+            continue
+        if (
+            task.status == "review"
+            and inputs.approval_state_by_task_id.get(task.id, "none") == "pending"
+        ):
+            pending_approval_count += 1
+        elif task.status == "in_progress" and _in_progress_is_fresh(
+            task,
+            now=now,
+            grace=IN_PROGRESS_PIPELINE_NUDGE_GRACE,
+        ):
+            fresh_in_progress_count += 1
+
+    other_active_count = (
+        active_state_count
+        - pending_approval_count
+        - blocked_count
+        - fresh_in_progress_count
+    )
+    clear_details: dict[str, object] = {
+        "active_state_count": active_state_count,
+        "pending_approval_count": pending_approval_count,
+        "blocked_count": blocked_count,
+        "fresh_in_progress_count": fresh_in_progress_count,
+        "other_active_count": other_active_count,
+    }
+    if active_state_count == 0:
+        clear_reason = "no_active_work"
+    elif pending_approval_count == active_state_count:
+        clear_reason = "only_pending_approval"
+    elif blocked_count == active_state_count:
+        clear_reason = "only_blocked"
+    elif fresh_in_progress_count == active_state_count:
+        clear_reason = "only_fresh_in_progress"
+    else:
+        clear_reason = "only_waiting_or_no_active_work"
+
     return _action(
         task=None,
         action_required=False,
         action="clear",
-        reason_code="only_waiting_or_no_active_work",
+        reason_code=clear_reason,
+        details=clear_details,
     )

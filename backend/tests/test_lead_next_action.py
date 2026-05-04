@@ -195,7 +195,9 @@ def test_fresh_in_progress_frontend_missing_pipeline_skips_nudge() -> None:
 
     assert action.action_required is False
     assert action.action == "clear"
-    assert action.reason_code == "only_waiting_or_no_active_work"
+    assert action.reason_code == "only_fresh_in_progress"
+    assert action.details["fresh_in_progress_count"] == 1
+    assert action.details["active_state_count"] == 1
 
 
 def test_generic_in_progress_grace_skips_nudge_for_fresh_task() -> None:
@@ -494,7 +496,9 @@ def test_returns_clear_when_only_known_blocked_work_remains() -> None:
 
     assert action.action_required is False
     assert action.action == "clear"
-    assert action.reason_code == "only_waiting_or_no_active_work"
+    assert action.reason_code == "only_blocked"
+    assert action.details["blocked_count"] == 1
+    assert action.details["active_state_count"] == 1
 
 
 def test_open_structured_blocker_excludes_task_from_active_queue() -> None:
@@ -611,6 +615,143 @@ def test_open_blocker_alone_yields_clear() -> None:
 
     assert action.action_required is False
     assert action.action == "clear"
+
+
+def test_clear_no_active_work_when_only_terminal_tasks_exist() -> None:
+    done_task = _task(status="done", title="Already done")
+    cancelled_task = _task(status="cancelled", title="Already cancelled")
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[done_task, cancelled_task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+        ),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+    assert action.reason_code == "no_active_work"
+    assert action.details["active_state_count"] == 0
+
+
+def test_clear_no_active_work_when_tasks_list_is_empty() -> None:
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[],
+            blocked_by_task_id={},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+        ),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+    assert action.reason_code == "no_active_work"
+
+
+def test_clear_only_pending_approval_when_review_awaits_operator() -> None:
+    review_task = _task(status="review", title="Awaiting operator approval")
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[review_task],
+            blocked_by_task_id={},
+            approval_state_by_task_id={review_task.id: "pending"},
+            pipeline_missing_by_task_id={},
+            review_readiness_by_task_id={review_task.id: {"ready": True}},
+        ),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+    assert action.reason_code == "only_pending_approval"
+    assert action.details["pending_approval_count"] == 1
+
+
+def test_clear_mixed_pending_approval_and_blocked_uses_legacy_fallback() -> None:
+    """``only_X`` reason_codes are strict — full active set must match.
+
+    A board with one pending-approval review + one blocked in_progress is
+    NEITHER ``only_pending_approval`` NOR ``only_blocked``, so the gate
+    must return the legacy umbrella code. ``details`` carries the breakdown
+    so the operator can still see what's parked.
+    """
+    pending_review = _task(status="review", title="Pending approval")
+    blocked_in_progress = _task(
+        status="in_progress",
+        title="Blocked work",
+        assigned=True,
+        in_progress_at=_stale_in_progress_at(),
+    )
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[pending_review, blocked_in_progress],
+            blocked_by_task_id={},
+            approval_state_by_task_id={pending_review.id: "pending"},
+            pipeline_missing_by_task_id={},
+            tasks_with_open_blocker=frozenset({blocked_in_progress.id}),
+        ),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+    assert action.reason_code == "only_waiting_or_no_active_work"
+    assert action.details["pending_approval_count"] == 1
+    assert action.details["blocked_count"] == 1
+    assert action.details["fresh_in_progress_count"] == 0
+    assert action.details["active_state_count"] == 2
+    assert action.details["other_active_count"] == 0
+
+
+def test_clear_mixed_blocked_and_fresh_in_progress_uses_legacy_fallback() -> None:
+    blocked_task = _task(status="in_progress", title="Blocked", assigned=True)
+    fresh_task = _task(
+        status="in_progress",
+        title="Fresh",
+        assigned=True,
+        in_progress_at=utcnow() - timedelta(minutes=5),
+    )
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[blocked_task, fresh_task],
+            blocked_by_task_id={blocked_task.id: [uuid4()]},
+            approval_state_by_task_id={},
+            pipeline_missing_by_task_id={},
+        ),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+    assert action.reason_code == "only_waiting_or_no_active_work"
+    assert action.details["blocked_count"] == 1
+    assert action.details["fresh_in_progress_count"] == 1
+
+
+def test_clear_only_pending_approval_with_multiple_pending_reviews() -> None:
+    review_a = _task(status="review", title="Pending A")
+    review_b = _task(status="review", title="Pending B")
+
+    action = select_lead_next_action(
+        LeadInputs(
+            tasks=[review_a, review_b],
+            blocked_by_task_id={},
+            approval_state_by_task_id={
+            review_a.id: "pending",
+            review_b.id: "pending",
+        },
+            pipeline_missing_by_task_id={},
+        ),
+    )
+
+    assert action.action_required is False
+    assert action.action == "clear"
+    assert action.reason_code == "only_pending_approval"
+    assert action.details["pending_approval_count"] == 2
+    assert action.details["active_state_count"] == 2
 
 
 def test_latest_approval_state_uses_newest_move_to_done_row() -> None:
