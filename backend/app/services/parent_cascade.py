@@ -398,6 +398,50 @@ async def maybe_retire_pure_container_umbrella(
     return True
 
 
+async def auto_retire_pure_container_umbrellas(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+) -> list[Task]:
+    """Belt-and-suspenders sweep: retire every pure-container umbrella
+    on the board whose retirement preconditions are currently met.
+
+    Complements the dep-clear hook in
+    ``_reconcile_dependents_for_dependency_toggle``. The hook fires at
+    the *moment* a dep transitions to done, so it cannot retire:
+    - Umbrellas whose deps cleared before the hook existed.
+    - Umbrellas whose ``UMBRELLA_RETIRED`` marker landed AFTER the deps
+      were already terminal.
+    - Anything missed by a transient failure on the hook.
+
+    The sweep runs on the lead next-action endpoint (every Supervisor
+    heartbeat) and catches all three. Each candidate goes through the
+    same ``maybe_retire_pure_container_umbrella`` predicate as the hook,
+    so retirement semantics stay aligned.
+
+    Pre-filter is cheap: ``status == "inbox"`` + never-executed reduces
+    the candidate set to ~handfuls of rows on a real board. The
+    per-candidate work is bounded by the same per-task gates as the
+    hook (deps query + children query + marker query).
+
+    Returns the list of cancelled umbrellas. Caller commits.
+    """
+    candidates = list(
+        await session.exec(
+            select(Task)
+            .where(col(Task.board_id) == board_id)
+            .where(col(Task.status) == "inbox")
+            .where(col(Task.in_progress_at).is_(None))
+            .where(col(Task.previous_in_progress_at).is_(None)),
+        ),
+    )
+    retired: list[Task] = []
+    for candidate in candidates:
+        if await maybe_retire_pure_container_umbrella(session, task=candidate):
+            retired.append(candidate)
+    return retired
+
+
 async def maybe_cascade_umbrella_close_by_id(
     session: AsyncSession,
     *,

@@ -112,6 +112,7 @@ from app.services.operator_decisions import (
     task_ids_with_pending_operator_decision,
 )
 from app.services.parent_cascade import (
+    auto_retire_pure_container_umbrellas,
     orphan_children_with_terminal_parent,
     task_ids_with_children,
     task_ids_with_umbrella_retired_marker,
@@ -824,6 +825,17 @@ async def get_lead_next_action(
     """Return one deterministic action candidate for the lead playbook."""
     _guard_board_access(agent_ctx, board)
     _require_board_lead(agent_ctx)
+    # Belt-and-suspenders sweep: retire pure-container umbrellas whose
+    # retirement preconditions are currently met but were missed by the
+    # dep-clear hook in _reconcile_dependents_for_dependency_toggle
+    # (e.g. dep cleared before the hook existed, marker landed after deps
+    # were terminal, transient hook failure). Runs before task load so
+    # the gate's recommendations reflect the post-retirement state.
+    retired_umbrellas = await auto_retire_pure_container_umbrellas(
+        session, board_id=board.id
+    )
+    if retired_umbrellas:
+        await session.commit()
     tasks = list(
         await session.exec(
             select(Task)
