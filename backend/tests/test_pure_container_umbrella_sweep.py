@@ -184,12 +184,13 @@ async def test_sweep_retires_multiple_qualifying_umbrellas_in_one_pass(
 
 
 @pytest.mark.asyncio
-async def test_sweep_retires_umbrella_without_marker(
+async def test_sweep_skips_umbrella_without_marker(
     seeded: tuple[AsyncSession, Board, Agent, Agent],
 ) -> None:
-    """Marker requirement was dropped: a never-executed inbox umbrella
-    whose deps are all terminal must retire on the sweep, marker or not.
-    The marker is no longer the gate."""
+    """Safety: a never-executed inbox task whose deps are all terminal
+    must NOT retire if it lacks the UMBRELLA_RETIRED marker. Without
+    the marker, this shape is indistinguishable from an ordinary task
+    waiting on its prerequisite — auto-cancelling would surprise users."""
     session, board, lead, worker = seeded
     dep = _make_dep(board_id=board.id, worker_id=worker.id, status="done")
     umbrella = _make_umbrella(board_id=board.id, lead_id=lead.id)
@@ -203,11 +204,10 @@ async def test_sweep_retires_umbrella_without_marker(
     await session.commit()
 
     retired = await auto_retire_pure_container_umbrellas(session, board_id=board.id)
-    await session.commit()
 
-    assert umbrella.id in {t.id for t in retired}
+    assert retired == []
     await session.refresh(umbrella)
-    assert umbrella.status == "cancelled"
+    assert umbrella.status == "inbox"
 
 
 @pytest.mark.asyncio

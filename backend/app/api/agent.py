@@ -801,8 +801,10 @@ async def list_tasks(
     tags=AGENT_LEAD_TAGS,
     summary="Return the deterministic next action for a board lead heartbeat",
     description=(
-        "Read-only lead endpoint that ranks board work using the heartbeat "
-        "closest-to-done order and returns one explicit action candidate."
+        "Lead heartbeat endpoint that ranks board work using the closest-"
+        "to-done order and returns one explicit action candidate. Runs a "
+        "pure-container umbrella retirement sweep before ranking — see "
+        "x-side-effects."
     ),
     openapi_extra={
         "x-llm-intent": "lead_next_action_gate",
@@ -811,7 +813,12 @@ async def list_tasks(
             "Lead needs a deterministic board-state action before interpreting comments.",
         ],
         "x-required-actor": "board_lead",
-        "x-side-effects": ["None. This endpoint is read-only."],
+        "x-side-effects": [
+            "Auto-cancels pure-container umbrella tasks on this board "
+            "whose UMBRELLA_RETIRED marker, dep, blocker, and child "
+            "preconditions are all met. Idempotent and serialised by a "
+            "conditional UPDATE so concurrent heartbeats cannot race."
+        ],
         "x-negative-guidance": [
             "Do not infer HEARTBEAT_OK from raw task lists when this endpoint returns action_required=true.",
         ],

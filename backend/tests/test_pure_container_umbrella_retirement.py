@@ -179,21 +179,20 @@ async def test_pure_container_umbrella_auto_retired_when_last_dep_clears(
 
 
 @pytest.mark.asyncio
-async def test_pure_container_umbrella_retired_without_marker(
+async def test_pure_container_umbrella_not_retired_without_marker(
     seeded: tuple[AsyncSession, Board, Task, Task, Agent, Agent],
 ) -> None:
-    """Marker requirement was dropped: never-executed inbox umbrella
-    with non-empty deps all terminal must auto-cancel even without the
-    legacy UMBRELLA_RETIRED comment. The predicate alone is sufficient
-    evidence that decomposition is complete; the marker only created
-    zombie rooms while waiting for a Supervisor comment."""
+    """Safety: no UMBRELLA_RETIRED marker comment → must NOT auto-cancel.
+    The marker is the only reliable discriminator between a retired
+    container and a legitimate unstarted task waiting on its
+    prerequisite dep."""
     session, board, dep_task, umbrella_task, _lead, worker = seeded
 
     await _trigger_dep_clear(session, board=board, dep_task=dep_task, worker=worker)
 
     await session.refresh(umbrella_task)
-    assert umbrella_task.status == "cancelled", (
-        f"expected umbrella to auto-cancel even without marker; "
+    assert umbrella_task.status == "inbox", (
+        f"expected umbrella to stay inbox without marker; "
         f"status={umbrella_task.status}"
     )
 

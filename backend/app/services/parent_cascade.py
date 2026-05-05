@@ -20,6 +20,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -189,7 +190,11 @@ async def maybe_cascade_umbrella_close(
 
     **Safety net** — the cascade only fires when
     ``parent.in_progress_at IS NULL AND parent.previous_in_progress_at IS NULL``
-    (the parent never executed; its work shipped via children).
+    AND the parent carries an explicit ``UMBRELLA_RETIRED`` marker
+    comment. The marker is the lead's commitment that the parent is
+    decomposition-completed and prevents auto-cancelling tasks that
+    happen to look umbrella-shaped but represent unstarted real work
+    (e.g. a final integration step waiting on its prerequisites).
 
     **Depth limit** — recursion stops at ``_UMBRELLA_CASCADE_MAX_DEPTH``
     levels so a pathological ``parent_task_id`` cycle (DB does not
@@ -209,10 +214,21 @@ async def maybe_cascade_umbrella_close(
         parent = await _qualifying_umbrella_parent(session, task=cursor)
         if parent is None:
             return topmost_cancelled
+        now = utcnow()
+        update_stmt = (
+            update(Task)
+            .where(col(Task.id) == parent.id)
+            .where(col(Task.status) == "inbox")
+            .where(col(Task.in_progress_at).is_(None))
+            .where(col(Task.previous_in_progress_at).is_(None))
+            .values(status="cancelled", cancelled_at=now, updated_at=now)
+        )
+        result = await session.exec(update_stmt)
+        if result.rowcount == 0:
+            return topmost_cancelled
         parent.status = "cancelled"
-        parent.cancelled_at = utcnow()
-        parent.updated_at = parent.cancelled_at
-        session.add(parent)
+        parent.cancelled_at = now
+        parent.updated_at = now
         record_activity(
             session,
             event_type="task.umbrella_auto_cascaded",
@@ -281,6 +297,14 @@ async def _qualifying_umbrella_parent(
         return None
     if any(sib.status not in TERMINAL_STATUSES for sib in siblings):
         return None
+
+    if parent.board_id is not None:
+        retired_ids = await task_ids_with_umbrella_retired_marker(
+            session, board_id=parent.board_id, task_ids=[parent.id],
+        )
+        if parent.id not in retired_ids:
+            return None
+
     return parent
 
 
@@ -294,9 +318,21 @@ async def maybe_retire_pure_container_umbrella(
     Pure container = umbrella linked to its work through
     ``depends_on_task_ids`` rather than ``parent_task_id`` children.
     Preconditions: status ``inbox``, never-executed (no
-    ``in_progress_at`` / ``previous_in_progress_at``), at least one
-    dep with all deps terminal, no open Blockers, and no non-terminal
-    parent_task_id children.
+    ``in_progress_at`` / ``previous_in_progress_at``), an explicit
+    ``UMBRELLA_RETIRED`` marker comment, at least one dep with all deps
+    terminal, no open Blockers, and no non-terminal parent_task_id
+    children.
+
+    The marker requirement guards against false positives — a real task
+    waiting on its prerequisite dep matches every other condition. The
+    marker is the lead's explicit "decomposition complete" signal and
+    is the only way to distinguish a retired container from unstarted
+    real work.
+
+    Mutation uses a conditional UPDATE that re-checks
+    ``status='inbox' AND in_progress_at IS NULL AND previous_in_progress_at IS NULL``
+    at write time so a concurrent writer that started/reopened the
+    task between SELECT and commit does not get clobbered.
 
     Returns True iff the task was cancelled. Caller commits.
     """
@@ -311,6 +347,12 @@ async def maybe_retire_pure_container_umbrella(
     if task.in_progress_at is not None or task.previous_in_progress_at is not None:
         return False
     if task.board_id is None:
+        return False
+
+    retired_ids = await task_ids_with_umbrella_retired_marker(
+        session, board_id=task.board_id, task_ids=[task.id],
+    )
+    if task.id not in retired_ids:
         return False
 
     deps_map = await dependency_ids_by_task_id(
@@ -336,19 +378,31 @@ async def maybe_retire_pure_container_umbrella(
     if open_children:
         return False
 
+    now = utcnow()
+    update_stmt = (
+        update(Task)
+        .where(col(Task.id) == task.id)
+        .where(col(Task.status) == "inbox")
+        .where(col(Task.in_progress_at).is_(None))
+        .where(col(Task.previous_in_progress_at).is_(None))
+        .values(status="cancelled", cancelled_at=now, updated_at=now)
+    )
+    result = await session.exec(update_stmt)
+    if result.rowcount == 0:
+        return False
     task.status = "cancelled"
-    task.cancelled_at = utcnow()
-    task.updated_at = task.cancelled_at
-    session.add(task)
+    task.cancelled_at = now
+    task.updated_at = now
     record_activity(
         session,
         event_type="task.umbrella_pure_container_retired",
         task_id=task.id,
         board_id=task.board_id,
         message=(
-            f"Pure-container umbrella auto-cancelled: all "
-            f"{len(dep_ids)} depends_on task(s) terminal, never-executed, "
-            f"no open Blockers, no open parent_task_id children."
+            f"Pure-container umbrella auto-cancelled: UMBRELLA_RETIRED "
+            f"marker present, all {len(dep_ids)} depends_on task(s) "
+            f"terminal, never-executed, no open Blockers, no open "
+            f"parent_task_id children."
         ),
     )
     return True

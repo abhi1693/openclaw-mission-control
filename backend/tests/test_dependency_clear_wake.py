@@ -130,15 +130,9 @@ async def seeded(
     dependent_task = Task(
         id=dependent_id,
         board_id=board_id,
-        title="Real task waiting on dep (not a pure container)",
+        title="Real task waiting on dep (not an umbrella)",
         status="inbox",
         assigned_agent_id=lead_id,
-        # Mark as already executed once so the auto-retire path
-        # (which only fires on never-executed pure-container umbrellas)
-        # doesn't claim this task. The dep-clear wake is for real tasks
-        # whose deps clear; pure-container umbrellas have a separate
-        # exit via maybe_retire_pure_container_umbrella.
-        previous_in_progress_at=datetime(2026, 5, 4, 0, 0),
     )
     sqlite_session.add(dep_task)
     sqlite_session.add(dependent_task)
