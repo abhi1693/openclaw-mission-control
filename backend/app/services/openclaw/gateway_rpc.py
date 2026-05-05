@@ -49,7 +49,10 @@ GatewayConnectMode = Literal["device", "control_ui"]
 
 # NOTE: These are the base gateway methods from the OpenClaw gateway repo.
 # The gateway can expose additional methods at runtime via channel plugins.
-# Updated for OpenClaw 2026.4.26 (be8c246).
+# Updated for OpenClaw 2026.5.4 — catalog drift cleanup added 39 method
+# names that drifted across 4.27→5.4. Verified against the canonical
+# server-methods-list from the installed npm package on .60 (commit
+# 325df3e). Used as documentation surfaced via /gateways/commands.
 GATEWAY_METHODS = [
     "health",
     "logs.tail",
@@ -174,13 +177,60 @@ GATEWAY_METHODS = [
     "chat.history",
     "chat.abort",
     "chat.send",
+    # Catalog drift cleanup 2026-05-05 (gateway 5.4 server-methods-list).
+    # 39 method names that drifted across 4.27→5.4 — none are MC
+    # backend code dependencies today; surfaced via /gateways/commands
+    # for clients that probe the protocol catalog.
+    "artifacts.download",
+    "artifacts.get",
+    "artifacts.list",
+    "channels.start",
+    "channels.stop",
+    "chat.inject",
+    "commands.list",
+    "diagnostics.stability",
+    "doctor.memory.backfillDreamDiary",
+    "doctor.memory.dedupeDreamDiary",
+    "doctor.memory.remHarness",
+    "doctor.memory.repairDreamingArtifacts",
+    "doctor.memory.resetDreamDiary",
+    "doctor.memory.resetGroundedShortTerm",
+    "exec.approval.list",
+    "gateway.restart.preflight",
+    "gateway.restart.request",
+    "message.action",
+    "plugin.approval.list",
+    "plugins.uiDescriptors",
+    "sessions.cleanup",
+    "sessions.compaction.branch",
+    "sessions.compaction.get",
+    "sessions.compaction.list",
+    "sessions.compaction.restore",
+    "sessions.describe",
+    "sessions.get",
+    "sessions.pluginPatch",
+    "talk.realtime.relayAudio",
+    "talk.realtime.relayMark",
+    "talk.realtime.relayStop",
+    "talk.realtime.relayToolResult",
+    "talk.realtime.session",
+    "tools.invoke",
+    "tts.personas",
+    "tts.setPersona",
+    "update.status",
+    "voicewake.routing.get",
+    "voicewake.routing.set",
 ]
 
-# Updated for OpenClaw 2026.4.26 (be8c246).
+# Updated for OpenClaw 2026.5.4. ``chat.side_result`` added during BTW
+# investigation 2026-05-04 — gateway broadcasts unfiltered via
+# ``context.broadcast`` from ``broadcastSideResult`` (chat.ts), carries
+# ``kind: "btw"`` envelopes for agent end-of-turn questions.
 GATEWAY_EVENTS = [
     "connect.challenge",
     "agent",
     "chat",
+    "chat.side_result",
     "presence",
     "tick",
     "talk.mode",
