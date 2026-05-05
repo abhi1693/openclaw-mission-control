@@ -1702,12 +1702,12 @@ async def _reconcile_dependents_for_dependency_toggle(
                 session, board_id=board_id, task_id=dependent.id
             ):
                 continue
-            # Pure-container umbrellas (UMBRELLA_RETIRED marker, never
-            # executed, deps were the work) auto-retire when their last
-            # dep clears — symmetric with the parent_task_id cascade for
-            # the depends_on edge. Try to retire first; if it fires,
-            # the task is now ``cancelled`` and the dep-cleared wake
-            # would be confusing (task isn't actionable, it's retired).
+            # Pure-container umbrellas (never executed, deps carried
+            # the work) auto-retire when their last dep clears —
+            # symmetric with the parent_task_id cascade for the
+            # depends_on edge. Try to retire first; if it fires, the
+            # task is now ``cancelled`` and the dep-cleared wake would
+            # be confusing (task isn't actionable, it's retired).
             retired = await maybe_retire_pure_container_umbrella(
                 session, task=dependent
             )

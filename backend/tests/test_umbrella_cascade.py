@@ -293,66 +293,27 @@ async def test_cascade_records_activity_event(
 
 
 @pytest.mark.asyncio
-async def test_cascade_skips_parent_with_only_conversational_umbrella_retired_mention(
+async def test_cascade_fires_without_umbrella_retired_marker(
     sqlite_session: AsyncSession,
 ) -> None:
-    """A comment that mentions UMBRELLA_RETIRED in conversational context
-    (e.g. 'this is NOT an UMBRELLA_RETIRED case') must NOT qualify the
-    parent for cascade. The marker must be a canonical prefix at the
-    start of the comment, not a substring match anywhere."""
-    from app.models.activity_events import ActivityEvent
-
-    board = await _seed_board(sqlite_session, slug="cascade-conversational-mention")
-    parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=1, child_status="done",
-        add_retired_marker=False,
-    )
-    # Conversational mention — NOT a real retirement marker.
-    sqlite_session.add(
-        ActivityEvent(
-            event_type="task.comment",
-            task_id=parent.id,
-            board_id=board.id,
-            message=(
-                "Discussed with operator: this is NOT an UMBRELLA_RETIRED "
-                "case because the parent still needs integration work after "
-                "the children land."
-            ),
-        ),
-    )
-    await sqlite_session.commit()
-
-    cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
-    assert cascaded is None, (
-        "conversational mention of 'UMBRELLA_RETIRED' must not qualify the "
-        "parent; only the canonical prefix marker counts"
-    )
-    await sqlite_session.refresh(parent)
-    assert parent.status == "inbox"
-
-
-@pytest.mark.asyncio
-async def test_cascade_skips_parent_without_umbrella_retired_marker(
-    sqlite_session: AsyncSession,
-) -> None:
-    """Tightening from codex review: the never-executed heuristic alone
-    is too broad. A parent that was simply never-picked-up but doesn't
-    carry the explicit ``UMBRELLA_RETIRED`` comment must NOT auto-cancel
-    just because its children happen to be done. The marker is the
-    operator/lead's commitment that the parent's work shipped via
-    children and the parent itself is decomposition-completed."""
+    """Marker requirement was dropped: never-executed inbox parent +
+    non-empty children all in terminal status is sufficient evidence
+    that decomposition is complete. The historical
+    ``UMBRELLA_RETIRED`` comment-gate produced zombie umbrellas waiting
+    for a Supervisor comment the system already had enough data to
+    infer; cancellation is reversible if a false positive ever lands."""
     board = await _seed_board(sqlite_session, slug="cascade-no-marker")
     parent, children = await _seed_umbrella_with_children(
         sqlite_session, board=board, n_children=2, child_status="done",
         add_retired_marker=False,
     )
     cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
-    assert cascaded is None, (
-        "parent without UMBRELLA_RETIRED marker must NOT auto-cancel, even "
-        "with all-terminal children + no execution history"
+    assert cascaded is not None, (
+        "cascade must fire on never-executed parent with all-terminal "
+        "children, even without the legacy UMBRELLA_RETIRED marker"
     )
-    await sqlite_session.refresh(parent)
-    assert parent.status == "inbox"
+    assert cascaded.id == parent.id
+    assert cascaded.status == "cancelled"
 
 
 @pytest.mark.asyncio

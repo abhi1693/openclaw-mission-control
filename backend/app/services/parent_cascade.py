@@ -190,9 +190,11 @@ async def maybe_cascade_umbrella_close(
 
     **Safety net** — the cascade only fires when
     ``parent.in_progress_at IS NULL AND parent.previous_in_progress_at IS NULL``
-    AND the parent carries an explicit ``UMBRELLA_RETIRED`` marker
-    comment. The marker is the lead's commitment that the parent is
-    decomposition-completed.
+    (the parent never executed; its work shipped via children). The
+    historical ``UMBRELLA_RETIRED`` marker requirement was dropped —
+    it produced zombie umbrellas waiting for a Supervisor comment the
+    system already had enough data to infer. Cancellation is a status,
+    not a delete — reversible if a false positive ever surfaces.
 
     **Depth limit** — recursion stops at ``_UMBRELLA_CASCADE_MAX_DEPTH``
     levels so a pathological ``parent_task_id`` cycle (DB does not
@@ -285,16 +287,13 @@ async def _qualifying_umbrella_parent(
     if any(sib.status not in TERMINAL_STATUSES for sib in siblings):
         return None
 
-    # The lead-posted UMBRELLA_RETIRED marker is the explicit "this
-    # parent is decomposition-completed and its work shipped via
-    # children" signal. The never-executed heuristic alone is too broad.
-    if parent.board_id is not None:
-        retired_ids = await task_ids_with_umbrella_retired_marker(
-            session, board_id=parent.board_id, task_ids=[parent.id],
-        )
-        if parent.id not in retired_ids:
-            return None
-
+    # No UMBRELLA_RETIRED marker requirement: never-executed inbox parent
+    # with non-empty children all in terminal status is sufficient
+    # evidence that the umbrella has nothing left to track. The marker
+    # was historical defense-in-depth; in practice it just produced
+    # zombie umbrellas parked in inbox waiting for a Supervisor comment
+    # the system already had enough data to infer. Cancellation is a
+    # status, not a delete — reversible if a false positive ever surfaces.
     return parent
 
 
@@ -317,12 +316,17 @@ async def maybe_retire_pure_container_umbrella(
     - ``status == "inbox"``: not already terminal, not actively worked.
     - ``in_progress_at IS NULL AND previous_in_progress_at IS NULL``:
       umbrella never executed; its work shipped via the deps.
-    - The task carries an explicit ``UMBRELLA_RETIRED`` marker comment:
-      lead's commitment that decomposition is complete.
     - ``depends_on_task_ids`` is non-empty AND every dep is in
       TERMINAL_STATUSES: the deps actually carried the work.
     - No non-terminal ``parent_task_id`` children: a non-terminal child
       means the umbrella is NOT a pure container.
+
+    No ``UMBRELLA_RETIRED`` marker requirement: the predicate above is
+    sufficient evidence that decomposition is complete. The marker was
+    historical defense-in-depth that produced zombie umbrellas parked
+    in inbox waiting for a Supervisor comment the system already had
+    enough data to infer. Cancellation is a status, not a delete —
+    reversible if a false positive ever surfaces.
 
     Returns True iff the task was cancelled. Caller is responsible for
     ``session.commit()``.
@@ -336,14 +340,6 @@ async def maybe_retire_pure_container_umbrella(
     if task.in_progress_at is not None or task.previous_in_progress_at is not None:
         return False
     if task.board_id is None:
-        return False
-
-    # Marker is the cheapest authoritative gate; check before walking
-    # the dep + child queries.
-    retired_ids = await task_ids_with_umbrella_retired_marker(
-        session, board_id=task.board_id, task_ids=[task.id],
-    )
-    if task.id not in retired_ids:
         return False
 
     # All declared deps must be terminal. ``blocked_by_for_task`` returns
@@ -389,10 +385,9 @@ async def maybe_retire_pure_container_umbrella(
         task_id=task.id,
         board_id=task.board_id,
         message=(
-            f"Pure-container umbrella auto-cancelled: UMBRELLA_RETIRED "
-            f"marker present, all {declared_deps_count} depends_on "
-            f"task(s) terminal, never-executed, no open parent_task_id "
-            f"children."
+            f"Pure-container umbrella auto-cancelled: all "
+            f"{declared_deps_count} depends_on task(s) terminal, "
+            f"never-executed, no open parent_task_id children."
         ),
     )
     return True

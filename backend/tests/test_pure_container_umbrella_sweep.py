@@ -184,13 +184,13 @@ async def test_sweep_retires_multiple_qualifying_umbrellas_in_one_pass(
 
 
 @pytest.mark.asyncio
-async def test_sweep_no_op_when_no_qualifying_umbrellas(
+async def test_sweep_retires_umbrella_without_marker(
     seeded: tuple[AsyncSession, Board, Agent, Agent],
 ) -> None:
-    """A board with active work but no qualifying pure-container
-    umbrellas must produce zero retirements."""
+    """Marker requirement was dropped: a never-executed inbox umbrella
+    whose deps are all terminal must retire on the sweep, marker or not.
+    The marker is no longer the gate."""
     session, board, lead, worker = seeded
-    # Open dep + umbrella WITHOUT the marker — doesn't qualify.
     dep = _make_dep(board_id=board.id, worker_id=worker.id, status="done")
     umbrella = _make_umbrella(board_id=board.id, lead_id=lead.id)
     session.add(dep)
@@ -203,10 +203,36 @@ async def test_sweep_no_op_when_no_qualifying_umbrellas(
     await session.commit()
 
     retired = await auto_retire_pure_container_umbrellas(session, board_id=board.id)
+    await session.commit()
+
+    assert umbrella.id in {t.id for t in retired}
+    await session.refresh(umbrella)
+    assert umbrella.status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_sweep_no_op_when_no_deps_or_children(
+    seeded: tuple[AsyncSession, Board, Agent, Agent],
+) -> None:
+    """Safety carve-out: a brand-new inbox task with neither deps nor
+    parent_task_id children isn't a container — it's just work the
+    operator hasn't decomposed yet. Sweep must NOT cancel it."""
+    session, board, lead, _worker = seeded
+    bare_task = Task(
+        id=uuid4(),
+        board_id=board.id,
+        title="Bare inbox task — not yet decomposed",
+        status="inbox",
+        assigned_agent_id=lead.id,
+    )
+    session.add(bare_task)
+    await session.commit()
+
+    retired = await auto_retire_pure_container_umbrellas(session, board_id=board.id)
 
     assert retired == []
-    await session.refresh(umbrella)
-    assert umbrella.status == "inbox"
+    await session.refresh(bare_task)
+    assert bare_task.status == "inbox"
 
 
 @pytest.mark.asyncio
