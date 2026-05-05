@@ -1604,6 +1604,30 @@ def _lead_created_task(task: Task, lead: Agent) -> bool:
     return task.auto_reason == f"lead_agent:{lead.id}"
 
 
+async def _try_unblock_or_retire_dependent(
+    session: AsyncSession,
+    *,
+    board_id: UUID,
+    dependent: Task,
+) -> Task | None:
+    """Return the dependent if it became fully actionable on this dep-clear.
+
+    Skips dependents that: are terminal, still have other unresolved deps,
+    have open Blockers, or auto-retire as pure-container umbrellas.
+    """
+    if dependent.status in TERMINAL_STATUSES:
+        return None
+    if await blocked_by_for_task(session, board_id=board_id, task_id=dependent.id):
+        return None
+    if await task_has_open_blocker(
+        session, board_id=board_id, task_id=dependent.id,
+    ):
+        return None
+    if await maybe_retire_pure_container_umbrella(session, task=dependent):
+        return None
+    return dependent
+
+
 async def _reconcile_dependents_for_dependency_toggle(
     session: AsyncSession,
     *,
@@ -1612,18 +1636,12 @@ async def _reconcile_dependents_for_dependency_toggle(
     previous_status: str,
     actor_agent_id: UUID | None,
 ) -> list[Task]:
-    """Apply dependency side-effects when a dependency task toggles done/undone.
+    """Apply dependency side-effects when a dependency toggles done/undone.
 
-    The UI models dependencies as a DAG: when a dependency is reopened, dependents that were
-    previously marked done may need to be reopened or flagged. This helper keeps dependent state
-    consistent with the dependency graph without duplicating logic across endpoints.
-
-    Returns the list of dependents that became fully actionable as a
-    direct result of THIS dependency clearing (dep just transitioned to
-    ``done``, no other unresolved deps, no open Blockers, status not
-    terminal). The caller is expected to commit before waking the lead
-    for each of them via ``notify_lead_after_dependency_cleared`` —
-    symmetric with the post-commit wake on blocker resolve.
+    On reopen, dependents that previously marked done are reset to inbox
+    so the dependency graph stays consistent. On clear, returns the list
+    of dependents that became fully actionable; caller commits then
+    wakes the lead per ``notify_lead_after_dependency_cleared``.
     """
 
     done_toggled = (previous_status == "done") != (dependency_task.status == "done")
@@ -1691,29 +1709,11 @@ async def _reconcile_dependents_for_dependency_toggle(
                 agent_id=actor_agent_id,
                 board_id=dependent.board_id,
             )
-            if dependent.status in TERMINAL_STATUSES:
-                continue
-            remaining_blocking = await blocked_by_for_task(
-                session, board_id=board_id, task_id=dependent.id
+            unblocked = await _try_unblock_or_retire_dependent(
+                session, board_id=board_id, dependent=dependent,
             )
-            if remaining_blocking:
-                continue
-            if await task_has_open_blocker(
-                session, board_id=board_id, task_id=dependent.id
-            ):
-                continue
-            # Pure-container umbrellas (never executed, deps carried
-            # the work) auto-retire when their last dep clears —
-            # symmetric with the parent_task_id cascade for the
-            # depends_on edge. Try to retire first; if it fires, the
-            # task is now ``cancelled`` and the dep-cleared wake would
-            # be confusing (task isn't actionable, it's retired).
-            retired = await maybe_retire_pure_container_umbrella(
-                session, task=dependent
-            )
-            if retired:
-                continue
-            newly_unblocked.append(dependent)
+            if unblocked is not None:
+                newly_unblocked.append(unblocked)
 
     return newly_unblocked
 

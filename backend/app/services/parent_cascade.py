@@ -24,7 +24,6 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
-from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
 from app.services.activity_log import record_activity
 
@@ -190,11 +189,7 @@ async def maybe_cascade_umbrella_close(
 
     **Safety net** — the cascade only fires when
     ``parent.in_progress_at IS NULL AND parent.previous_in_progress_at IS NULL``
-    (the parent never executed; its work shipped via children). The
-    historical ``UMBRELLA_RETIRED`` marker requirement was dropped —
-    it produced zombie umbrellas waiting for a Supervisor comment the
-    system already had enough data to infer. Cancellation is a status,
-    not a delete — reversible if a false positive ever surfaces.
+    (the parent never executed; its work shipped via children).
 
     **Depth limit** — recursion stops at ``_UMBRELLA_CASCADE_MAX_DEPTH``
     levels so a pathological ``parent_task_id`` cycle (DB does not
@@ -286,14 +281,6 @@ async def _qualifying_umbrella_parent(
         return None
     if any(sib.status not in TERMINAL_STATUSES for sib in siblings):
         return None
-
-    # No UMBRELLA_RETIRED marker requirement: never-executed inbox parent
-    # with non-empty children all in terminal status is sufficient
-    # evidence that the umbrella has nothing left to track. The marker
-    # was historical defense-in-depth; in practice it just produced
-    # zombie umbrellas parked in inbox waiting for a Supervisor comment
-    # the system already had enough data to infer. Cancellation is a
-    # status, not a delete — reversible if a false positive ever surfaces.
     return parent
 
 
@@ -302,38 +289,22 @@ async def maybe_retire_pure_container_umbrella(
     *,
     task: Task,
 ) -> bool:
-    """Auto-cancel a pure-container umbrella when its last unresolved
-    dep clears.
+    """Auto-cancel a pure-container umbrella whose work shipped via deps.
 
-    "Pure container" = an umbrella that links to its executable work via
-    ``depends_on_task_ids`` instead of ``parent_task_id`` children. The
-    parent_task_id-based ``maybe_cascade_umbrella_close`` does not fire
-    on these because its sibling check
-    (``select(Task).where(parent_task_id == X)``) returns empty.
+    Pure container = umbrella linked to its work through
+    ``depends_on_task_ids`` rather than ``parent_task_id`` children.
+    Preconditions: status ``inbox``, never-executed (no
+    ``in_progress_at`` / ``previous_in_progress_at``), at least one
+    dep with all deps terminal, no open Blockers, and no non-terminal
+    parent_task_id children.
 
-    Preconditions (mirror the parent_task_id cascade for the depends_on
-    edge):
-    - ``status == "inbox"``: not already terminal, not actively worked.
-    - ``in_progress_at IS NULL AND previous_in_progress_at IS NULL``:
-      umbrella never executed; its work shipped via the deps.
-    - ``depends_on_task_ids`` is non-empty AND every dep is in
-      TERMINAL_STATUSES: the deps actually carried the work.
-    - No non-terminal ``parent_task_id`` children: a non-terminal child
-      means the umbrella is NOT a pure container.
-
-    No ``UMBRELLA_RETIRED`` marker requirement: the predicate above is
-    sufficient evidence that decomposition is complete. The marker was
-    historical defense-in-depth that produced zombie umbrellas parked
-    in inbox waiting for a Supervisor comment the system already had
-    enough data to infer. Cancellation is a status, not a delete —
-    reversible if a false positive ever surfaces.
-
-    Returns True iff the task was cancelled. Caller is responsible for
-    ``session.commit()``.
+    Returns True iff the task was cancelled. Caller commits.
     """
-    # Local imports to avoid pulling task_dependencies / activity_log
-    # into module-load order.
-    from app.services.task_dependencies import blocked_by_for_task
+    from app.services.blockers import task_has_open_blocker
+    from app.services.task_dependencies import (
+        blocked_by_for_task,
+        dependency_ids_by_task_id,
+    )
 
     if task.status != "inbox":
         return False
@@ -342,33 +313,23 @@ async def maybe_retire_pure_container_umbrella(
     if task.board_id is None:
         return False
 
-    # All declared deps must be terminal. ``blocked_by_for_task`` returns
-    # only non-terminal deps, so an empty result means "all terminal" —
-    # but only when the task actually has dep edges in the first place.
-    # Pure-container umbrellas are defined by their depends_on edges;
-    # an umbrella with zero deps and zero children has nothing concrete
-    # to cancel against, so we don't auto-retire.
-    declared_deps_count = len(
-        list(
-            await session.exec(
-                select(col(TaskDependency.depends_on_task_id))
-                .where(col(TaskDependency.task_id) == task.id)
-                .where(col(TaskDependency.board_id) == task.board_id),
-            ),
-        ),
+    deps_map = await dependency_ids_by_task_id(
+        session, board_id=task.board_id, task_ids=[task.id],
     )
-    if declared_deps_count == 0:
+    dep_ids = deps_map.get(task.id, [])
+    if not dep_ids:
         return False
     remaining = await blocked_by_for_task(
-        session, board_id=task.board_id, task_id=task.id
+        session, board_id=task.board_id, task_id=task.id, dependency_ids=dep_ids,
     )
     if remaining:
         return False
 
-    # No non-terminal parent_task_id children. A non-terminal child
-    # means the umbrella is NOT a pure container — its parent_task_id
-    # children are the work, and the parent_task_id cascade is the
-    # right closure path for them.
+    if await task_has_open_blocker(
+        session, board_id=task.board_id, task_id=task.id,
+    ):
+        return False
+
     open_children = await non_terminal_children_of(
         session, board_id=task.board_id, parent_task_id=task.id,
     )
@@ -386,8 +347,8 @@ async def maybe_retire_pure_container_umbrella(
         board_id=task.board_id,
         message=(
             f"Pure-container umbrella auto-cancelled: all "
-            f"{declared_deps_count} depends_on task(s) terminal, "
-            f"never-executed, no open parent_task_id children."
+            f"{len(dep_ids)} depends_on task(s) terminal, never-executed, "
+            f"no open Blockers, no open parent_task_id children."
         ),
     )
     return True
@@ -398,28 +359,13 @@ async def auto_retire_pure_container_umbrellas(
     *,
     board_id: UUID,
 ) -> list[Task]:
-    """Belt-and-suspenders sweep: retire every pure-container umbrella
-    on the board whose retirement preconditions are currently met.
+    """Board-wide sweep that retires every pure-container umbrella
+    whose ``maybe_retire_pure_container_umbrella`` predicate is met.
 
-    Complements the dep-clear hook in
-    ``_reconcile_dependents_for_dependency_toggle``. The hook fires at
-    the *moment* a dep transitions to done, so it cannot retire:
-    - Umbrellas whose deps cleared before the hook existed.
-    - Umbrellas whose ``UMBRELLA_RETIRED`` marker landed AFTER the deps
-      were already terminal.
-    - Anything missed by a transient failure on the hook.
-
-    The sweep runs on the lead next-action endpoint (every Supervisor
-    heartbeat) and catches all three. Each candidate goes through the
-    same ``maybe_retire_pure_container_umbrella`` predicate as the hook,
-    so retirement semantics stay aligned.
-
-    Pre-filter is cheap: ``status == "inbox"`` + never-executed reduces
-    the candidate set to ~handfuls of rows on a real board. The
-    per-candidate work is bounded by the same per-task gates as the
-    hook (deps query + children query + marker query).
-
-    Returns the list of cancelled umbrellas. Caller commits.
+    Backstop for the dep-clear hook in
+    ``_reconcile_dependents_for_dependency_toggle`` — covers umbrellas
+    whose deps cleared before the hook existed, or anything the hook
+    missed. Returns the list of cancelled umbrellas. Caller commits.
     """
     candidates = list(
         await session.exec(
