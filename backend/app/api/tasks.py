@@ -130,13 +130,17 @@ from app.services.parent_cascade import (
 )
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
+    blocked_by_for_task,
     dependency_ids_by_task_id,
     dependency_status_by_id,
     dependent_task_ids,
     replace_task_dependencies,
     validate_dependency_update,
 )
-from app.services.lead_notify import notify_lead_after_blocker_resolved
+from app.services.lead_notify import (
+    notify_lead_after_blocker_resolved,
+    notify_lead_after_dependency_cleared,
+)
 from app.services.task_pipeline import (
     FRONTEND_REVIEW_PIPELINE_STATES,
     frontend_pipeline_required,
@@ -1606,17 +1610,24 @@ async def _reconcile_dependents_for_dependency_toggle(
     dependency_task: Task,
     previous_status: str,
     actor_agent_id: UUID | None,
-) -> None:
+) -> list[Task]:
     """Apply dependency side-effects when a dependency task toggles done/undone.
 
     The UI models dependencies as a DAG: when a dependency is reopened, dependents that were
     previously marked done may need to be reopened or flagged. This helper keeps dependent state
     consistent with the dependency graph without duplicating logic across endpoints.
+
+    Returns the list of dependents that became fully actionable as a
+    direct result of THIS dependency clearing (dep just transitioned to
+    ``done``, no other unresolved deps, no open Blockers, status not
+    terminal). The caller is expected to commit before waking the lead
+    for each of them via ``notify_lead_after_dependency_cleared`` —
+    symmetric with the post-commit wake on blocker resolve.
     """
 
     done_toggled = (previous_status == "done") != (dependency_task.status == "done")
     if not done_toggled:
-        return
+        return []
 
     dependent_ids = await dependent_task_ids(
         session,
@@ -1624,7 +1635,7 @@ async def _reconcile_dependents_for_dependency_toggle(
         dependency_task_id=dependency_task.id,
     )
     if not dependent_ids:
-        return
+        return []
 
     dependents = list(
         await session.exec(
@@ -1634,6 +1645,7 @@ async def _reconcile_dependents_for_dependency_toggle(
         ),
     )
     reopened = previous_status == "done" and dependency_task.status != "done"
+    newly_unblocked: list[Task] = []
 
     for dependent in dependents:
         if dependent.status == "done":
@@ -1678,6 +1690,20 @@ async def _reconcile_dependents_for_dependency_toggle(
                 agent_id=actor_agent_id,
                 board_id=dependent.board_id,
             )
+            if dependent.status in TERMINAL_STATUSES:
+                continue
+            remaining_blocking = await blocked_by_for_task(
+                session, board_id=board_id, task_id=dependent.id
+            )
+            if remaining_blocking:
+                continue
+            if await task_has_open_blocker(
+                session, board_id=board_id, task_id=dependent.id
+            ):
+                continue
+            newly_unblocked.append(dependent)
+
+    return newly_unblocked
 
 
 async def _fetch_task_events(
@@ -4751,7 +4777,7 @@ async def _apply_lead_task_update(
         previous_status=update.previous_status,
         actor_agent_id=update.actor.agent.id,
     )
-    await _reconcile_dependents_for_dependency_toggle(
+    newly_unblocked_dependents = await _reconcile_dependents_for_dependency_toggle(
         session,
         board_id=update.board_id,
         dependency_task=update.task,
@@ -4760,6 +4786,10 @@ async def _apply_lead_task_update(
     )
     await session.commit()
     await session.refresh(update.task)
+    for dependent in newly_unblocked_dependents:
+        await notify_lead_after_dependency_cleared(
+            session=session, task=dependent, dependency_task=update.task
+        )
     await _lead_notify_new_assignee(session, update=update)
     # Mirror the umbrella auto-cascade hook in _finalize_updated_task —
     # without this, lead-driven terminal transitions silently leave
@@ -5136,7 +5166,7 @@ async def _record_task_update_activity(
         previous_status=update.previous_status,
         actor_agent_id=actor_agent_id,
     )
-    await _reconcile_dependents_for_dependency_toggle(
+    newly_unblocked_dependents = await _reconcile_dependents_for_dependency_toggle(
         session,
         board_id=update.board_id,
         dependency_task=update.task,
@@ -5144,6 +5174,10 @@ async def _record_task_update_activity(
         actor_agent_id=actor_agent_id,
     )
     await session.commit()
+    for dependent in newly_unblocked_dependents:
+        await notify_lead_after_dependency_cleared(
+            session=session, task=dependent, dependency_task=update.task
+        )
 
 
 async def _assign_review_task_to_lead(
