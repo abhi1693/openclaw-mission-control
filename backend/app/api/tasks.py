@@ -125,6 +125,7 @@ from app.services.operator_decisions import (
 from app.services.parent_cascade import (
     TERMINAL_STATUSES,
     maybe_cascade_umbrella_close,
+    maybe_retire_pure_container_umbrella,
     non_terminal_children_of,
     orphan_children_by_parent_id,
 )
@@ -1700,6 +1701,17 @@ async def _reconcile_dependents_for_dependency_toggle(
             if await task_has_open_blocker(
                 session, board_id=board_id, task_id=dependent.id
             ):
+                continue
+            # Pure-container umbrellas (UMBRELLA_RETIRED marker, never
+            # executed, deps were the work) auto-retire when their last
+            # dep clears — symmetric with the parent_task_id cascade for
+            # the depends_on edge. Try to retire first; if it fires,
+            # the task is now ``cancelled`` and the dep-cleared wake
+            # would be confusing (task isn't actionable, it's retired).
+            retired = await maybe_retire_pure_container_umbrella(
+                session, task=dependent
+            )
+            if retired:
                 continue
             newly_unblocked.append(dependent)
 

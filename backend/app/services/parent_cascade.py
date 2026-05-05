@@ -24,6 +24,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
+from app.models.task_dependencies import TaskDependency
 from app.models.tasks import Task
 from app.services.activity_log import record_activity
 
@@ -295,6 +296,106 @@ async def _qualifying_umbrella_parent(
             return None
 
     return parent
+
+
+async def maybe_retire_pure_container_umbrella(
+    session: AsyncSession,
+    *,
+    task: Task,
+) -> bool:
+    """Auto-cancel a pure-container umbrella when its last unresolved
+    dep clears.
+
+    "Pure container" = an umbrella that links to its executable work via
+    ``depends_on_task_ids`` instead of ``parent_task_id`` children. The
+    parent_task_id-based ``maybe_cascade_umbrella_close`` does not fire
+    on these because its sibling check
+    (``select(Task).where(parent_task_id == X)``) returns empty.
+
+    Preconditions (mirror the parent_task_id cascade for the depends_on
+    edge):
+    - ``status == "inbox"``: not already terminal, not actively worked.
+    - ``in_progress_at IS NULL AND previous_in_progress_at IS NULL``:
+      umbrella never executed; its work shipped via the deps.
+    - The task carries an explicit ``UMBRELLA_RETIRED`` marker comment:
+      lead's commitment that decomposition is complete.
+    - ``depends_on_task_ids`` is non-empty AND every dep is in
+      TERMINAL_STATUSES: the deps actually carried the work.
+    - No non-terminal ``parent_task_id`` children: a non-terminal child
+      means the umbrella is NOT a pure container.
+
+    Returns True iff the task was cancelled. Caller is responsible for
+    ``session.commit()``.
+    """
+    # Local imports to avoid pulling task_dependencies / activity_log
+    # into module-load order.
+    from app.services.task_dependencies import blocked_by_for_task
+
+    if task.status != "inbox":
+        return False
+    if task.in_progress_at is not None or task.previous_in_progress_at is not None:
+        return False
+    if task.board_id is None:
+        return False
+
+    # Marker is the cheapest authoritative gate; check before walking
+    # the dep + child queries.
+    retired_ids = await task_ids_with_umbrella_retired_marker(
+        session, board_id=task.board_id, task_ids=[task.id],
+    )
+    if task.id not in retired_ids:
+        return False
+
+    # All declared deps must be terminal. ``blocked_by_for_task`` returns
+    # only non-terminal deps, so an empty result means "all terminal" —
+    # but only when the task actually has dep edges in the first place.
+    # Pure-container umbrellas are defined by their depends_on edges;
+    # an umbrella with zero deps and zero children has nothing concrete
+    # to cancel against, so we don't auto-retire.
+    declared_deps_count = len(
+        list(
+            await session.exec(
+                select(col(TaskDependency.depends_on_task_id))
+                .where(col(TaskDependency.task_id) == task.id)
+                .where(col(TaskDependency.board_id) == task.board_id),
+            ),
+        ),
+    )
+    if declared_deps_count == 0:
+        return False
+    remaining = await blocked_by_for_task(
+        session, board_id=task.board_id, task_id=task.id
+    )
+    if remaining:
+        return False
+
+    # No non-terminal parent_task_id children. A non-terminal child
+    # means the umbrella is NOT a pure container — its parent_task_id
+    # children are the work, and the parent_task_id cascade is the
+    # right closure path for them.
+    open_children = await non_terminal_children_of(
+        session, board_id=task.board_id, parent_task_id=task.id,
+    )
+    if open_children:
+        return False
+
+    task.status = "cancelled"
+    task.cancelled_at = utcnow()
+    task.updated_at = task.cancelled_at
+    session.add(task)
+    record_activity(
+        session,
+        event_type="task.umbrella_pure_container_retired",
+        task_id=task.id,
+        board_id=task.board_id,
+        message=(
+            f"Pure-container umbrella auto-cancelled: UMBRELLA_RETIRED "
+            f"marker present, all {declared_deps_count} depends_on "
+            f"task(s) terminal, never-executed, no open parent_task_id "
+            f"children."
+        ),
+    )
+    return True
 
 
 async def maybe_cascade_umbrella_close_by_id(
