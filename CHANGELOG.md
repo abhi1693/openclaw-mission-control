@@ -2,6 +2,24 @@
 
 All notable changes to the OpenClaw Mission Control fork.
 
+## 2026-05-06
+
+### Fixed
+- **Volatile `build_hash` in verdict packets caused false-positive deploy-mismatch rejections**: Phase 3 / E.03 was operator-rejected twice in this session because the cited `build_hash` (e.g. `index-DRMnUJoN.js`) was replaced on disk between cite-and-approve. Vite emits a fresh asset hash on every rebuild; the deploy-truth gate at `tasks.py` already prefers `source_commit` against the live `/__build.sha` endpoint. Verdict skills (`architect-review-verdict`, `qa-validation-verdict`, `reviewer-recheck`, `structured-review-verdict`) now mark `build_hash` deprecated and instruct reviewers to cite `source_commit` only.
+- **Architect iterating without root-cause measurement on rework**: Phase 3 / E.02 burned four QA-FAIL rework cycles attacking the wrong CSS selector before Architect measured the actual overflow source — ~30 min wasted per cycle. New "Rework Diagnosis" section in the `architect-review-verdict` skill mandates a root-cause measurement on the SECOND consecutive review of the same task, with shape varying by defect class (frontend layout: computed `scrollWidth`/`clientWidth` on the failing element; source-level: file path + line range; runtime: exact request status/body).
+- **Wake-discovery latency on review gate handoffs**: Every Phase 3 review chain spent 15–30 minutes per gate-handoff because reviewers waited for their next heartbeat tick to discover newly passed work. New `_wake_next_required_reviewer_after_pass` in `tasks.py` fires after a PASS verdict commits — computes the next missing required role for the task's `review_packet_type`, finds an agent on the board whose role classifier matches, and gateway-dispatches a `NEXT_REVIEWER` wake. Idempotent via a `task.next_reviewer_woken` activity-event marker scoped to the current review cycle. New shared `send_agent_wake` helper in `lead_notify.py`.
+- **Sequential review gates added latency without semantic gain**: `lead-review-routing` skill prescribed Architect-first then QA-E2E. The validator at `task_review_events.py` enforces AND-presence not order, so parallel routing is semantically safe. Skill updated to dispatch ALL missing required reviewers in parallel, with a cost-conditional fallback to sequential when Architect FAIL is recent (avoids wasting one QA-E2E browser-oracle run on something Architect would source-fail).
+- **No early signal on stuck rework loops**: Anti-loop existed only at the approval-rejection layer (`REJECTION_LOOP_THRESHOLD = 3` in `approvals.py`); review-event FAIL streaks went unflagged until operator pattern-matched manually. New `_apply_review_anti_loop_signals` in `tasks.py` detects consecutive non-PASS verdicts on the same `target` since the last PASS, posts a `task.anti_loop_summon` activity event tagging Architect at FAIL #2 (idempotent — one summon per active streak), and files a structured `review_anti_loop` Blocker at FAIL #3 (operator/Architect adjudication required). Same-target gate avoids paging Architect on legitimate first-fix misses. New reason code `review_anti_loop` registered in `blocker_reason_codes` (operator_durable class).
+
+### Changed
+- **`_send_lead_wake` factored**: Was duplicating dispatch+config block in two places. Now a 6-line wrapper around the shared `_send_agent_wake` helper used by both lead-wake and next-reviewer wake paths.
+- **Promoted helpers in `task_review_events.py`**: `_latest_events_by_role` / `_cycle_since` renamed to public `latest_events_by_role` / `cycle_since` so the new next-reviewer wake path can reuse them instead of inlining the cycle filter + latest-by-role walk.
+- **Streak query bounded**: `_apply_review_anti_loop_signals` now runs `select(TaskReviewEvent).order_by(desc(created_at)).limit(20)` — streak walk breaks at the first PASS so deeply contested tasks rarely need >5 events backward; full-history scan was unbounded.
+- **`_post_idempotent_marker` extracted**: The SELECT-existing → INSERT-new activity-event pattern used by both anti-loop summon and next-reviewer wake paths is now a single shared helper.
+
+### Codex review (gpt-5.5/high)
+The pipeline-speed-up shipset proposal originally included an "operator approval auto-fast-path" item that would auto-resolve approvals when all structured PASS gates were met. Codex flagged this as HIGH severity — the approval API at `approvals.py:754` intentionally human-gates approval (agents can only reject), and auto-resolution would bypass that threat boundary. Item was dropped. Codex also reshaped the original "build-deploy lock" item into the cite-discipline change, since the deploy-truth gate already prefers commit SHA over volatile asset hash.
+
 ## 2026-05-05
 
 ### Fixed
