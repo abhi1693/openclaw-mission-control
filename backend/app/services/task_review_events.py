@@ -41,16 +41,16 @@ def required_review_roles(review_packet_type: str | None) -> list[str]:
     return list(REQUIRED_REVIEW_ROLES_BY_PACKET_TYPE.get(review_packet_type or "", ()))
 
 
-def _cycle_since(task: "Task") -> datetime | None:
+def cycle_since(task: "Task") -> datetime | None:
     return task.in_progress_at or task.previous_in_progress_at
 
 
-def _latest_events_by_role(
+def latest_events_by_role(
     *,
     task: "Task",
     events: Sequence[TaskReviewEvent],
 ) -> dict[str, TaskReviewEvent]:
-    since = _cycle_since(task)
+    since = cycle_since(task)
     latest: dict[str, TaskReviewEvent] = {}
     for event in sorted(events, key=lambda value: value.created_at):
         if since is not None and event.created_at < since:
@@ -255,7 +255,7 @@ def build_review_readiness(
     """
 
     required_roles = required_review_roles(task.review_packet_type)
-    latest_by_role = _latest_events_by_role(task=task, events=events)
+    latest_by_role = latest_events_by_role(task=task, events=events)
     present_roles = [role for role in required_roles if role in latest_by_role]
     missing_roles = [role for role in required_roles if role not in latest_by_role]
     blocking_roles = [
@@ -349,8 +349,8 @@ async def get_task_review_readiness(
 ) -> TaskReviewReadinessRead:
     """Load structured review verdicts and compute readiness for a task."""
 
-    cycle_since = _cycle_since(task)
-    events = await list_task_review_events(session, task_id=task.id, since=cycle_since)
+    since = cycle_since(task)
+    events = await list_task_review_events(session, task_id=task.id, since=since)
     board_task_ids: set[UUID] | None = None
     if task.board_id is not None:
         board_task_ids = set(
@@ -360,7 +360,7 @@ async def get_task_review_readiness(
     latest_fallback = await fetch_latest_model_fallback_step(
         session,
         task_id=task.id,
-        since=cycle_since,
+        since=since,
     )
 
     return build_review_readiness(
@@ -404,16 +404,16 @@ async def get_task_review_readiness_batch(
 
     out: dict[UUID, TaskReviewReadinessRead] = {}
     for task in tasks:
-        cycle_since = _cycle_since(task)
+        since = cycle_since(task)
         events = events_by_task.get(task.id, [])
-        if cycle_since is not None:
-            events = [event for event in events if event.created_at >= cycle_since]
+        if since is not None:
+            events = [event for event in events if event.created_at >= since]
 
         latest_fallback = fallback_by_task.get(task.id)
         if (
             latest_fallback is not None
-            and cycle_since is not None
-            and latest_fallback.created_at < cycle_since
+            and since is not None
+            and latest_fallback.created_at < since
         ):
             latest_fallback = None
 

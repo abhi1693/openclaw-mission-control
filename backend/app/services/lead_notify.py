@@ -22,13 +22,42 @@ from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 logger = logging.getLogger(__name__)
 
 
+async def _send_agent_wake(
+    *,
+    session: AsyncSession,
+    board_id,
+    agent: Agent,
+    message: str,
+) -> bool:
+    """Send a wake message to a specific agent. Returns True iff
+    dispatched. No-op (returns False) when session_key, board, or
+    gateway config is missing.
+    """
+    if not agent.openclaw_session_id:
+        return False
+    dispatch = GatewayDispatchService(session)
+    board = await session.get(Board, board_id)
+    if board is None:
+        return False
+    config = await dispatch.optional_gateway_config_for_board(board)
+    if config is None:
+        return False
+    await dispatch.try_send_agent_message(
+        session_key=agent.openclaw_session_id,
+        config=config,
+        agent_name=agent.name,
+        message=message,
+        deliver=True,
+    )
+    return True
+
+
 async def _send_lead_wake(
     *,
     session: AsyncSession,
     task: Task,
     message: str,
 ) -> None:
-    """Send a wake message to the board lead. Caller wraps in try/except."""
     if task.board_id is None:
         return
     lead = (
@@ -36,21 +65,10 @@ async def _send_lead_wake(
         .filter(col(Agent.is_board_lead).is_(True))
         .first(session)
     )
-    if lead is None or not lead.openclaw_session_id:
+    if lead is None:
         return
-    dispatch = GatewayDispatchService(session)
-    board = await session.get(Board, task.board_id)
-    if board is None:
-        return
-    config = await dispatch.optional_gateway_config_for_board(board)
-    if config is None:
-        return
-    await dispatch.try_send_agent_message(
-        session_key=lead.openclaw_session_id,
-        config=config,
-        agent_name=lead.name,
-        message=message,
-        deliver=True,
+    await _send_agent_wake(
+        session=session, board_id=task.board_id, agent=lead, message=message,
     )
 
 
@@ -86,30 +104,11 @@ async def send_agent_wake(
     agent: Agent,
     message: str,
 ) -> bool:
-    """Send a wake message to a specific (non-lead) agent. Returns True
-    if a dispatch fired, False if any precondition was missing
-    (no session_key, no gateway config, etc.).
-
-    Used by the next-reviewer auto-wake path when a PASS verdict
-    leaves another required reviewer role outstanding.
-    """
-    if not agent.openclaw_session_id:
-        return False
-    dispatch = GatewayDispatchService(session)
-    board = await session.get(Board, board_id)
-    if board is None:
-        return False
-    config = await dispatch.optional_gateway_config_for_board(board)
-    if config is None:
-        return False
-    await dispatch.try_send_agent_message(
-        session_key=agent.openclaw_session_id,
-        config=config,
-        agent_name=agent.name,
-        message=message,
-        deliver=True,
+    """Public alias for _send_agent_wake — used by the next-reviewer
+    auto-wake path."""
+    return await _send_agent_wake(
+        session=session, board_id=board_id, agent=agent, message=message,
     )
-    return True
 
 
 async def notify_lead_after_dependency_cleared(
