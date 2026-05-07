@@ -908,6 +908,16 @@ async def update_approval(
     session.add(approval)
     await session.commit()
     await session.refresh(approval)
+    if approval.status == "approved" and prior_status != "approved":
+        try:
+            await _auto_transition_tasks_to_done_after_approval(
+                session=session, board=board, approval=approval, actor=actor,
+            )
+        except Exception:
+            logger.exception(
+                "approval.auto_transition_unexpected board_id=%s approval_id=%s",
+                board.id, approval.id,
+            )
     if approval.status in {"approved", "rejected"} and approval.status != prior_status:
         try:
             await _notify_lead_on_approval_resolution(
@@ -924,6 +934,86 @@ async def update_approval(
             )
     reads = await _approval_reads(session, [approval])
     return reads[0]
+
+
+async def _auto_transition_tasks_to_done_after_approval(
+    *,
+    session: AsyncSession,
+    board: Board,
+    approval: Approval,
+    actor: ActorContext,
+) -> None:
+    """When a `move_to_done` approval flips to `approved`, drive each
+    linked review-status task to `done` directly, firing the same
+    cascade hooks the lead PATCH would (umbrella close, dep-clear
+    waking on dependents). Removes the lead-tick wake-discovery
+    latency on operator approvals.
+
+    Gates already enforced by the calling PATCH path:
+    - Tasks are in `review` (`_ensure_move_to_done_targets_in_review`)
+    - Delivery contract complete (`_ensure_move_to_done_targets_have_delivery_contract`)
+    """
+    if approval.action_type not in DONE_APPROVAL_ACTION_TYPES:
+        return
+    task_ids_by_approval = await load_task_ids_by_approval(
+        session, approval_ids=[approval.id]
+    )
+    task_ids = list(task_ids_by_approval.get(approval.id, []) or [])
+    if not task_ids and approval.task_id is not None:
+        task_ids = [approval.task_id]
+    if not task_ids:
+        return
+
+    from app.api.tasks import _reconcile_dependents_for_dependency_toggle
+    from app.services.lead_notify import notify_lead_after_dependency_cleared
+    from app.services.parent_cascade import maybe_cascade_umbrella_close
+
+    actor_agent_id = (
+        actor.agent.id if actor.actor_type == "agent" and actor.agent is not None else None
+    )
+
+    tasks = list(
+        await session.exec(
+            select(Task)
+            .where(col(Task.board_id) == board.id)
+            .where(col(Task.id).in_(task_ids))
+        ),
+    )
+    for task in tasks:
+        if task.status != "review":
+            continue
+        previous_status = task.status
+        now = utcnow()
+        task.status = "done"
+        task.updated_at = now
+        session.add(task)
+        record_activity(
+            session,
+            event_type="task.status_changed",
+            task_id=task.id,
+            board_id=task.board_id,
+            agent_id=actor_agent_id,
+            message=(
+                f"Task moved to done: {task.title} "
+                f"(auto-transition on operator approval {approval.id})."
+            ),
+        )
+        newly_unblocked = await _reconcile_dependents_for_dependency_toggle(
+            session,
+            board_id=board.id,
+            dependency_task=task,
+            previous_status=previous_status,
+            actor_agent_id=actor_agent_id,
+        )
+        await session.commit()
+        await session.refresh(task)
+        for dependent in newly_unblocked:
+            await notify_lead_after_dependency_cleared(
+                session=session, task=dependent, dependency_task=task,
+            )
+        cascaded = await maybe_cascade_umbrella_close(session, task=task)
+        if cascaded is not None:
+            await session.commit()
 
 
 @router.post("/{approval_id}/unblock", response_model=OkResponse)
