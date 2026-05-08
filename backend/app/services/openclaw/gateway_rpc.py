@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import platform as _platform
 import ssl
 from dataclasses import dataclass
 from time import perf_counter, time
@@ -28,6 +29,9 @@ from app.services.openclaw.device_identity import (
 )
 
 PROTOCOL_VERSION = 3
+# Resolved once at import time; matches the value written by the openclaw CLI
+# during pairing ("linux", "darwin", or "windows").
+_HOST_PLATFORM: str = _platform.system().lower()
 logger = get_logger(__name__)
 GATEWAY_OPERATOR_SCOPES = (
     "operator.read",
@@ -334,7 +338,7 @@ def _build_connect_params(
         "client": {
             "id": CONTROL_UI_CLIENT_ID if use_control_ui else DEFAULT_GATEWAY_CLIENT_ID,
             "version": "1.0.0",
-            "platform": "python",
+            "platform": _HOST_PLATFORM,
             "mode": CONTROL_UI_CLIENT_MODE if use_control_ui else DEFAULT_GATEWAY_CLIENT_MODE,
         },
     }
