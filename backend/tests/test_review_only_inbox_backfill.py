@@ -80,10 +80,11 @@ async def test_backfill_records_status_change_activity(
     events = (await session.exec(
         select(ActivityEvent).where(ActivityEvent.task_id == stuck.id)
     )).all()
-    types = {e.event_type for e in events}
-    assert "task.status_changed" in types, (
-        f"expected status_changed activity event; got {types!r}"
+    status_events = [e for e in events if e.event_type == "task.status_changed"]
+    assert len(status_events) == 1, (
+        f"expected exactly 1 status_changed event; got {[e.event_type for e in events]!r}"
     )
+    assert status_events[0].actor_user_id == user.id
 
 
 @pytest.mark.asyncio
