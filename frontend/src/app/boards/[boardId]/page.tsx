@@ -3633,22 +3633,44 @@ export default function BoardDetailPage() {
           </div>
 
           <div className="relative flex flex-col gap-4 p-4 md:flex-row md:gap-6 md:p-6">
-            {isOrgAdmin ? (
+            {isOrgAdmin && agentsCardCollapsed ? (
+              <aside
+                className="flex w-full flex-row md:flex-col items-center rounded-xl border border-slate-200 bg-white shadow-sm md:w-12 md:self-start gap-3 px-4 md:px-0 py-3"
+                aria-label="Agents card (collapsed)"
+              >
+                <button
+                  type="button"
+                  onClick={() => setAgentsCardCollapsed(false)}
+                  aria-expanded="false"
+                  aria-controls="board-agents-list"
+                  data-cy="board-agents-toggle"
+                  className="rounded-md p-1 text-slate-500 transition hover:bg-slate-100"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <span
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700"
+                  aria-label={`${sortedAgents.length} agents total`}
+                >
+                  {sortedAgents.length}
+                </span>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 md:[writing-mode:vertical-rl]">
+                  Agents
+                </p>
+              </aside>
+            ) : null}
+            {isOrgAdmin && !agentsCardCollapsed ? (
               <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white shadow-sm md:w-64 md:self-start">
                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                   <button
                     type="button"
-                    onClick={() => setAgentsCardCollapsed(!agentsCardCollapsed)}
-                    aria-expanded={!agentsCardCollapsed}
+                    onClick={() => setAgentsCardCollapsed(true)}
+                    aria-expanded="true"
                     aria-controls="board-agents-list"
                     data-cy="board-agents-toggle"
                     className="flex flex-1 items-center gap-2 rounded-md p-1 -m-1 text-left transition hover:bg-slate-50"
                   >
-                    {agentsCardCollapsed ? (
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-slate-400" />
-                    )}
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Agents
@@ -3668,10 +3690,7 @@ export default function BoardDetailPage() {
                 </div>
                 <div
                   id="board-agents-list"
-                  className={cn(
-                    "flex-1 space-y-2 overflow-y-auto p-3",
-                    agentsCardCollapsed && "hidden",
-                  )}
+                  className="flex-1 space-y-2 overflow-y-auto p-3"
                 >
                   {sortedAgents.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">
