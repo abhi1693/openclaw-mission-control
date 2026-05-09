@@ -352,6 +352,7 @@ async def test_patch_review_only_blocked_by_legacy_operator_decision(
             actor=ActorContext(actor_type="user", user=actor.user),
         )
     assert exc.value.status_code == 409
+    assert isinstance(exc.value.detail, dict)
     assert exc.value.detail.get("code") == "task_blocked_operator_decision_required"
 
 
