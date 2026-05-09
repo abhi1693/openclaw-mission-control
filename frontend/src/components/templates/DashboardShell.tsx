@@ -16,6 +16,7 @@ import { BrandMark } from "@/components/atoms/BrandMark";
 import { OrgSwitcher } from "@/components/organisms/OrgSwitcher";
 import { UserMenu } from "@/components/organisms/UserMenu";
 import { isOnboardingComplete } from "@/lib/onboarding";
+import { useSidebarCollapsed } from "@/lib/use-sidebar-collapsed";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -30,6 +31,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     setSidebarState({ open: false, path: pathname });
   }
   const sidebarOpen = sidebarState.open;
+  const [collapsed] = useSidebarCollapsed();
 
   const meQuery = useGetMeApiV1UsersMeGet<
     getMeApiV1UsersMeGetResponse,
@@ -93,10 +95,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   }, [sidebarOpen]);
 
   return (
-    <div className="min-h-screen bg-app text-strong" data-sidebar={sidebarOpen ? "open" : "closed"}>
+    <div
+      className="min-h-screen bg-app text-strong"
+      data-sidebar={sidebarOpen ? "open" : "closed"}
+      data-sidebar-collapsed={collapsed ? "true" : "false"}
+    >
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
         <div className="flex items-center py-3">
-          <div className="flex items-center px-4 md:px-6 md:w-[260px]">
+          <div
+            className={`flex items-center px-4 md:px-6 transition-[width] duration-200 ${
+              collapsed ? "md:w-[64px]" : "md:w-[260px]"
+            }`}
+          >
             {isSignedIn ? (
               <button
                 type="button"
@@ -107,7 +117,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
             ) : null}
-            <BrandMark />
+            {collapsed ? null : <BrandMark />}
           </div>
           <SignedIn>
             <div className="hidden md:flex flex-1 items-center">
@@ -140,7 +150,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         />
       ) : null}
 
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[260px_1fr] bg-slate-50">
+      <div
+        className={`grid min-h-[calc(100vh-64px)] grid-cols-1 bg-slate-50 transition-[grid-template-columns] duration-200 ${
+          collapsed ? "md:grid-cols-[64px_1fr]" : "md:grid-cols-[260px_1fr]"
+        }`}
+      >
         {children}
       </div>
     </div>
