@@ -1,15 +1,12 @@
 # ruff: noqa: INP001
 """Review-only tasks must never enter `inbox` — they have no
 implementation phase, so the worker→reviewer pipeline doesn't apply.
-
-Production incident 2026-05-09: Track F (`ab91d422`) and Final
-acceptance (`a8743f3a`) sat stuck in inbox; neither lead nor worker
-can perform `inbox→review` (lead status gate trips, OperatorDecision
-emitted, pipeline drains). The fix: review_only tasks are created in
-`review` directly.
-
-These tests are RED until `normalize_review_only_initial_status` is
-called from both create_task handlers.
+Without this guarantee, neither lead nor worker can perform
+`inbox→review` (lead-status-gate, comment-required, pipeline-events
+all reject), and the only escape is a manual operator OperatorDecision
+resolution. The fix: review_only tasks are created in `review`
+directly, and PATCHes that recategorize an inbox task to review_only
+auto-advance.
 """
 from __future__ import annotations
 

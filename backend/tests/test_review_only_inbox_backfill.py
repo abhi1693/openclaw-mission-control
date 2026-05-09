@@ -18,13 +18,13 @@ from app.models.boards import Board
 from app.models.organizations import Organization
 from app.models.tasks import Task
 from app.models.users import User
+from scripts.backfill_review_only_inbox import backfill_async
 
 
 @pytest.mark.asyncio
 async def test_backfill_advances_review_only_inbox_to_review(
     sqlite_session: AsyncSession,
 ) -> None:
-    from scripts.backfill_review_only_inbox import backfill_async
     session = sqlite_session
     org = Organization(id=uuid4(), name="o")
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b1")
@@ -63,7 +63,6 @@ async def test_backfill_records_status_change_activity(
     """Without going through _finalize_updated_task the script would
     silently flip status. The activity row is what the UI shows in the
     task history."""
-    from scripts.backfill_review_only_inbox import backfill_async
     session = sqlite_session
     org = Organization(id=uuid4(), name="o")
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b2")
@@ -95,7 +94,6 @@ async def test_backfill_records_status_change_activity(
 async def test_backfill_dry_run_does_not_mutate(
     sqlite_session: AsyncSession,
 ) -> None:
-    from scripts.backfill_review_only_inbox import backfill_async
     session = sqlite_session
     org = Organization(id=uuid4(), name="o")
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b3")
@@ -117,7 +115,6 @@ async def test_backfill_dry_run_does_not_mutate(
 async def test_backfill_idempotent(
     sqlite_session: AsyncSession,
 ) -> None:
-    from scripts.backfill_review_only_inbox import backfill_async
     session = sqlite_session
     org = Organization(id=uuid4(), name="o")
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b4")
@@ -140,7 +137,6 @@ async def test_backfill_scoped_to_board_id(
     sqlite_session: AsyncSession,
 ) -> None:
     """When --board-id is provided, backfill must touch ONLY that board."""
-    from scripts.backfill_review_only_inbox import backfill_async
     session = sqlite_session
     org = Organization(id=uuid4(), name="o")
     board_a = Board(id=uuid4(), organization_id=org.id, name="A", slug="ba")
