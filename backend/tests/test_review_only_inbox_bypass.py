@@ -394,3 +394,36 @@ async def test_non_lead_agent_patch_review_only_rejected_by_agent_transition_gat
             actor=ActorContext(actor_type="agent", agent=worker),
         )
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_lead_patch_recategorize_to_review_only_advances_inbox(
+    sqlite_session: AsyncSession,
+) -> None:
+    """Lead-path symmetry with user path: when a lead PATCH provides
+    `review_packet_type='review_only'` (recategorize) on an inbox task,
+    the lead-status-gate's narrow exception must fire even though the
+    task's CURRENT review_packet_type is still the old value (`mixed`,
+    `frontend_ui`, etc.). Otherwise leads need two PATCHes for what
+    operators can do in one — symmetry-broken.
+    """
+    session = sqlite_session
+    board, lead = await _seed_board_with_lead(session)
+    task = Task(
+        id=uuid4(), board_id=board.id, title="recat candidate",
+        status="inbox", review_packet_type="mixed",
+    )
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+
+    updated = await tasks_api.update_task(
+        payload=TaskUpdate(
+            review_packet_type="review_only",
+            status="review",
+        ),
+        task=task, session=session,
+        actor=ActorContext(actor_type="agent", agent=lead),
+    )
+    assert updated.review_packet_type == "review_only"
+    assert updated.status == "review"
