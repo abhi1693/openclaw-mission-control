@@ -23,6 +23,7 @@ from app.api import tasks as tasks_api
 from app.api import agent as agent_api
 from app.api.deps import ActorContext
 from app.core.agent_auth import AgentAuthContext
+from app.core.auth import AuthContext
 from app.models.agents import Agent
 from app.models.boards import Board
 from app.models.gateways import Gateway
@@ -32,13 +33,14 @@ from app.models.users import User
 from app.schemas.tasks import TaskCreate, TaskRead
 
 
-def _user_actor(session: AsyncSession) -> ActorContext:
+async def _user_actor(session: AsyncSession) -> ActorContext:
     user = User(
         id=uuid4(),
         clerk_user_id=f"clerk-{uuid4().hex[:8]}",
         email=f"test-{uuid4().hex[:8]}@example.com",
     )
     session.add(user)
+    await session.flush()
     return ActorContext(actor_type="user", user=user)
 
 
@@ -60,7 +62,7 @@ async def _seed_board_with_lead(session: AsyncSession) -> tuple[Board, Agent]:
     session.add(board)
     lead = Agent(
         id=uuid4(), board_id=board_id, gateway_id=gateway_id,
-        name="Lead", auth_token=f"tok-{uuid4().hex}",
+        name="Lead",
         is_board_lead=True,
     )
     session.add(lead)
@@ -76,7 +78,7 @@ async def test_user_route_create_review_only_starts_in_review(
 ) -> None:
     session = sqlite_session
     board, _ = await _seed_board_with_lead(session)
-    actor = _user_actor(session)
+    actor = await _user_actor(session)
 
     created = await tasks_api.create_task(
         payload=TaskCreate(
@@ -88,7 +90,7 @@ async def test_user_route_create_review_only_starts_in_review(
             status="inbox",  # caller hint must be overridden
         ),
         board=board, session=session,
-        auth=type("A", (), {"user": actor.user, "agent": None})(),
+        auth=AuthContext(actor_type="user", user=actor.user),
     )
     assert created.status == "review"
     persisted = (await session.exec(select(Task).where(Task.id == created.id))).first()
@@ -124,7 +126,7 @@ async def test_create_non_review_only_keeps_default_inbox(
 ) -> None:
     session = sqlite_session
     board, _ = await _seed_board_with_lead(session)
-    actor = _user_actor(session)
+    actor = await _user_actor(session)
 
     created = await tasks_api.create_task(
         payload=TaskCreate(
@@ -135,7 +137,7 @@ async def test_create_non_review_only_keeps_default_inbox(
             validation_target_scope="review",
         ),
         board=board, session=session,
-        auth=type("A", (), {"user": actor.user, "agent": None})(),
+        auth=AuthContext(actor_type="user", user=actor.user),
     )
     assert created.status == "inbox"
 
