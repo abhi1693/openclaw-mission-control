@@ -281,6 +281,7 @@ def actionability_missing_fields(
 
 
 def normalize_review_only_initial_status(
+    *,
     review_packet_type: ReviewPacketType | str | None,
     status: TaskStatus | str | None,
 ) -> TaskStatus | str | None:

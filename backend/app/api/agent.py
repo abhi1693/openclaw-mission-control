@@ -1186,7 +1186,8 @@ async def create_task(
     task = Task.model_validate(data)
     task.board_id = board.id
     task.status = normalize_review_only_initial_status(
-        task.review_packet_type, task.status,
+        review_packet_type=task.review_packet_type,
+        status=task.status,
     )
     task.auto_created = True
     task.auto_reason = f"lead_agent:{agent_ctx.agent.id}"
