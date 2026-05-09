@@ -354,19 +354,19 @@ async def test_patch_review_only_blocked_by_legacy_operator_decision(
 
 
 @pytest.mark.asyncio
-async def test_non_lead_agent_patch_review_only_rejected_by_agent_transition_gate(
+async def test_non_lead_agent_patch_review_only_rejected(
     sqlite_session: AsyncSession,
 ) -> None:
     """Non-lead agents (workers) MUST NOT be able to recategorize an
     inbox task to review_only — review-only sign-offs are operator/lead
-    territory. The agent-path transition gate (`_AGENT_PATH_VALID_TRANSITIONS`)
-    rejects (inbox, review). Task 4's auto-advance must NOT bypass this:
-    the auto-advance fires on payload mutation, then `_validate_agent_transition`
-    correctly rejects with 403.
+    territory. Two gates enforce this in the non-lead path: the
+    allowed-fields gate rejects `review_packet_type` first, and the
+    `_AGENT_PATH_VALID_TRANSITIONS` gate would reject (inbox, review)
+    as a fallback. The auto-advance does NOT widen either gate.
 
-    This test guards intent: any future contributor extending the
-    auto-advance must consciously decide whether to also extend
-    `_AGENT_PATH_VALID_TRANSITIONS` for review_only. Today: no.
+    This test asserts the end-state (403); regression-guards intent
+    against any future contributor extending allowed-fields or
+    transitions for the non-lead path.
     """
     session = sqlite_session
     board, lead = await _seed_board_with_lead(session)

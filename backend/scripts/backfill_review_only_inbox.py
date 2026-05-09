@@ -15,6 +15,13 @@ The script picks (or creates) a system actor user named
 through ``_record_task_update_activity``, which records the
 ``task.status_changed`` event with ``agent_id=None`` (proving the
 transition came from a user actor rather than an agent).
+
+Audit caveat: ``_finalize_updated_task`` commits the task row first,
+then issues separate commits for the comment + activity rows. A
+process kill between those commits leaves the row advanced without
+its activity event; a rerun skips it (idempotency by design — no
+audit repair). This is fine for a one-shot operator-driven backfill;
+do NOT wrap this script in a long-running service.
 """
 
 from __future__ import annotations
