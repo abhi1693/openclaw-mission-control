@@ -3974,6 +3974,24 @@ async def update_task(
     previous_status = task.status
     previous_assigned = task.assigned_agent_id
     previous_review_packet_type = task.review_packet_type
+    # Recategorize inbox task to review_only ⇒ implicit advance to review
+    # in the same write. Without this, the caller would need a second
+    # PATCH which trips the lead-status-gate at _lead_apply_status. We
+    # mutate `payload.status` BEFORE `model_dump(exclude_unset=True)` so
+    # the status change is visible to downstream gates
+    # (`comment_required_for_review` at _finalize_updated_task,
+    # operator_decision blocks at _require_operator_decision_task_not_active).
+    # We are NOT bypassing those checks — they fire downstream.
+    if (
+        payload.review_packet_type == "review_only"
+        and task.status == "inbox"
+        and payload.status is None
+    ):
+        payload.status = "review"
+        # Pydantic model_fields_set tracks "explicitly provided"; mark
+        # status so downstream `requested_status` / `status_requested`
+        # flags fire correctly.
+        payload.model_fields_set.add("status")
     updates = payload.model_dump(exclude_unset=True)
     comment = payload.comment if "comment" in payload.model_fields_set else None
     depends_on_task_ids = (
@@ -4668,6 +4686,23 @@ async def _lead_apply_status(
             # cycle-time truth.
             if target_status == "in_progress":
                 update.task.in_progress_at = utcnow()
+            return
+        # Narrow exception: lead can move review_only tasks inbox→review.
+        # These tasks have no implementation phase (the reviewer IS the
+        # worker), so the normal worker→reviewer pipeline doesn't apply.
+        # Operator_decision gates (legacy task field + first-class
+        # OperatorDecision row) still fire downstream and will block
+        # the transition when set; this exception only covers the
+        # lead-status-gate. Note: leads cannot pass `comment` on PATCH
+        # (`_validate_lead_update_request` rejects it at tasks.py:4482),
+        # so we do NOT require a comment here — leads post via the
+        # comments endpoint separately.
+        if (
+            update.task.status == "inbox"
+            and target_status == "review"
+            and update.task.review_packet_type == "review_only"
+        ):
+            update.task.status = "review"
             return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
