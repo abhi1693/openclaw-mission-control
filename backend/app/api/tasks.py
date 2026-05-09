@@ -4696,11 +4696,18 @@ async def _lead_apply_status(
         # lead-status-gate. Note: leads cannot pass `comment` on PATCH
         # (`_validate_lead_update_request` rejects it at tasks.py:4482),
         # so we do NOT require a comment here — leads post via the
-        # comments endpoint separately.
+        # comments endpoint separately. The OR clause also allows lead
+        # to recategorize-and-advance in a single PATCH (symmetry with
+        # the user-route auto-advance) — without it, leads need two
+        # PATCHes since `_lead_apply_status` runs before the setattr
+        # loop applies the new `review_packet_type`.
         if (
             update.task.status == "inbox"
             and target_status == "review"
-            and update.task.review_packet_type == "review_only"
+            and (
+                update.task.review_packet_type == "review_only"
+                or update.updates.get("review_packet_type") == "review_only"
+            )
         ):
             update.task.status = "review"
             return
