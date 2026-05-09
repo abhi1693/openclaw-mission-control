@@ -22,6 +22,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipPortal,
   TooltipProvider,
   TooltipTrigger,
 } from "@radix-ui/react-tooltip";
@@ -67,13 +68,15 @@ function NavLink({ href, icon: Icon, label, active, collapsed }: NavLinkProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent
-        side="right"
-        sideOffset={6}
-        className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-md"
-      >
-        {label}
-      </TooltipContent>
+      <TooltipPortal>
+        <TooltipContent
+          side="right"
+          sideOffset={6}
+          className="z-[60] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-md"
+        >
+          {label}
+        </TooltipContent>
+      </TooltipPortal>
     </Tooltip>
   );
 }
@@ -305,13 +308,15 @@ export function DashboardSidebar() {
                   )}
                 />
               </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                sideOffset={6}
-                className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-md"
-              >
-                {statusLabel}
-              </TooltipContent>
+              <TooltipPortal>
+                <TooltipContent
+                  side="right"
+                  sideOffset={6}
+                  className="z-[60] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-md"
+                >
+                  {statusLabel}
+                </TooltipContent>
+              </TooltipPortal>
             </Tooltip>
           ) : (
             <div className="flex items-center gap-2 text-xs text-slate-500">
