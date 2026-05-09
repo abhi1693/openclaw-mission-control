@@ -72,7 +72,7 @@ function NavLink({ href, icon: Icon, label, active, collapsed }: NavLinkProps) {
         <TooltipContent
           side="right"
           sideOffset={6}
-          className="z-[60] rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-md"
+          className="z-[60] rounded-md bg-slate-900 px-2 py-1 text-xs font-bold text-white shadow-md"
         >
           {label}
         </TooltipContent>
@@ -312,7 +312,7 @@ export function DashboardSidebar() {
                 <TooltipContent
                   side="right"
                   sideOffset={6}
-                  className="z-[60] rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-md"
+                  className="z-[60] rounded-md bg-slate-900 px-2 py-1 text-xs font-bold text-white shadow-md"
                 >
                   {statusLabel}
                 </TooltipContent>
