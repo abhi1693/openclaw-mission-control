@@ -1,0 +1,132 @@
+name: Deploy to .64
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, prod-deploy]
+    timeout-minutes: 15
+
+    steps:
+      - name: Resolve target SHAs
+        id: shas
+        run: |
+          set -euo pipefail
+          cd /home/mcontrol/openclaw-mission-control
+          git fetch origin master
+          BEFORE=$(git rev-parse HEAD)
+          AFTER=$(git rev-parse origin/master)
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Already at $AFTER — no deploy needed."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "Will deploy $BEFORE -> $AFTER"
+          fi
+
+      - name: Detect changed surfaces
+        id: surfaces
+        if: steps.shas.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          cd /home/mcontrol/openclaw-mission-control
+          CHANGED=$(git diff --name-only "${{ steps.shas.outputs.before }}" "${{ steps.shas.outputs.after }}")
+          echo "Changed files between SHAs:"
+          echo "$CHANGED"
+
+          backend=false; backend_deps=false
+          frontend=false; frontend_deps=false
+          echo "$CHANGED" | grep -qE '^backend/' && backend=true
+          echo "$CHANGED" | grep -qE '^backend/(uv\.lock|pyproject\.toml)$' && backend_deps=true
+          echo "$CHANGED" | grep -qE '^frontend/' && frontend=true
+          echo "$CHANGED" | grep -qE '^frontend/(package(-lock)?\.json)$' && frontend_deps=true
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "backend_deps=$backend_deps" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
+
+      - name: Update working tree
+        if: steps.shas.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          cd /home/mcontrol/openclaw-mission-control
+          git reset --hard origin/master
+          git log --oneline -1
+
+      - name: Backend — install deps if needed
+        if: steps.shas.outputs.needed == 'true' && steps.surfaces.outputs.backend_deps == 'true'
+        run: |
+          set -euo pipefail
+          cd /home/mcontrol/openclaw-mission-control/backend
+          /root/.local/bin/uv sync --frozen
+
+      - name: Frontend — install deps if needed
+        if: steps.shas.outputs.needed == 'true' && steps.surfaces.outputs.frontend_deps == 'true'
+        run: |
+          set -euo pipefail
+          cd /home/mcontrol/openclaw-mission-control/frontend
+          npm ci
+
+      - name: Frontend — build (before restart so failure leaves old build live)
+        if: steps.shas.outputs.needed == 'true' && steps.surfaces.outputs.frontend == 'true'
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          set -euo pipefail
+          cd /home/mcontrol/openclaw-mission-control/frontend
+          npm run build
+
+      - name: Restart mc-backend
+        if: steps.shas.outputs.needed == 'true' && steps.surfaces.outputs.backend == 'true'
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/systemctl restart mc-backend
+          sleep 3
+          sudo /usr/bin/systemctl is-active mc-backend
+
+      - name: Restart mission-control
+        if: steps.shas.outputs.needed == 'true' && steps.surfaces.outputs.frontend == 'true'
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/systemctl restart mission-control
+          sleep 5
+          sudo /usr/bin/systemctl is-active mission-control
+
+      - name: Smoke test
+        if: steps.shas.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.surfaces.outputs.backend }}" = "true" ]; then
+            curl -fsS http://localhost:8000/healthz >/dev/null
+            echo "mc-backend /healthz OK"
+          fi
+          if [ "${{ steps.surfaces.outputs.frontend }}" = "true" ]; then
+            curl -fsS -o /dev/null -w "frontend HTTP %{http_code}\n" http://localhost:3000/
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deploy result"
+            echo ""
+            echo "- before: \`${{ steps.shas.outputs.before }}\`"
+            echo "- after:  \`${{ steps.shas.outputs.after }}\`"
+            echo "- needed: \`${{ steps.shas.outputs.needed }}\`"
+            echo "- backend changed: \`${{ steps.surfaces.outputs.backend }}\` (deps: \`${{ steps.surfaces.outputs.backend_deps }}\`)"
+            echo "- frontend changed: \`${{ steps.surfaces.outputs.frontend }}\` (deps: \`${{ steps.surfaces.outputs.frontend_deps }}\`)"
+            echo ""
+            echo "_.60 deploy is out of CI/CD scope — sync skills via local \`./deploy-skills.sh\` rsync, templates via MC Sync Templates API._"
+          } >> "$GITHUB_STEP_SUMMARY"
