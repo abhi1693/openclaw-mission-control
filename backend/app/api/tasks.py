@@ -264,6 +264,10 @@ REWORK_ROUTING_NEGATION_RE = re.compile(
 )
 FINAL_EVIDENCE_PACKET_RE = re.compile(r"^\s*FINAL_EVIDENCE_PACKET\b")
 ACTIVE_BLOCKER_CLEARED_RE = re.compile(r"^\s*Active blocker cleared:\s*\S", re.IGNORECASE)
+POST_MERGE_VERIFICATION_PASSED_RE = re.compile(
+    r"^\s*POST_MERGE_VERIFICATION_PASSED\s*(?:=|:)\s*(?:1|true)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 GIT_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 TASK_STATUS_CHANGED_RE = re.compile(r"^Task moved to ([a-z_]+):")
 REVIEW_EVIDENCE_REQUIRED_PACKET_TYPES = frozenset(
@@ -349,6 +353,20 @@ def _review_evidence_packet_error(*, code: str, message: str) -> HTTPException:
     )
 
 
+def _require_post_merge_verification_marker(packet: str | None) -> None:
+    if packet is not None and POST_MERGE_VERIFICATION_PASSED_RE.search(packet):
+        return
+    raise _review_evidence_packet_error(
+        code="post_merge_verification_required",
+        message=(
+            "Worktree parallel implementation agents cannot move a task to review "
+            "until the parent-owned final evidence or blocker-clearance packet "
+            "includes `POST_MERGE_VERIFICATION_PASSED=1` after verifying the "
+            "merged main workspace."
+        ),
+    )
+
+
 def _actor_is_qa_validation_agent(actor: ActorContext) -> bool:
     if actor.actor_type != "agent" or actor.agent is None:
         return False
@@ -369,6 +387,14 @@ def _actor_is_implementation_agent(actor: ActorContext) -> bool:
     if actor.agent.is_board_lead:
         return False
     return not _actor_is_qa_validation_agent(actor) and not _actor_is_review_only_agent(actor)
+
+
+def _actor_uses_worktree_parallel_mode(actor: ActorContext) -> bool:
+    if actor.actor_type != "agent" or actor.agent is None:
+        return False
+    profile = actor.agent.identity_profile or {}
+    mode = profile.get("worker_parallel_mode")
+    return isinstance(mode, str) and mode.strip().lower() == "worktree"
 
 
 def _validate_task_comment_format_for_actor(message: str, actor: ActorContext) -> None:
@@ -5109,6 +5135,7 @@ async def _apply_non_lead_agent_task_rules(
         "comment",
         "custom_field_values",
         "packet_commit_sha",
+        "packet_build_sha",
     }
     if (
         update.depends_on_task_ids is not None
@@ -5119,7 +5146,10 @@ async def _apply_non_lead_agent_task_rules(
     ):
         raise _task_update_forbidden_error(
             code="task_update_field_forbidden",
-            message="Agents may only update status, comment, packet_commit_sha, and custom field values.",
+            message=(
+                "Agents may only update status, comment, packet_commit_sha, "
+                "packet_build_sha, and custom field values."
+            ),
         )
     if "status" in update.updates:
         only_lead_can_change_status = (
@@ -5584,6 +5614,7 @@ async def _require_worker_review_evidence_packet(
             since=review_comment_since,
             pattern=required_pattern,
         )
+    requires_post_merge_marker = _actor_uses_worktree_parallel_mode(update.actor)
     if frontend_pipeline_required(update.task.review_packet_type):
         if is_rework_resubmission and packet is None:
             raise _review_evidence_packet_error(
@@ -5593,10 +5624,15 @@ async def _require_worker_review_evidence_packet(
                     "`Active blocker cleared:` and evidence that clears the reviewer blocker."
                 ),
             )
+        await require_frontend_pipeline_ready_for_review(
+            session,
+            task=update.task,
+            since=review_comment_since,
+        )
+        if requires_post_merge_marker:
+            _require_post_merge_verification_marker(packet)
         return
-    if packet is not None:
-        return
-    if is_rework_resubmission:
+    if packet is None and is_rework_resubmission:
         raise _review_evidence_packet_error(
             code="task_active_blocker_clearance_required",
             message=(
@@ -5604,13 +5640,17 @@ async def _require_worker_review_evidence_packet(
                 "`Active blocker cleared:` and evidence that clears the reviewer blocker."
             ),
         )
-    raise _review_evidence_packet_error(
-        code="task_final_evidence_packet_required",
-        message=(
-            "Moving this task to review requires a parent-owned comment starting with "
-            "`FINAL_EVIDENCE_PACKET`; source-only or child-section evidence is not enough."
-        ),
-    )
+    if packet is None:
+        raise _review_evidence_packet_error(
+            code="task_final_evidence_packet_required",
+            message=(
+                "Moving this task to review requires a parent-owned comment starting with "
+                "`FINAL_EVIDENCE_PACKET`; source-only or child-section evidence is not enough."
+            ),
+        )
+    if requires_post_merge_marker:
+        _require_post_merge_verification_marker(packet)
+    return
 
 
 async def _notify_task_update_assignment_changes(

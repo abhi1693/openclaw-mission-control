@@ -47,6 +47,7 @@ async def _seed_worker_task(
     *,
     status: str = "in_progress",
     review_packet_type: str = "frontend_ui",
+    identity_profile: dict[str, object] | None = None,
 ) -> tuple[Board, Agent, Task]:
     org_id = uuid4()
     gateway_id = uuid4()
@@ -80,7 +81,9 @@ async def _seed_worker_task(
         board_id=board_id,
         gateway_id=gateway_id,
         status="online",
-        identity_profile={"dev_acp_flow": "claude_then_codex_review"},
+        identity_profile=identity_profile
+        if identity_profile is not None
+        else {"dev_acp_flow": "claude_then_codex_review"},
     )
     session.add(worker)
     session.add(
@@ -276,6 +279,85 @@ async def test_frontend_review_transition_accepts_structured_pipeline_events() -
                 payload=TaskUpdate(
                     status="review",
                     comment="Implementation complete; structured pipeline evidence is recorded.",
+                ),
+                task=await _reload_task(session, task.id),
+                session=session,
+                actor=ActorContext(actor_type="agent", agent=worker),
+            )
+
+            assert updated.status == "review"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_worktree_parallel_review_transition_requires_post_merge_marker() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, worker, task = await _seed_worker_task(
+                session,
+                identity_profile={
+                    "dev_acp_flow": "claude_then_codex_review",
+                    "worker_parallel_mode": "worktree",
+                },
+            )
+            await _record_frontend_pipeline_ready(
+                session,
+                board=board,
+                worker=worker,
+                task=task,
+            )
+
+            with pytest.raises(HTTPException) as exc:
+                await tasks_api.update_task(
+                    payload=TaskUpdate(
+                        status="review",
+                        comment=(
+                            "FINAL_EVIDENCE_PACKET\n"
+                            "Target: https://example.test\n"
+                            "Verification: pre-merge checks passed\n"
+                        ),
+                    ),
+                    task=await _reload_task(session, task.id),
+                    session=session,
+                    actor=ActorContext(actor_type="agent", agent=worker),
+                )
+
+            assert exc.value.status_code == 409
+            assert exc.value.detail["code"] == "post_merge_verification_required"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_worktree_parallel_review_transition_accepts_post_merge_marker() -> None:
+    engine = await _make_engine()
+    try:
+        async with await _make_session(engine) as session:
+            board, worker, task = await _seed_worker_task(
+                session,
+                identity_profile={
+                    "dev_acp_flow": "claude_then_codex_review",
+                    "worker_parallel_mode": "worktree",
+                },
+            )
+            await _record_frontend_pipeline_ready(
+                session,
+                board=board,
+                worker=worker,
+                task=task,
+            )
+
+            updated = await tasks_api.update_task(
+                payload=TaskUpdate(
+                    status="review",
+                    comment=(
+                        "FINAL_EVIDENCE_PACKET\n"
+                        "POST_MERGE_VERIFICATION_PASSED=1\n"
+                        "Target: https://example.test\n"
+                        "Verification: merged workspace checks passed\n"
+                    ),
                 ),
                 task=await _reload_task(session, task.id),
                 session=session,
