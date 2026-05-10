@@ -35,6 +35,20 @@ Before posting evidence or moving to review:
 
 If evidence is missing, do not describe the child run as successful. Re-spawn only when allowed, with a fresh label and complete payload per `acp-delegation`.
 
+## Worktree Pre-Merge Gate
+
+When the ACP child ran in worker worktree mode, run this gate before merging the child worktree into the main workspace.
+
+1. Confirm the child completed and identify `$WT_PATH`, `$WT_BRANCH`, task id, stage label, and child/run id.
+2. Inspect the worktree diff against the parent workspace base. The diff must match the task scope and acceptance criteria; out-of-scope edits block merge.
+3. Run the applicable parent-side runtime/browser/check evidence against the worktree when possible, or explain why only post-merge verification can prove it.
+4. If role flow requires stage-2 review, spawn the review-only child against the worktree diff and child evidence. Do not merge until that review returns PASS.
+5. Check child write contamination before merge. Child Mission Control writes, status moves, or stale API writes block merge as process failure until parent-owned evidence replaces them.
+6. Only after parent verification and required review PASS, set `PRE_MERGE_REVIEW_PASSED=1` for the scheduler merge step.
+7. After locked merge, run post-merge verification from `$WORKSPACE_PATH`. Set `POST_MERGE_VERIFICATION_PASSED=1` only after the merged workspace passes the required checks, then post the parent-owned `FINAL_EVIDENCE_PACKET`.
+
+If this gate fails, do not merge. Record the blocker or re-spawn according to `acp-delegation`.
+
 ## Child Write Contamination Gate
 
 Check whether the child wrote Mission Control state:

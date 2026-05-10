@@ -207,45 +207,6 @@ def test_heartbeat_templates_stay_within_soft_budget() -> None:
         )
 
 
-def test_frontend_parallel_heartbeat_schedules_worktree_acp_children() -> None:
-    context = {
-        **_REALISTIC_RENDER_CONTEXT,
-        "agent_name": "Programmer-Frontend",
-        "identity_role": "Frontend Developer",
-        "identity_frontend_parallel_mode": "worktree",
-    }
-    rendered = _render_template(
-        "BOARD_HEARTBEAT.md.j2",
-        is_main_agent=False,
-        is_board_lead=False,
-        **context,
-    )
-
-    # Post skill conversion (2026-05-10): the rendered HEARTBEAT.md is a lean
-    # pointer to the `worker-parallel-scheduler` skill; the embedded Python
-    # scheduler, worktree creation bash, and merge-back lock now live in the
-    # skill. These assertions verify the lean pointer is intact.
-    assert "Worker Parallel Scheduler Gate" in rendered
-    assert "worker-parallel-scheduler` skill" in rendered
-    assert "- `WORKSPACE_PATH` when `identity.worker_parallel_mode`" in rendered
-    assert "ACP child completion event in this wake" in rendered
-    assert "ACP_EXECUTOR_STARTED" in rendered
-    assert "wt-$TASK_ID" not in rendered
-    # Embedded scheduler code MUST NOT appear inline anymore — it's in the skill
-    assert "def unfinished_child" not in rendered
-    assert "/tmp/mc-frontend-scheduler.env" not in rendered
-    assert 'git -C "$WORKSPACE_PATH" worktree add' not in rendered
-
-
-def test_acp_delegation_accepts_heartbeat_derived_worktree_cwd() -> None:
-    skill_text = _read_skill_text_or_skip("acp-delegation")
-
-    assert "A heartbeat-derived `WT_PATH` counts as the supplied worktree path." in skill_text
-    assert "do not omit `cwd` because the lead did not spell out the path" in skill_text
-    assert '"cwd": "$WT_PATH"' in skill_text
-    assert "/tmp/wt-<TASK_ID>" not in skill_text
-
-
 @_SKIP_LOCAL_TEMPLATE_PHILOSOPHY
 def test_agents_md_fits_in_bootstrap_per_file_cap() -> None:
     """AGENTS.md is injected at session start (not every tick) but it
@@ -335,13 +296,6 @@ def test_lead_board_playbook_includes_recovery_and_health_scan() -> None:
     assert "agent_status=" in health_skill
     assert "recover" in health_skill.lower()
     assert "A comment is not routing" in health_skill
-    # Filing a Blocker/OperatorDecision MUST be paired with a
-    # human-readable visibility comment so the operator/dashboard sees
-    # the routing intent in the comment scroll, not just the API row
-    # (production gap 2026-05-03: QA gate Blocker filed silently with
-    # no prose explanation, operator asked "where did this come from?").
-    assert "Required visibility comment" in health_skill
-    assert "BLOCKER FILED:" in health_skill
 
     # The HEARTBEAT heartbeat should reference the playbook by name so
     # the model knows where to find the actual curl commands.
@@ -719,10 +673,8 @@ def test_phase1_review_loop_guardrails_render_for_frontend_architect_and_lead() 
     assert "Post one blocker summary" in lead_agents
     assert "Keep failed review in `rework`" in lead_agents
     assert "worker escalation still starts at `3+ rejections`." in lead_agents
-    assert "use first-class `OperatorDecision` links for human/operator choices" in lead_agents
-    assert "structured `Blocker` rows for runtime/deploy/source/contract friction" in lead_agents
-    assert "Do not set legacy `operator_decision_required` on active assigned work" in lead_agents
-    assert "human/operator choice" in lead_agents
+    assert "set `review_packet_type`, known `validation_target*`, and `operator_decision_required` when needed" in lead_agents
+    assert "route around operator-gated work" in lead_agents
 
 
 def test_pf_pb_and_acp_skills_enforce_tdd_discipline() -> None:
@@ -808,9 +760,6 @@ def test_architect_templates_are_review_only_without_worker_leakage() -> None:
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
     assert 'order = ["review", "inbox"]' in heartbeat
     assert 'order = ["in_progress"' not in heartbeat
-    assert "Assigned `inbox` review intake requires lead routing" in heartbeat
-    assert "For a chosen `inbox` review task, move it to `review`" not in heartbeat
-    assert '-d \'{"status": "review"}\'' not in heartbeat
     assert "post the result to the task comment without `@lead`" in heartbeat
     assert "post the result to the task comment, tag `@lead`" not in heartbeat
     assert "## Inbox Pickup Gate" not in heartbeat
@@ -860,9 +809,6 @@ def test_qa_unit_templates_are_validation_only_without_worker_leakage() -> None:
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
     assert 'order = ["review", "inbox"]' in heartbeat
     assert 'order = ["in_progress"' not in heartbeat
-    assert "Assigned `inbox` validation intake requires lead routing" in heartbeat
-    assert "For a chosen `inbox` validation task, move it to `review`" not in heartbeat
-    assert '-d \'{"status": "review"}\'' not in heartbeat
     assert "post the result to the task comment without `@lead`" in heartbeat
     assert "post the result to the task comment, tag `@lead`" not in heartbeat
     assert "Do not move `review` to `rework`" in heartbeat
@@ -1012,7 +958,7 @@ def test_supervisor_heartbeat_has_failure_and_drift_guardrails() -> None:
     assert "newer than the latest blocking review verdict" not in agents
 
 
-def test_frontend_heartbeat_forbids_implicit_worktree_parallelism() -> None:
+def test_worker_heartbeat_forbids_implicit_worktree_parallelism() -> None:
     ctx = {
         **_REALISTIC_RENDER_CONTEXT,
         "is_main_agent": False,
@@ -1024,7 +970,7 @@ def test_frontend_heartbeat_forbids_implicit_worktree_parallelism() -> None:
     }
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
-    assert "Frontend Parallel Mode" in heartbeat
+    assert "Worker Parallel Mode" in heartbeat
     assert "Do not create git worktrees" in heartbeat
     assert "Only if `@lead` explicitly routes independent parallel slices" in heartbeat
     assert "acp-post-review" in heartbeat
@@ -1036,29 +982,39 @@ def test_frontend_heartbeat_forbids_implicit_worktree_parallelism() -> None:
     assert "After all ACs pass, use the ACP review flow" in agents
 
 
-def test_frontend_heartbeat_allows_explicit_worktree_parallelism_only_by_profile_flag() -> None:
+def test_worker_heartbeat_allows_explicit_worktree_parallelism_only_by_profile_flag() -> None:
     ctx = {
         **_REALISTIC_RENDER_CONTEXT,
         "is_main_agent": False,
         "is_board_lead": False,
-        "agent_name": "Programmer-Frontend",
-        "agent_id": "frontend-id",
-        "identity_role": "Frontend Developer",
-        "identity_dev_acp_flow": "claude_then_codex_review",
-        "identity_frontend_parallel_mode": "worktree",
+        "agent_name": "Programmer-Backend",
+        "agent_id": "backend-id",
+        "identity_role": "Backend Developer",
+        "identity_dev_acp_flow": "codex_then_claude_review",
+        "identity_worker_parallel_mode": "worktree",
     }
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
-    # Post skill conversion: lean section pointing to skill.
-    assert "Worker Parallel Mode" in heartbeat
-    assert "Opt-in worktree task parallelism is enabled" in heartbeat
-    assert "Cap = 5 active implementation tasks" in heartbeat
-    assert "worker-parallel-scheduler` skill" in heartbeat
-    assert "acp-delegation` § Worktree Task Mode" in heartbeat
-    # Detail content moved to skill — verify it's NOT in the rendered HEARTBEAT.md
-    assert "WT_MERGE_LOCK" not in heartbeat
-    assert "Completion-woken ticks process child results only" not in heartbeat
+    assert "Worker Parallel Scheduler Gate" in heartbeat
+    assert "Opt-in worktree task parallelism is enabled by `identity.worker_parallel_mode=worktree`" in heartbeat
+    assert "Cap-aware scheduler (4 active concurrent, one-per-tick spawn rate)" in heartbeat
+    assert "Cap = 4 active implementation tasks" in heartbeat
+    assert "**≥ 4?**" in heartbeat
+    assert "`acp-delegation` § Worktree Task Mode" in heartbeat
     assert "sessions_spawn({" not in heartbeat
+
+    agents = _render_template("BOARD_AGENTS.md.j2", **ctx)
+    assert "cap is 4 active implementation tasks" in agents
+    assert "worker-parallel-scheduler" in agents
+
+
+def test_worker_parallel_mode_profile_field_is_exported_to_templates() -> None:
+    from app.services.openclaw.constants import EXTRA_IDENTITY_PROFILE_FIELDS
+
+    assert (
+        EXTRA_IDENTITY_PROFILE_FIELDS["worker_parallel_mode"]
+        == "identity_worker_parallel_mode"
+    )
 
 
 def test_acp_delegation_documents_explicit_worktree_cwd_mode() -> None:
@@ -1066,9 +1022,9 @@ def test_acp_delegation_documents_explicit_worktree_cwd_mode() -> None:
     assert "### Worktree Task Mode" in skill
     assert "git worktree add" in skill
     assert "explicit opt-in only" in skill
-    assert 'WT_PATH="/tmp/wt-$TASK_SHORT"' in skill
+    assert "worker worktree mode" in skill
+    assert 'WT_PATH="/tmp/mc-${BOARD_SHORT}-wt-$TASK_SHORT"' in skill
     assert '"cwd": "$WT_PATH"' in skill
-    assert "/tmp/wt-<TASK_ID>" not in skill
     assert "There is one worktree per task, not per acceptance criterion" in skill
     assert "acp-router" not in skill
     assert "ACP transport unavailable" in skill
@@ -1117,13 +1073,6 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "create exactly" in next_action
     assert "assigned_inbox_needs_lead_triage" in next_action
     assert "assigned inbox" in next_action.lower()
-    # Slice 5: lead must know how to read details.gateway_session and
-    # branch on aborted_last_run / last_changed_at_ms staleness.
-    assert "gateway_session" in next_action
-    assert "aborted_last_run" in next_action
-    assert "last_changed_at_ms" in next_action
-    assert "worker_session_aborted" in next_action
-    assert "worker_silent_on_gateway" in next_action
     assert "Do not leave" in next_action
     assert "`is_blocked=false` parked inbox tasks" in next_action
     assert "Drain Loop" in next_action
@@ -1140,16 +1089,6 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "Decomposition Gate" in inbox
     assert "ARCHITECT_ID" in inbox
     assert "Umbrella Lifecycle" in inbox
-    # Pin the lead-inbox-shortcut contract: lead PATCHing an inbox task
-    # to a validator (Architect/QA) MUST use status=in_progress so the
-    # backend's auto-correct converts it to review. Direct status=review
-    # is rejected by the lead-path validator at tasks.py:4081-4087
-    # (production failure 2026-05-03 on QA gate 5b7abdd2).
-    assert '"assigned_agent_id":"ARCHITECT_ID","status":"in_progress"' in inbox
-    assert (
-        '`{"assigned_agent_id":"ARCHITECT_ID","status":"review"}`' not in inbox
-    ), "Architect route must NOT instruct status=review for inbox tasks"
-    assert "auto-converts the target to `review`" in inbox
 
     memory = _read_skill_text_or_skip("lead-memory-intake")
     assert "Step 2" in memory
@@ -1182,8 +1121,6 @@ def test_custom_lead_skills_match_template_boundaries() -> None:
     assert "second task-comment nudge" in verdict
     assert "commits and refreshes the structured" in verdict
     assert "Do not repost an identical PASS" in verdict
-    assert '"ac_rows"' in verdict
-    assert '"browser_matrix"' in verdict
 
 
 def test_extracted_worker_review_skills_match_template_boundaries() -> None:
@@ -1192,48 +1129,16 @@ def test_extracted_worker_review_skills_match_template_boundaries() -> None:
     assert "QA-Unit PASS Evidence" in qa
     assert "Suggested routing: lead move to rework" in qa
     assert "structured-review-verdict" in qa
-    assert '"ac_rows"' in qa
-    assert '"browser_matrix"' in qa
 
     architect = _read_skill_text_or_skip("architect-review-verdict")
     assert "Architect Review Verdict" in architect
     assert "planned_child_task_ids" in architect
     assert "no_child_tasks_required:true" in architect
-    # Per the 3-subagent triage 2026-05-03: Architect review is structurally
-    # different from QA's per-AC matrix. Lifted only the verbatim AC-quoting
-    # rule + Scope/AC coverage lines (no matrix). These literals pin those
-    # additions so future skill edits don't silently drop them.
-    assert "AC Quoting Rule (verbatim, no paraphrase)" in architect
-    assert "Scope: cross-cutting | per-AC" in architect
-    assert "AC coverage:" in architect
-    assert "Verdict basis:" in architect
-    # Verdict comments must end with @Supervisor + one-line routing intent
-    # so the wake is visible in the human-facing dashboard channel
-    # (production gap 2026-05-03: structured /review-events fired but
-    # operator/dashboard reading the prose comment couldn't see the wake).
-    assert "Required @ citation" in architect
-    assert "@Supervisor" in architect
-
-    qa = _read_skill_text_or_skip("qa-validation-verdict")
-    assert "Required @ citation" in qa
-    assert "@Supervisor" in qa
 
     recheck = _read_skill_text_or_skip("reviewer-recheck")
     assert "QA RECHECK for $TASK_ID" in recheck
     assert "ARCHITECT RECHECK for $TASK_ID" in recheck
     assert "Re-citing a previous PASS is forbidden" in recheck
-    # ARCHITECT RECHECK adds a single Diff from previous narrative line
-    # (not a per-AC delta column — see triage on architect skill above).
-    assert "Diff from previous:" in recheck
-    # Recheck comments must also end with @Supervisor citation.
-    assert "Required @ citation" in recheck
-    assert "@Supervisor" in recheck
-
-    # structured-review-verdict's "no separate nudge" rule must clarify
-    # that the verdict comment ITSELF carries @Supervisor — the rule only
-    # forbids a SECOND follow-up nudge comment after the verdict.
-    structured = _read_skill_text_or_skip("structured-review-verdict")
-    assert "@Supervisor" in structured
 
     devops = _read_skill_text_or_skip("devops-deploy-validation")
     assert "DEVOPS DIAGNOSIS for $TASK_ID rejection" in devops

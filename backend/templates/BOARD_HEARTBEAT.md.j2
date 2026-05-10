@@ -95,40 +95,6 @@ HEARTBEAT_OK is forbidden when it prints `LEAD_NEXT_ACTION_REQUIRED` unless
 this tick applies the returned action and drains additional ready actions
 per the skill's Drain Loop (max 5 per tick, fresh fetch between iterations),
 or records the first concrete friction that prevents it.
-
-**Mandatory evidence (anti-hallucination):** every heartbeat reply that
-references a Lead Next Action Gate outcome MUST quote the
-`x-request-id` (the `LEAD_NEXT_ACTION_REQUEST_ID` env var the gate
-script captures from the response headers) AND the literal
-`task_id`/`blocker_ids` returned by the just-fired curl. Note: the
-request_id is operator-audit signal (post-hoc check that an `exec`
-tool ran on this tick), not cryptographic proof — the FastAPI
-middleware accepts client-overridable inbound headers, so a model
-*could* fabricate a 32-hex string. The deterrent is the
-`toolMetas` audit, not the id format itself. Past
-incident 2026-05-04: a Supervisor turn returned `HEARTBEAT_FAILED:
-inspect_stale_blocker for blocker 64c0d937` while the trajectory
-showed zero curl invocations — the model fabricated the failure
-from prior-turn memory. Concretely:
-
-- Run the `lead-next-action-gate` script as the SHELL command (do
-  not paraphrase it from memory). The bash output must include the
-  literal lines `LEAD_NEXT_ACTION {...full json...}` and either
-  `LEAD_NEXT_ACTION_REQUIRED <action> <reason_code> <task_id>` or
-  `LEAD_NEXT_ACTION_CLEAR <reason_code>`.
-- Capture the FastAPI `request_id` from the curl response (use
-  `-D -` to dump headers) and quote it in the heartbeat reply when
-  reporting any failure or routing decision.
-- If your reply discusses a blocker by id, that blocker id MUST
-  appear in the just-captured `LEAD_NEXT_ACTION` JSON (either as
-  `task_id` or in `details.blocker_ids`). Quoting blocker ids from
-  memory of a prior tick — without a current curl response showing
-  them — is a hard `HEARTBEAT_FAILED` and the operator will catch
-  it via the trajectory audit.
-- Hallucinated heartbeats are detected post-hoc by inspecting the
-  `toolMetas` field of the trajectory: if there is no `bash`/`exec`
-  tool with the gate script in this tick, the heartbeat is
-  invalid regardless of the assistant's text.
 If the returned action is `inspect_review_gates` with
 `reason_code=review_task_ready_for_approval`, run
 `AGENTS.md § Lead Board Playbook / Step 3 — Route Review Tasks` using
@@ -192,6 +158,7 @@ missing, stop and request reprovisioning.
 - Use `$BOARD_TIMEZONE` for date displays when it exists.
 - If heartbeat pre-flight fails, stop. Do not write task or memory updates.
 - Parked tasks: `is_blocked=true` means do not touch. Do not post progress, do not post "still blocked", and do not move status.
+- Never echo the runtime heartbeat prompt. Execute this checklist against current Board API state; if no eligible work or child result needs attention, reply exactly `HEARTBEAT_OK`.
 
 ## This Heartbeat
 1. **Check in.**
@@ -211,11 +178,11 @@ If this fails (5xx/network), stop. Do not continue.
    - **ACP child completion event in this wake?** Process the result via
      `acp-post-review`; do NOT spawn new work on the same tick.
    - **Active implementation tasks** (assigned `in_progress`/`rework` with
-     accepted `ACP_EXECUTOR_STARTED` AND no processed completion) **≥ 5?**
+     accepted `ACP_EXECUTOR_STARTED` AND no processed completion) **≥ 4?**
      Return `HEARTBEAT_OK` without posting a filler comment.
    - **Otherwise** invoke the scheduler from the `worker-parallel-scheduler`
-     skill to select a candidate task, create the deterministic worktree
-     (`/tmp/wt-$TASK_SHORT`), then add `"cwd": "$WT_PATH"` to the ACP
+     skill to select a candidate task, create the deterministic board-scoped
+     worktree (`/tmp/mc-$BOARD_SHORT-wt-$TASK_SHORT`), then add `"cwd": "$WT_PATH"` to the ACP
      `sessions_spawn` payload (per `acp-delegation` § Worktree Task Mode).
      Post `ACP_EXECUTOR_STARTED` only after the spawn returns `accepted`.
 
@@ -265,21 +232,21 @@ return `HEARTBEAT_OK` without posting.
 {% endif %}
 
 {% if is_qa %}
-Assigned `inbox` validation intake requires lead routing. Do not PATCH
-`inbox -> review`; the agent path requires `inbox -> in_progress` first, and
-QA must not claim implementation. If the selected task is `inbox`, post one
-comment if an equivalent marker is not already present, then return
-`HEARTBEAT_OK`:
-
-`@lead INBOX_VALIDATION_INTAKE_NEEDS_LEAD_ROUTE task=$TASK_ID`
+For a chosen `inbox` validation task, move it to `review` before validating.
+Do not move QA tasks to `in_progress`, and do not implement or deploy:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "review"}'
+```
 {% elif is_architect %}
-Assigned `inbox` review intake requires lead routing. Do not PATCH
-`inbox -> review`; the agent path requires `inbox -> in_progress` first, and
-Architect must not claim implementation. If the selected task is `inbox`, post
-one comment if an equivalent marker is not already present, then return
-`HEARTBEAT_OK`:
-
-`@lead INBOX_REVIEW_INTAKE_NEEDS_LEAD_ROUTE task=$TASK_ID`
+For a chosen `inbox` review task, move it to `review` before reviewing.
+Do not move Architect tasks to `in_progress`, do not claim `rework`, and do not implement or deploy:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "review"}'
+```
 {% else %}
 For a chosen `inbox` or `rework` task, move it before working:
 ```bash
@@ -373,7 +340,7 @@ If the task passes the gate, claim it atomically:
 {% if is_architect %}
 3. **Architect lane.**
    - Stay in review mode: verdict first, findings second.
-   - Review only tasks in `review`; assigned `inbox` review intake is lead-routed and must not be moved by Architect.
+   - Review only tasks in `review`; an assigned `inbox` task is only review intake and must be moved to `review` before assessment.
    - Do not continue `in_progress`, claim `rework`, implement, deploy, or re-submit worker output.
    - Enforce the declared `review_packet_type` and `validation_target*`.
    - Frontend/UI PASS requires the submitted browser evidence packet: target URL, navigation/snapshot, DOM/raw i18n-key scan, console/network output, click/observe proof for functional ACs, responsive/layout proof when applicable, and loaded build hash for deployed targets.
@@ -421,20 +388,30 @@ If your draft says only "still blocked", "unchanged", "same failure", or "waitin
 Opt-in worktree task parallelism is enabled by `identity.worker_parallel_mode={{ worker_parallel_mode }}`. Use it only after `@lead` or the operator has posted live ACP `cwd` smoke-test evidence for this board.
 
 The `worker-parallel-scheduler` skill is the authoritative source for:
-- Cap-aware scheduler (5 active concurrent, one-per-tick spawn rate)
-- Deterministic worktree paths (`/tmp/wt-$TASK_SHORT`)
+- Cap-aware scheduler (4 active concurrent, one-per-tick spawn rate)
+- Atomic spawn gate (`/tmp/mc-wt-scheduler-${BOARD_ID}-${AGENT_ID}.lock`)
+- Deterministic board-scoped worktree paths (`/tmp/mc-$BOARD_SHORT-wt-$TASK_SHORT`)
 - Per-board merge-back lock (`/tmp/mc-wt-merge-${BOARD_ID}.lock`, 60s flock)
+- Worktree pre-merge review before merge-back
 - ACP spawn payload integration (`acp-delegation` § Worktree Task Mode)
 
-Cap = 5 active implementation tasks unless operator raises it. "Active" = `ACP_EXECUTOR_STARTED` marker + no processed child completion. Parked, blocked, or `operator_decision_required=true` tasks do NOT count. Cap is concurrent-max, not per-tick budget — ramp-up takes 5 cycles from 0→5.
+Cap = 4 active implementation tasks unless operator raises it. "Active" = `ACP_EXECUTOR_STARTED` marker + no processed child completion. Parked, blocked, or `operator_decision_required=true` tasks do NOT count. Cap is concurrent-max, not per-tick budget — ramp-up takes 4 cycles from 0→4.
 
 On any worktree create, merge, cleanup, or ACP `cwd` uncertainty: stop parallelism, post one structured blocker with exact failing command/output, continue in sequential main-workspace mode until lead/operator re-enables.
 {% else %}
-Default to one active implementation task. Do not create git worktrees, isolated sessions, or parallel workspace branches during heartbeat work — those isolation paths have previously hidden state and caused stale merges.
+Default to one active implementation task. Do not create git worktrees,
+isolated sessions, or parallel workspace branches during heartbeat work.
+Those isolation paths have previously hidden state and caused stale merges.
 
-When multiple assigned tasks are present, continue the oldest active `in_progress` task first. If none is active, pick one eligible task and finish it through evidence, `acp-post-review`, and handoff before starting another.
+When multiple assigned tasks are present, continue the oldest active
+`in_progress` task first. If none is active, pick one eligible task and finish
+it through evidence, ACP post-review, and handoff before starting another.
 
-Only if `@lead` explicitly routes independent parallel slices may you run more than one ACP child. In that case, use `acp-delegation` with disjoint file/AC ownership, unique labels, and parent-owned final integration. Do not move status or post completion evidence from child output until `acp-post-review` passes.
+Only if `@lead` explicitly routes independent parallel slices may you run more
+than one ACP child. In that case, use `acp-delegation` with disjoint file/AC
+ownership, unique labels, and parent-owned final integration. Do not move
+status or post completion evidence from child output until `acp-post-review`
+passes.
 {% endif %}
 {% endif %}
 {% endif %}

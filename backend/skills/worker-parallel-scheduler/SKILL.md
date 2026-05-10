@@ -1,29 +1,39 @@
 ---
 name: worker-parallel-scheduler
-description: Use when a worker agent (frontend or backend) operates in worktree-parallel mode and must select the next task across an active-child cap, create deterministic worktrees, and serialize merge-back into the main workspace.
+description: Use when a worker agent operates in worktree-parallel mode and must select implementation work without overspawning, isolate each task in a deterministic worktree, and serialize merge-back.
 ---
 
 # Worker Parallel Scheduler
 
 This skill is the authoritative source for worker-agent worktree-parallel mode mechanics. `HEARTBEAT.md` points here instead of duplicating the cap-aware scheduler, worktree procedure, or per-board merge-back lock.
 
-Use this skill **only when** `identity.worker_parallel_mode` (or legacy `identity.frontend_parallel_mode`) is set to `"worktree"` (or equivalent) AND `@lead` or the operator has posted live ACP `cwd` smoke-test evidence for this board.
+Use this skill only when `identity.worker_parallel_mode` (or legacy `identity.frontend_parallel_mode`) is set to `worktree` or equivalent AND `@lead` or the operator has posted live ACP `cwd` smoke-test evidence for this board.
 
-The current implementation is opt-in for any worker role that fits the worktree-isolation pattern (frontend code, backend services, etc.). The scheduler logic is role-agnostic; the cap and pickup-order mirror the worker execution loop in `AGENTS.md`.
+The scheduler is role-agnostic for frontend and backend workers. Parallelism is per task, not per acceptance criterion.
 
 ## Hard Rules
 
-- **Cap = 5 active implementation tasks** unless the operator explicitly raises it for this board. "Active" = task with an accepted `ACP_EXECUTOR_STARTED` marker AND no processed child completion. Parked, blocked, or `operator_decision_required=true` tasks do NOT count toward the cap.
-- **One spawn per heartbeat tick.** The cap is a concurrent-max, not a per-tick budget. Going from 0→5 active children takes 5 heartbeat-or-completion cycles. This is intentional throttling — keeps worktree creation, ACP spawn handshakes, and gateway load bounded.
-- **One worktree per task, not per acceptance criterion.** Use `acp-delegation` § Worktree Task Mode for the ACP payload integration.
-- **Post `ACP_EXECUTOR_STARTED` only after the ACP spawn is accepted**, then return `HEARTBEAT_OK` for the current tick.
-- **Completion-woken ticks process child results only.** Do NOT spawn new work on a completion wake. Merge `wt/$TASK_SHORT` back to the main workspace, remove the worktree/branch after a clean merge, then run `acp-post-review`. (Order matters: merge/cleanup before review so the parent's verification runs against the merged state, not against the worktree branch in isolation.)
+- **Cap = 4 active implementation tasks** unless the operator explicitly raises it for this board. "Active" = task with an accepted `ACP_EXECUTOR_STARTED` marker AND no processed child completion. Parked, blocked, or `operator_decision_required=true` tasks do NOT count toward the cap.
+- **Atomic spawn gate.** Acquire the per-agent scheduler lock before active-count/candidate selection. Keep file descriptor 8 open through `sessions_spawn` and `ACP_EXECUTOR_STARTED` posting. Release it only after no candidate, spawn rejection, or accepted marker post.
+- **One spawn per heartbeat tick.** The cap is a concurrent-max, not a per-tick budget. Going from 0 to 4 active children takes 4 heartbeat-or-completion cycles. This throttles worktree creation, ACP spawn handshakes, and gateway load.
+- **One worktree per task.** Use `acp-delegation` Worktree Task Mode for the ACP payload integration.
+- **Post `ACP_EXECUTOR_STARTED` only after the ACP spawn is accepted**, then release the scheduler lock and return `HEARTBEAT_OK` for the current tick.
+- **Completion-woken ticks process child results only.** Do NOT spawn new work on a completion wake. Do NOT merge child work before parent verification and required stage-2 review PASS. After locked merge, run post-merge verification before posting `FINAL_EVIDENCE_PACKET` or routing.
 
-## Cap-aware scheduler
+## Atomic Spawn Gate
 
-Run this on each heartbeat tick (after the standard check-in curl, before any spawn or status mutation):
+Run this on each non-completion heartbeat tick after the standard check-in curl, before any spawn or task status mutation:
 
 ```bash
+WT_SCHED_LOCK="/tmp/mc-wt-scheduler-${BOARD_ID}-${AGENT_ID}.lock"
+exec 8>"$WT_SCHED_LOCK"
+if ! flock -w 30 8; then
+  echo "WT_SCHED_LOCK_BUSY board=$BOARD_ID agent=$AGENT_ID"
+  exit 0
+fi
+# Keep file descriptor 8 open until after there is no TASK_ID, the spawn is
+# rejected, or sessions_spawn is accepted and ACP_EXECUTOR_STARTED is posted.
+
 curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?assigned_agent_id=$AGENT_ID" \
   -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/mc-my-tasks.json
 BASE_URL="$BASE_URL" AUTH_TOKEN="$AUTH_TOKEN" BOARD_ID="$BOARD_ID" AGENT_ID="$AGENT_ID" \
@@ -40,14 +50,7 @@ tasks = json.load(open("/tmp/mc-my-tasks.json")).get("items", [])
 comment_cache = {}
 
 def task_comments(task_id):
-    """Fetch the LATEST 250 comments so the ACP marker scan is correct.
-
-    The cap-aware scheduler counts active children by scanning for the
-    latest ACP_EXECUTOR_STARTED vs FINAL_EVIDENCE_PACKET / ACP_POST_REVIEW_COMPLETE
-    marker. The MC comments endpoint returns OLDEST first, so a naive
-    offset=0 page fetches the wrong window. Probe ``total`` first, then
-    fetch from offset=total-250 forward.
-    """
+    """Fetch the latest 250 comments so ACP marker scans use the newest state."""
     if task_id not in comment_cache:
         page_size = 50
         max_window = 250
@@ -59,10 +62,6 @@ def task_comments(task_id):
             probe = json.load(resp)
         total_raw = probe.get("total")
         if not isinstance(total_raw, int) or total_raw < 0:
-            # Fail closed: synthesize a START marker so unfinished_child()
-            # returns True and the scheduler does NOT pick this task as a
-            # fresh-spawn candidate. Better to leave a real child uncounted
-            # than to double-spawn.
             comment_cache[task_id] = [{"message": "ACP_EXECUTOR_STARTED [pagination_total_missing_fail_closed]"}]
             return comment_cache[task_id]
         total = total_raw
@@ -105,7 +104,7 @@ active = [
     if task.get("status") in {"in_progress", "rework"} and usable(task) and unfinished_child(task)
 ]
 candidate = None
-if len(active) < 5:
+if len(active) < 4:
     for status in ("in_progress", "rework", "inbox"):
         for task in tasks:
             if task.get("status") == status and usable(task) and not unfinished_child(task):
@@ -120,48 +119,95 @@ PY
 . /tmp/mc-worker-scheduler.env
 ```
 
-If `TASK_ID` is empty, there is no eligible task or the active child cap is full — return `HEARTBEAT_OK` without posting a filler comment.
-
-## Worktree creation
-
-Before spawning an implementation child, create or reuse the deterministic worktree:
+If `TASK_ID` is empty, release the scheduler lock and return `HEARTBEAT_OK` without posting a filler comment:
 
 ```bash
+if [ -z "$TASK_ID" ]; then
+  flock -u 8
+  exit 0
+fi
+```
+
+If the ACP spawn is rejected, do not post `ACP_EXECUTOR_STARTED`; record the rejection/error per `acp-delegation`, release the scheduler lock, and follow retry/escalation policy.
+
+After the ACP spawn returns accepted, post `ACP_EXECUTOR_STARTED` while file descriptor 8 is still open. Then release the scheduler lock and return `HEARTBEAT_OK`:
+
+```bash
+# post ACP_EXECUTOR_STARTED here with the accepted child/run/label
+flock -u 8
+exit 0
+```
+
+## Worktree Creation
+
+Before spawning an implementation child, create or reuse the deterministic board-scoped worktree:
+
+```bash
+BOARD_SHORT="$(printf '%s' "$BOARD_ID" | cut -c1-8)"
 TASK_SHORT="$(printf '%s' "$TASK_ID" | cut -c1-8)"
-WT_PATH="/tmp/wt-$TASK_SHORT"
-WT_BRANCH="wt/$TASK_SHORT"
-if ! git -C "$WT_PATH" rev-parse --show-toplevel >/tmp/wt-root.txt 2>/tmp/wt-create.err; then
+WT_PATH="/tmp/mc-${BOARD_SHORT}-wt-$TASK_SHORT"
+WT_BRANCH="wt/${BOARD_SHORT}/$TASK_SHORT"
+BASE_HEAD="$(git -C "$WORKSPACE_PATH" rev-parse HEAD)"
+
+if git -C "$WT_PATH" rev-parse --show-toplevel >/tmp/wt-root.txt 2>/tmp/wt-create.err; then
+  WT_BRANCH_ACTUAL="$(git -C "$WT_PATH" rev-parse --abbrev-ref HEAD)"
+  WT_HEAD="$(git -C "$WT_PATH" rev-parse HEAD)"
+  WT_STATUS="$(git -C "$WT_PATH" status --short)"
+  if [ "$WT_BRANCH_ACTUAL" != "$WT_BRANCH" ] || [ "$WT_HEAD" != "$BASE_HEAD" ] || [ -n "$WT_STATUS" ]; then
+    {
+      echo "WT_STALE_OR_DIRTY path=$WT_PATH branch=$WT_BRANCH_ACTUAL expected=$WT_BRANCH"
+      echo "WT_HEAD=$WT_HEAD BASE_HEAD=$BASE_HEAD"
+      printf '%s\n' "$WT_STATUS"
+    } >/tmp/wt-create.err
+    exit 1
+  fi
+else
   git -C "$WORKSPACE_PATH" worktree add -B "$WT_BRANCH" "$WT_PATH" HEAD
 fi
+git -C "$WT_PATH" rev-parse --show-toplevel
+git -C "$WT_PATH" rev-parse --abbrev-ref HEAD
 git -C "$WT_PATH" status --short
 ```
 
-If any worktree command fails, post one structured blocker with the exact command and stderr from `/tmp/wt-create.err`, then fall back to sequential main-workspace mode until lead/operator re-enables parallelism.
+If any worktree command fails, release the scheduler lock, post one structured blocker with the exact command and stderr from `/tmp/wt-create.err`, then continue sequentially in the main workspace until lead/operator re-enables parallelism.
 
 For the ACP implementation payload, add:
+
 ```json
 { "cwd": "$WT_PATH" }
 ```
 
-## Per-board merge-back lock (cap=5 contention)
+## Completion And Pre-Merge Review
 
-With multiple ACP children completing in the same window, two heartbeat sessions can race the merge into shared `$WORKSPACE_PATH` and leave the working tree in a half-merged state. Wrap the merge/cleanup with `flock` against a per-board file lock. If the lock is held longer than 60s, log busy and exit this heartbeat tick — the next heartbeat retries.
+On a completion-woken tick, do not run the spawn gate. Process the finished child only.
 
-Lock contention is normal at higher caps; only post a structured blocker for actual merge/cleanup failure (the explicit `exit 1` branch below), not for transient busy-lock waits:
+Do NOT merge child work before parent verification. Use `acp-post-review` Worktree Pre-Merge Gate against the child output and worktree diff. If the role flow requires stage-2 review, spawn that review against the worktree diff before merge. Continue only after:
+
+- child output and worktree diff match the task scope
+- required parent runtime/browser checks are captured when possible from the worktree
+- required stage-2 review PASS
+- no child Mission Control write contamination
+
+Record this state locally before merge:
 
 ```bash
+PRE_MERGE_REVIEW_PASSED=1
+```
+
+## Per-Board Merge-Back Lock
+
+With multiple ACP children completing in the same window, two heartbeat sessions can race the merge into shared `$WORKSPACE_PATH`. Wrap merge/cleanup with `flock` against a per-board file lock. If the lock is held longer than 60s, log busy and exit this heartbeat tick; the next heartbeat retries.
+
+```bash
+: "${PRE_MERGE_REVIEW_PASSED:?run acp-post-review Worktree Pre-Merge Gate before merge}"
 WT_MERGE_LOCK="/tmp/mc-wt-merge-${BOARD_ID}.lock"
 exec 9>"$WT_MERGE_LOCK"
 if ! flock -w 60 9; then
-  # Another completion wake is mid-merge. Stop this tick and let it
-  # finish; the next heartbeat will pick this child up.
   echo "WT_MERGE_LOCK_BUSY task=$TASK_SHORT board=$BOARD_ID"
   exit 0
 fi
 git -C "$WORKSPACE_PATH" merge --no-ff "$WT_BRANCH" -m "merge $WT_BRANCH into main workspace" || {
   flock -u 9
-  # Post a blocker via the standard worktree-failure path; do NOT
-  # leave the lock held.
   exit 1
 }
 git -C "$WORKSPACE_PATH" worktree remove --force "$WT_PATH" || true
@@ -169,19 +215,19 @@ git -C "$WORKSPACE_PATH" branch -D "$WT_BRANCH" || true
 flock -u 9
 ```
 
-The lock file at `/tmp/mc-wt-merge-${BOARD_ID}.lock` is per board, not per task — only one merge into `$WORKSPACE_PATH` runs at a time, while worktree builds, tests, and child spawns continue in parallel inside their own `wt/$TASK_SHORT` directories.
+The lock file at `/tmp/mc-wt-merge-${BOARD_ID}.lock` is per board, not per task.
 
-## Failure handling
+After merge, run parent-side post-merge verification from `$WORKSPACE_PATH`. Set `POST_MERGE_VERIFICATION_PASSED=1` only after the relevant checks pass. Then post the parent-owned `FINAL_EVIDENCE_PACKET` and route according to `acp-post-review`.
 
-On any worktree create, merge, cleanup, or ACP `cwd` uncertainty:
-1. Stop parallelism for this agent.
-2. Post one structured blocker with the exact failing command/output.
-3. Continue in sequential main-workspace mode until lead/operator re-enables it.
+## Failure Handling
 
-## Sequential fallback (when parallel mode is OFF)
+On any worktree create, pre-merge review, merge, cleanup, or ACP `cwd` uncertainty:
 
-When `worker_parallel_mode` is not set (or is `"off"`), DO NOT create git worktrees, isolated sessions, or parallel workspace branches during heartbeat work. Those isolation paths have previously hidden state and caused stale merges.
+1. Release held scheduler/merge locks.
+2. Stop parallelism for this agent.
+3. Post one structured blocker with the exact failing command/output.
+4. Continue in sequential main-workspace mode until lead/operator re-enables it.
 
-When multiple assigned tasks are present, continue the oldest active `in_progress` task first. If none is active, pick one eligible task and finish it through evidence, ACP post-review, and handoff before starting another.
+## Sequential Fallback
 
-Only if `@lead` explicitly routes independent parallel slices may you run more than one ACP child without worktree mode. In that case, use `acp-delegation` with disjoint file/AC ownership, unique labels, and parent-owned final integration.
+When `worker_parallel_mode` is not set or is `off`, do not create git worktrees, isolated sessions, or parallel workspace branches during heartbeat work. Continue the oldest active `in_progress` task first. If none is active, pick one eligible task and finish it through evidence, ACP post-review, and handoff before starting another.
