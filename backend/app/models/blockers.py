@@ -112,22 +112,16 @@ class Blocker(TenantScoped, table=True):
     # when the 512-char citation truncation clips it; the citation
     # itself retains the id verbatim for human readability.
     citation_request_id: str | None = Field(default=None, max_length=128)
-    created_by_agent_id: UUID | None = Field(
-        default=None, foreign_key="agents.id", index=True
-    )
+    created_by_agent_id: UUID | None = Field(default=None, foreign_key="agents.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
     # Acknowledgement signals the receiving owner accepted the blocker.
     # Lane quieting (Phase VI §I6) keys off this.
     acknowledged_at: datetime | None = None
-    acknowledged_by_agent_id: UUID | None = Field(
-        default=None, foreign_key="agents.id", index=True
-    )
+    acknowledged_by_agent_id: UUID | None = Field(default=None, foreign_key="agents.id", index=True)
     # While open (resolved_at IS NULL), the is_blocked derivation
     # treats this row as active.
     resolved_at: datetime | None = None
     # Allows filing a sharper restatement of a prior blocker without
     # losing the audit trail. The superseding row should close the
     # prior row in the same transaction.
-    supersedes_blocker_id: UUID | None = Field(
-        default=None, foreign_key="blockers.id"
-    )
+    supersedes_blocker_id: UUID | None = Field(default=None, foreign_key="blockers.id")

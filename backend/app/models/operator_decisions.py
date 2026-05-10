@@ -51,9 +51,7 @@ class OperatorDecision(TenantScoped, table=True):
     question: str
     # Who owns the decision. Null when the system escalates without
     # assignment — the operator picks it up from the inbox.
-    owner_user_id: UUID | None = Field(
-        default=None, foreign_key="users.id", index=True
-    )
+    owner_user_id: UUID | None = Field(default=None, foreign_key="users.id", index=True)
     # Free-text description of when / how this unblocks the linked
     # tasks. Not machine-evaluated in Phase III; becomes structured in
     # Phase IV once actionability enforcement lands.
@@ -71,9 +69,7 @@ class OperatorDecision(TenantScoped, table=True):
     status: str = Field(default="pending")
     resolved_value: str | None = None
     # Who escalated the decision (agent or null for operator-authored).
-    created_by_agent_id: UUID | None = Field(
-        default=None, foreign_key="agents.id", index=True
-    )
+    created_by_agent_id: UUID | None = Field(default=None, foreign_key="agents.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
     resolved_at: datetime | None = None
 

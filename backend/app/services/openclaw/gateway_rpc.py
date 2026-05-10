@@ -31,12 +31,16 @@ from app.services.openclaw.device_identity import (
 # Re-exported from the dependency-free protocol_constants module so
 # the long-lived event subscriber can share these without dragging
 # app.core.* settings into its import chain.
-from app.services.openclaw.protocol_constants import (  # noqa: E402
+from app.services.openclaw.protocol_constants import (
     CONTROL_UI_CLIENT_ID,
     CONTROL_UI_CLIENT_MODE,
     GATEWAY_OPERATOR_SCOPES,
-    HOST_PLATFORM as _HOST_PLATFORM,
+)
+from app.services.openclaw.protocol_constants import HOST_PLATFORM as _HOST_PLATFORM  # noqa: E402
+from app.services.openclaw.protocol_constants import (
     PROTOCOL_VERSION,
+)
+from app.services.openclaw.protocol_constants import (
     build_control_ui_origin as _build_control_ui_origin,
 )
 
@@ -718,9 +722,7 @@ async def openclaw_connect_metadata(*, config: GatewayConfig) -> object:
         raise OpenClawGatewayError(str(exc)) from exc
 
 
-async def models_auth_status(
-    *, config: GatewayConfig
-) -> dict[str, Any] | None:
+async def models_auth_status(*, config: GatewayConfig) -> dict[str, Any] | None:
     """Call ``models.authStatus`` on the gateway (4.15+).
 
     Returns the raw snapshot dict on success, ``None`` on any failure
@@ -871,9 +873,7 @@ async def get_tools_effective(
     config: GatewayConfig,
 ) -> object:
     """Get the effective tool inventory for a session."""
-    return await openclaw_call(
-        "tools.effective", {"sessionKey": session_key}, config=config
-    )
+    return await openclaw_call("tools.effective", {"sessionKey": session_key}, config=config)
 
 
 async def get_memory_status(
@@ -882,6 +882,4 @@ async def get_memory_status(
     config: GatewayConfig,
 ) -> object:
     """Get memory/embedding/dreaming status for an agent."""
-    return await openclaw_call(
-        "doctor.memory.status", {"agentId": agent_id}, config=config
-    )
+    return await openclaw_call("doctor.memory.status", {"agentId": agent_id}, config=config)

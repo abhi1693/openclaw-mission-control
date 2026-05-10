@@ -2,6 +2,7 @@
 
 Uses in-memory SQLite per the MC test convention — no production DB access.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -9,12 +10,12 @@ from uuid import uuid4
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+import app.services.openclaw.provisioning as provisioning
 from app.api import board_memory
 from app.models.agents import Agent
 from app.models.boards import Board
 from app.models.gateways import Gateway
 from app.models.organizations import Organization
-import app.services.openclaw.provisioning as provisioning
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
 
 
@@ -68,13 +69,19 @@ async def test_board_memory_pause_resume_sends_single_global_set_heartbeats(
     org, gateway, board = _seed_org_gateway_board()
     agents = [
         Agent(
-            id=uuid4(), board_id=board.id, gateway_id=gateway.id,
-            name="Worker 1", openclaw_session_id="session:w1",
+            id=uuid4(),
+            board_id=board.id,
+            gateway_id=gateway.id,
+            name="Worker 1",
+            openclaw_session_id="session:w1",
             heartbeat_config={"every": "30m"},
         ),
         Agent(
-            id=uuid4(), board_id=board.id, gateway_id=gateway.id,
-            name="Worker 2", openclaw_session_id="session:w2",
+            id=uuid4(),
+            board_id=board.id,
+            gateway_id=gateway.id,
+            name="Worker 2",
+            openclaw_session_id="session:w2",
             heartbeat_config={"every": "30m"},
         ),
     ]
@@ -88,17 +95,27 @@ async def test_board_memory_pause_resume_sends_single_global_set_heartbeats(
     actor = board_memory.ActorContext(actor_type="user", user=None, agent=None)
     dispatch = board_memory.GatewayDispatchService(session)
     config = GatewayClientConfig(
-        url=gateway.url, token=gateway.token,
-        allow_insecure_tls=True, disable_device_pairing=True,
+        url=gateway.url,
+        token=gateway.token,
+        allow_insecure_tls=True,
+        disable_device_pairing=True,
     )
 
     await board_memory._send_control_command(
-        session=session, board=board, actor=actor,
-        dispatch=dispatch, config=config, command="/pause",
+        session=session,
+        board=board,
+        actor=actor,
+        dispatch=dispatch,
+        config=config,
+        command="/pause",
     )
     await board_memory._send_control_command(
-        session=session, board=board, actor=actor,
-        dispatch=dispatch, config=config, command="/resume",
+        session=session,
+        board=board,
+        actor=actor,
+        dispatch=dispatch,
+        config=config,
+        command="/resume",
     )
 
     # Two agents → two chat messages per command = 4 total
@@ -133,29 +150,44 @@ async def test_apply_agent_lifecycle_enables_global_heartbeats(
     monkeypatch.setattr(provisioning, "ensure_session", _fake_ensure_session)
     monkeypatch.setattr(provisioning, "send_message", _fake_send_message)
     monkeypatch.setattr(
-        provisioning.BoardAgentLifecycleManager, "provision", _fake_provision,
+        provisioning.BoardAgentLifecycleManager,
+        "provision",
+        _fake_provision,
     )
 
     org_id = uuid4()
     gateway = Gateway(
-        id=uuid4(), organization_id=org_id, name="GW",
-        url="ws://gateway.example/ws", token="tok",
+        id=uuid4(),
+        organization_id=org_id,
+        name="GW",
+        url="ws://gateway.example/ws",
+        token="tok",
         workspace_root="/tmp/openclaw",
     )
     board = Board(
-        id=uuid4(), organization_id=org_id, name="Board A",
-        slug="board-a", gateway_id=gateway.id,
+        id=uuid4(),
+        organization_id=org_id,
+        name="Board A",
+        slug="board-a",
+        gateway_id=gateway.id,
     )
     agent = Agent(
-        id=uuid4(), board_id=board.id, gateway_id=gateway.id,
-        name="Worker", openclaw_session_id="session:worker",
+        id=uuid4(),
+        board_id=board.id,
+        gateway_id=gateway.id,
+        name="Worker",
+        openclaw_session_id="session:worker",
         heartbeat_config={"every": "30m"},
     )
 
     await provisioning.OpenClawGatewayProvisioner().apply_agent_lifecycle(
-        agent=agent, gateway=gateway, board=board,
-        auth_token="secret-token", user=None,
-        action="update", wake=True,
+        agent=agent,
+        gateway=gateway,
+        board=board,
+        auth_token="secret-token",
+        user=None,
+        action="update",
+        wake=True,
     )
 
     assert ("set-heartbeats", {"enabled": True}) in calls

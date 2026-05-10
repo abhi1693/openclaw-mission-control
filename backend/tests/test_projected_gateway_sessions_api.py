@@ -33,7 +33,6 @@ from app.services.mc_gateway_subscriber.session_state_repo import (
 )
 from app.services.organizations import OrganizationContext
 
-
 # ---------------------------------------------------------------------------
 # Fixture: seeded caller organization with one paired gateway and an
 # OrganizationContext to feed the handler's ORG_ADMIN_DEP slot.
@@ -76,12 +75,18 @@ async def _seed_org_agent(
     handler scopes by joining agents to the org's gateway, so the agent
     must live under that gateway."""
     gateway = (
-        await session.exec(
-            __import__("sqlalchemy").select(Gateway).where(  # type: ignore[attr-defined]
-                Gateway.organization_id == org_ctx.organization.id
+        (
+            await session.exec(
+                __import__("sqlalchemy")
+                .select(Gateway)
+                .where(  # type: ignore[attr-defined]
+                    Gateway.organization_id == org_ctx.organization.id
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert gateway is not None
     session.add(
         Agent(
@@ -194,17 +199,15 @@ async def test_projected_sessions_excludes_other_orgs(
             openclaw_session_id=f"agent:{other_agent_id}:main",
         )
     )
-    await upsert_session_state(
-        sqlite_session, _state(agent_id=other_agent_id)
-    )
+    await upsert_session_state(sqlite_session, _state(agent_id=other_agent_id))
     await sqlite_session.commit()
 
     response = await projected_gateway_sessions(
         agent_id=None, session=sqlite_session, ctx=caller_org_ctx
     )
-    assert {s.agent_id for s in response.sessions} == {a_id}, (
-        f"cross-org leak: {[s.agent_id for s in response.sessions]}"
-    )
+    assert {s.agent_id for s in response.sessions} == {
+        a_id
+    }, f"cross-org leak: {[s.agent_id for s in response.sessions]}"
 
 
 @pytest.mark.asyncio
@@ -234,9 +237,7 @@ async def test_projected_sessions_agent_id_filter_cannot_widen_across_orgs(
             openclaw_session_id=f"agent:{other_agent_id}:main",
         )
     )
-    await upsert_session_state(
-        sqlite_session, _state(agent_id=other_agent_id)
-    )
+    await upsert_session_state(sqlite_session, _state(agent_id=other_agent_id))
     await sqlite_session.commit()
 
     response = await projected_gateway_sessions(
@@ -295,7 +296,9 @@ async def test_projected_sessions_no_slug_collision_leak(
     gateway = (
         (
             await sqlite_session.exec(
-                __import__("sqlalchemy").select(Gateway).where(  # type: ignore[attr-defined]
+                __import__("sqlalchemy")
+                .select(Gateway)
+                .where(  # type: ignore[attr-defined]
                     Gateway.organization_id == caller_org_ctx.organization.id
                 )
             )
@@ -322,6 +325,6 @@ async def test_projected_sessions_no_slug_collision_leak(
     response = await projected_gateway_sessions(
         agent_id=None, session=sqlite_session, ctx=caller_org_ctx
     )
-    assert response.sessions == [], (
-        f"slug-collision leak: {[s.agent_id for s in response.sessions]}"
-    )
+    assert (
+        response.sessions == []
+    ), f"slug-collision leak: {[s.agent_id for s in response.sessions]}"

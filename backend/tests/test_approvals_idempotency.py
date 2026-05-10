@@ -102,9 +102,9 @@ async def test_update_approval_is_idempotent_for_same_decision_approve() -> None
             )
 
             assert second.status == "approved"
-            assert second.resolved_at == initial_resolved_at, (
-                "idempotent re-resolve must not mutate resolved_at"
-            )
+            assert (
+                second.resolved_at == initial_resolved_at
+            ), "idempotent re-resolve must not mutate resolved_at"
             assert second.id == first.id
     finally:
         await engine.dispose()
@@ -345,9 +345,9 @@ async def test_update_approval_uses_for_update_lock_on_approval_row() -> None:
             ]
             assert approval_selects, "no SELECT against approvals table observed"
             first_select = approval_selects[0]
-            assert "FOR UPDATE" in first_select.upper(), (
-                f"locking SELECT missing FOR UPDATE clause: {first_select}"
-            )
+            assert (
+                "FOR UPDATE" in first_select.upper()
+            ), f"locking SELECT missing FOR UPDATE clause: {first_select}"
     finally:
         await engine.dispose()
 

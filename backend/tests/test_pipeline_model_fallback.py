@@ -249,9 +249,7 @@ class TestFetchLatestModelFallbackStepSql:
             await conn.run_sync(SQLModel.metadata.create_all)
         try:
             async with AsyncSession(engine, expire_on_commit=False) as session:
-                result = await fetch_latest_model_fallback_step(
-                    session, task_id=uuid4()
-                )
+                result = await fetch_latest_model_fallback_step(session, task_id=uuid4())
                 assert result is None
         finally:
             await engine.dispose()
@@ -315,9 +313,7 @@ class TestFetchLatestModelFallbackStepSql:
                 session.add_all([committed, fallback_old, fallback_newer])
                 await session.commit()
 
-                result = await fetch_latest_model_fallback_step(
-                    session, task_id=task_id
-                )
+                result = await fetch_latest_model_fallback_step(session, task_id=task_id)
                 assert result is not None
                 assert result.state == "model_fallback"
                 assert result.id == fallback_newer.id
@@ -348,9 +344,7 @@ class TestFetchLatestModelFallbackStepsForTasks:
             await conn.run_sync(SQLModel.metadata.create_all)
         try:
             async with AsyncSession(engine, expire_on_commit=False) as session:
-                result = await fetch_latest_model_fallback_steps_for_tasks(
-                    session, task_ids=[]
-                )
+                result = await fetch_latest_model_fallback_steps_for_tasks(session, task_ids=[])
                 assert result == {}
         finally:
             await engine.dispose()
@@ -383,9 +377,7 @@ class TestFetchLatestModelFallbackStepsForTasks:
                     reason: str | None = None,
                 ) -> TaskPipelineEvent:
                     evidence = (
-                        {"from_model": "x", "to_model": "y", "reason": reason}
-                        if reason
-                        else None
+                        {"from_model": "x", "to_model": "y", "reason": reason} if reason else None
                     )
                     return TaskPipelineEvent(
                         id=uuid4(),
@@ -524,8 +516,6 @@ class TestListTaskPipelineEventsForTasks:
                 assert result[task_a][0].state == "built"
                 assert result[task_a][1].state == "committed"
                 assert len(result[task_b]) == 1
-                assert query_count == 1, (
-                    f"expected 1 query for batch fetch; got {query_count}"
-                )
+                assert query_count == 1, f"expected 1 query for batch fetch; got {query_count}"
         finally:
             await engine.dispose()

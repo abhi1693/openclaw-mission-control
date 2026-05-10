@@ -198,9 +198,7 @@ async def _apply_board_update(
     # To disable a specific flag, PATCH it with `false`; there is no endpoint
     # for clearing all flags because no use case exists yet.
     if "rollout_flags" in updates:
-        incoming_known, incoming_unknown = partition_rollout_flags(
-            updates.pop("rollout_flags")
-        )
+        incoming_known, incoming_unknown = partition_rollout_flags(updates.pop("rollout_flags"))
         updates["rollout_flags"] = {**(board.rollout_flags or {}), **incoming_known}
         updates["rollout_flags_unknown"] = {
             **(board.rollout_flags_unknown or {}),

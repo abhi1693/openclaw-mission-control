@@ -54,13 +54,19 @@ async def _seed_board(session: AsyncSession) -> Board:
     session.add(Organization(id=org_id, name="acme"))
     session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name="gw",
-            url="ws://gw.example/ws", workspace_root="/tmp/openclaw",
+            id=gateway_id,
+            organization_id=org_id,
+            name="gw",
+            url="ws://gw.example/ws",
+            workspace_root="/tmp/openclaw",
         ),
     )
     board = Board(
-        id=uuid4(), organization_id=org_id, gateway_id=gateway_id,
-        name="board", slug="board",
+        id=uuid4(),
+        organization_id=org_id,
+        gateway_id=gateway_id,
+        name="board",
+        slug="board",
     )
     session.add(board)
     await session.commit()
@@ -79,7 +85,9 @@ async def test_reconcile_endpoint_returns_200_with_four_counter_fields(
     ctx = _agent_ctx(board_id=board.id, gateway_id=board.gateway_id)
 
     result = await agent_api.reconcile_board_memory_intake_endpoint(
-        board=board, session=sqlite_session, agent_ctx=ctx,
+        board=board,
+        session=sqlite_session,
+        agent_ctx=ctx,
     )
     payload = result.model_dump()
     for field in ("scanned", "created", "skipped_existing", "skipped_non_actionable"):
@@ -105,7 +113,9 @@ async def test_reconcile_creates_intake_task_for_unlinked_operator_findings_memo
     await sqlite_session.commit()
 
     result = await agent_api.reconcile_board_memory_intake_endpoint(
-        board=board, session=sqlite_session, agent_ctx=ctx,
+        board=board,
+        session=sqlite_session,
+        agent_ctx=ctx,
     )
 
     assert result.scanned == 1
@@ -132,14 +142,19 @@ async def test_reconcile_skips_existing_linked_memory(
     await sqlite_session.commit()
     sqlite_session.add(
         Task(
-            id=uuid4(), board_id=board.id, title="prior intake",
-            status="inbox", source_memory_id=memory.id,
+            id=uuid4(),
+            board_id=board.id,
+            title="prior intake",
+            status="inbox",
+            source_memory_id=memory.id,
         ),
     )
     await sqlite_session.commit()
 
     result = await agent_api.reconcile_board_memory_intake_endpoint(
-        board=board, session=sqlite_session, agent_ctx=ctx,
+        board=board,
+        session=sqlite_session,
+        agent_ctx=ctx,
     )
 
     assert result.scanned == 1
@@ -158,18 +173,24 @@ async def test_reconcile_skips_non_operator_memory(
 
     sqlite_session.add(
         BoardMemory(
-            board_id=board.id, content="random chat", tags=["chat"],
+            board_id=board.id,
+            content="random chat",
+            tags=["chat"],
         ),
     )
     sqlite_session.add(
         BoardMemory(
-            board_id=board.id, content="canary smoke", tags=["operator", "findings", "e2e_canary"],
+            board_id=board.id,
+            content="canary smoke",
+            tags=["operator", "findings", "e2e_canary"],
         ),
     )
     await sqlite_session.commit()
 
     result = await agent_api.reconcile_board_memory_intake_endpoint(
-        board=board, session=sqlite_session, agent_ctx=ctx,
+        board=board,
+        session=sqlite_session,
+        agent_ctx=ctx,
     )
 
     assert result.scanned == 2
@@ -203,6 +224,8 @@ async def test_reconcile_endpoint_rejects_non_lead_agent_with_403(
 
     with pytest.raises(HTTPException) as exc:
         await agent_api.reconcile_board_memory_intake_endpoint(
-            board=board, session=sqlite_session, agent_ctx=worker_ctx,
+            board=board,
+            session=sqlite_session,
+            agent_ctx=worker_ctx,
         )
     assert exc.value.status_code == 403

@@ -183,6 +183,7 @@ def _patch_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
             return None
 
     import app.services.lead_notify as lead_notify
+
     monkeypatch.setattr(lead_notify, "GatewayDispatchService", _FakeDispatch)
     return sent
 
@@ -248,9 +249,9 @@ async def test_dependency_cleared_no_wake_when_dependent_has_other_open_dep(
         actor_agent_id=worker.id,
     )
 
-    assert not any("DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent), (
-        f"unexpected wake while another dep is still open: {sent}"
-    )
+    assert not any(
+        "DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent
+    ), f"unexpected wake while another dep is still open: {sent}"
 
 
 @pytest.mark.asyncio
@@ -284,9 +285,9 @@ async def test_dependency_cleared_no_wake_when_dependent_has_open_blocker(
         actor_agent_id=worker.id,
     )
 
-    assert not any("DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent), (
-        f"unexpected wake while open Blocker remains on dependent: {sent}"
-    )
+    assert not any(
+        "DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent
+    ), f"unexpected wake while open Blocker remains on dependent: {sent}"
 
 
 @pytest.mark.asyncio
@@ -311,6 +312,6 @@ async def test_dependency_cleared_no_wake_when_dependent_already_terminal(
         actor_agent_id=worker.id,
     )
 
-    assert not any("DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent), (
-        f"unexpected wake against already-terminal dependent: {sent}"
-    )
+    assert not any(
+        "DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent
+    ), f"unexpected wake against already-terminal dependent: {sent}"

@@ -93,9 +93,7 @@ class TestToolsList:
 
     def test_pipeline_event_schema_constrains_state_to_real_literal(self) -> None:
         result = _module.handle_tools_list({})
-        pipeline_tool = next(
-            t for t in result["tools"] if t["name"] == "mc_pipeline_event_create"
-        )
+        pipeline_tool = next(t for t in result["tools"] if t["name"] == "mc_pipeline_event_create")
         states = pipeline_tool["inputSchema"]["properties"]["state"]["enum"]
         assert set(states) == {
             "code_changed",
@@ -110,9 +108,7 @@ class TestToolsList:
 
     def test_review_event_schema_constrains_verdict_to_real_literal(self) -> None:
         result = _module.handle_tools_list({})
-        review_tool = next(
-            t for t in result["tools"] if t["name"] == "mc_review_event_create"
-        )
+        review_tool = next(t for t in result["tools"] if t["name"] == "mc_review_event_create")
         verdicts = review_tool["inputSchema"]["properties"]["verdict"]["enum"]
         assert set(verdicts) == {"pass", "fail", "inconclusive", "infra_blocked"}
 
@@ -291,18 +287,13 @@ class TestToolsCall:
             )
         assert result["isError"] is False
         assert captured["payload"]["blocking_owner"] == "PF"
-        assert (
-            captured["payload"]["suggested_routing"]
-            == "lead move to rework for PF"
-        )
+        assert captured["payload"]["suggested_routing"] == "lead move to rework for PF"
 
     def test_review_event_schema_advertises_blocking_owner_and_routing(self) -> None:
         """Tool input schema must list the routing fields so MCP hosts
         offer them as completion suggestions and reject typos."""
         result = _module.handle_tools_list({})
-        review_tool = next(
-            t for t in result["tools"] if t["name"] == "mc_review_event_create"
-        )
+        review_tool = next(t for t in result["tools"] if t["name"] == "mc_review_event_create")
         props = review_tool["inputSchema"]["properties"]
         assert "blocking_owner" in props
         assert "suggested_routing" in props
@@ -346,17 +337,13 @@ class TestErrorHandling:
 
 
 class TestEnvResolution:
-    def test_missing_token_raises_at_call_time(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_token_raises_at_call_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("LOCAL_AUTH_TOKEN", raising=False)
         with pytest.raises(RuntimeError) as exc:
             _module.op_task_read("any")
         assert "LOCAL_AUTH_TOKEN" in str(exc.value)
 
-    def test_missing_board_raises_at_call_time(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_board_raises_at_call_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("BOARD_ID", raising=False)
         with pytest.raises(RuntimeError) as exc:
             _module.op_task_read("any")
@@ -414,8 +401,10 @@ class TestEnvResolution:
 class TestServeLoop:
     def test_serve_handles_initialize_and_tools_list(self) -> None:
         stdin = io.StringIO(
-            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}) + "\n"
-            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}) + "\n"
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+            + "\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+            + "\n"
         )
         stdout = io.StringIO()
         _module.serve(stdin=stdin, stdout=stdout)
@@ -433,7 +422,8 @@ class TestServeLoop:
             "\n"
             "   \n"
             "this is not json\n"
-            + json.dumps({"jsonrpc": "2.0", "id": 5, "method": "initialize"}) + "\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 5, "method": "initialize"})
+            + "\n"
         )
         stdout = io.StringIO()
         _module.serve(stdin=stdin, stdout=stdout)

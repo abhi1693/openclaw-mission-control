@@ -585,12 +585,9 @@ async def list_shadow_metric_events(
     admin's organization safely.
     """
 
-    accessible_board_ids = await list_accessible_board_ids(
-        session, member=ctx.member, write=False
-    )
-    statement = (
-        select(ShadowMetricEvent)
-        .where(col(ShadowMetricEvent.board_id).in_(accessible_board_ids))
+    accessible_board_ids = await list_accessible_board_ids(session, member=ctx.member, write=False)
+    statement = select(ShadowMetricEvent).where(
+        col(ShadowMetricEvent.board_id).in_(accessible_board_ids)
     )
     if event_type is not None:
         statement = statement.where(col(ShadowMetricEvent.event_type) == event_type)

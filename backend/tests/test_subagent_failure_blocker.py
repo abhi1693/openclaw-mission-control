@@ -98,20 +98,12 @@ def test_parser_trims_whitespace() -> None:
 
 
 def test_parser_returns_none_for_older_gateway_missing_role() -> None:
-    assert (
-        parse_subagent_failure_payload(
-            {"runtime_ms": 100, "error_class": "Boom"}
-        )
-        is None
-    )
+    assert parse_subagent_failure_payload({"runtime_ms": 100, "error_class": "Boom"}) is None
 
 
 def test_parser_returns_none_for_missing_runtime_ms() -> None:
     assert (
-        parse_subagent_failure_payload(
-            {"requested_role": "codex", "error_class": "Boom"}
-        )
-        is None
+        parse_subagent_failure_payload({"requested_role": "codex", "error_class": "Boom"}) is None
     )
 
 
@@ -184,20 +176,13 @@ def test_parser_warn_path_tolerates_mixed_type_keys() -> None:
     ``TypeError`` from ``sorted()`` on uncomparable keys."""
 
     assert (
-        parse_subagent_failure_payload(
-            {2: "not-a-role", "runtime_ms": 10, "error_class": "Boom"}
-        )
+        parse_subagent_failure_payload({2: "not-a-role", "runtime_ms": 10, "error_class": "Boom"})
         is None
     )
 
 
 def test_parser_returns_none_for_missing_error_class() -> None:
-    assert (
-        parse_subagent_failure_payload(
-            {"requested_role": "codex", "runtime_ms": 1}
-        )
-        is None
-    )
+    assert parse_subagent_failure_payload({"requested_role": "codex", "runtime_ms": 1}) is None
 
 
 def test_parser_returns_none_for_non_dict() -> None:
@@ -249,11 +234,7 @@ async def test_files_runtime_blocker_when_flag_enabled(
         ),
     )
     assert blocker_id is not None
-    blocker = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.id) == blocker_id)
-        )
-    ).first()
+    blocker = (await session.exec(select(Blocker).where(col(Blocker.id) == blocker_id))).first()
     assert blocker is not None
     assert blocker.category == "runtime"
     assert blocker.owner_role == "codex"
@@ -284,11 +265,7 @@ async def test_skips_when_board_flag_off(
     assert blocker_id is None
     # Lock "gate-off leaks no state" — returning None isn't enough, the
     # table must also be empty.
-    rows = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.task_id) == task.id)
-        )
-    ).all()
+    rows = (await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))).all()
     assert rows == []
 
 
@@ -325,11 +302,7 @@ async def test_dedupes_on_same_task_role(
     )
     assert first is not None
     assert second is None
-    rows = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.task_id) == task.id)
-        )
-    ).all()
+    rows = (await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))).all()
     assert len(rows) == 1
 
 
@@ -444,19 +417,13 @@ async def test_integrity_error_from_partial_unique_index_returns_none(
         payload=payload,
     )
     assert first is not None
-    baseline = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.task_id) == task.id)
-        )
-    ).all()
+    baseline = (await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))).all()
     assert len(baseline) == 1
 
     async def _always_false(*_args: object, **_kwargs: object) -> bool:
         return False
 
-    monkeypatch.setattr(
-        module, "_open_subagent_runtime_blocker_exists", _always_false
-    )
+    monkeypatch.setattr(module, "_open_subagent_runtime_blocker_exists", _always_false)
 
     second = await file_subagent_failure_blocker_if_configured(
         session,

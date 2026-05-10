@@ -261,9 +261,7 @@ async def test_ingest_board_webhook_rejects_disabled_endpoint(
     async with session_maker() as session:
         stored_payloads = (
             await session.exec(
-                select(BoardWebhookPayload).where(
-                    col(BoardWebhookPayload.board_id) == board.id
-                ),
+                select(BoardWebhookPayload).where(col(BoardWebhookPayload.board_id) == board.id),
             )
         ).all()
         assert stored_payloads == []

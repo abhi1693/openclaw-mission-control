@@ -455,27 +455,25 @@ async def test_run_lifecycle_skipped_wake_does_not_mark_online_or_strike_or_enqu
         "wake_attempts MUST NOT be incremented when the wake was skipped; "
         f"was {initial_wake_attempts}, became {agent.wake_attempts}"
     )
-    assert agent.last_wake_sent_at == initial_last_wake_sent_at, (
-        "last_wake_sent_at MUST NOT be set when no wake was sent"
-    )
+    assert (
+        agent.last_wake_sent_at == initial_last_wake_sent_at
+    ), "last_wake_sent_at MUST NOT be set when no wake was sent"
     assert agent.checkin_deadline_at is None, (
         "checkin_deadline_at MUST be None on skip — otherwise the sweep "
         "would schedule a missed-checkin reconcile for a wake that "
         "never happened"
     )
     assert agent.status != "online", (
-        f"agent MUST NOT be marked online when the wake was skipped; "
-        f"status is {agent.status!r}"
+        f"agent MUST NOT be marked online when the wake was skipped; " f"status is {agent.status!r}"
     )
-    assert agent.last_provision_error is not None, (
-        "last_provision_error must describe why the wake was skipped"
-    )
+    assert (
+        agent.last_provision_error is not None
+    ), "last_provision_error must describe why the wake was skipped"
     assert "skip" in agent.last_provision_error.lower() or (
         "credential" in agent.last_provision_error.lower()
     ), f"skip reason should mention credentials/skip; got {agent.last_provision_error!r}"
     assert enqueued == [], (
-        "no reconcile task should be enqueued for a skipped wake; got "
-        f"{enqueued!r}"
+        "no reconcile task should be enqueued for a skipped wake; got " f"{enqueued!r}"
     )
 
 
@@ -578,15 +576,9 @@ async def test_run_lifecycle_delivered_wake_consumes_strike_and_enqueues_reconci
         wakeup_verb="updated",
     )
 
-    assert agent.wake_attempts == 1, (
-        "first wake in a fresh cycle must consume a strike"
-    )
+    assert agent.wake_attempts == 1, "first wake in a fresh cycle must consume a strike"
     assert agent.last_wake_sent_at is not None, "last_wake_sent_at must be set"
-    assert agent.checkin_deadline_at is not None, (
-        "a delivered wake must arm a check-in deadline"
-    )
+    assert agent.checkin_deadline_at is not None, "a delivered wake must arm a check-in deadline"
     assert agent.status == "online"
     assert agent.last_provision_error is None
-    assert len(enqueued) == 1, (
-        f"exactly one reconcile task should be enqueued; got {len(enqueued)}"
-    )
+    assert len(enqueued) == 1, f"exactly one reconcile task should be enqueued; got {len(enqueued)}"

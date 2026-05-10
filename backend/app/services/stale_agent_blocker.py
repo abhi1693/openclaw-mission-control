@@ -211,9 +211,7 @@ async def file_stale_agent_blocker_if_configured(
     if reason is None:
         return None
 
-    if not board_rollout_flag_enabled(
-        board.rollout_flags, STRUCTURED_BLOCKERS_V1_FLAG
-    ):
+    if not board_rollout_flag_enabled(board.rollout_flags, STRUCTURED_BLOCKERS_V1_FLAG):
         return None
 
     if await _open_stale_agent_blocker_exists(
@@ -231,9 +229,7 @@ async def file_stale_agent_blocker_if_configured(
         category=_CATEGORY_OPERATOR,
         owner_role="operator",
         required_artifact=_required_artifact_for(agent_name),
-        reopen_condition=(
-            "re-add agent to openclaw.json and confirm provision"
-        ),
+        reopen_condition=("re-add agent to openclaw.json and confirm provision"),
         citation=_citation_for(reason, raw_message),
         citation_request_id=request_id_from_exc(exc),
     )

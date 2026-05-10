@@ -79,13 +79,11 @@ async def test_try_send_agent_message_returns_within_timeout_when_gateway_hangs(
     elapsed = time.monotonic() - started
 
     # Must return a timeout error (NOT None / NOT raise unhandled).
-    assert isinstance(result, OpenClawGatewayError), (
-        f"expected OpenClawGatewayError on timeout, got {type(result).__name__}: {result!r}"
-    )
+    assert isinstance(
+        result, OpenClawGatewayError
+    ), f"expected OpenClawGatewayError on timeout, got {type(result).__name__}: {result!r}"
     # Must complete close to the patched timeout, not the 3600s sleep.
-    assert elapsed < test_timeout + 1.0, (
-        f"expected <{test_timeout + 1.0}s, got {elapsed:.2f}s"
-    )
+    assert elapsed < test_timeout + 1.0, f"expected <{test_timeout + 1.0}s, got {elapsed:.2f}s"
     # The error message should make the timeout cause auditable in logs.
     assert "timeout" in str(result).lower()
 
@@ -95,6 +93,7 @@ async def test_try_send_agent_message_succeeds_when_gateway_responds_promptly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Sanity: the timeout wrap must not break the happy path."""
+
     async def _ok_ensure_session(*args, **kwargs) -> None:
         return None
 

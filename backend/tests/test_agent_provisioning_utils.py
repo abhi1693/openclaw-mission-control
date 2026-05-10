@@ -64,7 +64,9 @@ def test_wakeup_text_includes_bootstrap_before_agents():
 
     assert "If BOOTSTRAP.md exists, read it first, then read AGENTS.md." in text
     assert "Do not assume exec is blocked based on an earlier session." in text
-    assert "Attempt the required command once in this session before saying you are blocked." in text
+    assert (
+        "Attempt the required command once in this session before saying you are blocked." in text
+    )
 
 
 def test_wakeup_text_requires_explicit_heartbeat_checkin():
@@ -453,9 +455,7 @@ async def test_apply_agent_lifecycle_writes_files_before_wake(monkeypatch):
     assert "send_message" in call_log, f"wake must be delivered; got {call_log}"
     set_idx = call_log.index("set_agent_files")
     send_idx = call_log.index("send_message")
-    assert set_idx < send_idx, (
-        f"set_agent_files must run before send_message, but got {call_log}"
-    )
+    assert set_idx < send_idx, f"set_agent_files must run before send_message, but got {call_log}"
     # verify_credentials_visible runs list_agent_files AFTER file sync
     # and BEFORE send_message — this is the read-back check that
     # guarantees the wake text has a valid credential source to quote.
@@ -899,6 +899,7 @@ async def test_provision_main_agent_uses_dedicated_openclaw_agent_id(monkeypatch
 
     async def _fake_openclaw_call(*args, **kwargs):
         return {"ok": True, "enabled": True}
+
     monkeypatch.setattr(agent_provisioning, "openclaw_call", _fake_openclaw_call)
     monkeypatch.setattr(
         agent_provisioning.BaseAgentLifecycleManager,
@@ -1773,11 +1774,11 @@ def test_offline_threshold_exceeds_max_heartbeat():
 
 def test_offline_threshold_covers_30m_heartbeat_agents():
     """Regression: 30m-heartbeat agents must not be falsely marked offline."""
+    from app.core.durations import parse_every_to_seconds
     from app.services.openclaw.constants import (
         HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL,
         OFFLINE_AFTER,
     )
-    from app.core.durations import parse_every_to_seconds
 
     max_worker_interval = parse_every_to_seconds("30m")
     assert OFFLINE_AFTER.total_seconds() > (
@@ -1843,15 +1844,15 @@ async def test_patch_agent_heartbeats_routes_through_openclaw_call(monkeypatch):
     # No other RPC methods should be involved in this code path. If a future
     # change adds one (e.g. a tool-facing wrapper, a session.* call, etc.),
     # make sure the new path is also operator-trusted before relaxing this.
-    assert set(methods) == {"config.get", "config.patch"}, (
-        f"unexpected gateway RPCs in patch_agent_heartbeats path: {methods}"
-    )
+    assert set(methods) == {
+        "config.get",
+        "config.patch",
+    }, f"unexpected gateway RPCs in patch_agent_heartbeats path: {methods}"
 
     patch_call = next(call for call in calls if call[0] == "config.patch")
     patch_params = patch_call[1]
     assert isinstance(patch_params, dict)
     assert "raw" in patch_params, "config.patch must carry the 'raw' JSON payload"
     assert patch_params.get("baseHash") == "h-base", (
-        "config.patch must include baseHash from the prior config.get for "
-        "optimistic concurrency"
+        "config.patch must include baseHash from the prior config.get for " "optimistic concurrency"
     )

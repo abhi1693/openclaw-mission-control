@@ -68,21 +68,29 @@ async def _seed_board_and_review_task(
     session.add(Organization(id=org_id, name=f"org-{board_id}"))
     session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name=f"gw-{board_id}",
-            url="ws://example/ws", workspace_root="/tmp/wks",
+            id=gateway_id,
+            organization_id=org_id,
+            name=f"gw-{board_id}",
+            url="ws://example/ws",
+            workspace_root="/tmp/wks",
         ),
     )
     board = Board(id=board_id, organization_id=org_id, name="b", slug=f"b-{board_id.hex[:6]}")
     session.add(board)
     worker = Agent(
-        id=worker_id, board_id=board_id, gateway_id=gateway_id,
+        id=worker_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
         name=f"worker-{worker_id.hex[:6]}",
         auth_token=f"tok-{uuid4().hex}",
     )
     session.add(worker)
     task = Task(
-        id=task_id, board_id=board_id, title=f"task-{task_id.hex[:6]}",
-        status=task_status, review_packet_type=review_packet_type,
+        id=task_id,
+        board_id=board_id,
+        title=f"task-{task_id.hex[:6]}",
+        status=task_status,
+        review_packet_type=review_packet_type,
         assigned_agent_id=worker_id,
     )
     session.add(task)
@@ -104,21 +112,25 @@ async def test_approving_move_to_done_auto_transitions_task_to_done(
 
     pending = await approvals_api.create_approval(
         payload=ApprovalCreate(
-            action_type="move_to_done", task_id=task.id,
+            action_type="move_to_done",
+            task_id=task.id,
             payload={"reason": "ready for done"},
-            confidence=92, status="pending",
+            confidence=92,
+            status="pending",
         ),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
     await approvals_api.update_approval(
         approval_id=pending.id,
         payload=ApprovalUpdate(status="approved"),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
 
-    refreshed = (
-        await session.exec(select(Task).where(Task.id == task.id))
-    ).first()
+    refreshed = (await session.exec(select(Task).where(Task.id == task.id))).first()
     assert refreshed is not None
     assert refreshed.status == "done", (
         f"expected task auto-transitioned to done after approval; "
@@ -139,21 +151,25 @@ async def test_approving_non_move_to_done_action_leaves_task_status_unchanged(
 
     pending = await approvals_api.create_approval(
         payload=ApprovalCreate(
-            action_type="task.execute", task_id=task.id,
+            action_type="task.execute",
+            task_id=task.id,
             payload={"reason": "execute"},
-            confidence=80, status="pending",
+            confidence=80,
+            status="pending",
         ),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
     await approvals_api.update_approval(
         approval_id=pending.id,
         payload=ApprovalUpdate(status="approved"),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
 
-    refreshed = (
-        await session.exec(select(Task).where(Task.id == task.id))
-    ).first()
+    refreshed = (await session.exec(select(Task).where(Task.id == task.id))).first()
     assert refreshed is not None
     assert refreshed.status == "review", (
         f"expected non-done action_type to leave task status unchanged; "
@@ -175,36 +191,49 @@ async def test_idempotent_when_approval_already_resolved(
 
     pending = await approvals_api.create_approval(
         payload=ApprovalCreate(
-            action_type="move_to_done", task_id=task.id,
+            action_type="move_to_done",
+            task_id=task.id,
             payload={"reason": "ready"},
-            confidence=92, status="pending",
+            confidence=92,
+            status="pending",
         ),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
     await approvals_api.update_approval(
         approval_id=pending.id,
         payload=ApprovalUpdate(status="approved"),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
     # Second PATCH same-status. Existing API path is idempotent (returns
     # current state). The auto-transition must not re-fire.
     await approvals_api.update_approval(
         approval_id=pending.id,
         payload=ApprovalUpdate(status="approved"),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
-    refreshed = (
-        await session.exec(select(Task).where(Task.id == task.id))
-    ).first()
+    refreshed = (await session.exec(select(Task).where(Task.id == task.id))).first()
     assert refreshed is not None
     assert refreshed.status == "done"
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("action_type", [
-    "move_to_done", "mark_done", "task_done", "task_done_transition",
-    "move_task_to_done", "mark_task_done",
-])
+@pytest.mark.parametrize(
+    "action_type",
+    [
+        "move_to_done",
+        "mark_done",
+        "task_done",
+        "task_done_transition",
+        "move_task_to_done",
+        "mark_task_done",
+    ],
+)
 async def test_all_done_aliases_trigger_auto_transition(
     sqlite_session: AsyncSession,
     action_type: str,
@@ -219,24 +248,27 @@ async def test_all_done_aliases_trigger_auto_transition(
     actor = _user_actor(session)
     pending = await approvals_api.create_approval(
         payload=ApprovalCreate(
-            action_type=action_type, task_id=task.id,
+            action_type=action_type,
+            task_id=task.id,
             payload={"reason": "alias-test"},
-            confidence=92, status="pending",
+            confidence=92,
+            status="pending",
         ),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
     await approvals_api.update_approval(
         approval_id=pending.id,
         payload=ApprovalUpdate(status="approved"),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
-    refreshed = (
-        await session.exec(select(Task).where(Task.id == task.id))
-    ).first()
+    refreshed = (await session.exec(select(Task).where(Task.id == task.id))).first()
     assert refreshed is not None
     assert refreshed.status == "done", (
-        f"alias {action_type!r} should trigger auto-transition; "
-        f"got status={refreshed.status!r}"
+        f"alias {action_type!r} should trigger auto-transition; " f"got status={refreshed.status!r}"
     )
 
 
@@ -251,19 +283,23 @@ async def test_rejecting_does_not_auto_transition(
 
     pending = await approvals_api.create_approval(
         payload=ApprovalCreate(
-            action_type="move_to_done", task_id=task.id,
+            action_type="move_to_done",
+            task_id=task.id,
             payload={"reason": "needs more"},
-            confidence=80, status="pending",
+            confidence=80,
+            status="pending",
         ),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
     await approvals_api.update_approval(
         approval_id=pending.id,
         payload=ApprovalUpdate(status="rejected"),
-        board=board, session=session, actor=actor,
+        board=board,
+        session=session,
+        actor=actor,
     )
-    refreshed = (
-        await session.exec(select(Task).where(Task.id == task.id))
-    ).first()
+    refreshed = (await session.exec(select(Task).where(Task.id == task.id))).first()
     assert refreshed is not None
     assert refreshed.status == "review"

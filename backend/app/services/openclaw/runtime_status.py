@@ -7,7 +7,6 @@ import json
 import subprocess
 from dataclasses import dataclass
 
-
 DEFAULT_OPENCLAW_STATUS_TIMEOUT_SECONDS = 10
 
 

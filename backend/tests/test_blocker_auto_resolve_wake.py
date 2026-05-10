@@ -147,6 +147,7 @@ def _patch_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
     # call notify_lead_after_blocker_resolved which constructs
     # GatewayDispatchService inside lead_notify.
     import app.services.lead_notify as lead_notify
+
     monkeypatch.setattr(lead_notify, "GatewayDispatchService", _FakeDispatch)
     return sent
 
@@ -309,6 +310,6 @@ async def test_pipeline_event_auto_resolve_no_wake_when_other_blockers_open(
     assert operator_blocker.resolved_at is None
 
     # The operator blocker is still open → no wake.
-    assert not any("BLOCKER_RESOLVED" in str(s.get("message", "")) for s in sent), (
-        f"unexpected wake while other open Blockers remain: {sent}"
-    )
+    assert not any(
+        "BLOCKER_RESOLVED" in str(s.get("message", "")) for s in sent
+    ), f"unexpected wake while other open Blockers remain: {sent}"

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 OPENCLAW_SKILLS_ROOT = Path("/root/.openclaw/skills")
 
@@ -54,7 +53,7 @@ def test_worker_parallel_scheduler_reviews_before_merge() -> None:
     assert "required stage-2 review PASS" in skill
     assert "POST_MERGE_VERIFICATION_PASSED" in skill
     assert skill.index("required stage-2 review PASS") < skill.index(
-        "git -C \"$WORKSPACE_PATH\" merge",
+        'git -C "$WORKSPACE_PATH" merge',
     )
 
 

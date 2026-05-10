@@ -114,7 +114,6 @@ async def _touch_agent_presence(
     session.add(agent)
 
 
-
 async def get_agent_auth_context(
     request: Request,
     agent_token: str | None = Header(default=None, alias="X-Agent-Token"),

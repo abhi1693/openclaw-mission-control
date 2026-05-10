@@ -76,9 +76,7 @@ class OperatorDecisionUpdate(SQLModel):
         # "resolve"`` — which would otherwise register in the set and
         # pass the guard while persisting a null answer.
         if self.status_transition == "resolve" and self.resolved_value is None:
-            raise ValueError(
-                "status_transition='resolve' requires a non-null resolved_value"
-            )
+            raise ValueError("status_transition='resolve' requires a non-null resolved_value")
         return self
 
 

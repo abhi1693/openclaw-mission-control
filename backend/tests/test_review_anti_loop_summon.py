@@ -62,23 +62,34 @@ async def _seed_frontend_ui_task(
     sqlite_session.add(Organization(id=org_id, name=f"org-{slug}"))
     sqlite_session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name=f"gw-{slug}",
-            url="ws://gateway.example/ws", workspace_root="/tmp/openclaw",
+            id=gateway_id,
+            organization_id=org_id,
+            name=f"gw-{slug}",
+            url="ws://gateway.example/ws",
+            workspace_root="/tmp/openclaw",
         ),
     )
     board = Board(
-        id=board_id, organization_id=org_id, gateway_id=gateway_id,
-        name=slug, slug=slug,
+        id=board_id,
+        organization_id=org_id,
+        gateway_id=gateway_id,
+        name=slug,
+        slug=slug,
     )
     sqlite_session.add(board)
     qa = Agent(
-        id=qa_id, board_id=board_id, gateway_id=gateway_id,
-        name="QA-E2E", openclaw_session_id=f"agent:{slug}:qa",
+        id=qa_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
+        name="QA-E2E",
+        openclaw_session_id=f"agent:{slug}:qa",
     )
     sqlite_session.add(qa)
     task = Task(
-        id=task_id, board_id=board_id,
-        title=f"task-{slug}", status="review",
+        id=task_id,
+        board_id=board_id,
+        title=f"task-{slug}",
+        status="review",
         review_packet_type="frontend_ui",
         assigned_agent_id=qa_id,
         packet_commit_sha="0123abc",
@@ -106,7 +117,9 @@ async def _post_fail(
         evidence={"comment": note or "QA-E2E FAIL: layout regression"},
     )
     await tasks_api.record_task_review_event(
-        payload=payload, task=task, session=session,
+        payload=payload,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=actor),  # type: ignore[arg-type]
     )
     # The auto-rework on FAIL transitions the task; restage to review
@@ -128,10 +141,20 @@ async def test_second_consecutive_fail_same_target_summons_architect(
     board, qa, task = await _seed_frontend_ui_task(sqlite_session, slug="loop-soft")
     target = "http://192.168.2.63:3002/product#mobile-overflow"
 
-    await _post_fail(sqlite_session, task=task, actor=qa, target=target,
-                     note="FAIL #1: scrollWidth=363 > clientWidth=343 on /product mobile")
-    await _post_fail(sqlite_session, task=task, actor=qa, target=target,
-                     note="FAIL #2: same overflow still present after fix #1")
+    await _post_fail(
+        sqlite_session,
+        task=task,
+        actor=qa,
+        target=target,
+        note="FAIL #1: scrollWidth=363 > clientWidth=343 on /product mobile",
+    )
+    await _post_fail(
+        sqlite_session,
+        task=task,
+        actor=qa,
+        target=target,
+        note="FAIL #2: same overflow still present after fix #1",
+    )
 
     # Soft-summon comment must exist tagging Architect.
     rows = list(
@@ -147,9 +170,9 @@ async def test_second_consecutive_fail_same_target_summons_architect(
     )
     msg = rows[0].message or ""
     assert "@Architect" in msg, f"summon comment must tag @Architect; got: {msg!r}"
-    assert "FAIL #2" in msg or "second consecutive" in msg.lower(), (
-        f"summon comment must call out the repeat-failure pattern; got: {msg!r}"
-    )
+    assert (
+        "FAIL #2" in msg or "second consecutive" in msg.lower()
+    ), f"summon comment must call out the repeat-failure pattern; got: {msg!r}"
 
 
 @pytest.mark.asyncio
@@ -159,15 +182,21 @@ async def test_second_fail_different_target_does_not_summon(
     """If the second FAIL cites a DIFFERENT target than the first, the
     iteration is not stuck — the worker fixed one issue and exposed
     another. No summon should fire."""
-    board, qa, task = await _seed_frontend_ui_task(
-        sqlite_session, slug="loop-different-target"
+    board, qa, task = await _seed_frontend_ui_task(sqlite_session, slug="loop-different-target")
+    await _post_fail(
+        sqlite_session,
+        task=task,
+        actor=qa,
+        target="http://192.168.2.63:3002/product#mobile-overflow",
+        note="FAIL #1: /product mobile overflow",
     )
-    await _post_fail(sqlite_session, task=task, actor=qa,
-                     target="http://192.168.2.63:3002/product#mobile-overflow",
-                     note="FAIL #1: /product mobile overflow")
-    await _post_fail(sqlite_session, task=task, actor=qa,
-                     target="http://192.168.2.63:3002/docs#tablet-spacing",
-                     note="FAIL #2: docs tablet spacing")
+    await _post_fail(
+        sqlite_session,
+        task=task,
+        actor=qa,
+        target="http://192.168.2.63:3002/docs#tablet-spacing",
+        note="FAIL #2: docs tablet spacing",
+    )
 
     rows = list(
         await sqlite_session.exec(
@@ -191,13 +220,13 @@ async def test_pass_resets_anti_loop_streak(
     board, qa, task = await _seed_frontend_ui_task(sqlite_session, slug="loop-pass-reset")
     target = "http://192.168.2.63:3002/product#mobile-overflow"
 
-    await _post_fail(sqlite_session, task=task, actor=qa, target=target,
-                     note="FAIL #1")
+    await _post_fail(sqlite_session, task=task, actor=qa, target=target, note="FAIL #1")
     # PASS verdict between FAILs. Seed directly to dodge the
     # qa_e2e_pass_invalid_evidence gate (this test is about streak
     # reset behavior, not evidence-completeness invariants — those
     # are covered in test_review_event_artifact_invariant.py).
     from app.models.task_review_events import TaskReviewEvent
+
     sqlite_session.add(
         TaskReviewEvent(
             board_id=board.id,
@@ -212,8 +241,9 @@ async def test_pass_resets_anti_loop_streak(
     )
     await sqlite_session.commit()
     # New cycle starts; this is FAIL #1 of a new streak, not FAIL #2.
-    await _post_fail(sqlite_session, task=task, actor=qa, target=target,
-                     note="new FAIL after a PASS")
+    await _post_fail(
+        sqlite_session, task=task, actor=qa, target=target, note="new FAIL after a PASS"
+    )
 
     rows = list(
         await sqlite_session.exec(
@@ -239,8 +269,13 @@ async def test_third_consecutive_fail_files_anti_loop_blocker(
     board, qa, task = await _seed_frontend_ui_task(sqlite_session, slug="loop-hard-halt")
     target = "http://192.168.2.63:3002/product#mobile-overflow"
     for i in (1, 2, 3):
-        await _post_fail(sqlite_session, task=task, actor=qa, target=target,
-                         note=f"FAIL #{i}: same selector still wrong")
+        await _post_fail(
+            sqlite_session,
+            task=task,
+            actor=qa,
+            target=target,
+            note=f"FAIL #{i}: same selector still wrong",
+        )
 
     blockers = list(
         await sqlite_session.exec(
@@ -250,8 +285,7 @@ async def test_third_consecutive_fail_files_anti_loop_blocker(
         ),
     )
     assert len(blockers) >= 1, (
-        "expected at least one review_anti_loop Blocker after FAIL #3 "
-        "on the same target"
+        "expected at least one review_anti_loop Blocker after FAIL #3 " "on the same target"
     )
 
 
@@ -276,6 +310,6 @@ async def test_summon_idempotent_within_same_streak(
             .where(col(ActivityEvent.event_type) == "task.anti_loop_summon"),
         ),
     )
-    assert len(summons) == 1, (
-        f"expected exactly one summon event per active streak; got {len(summons)}"
-    )
+    assert (
+        len(summons) == 1
+    ), f"expected exactly one summon event per active streak; got {len(summons)}"

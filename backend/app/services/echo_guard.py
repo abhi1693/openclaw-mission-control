@@ -117,10 +117,7 @@ async def _blocker_changed_since(
         select(
             sql_exists()
             .where(col(Blocker.task_id) == task_id)
-            .where(
-                (col(Blocker.created_at) > since)
-                | (col(Blocker.resolved_at) > since)
-            )
+            .where((col(Blocker.created_at) > since) | (col(Blocker.resolved_at) > since))
         )
     )
     return bool(changed)
@@ -149,9 +146,7 @@ async def classify_for_echo(
 
     if agent_id is None or task.board_id is None:
         flags = classify(message, packet_type=packet_type)
-        return EchoGuardResult(
-            should_suppress=False, classifier_flags=flags, reason=None
-        )
+        return EchoGuardResult(should_suppress=False, classifier_flags=flags, reason=None)
 
     now = utcnow()
     window_start = now - timedelta(seconds=ECHO_GUARD_WINDOW_SECONDS)
@@ -173,31 +168,21 @@ async def classify_for_echo(
 
     if prior is None:
         # First comment in the window — no echo possible by definition.
-        return EchoGuardResult(
-            should_suppress=False, classifier_flags=flags, reason=None
-        )
+        return EchoGuardResult(should_suppress=False, classifier_flags=flags, reason=None)
 
     if ClassifierFlag.ECHO_SHAPE not in flags:
-        return EchoGuardResult(
-            should_suppress=False, classifier_flags=flags, reason=None
-        )
+        return EchoGuardResult(should_suppress=False, classifier_flags=flags, reason=None)
 
-    if await _blocker_changed_since(
-        session, task_id=task.id, since=prior.created_at
-    ):
+    if await _blocker_changed_since(session, task_id=task.id, since=prior.created_at):
         # Legitimate alignment after a fresh blocker was filed/resolved.
-        return EchoGuardResult(
-            should_suppress=False, classifier_flags=flags, reason=None
-        )
+        return EchoGuardResult(should_suppress=False, classifier_flags=flags, reason=None)
 
     board_flags = await session.scalar(
         select(Board.rollout_flags).where(col(Board.id) == task.board_id)
     )
     if not board_rollout_flag_enabled(board_flags, COMMENT_ECHO_GUARD_V1_FLAG):
         # Shadow-mode: classifier fired but enforcement is off.
-        return EchoGuardResult(
-            should_suppress=False, classifier_flags=flags, reason="observe"
-        )
+        return EchoGuardResult(should_suppress=False, classifier_flags=flags, reason="observe")
 
     logger.info(
         "echo_guard.suppress task_id=%s agent_id=%s prior_at=%s flags=%s",

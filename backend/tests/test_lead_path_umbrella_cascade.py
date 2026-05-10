@@ -147,9 +147,7 @@ async def test_lead_path_patch_to_done_triggers_umbrella_cascade() -> None:
 
             # The cascade should have flipped the parent to cancelled.
             session.expire_all()
-            parent = (
-                await session.exec(select(Task).where(col(Task.id) == parent_id))
-            ).first()
+            parent = (await session.exec(select(Task).where(col(Task.id) == parent_id))).first()
             assert parent is not None
             assert parent.status == "cancelled", (
                 f"lead-path PATCH must cascade through to retired umbrella; "

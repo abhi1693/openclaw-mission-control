@@ -164,7 +164,9 @@ class TestWebhookHmacVerification:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """A webhook with a secret configured should reject requests without a signature."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
@@ -196,7 +198,9 @@ class TestWebhookHmacVerification:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """A webhook with a secret should reject requests with an incorrect signature."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
@@ -228,7 +232,9 @@ class TestWebhookHmacVerification:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """A valid HMAC-SHA256 signature should be accepted."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
@@ -266,7 +272,9 @@ class TestWebhookHmacVerification:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """A webhook without a secret should accept unsigned requests (backward compat)."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
@@ -296,7 +304,9 @@ class TestWebhookHmacVerification:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """A configured signature_header should override the default header names."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
@@ -452,7 +462,9 @@ class TestWebhookPayloadSizeLimit:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """Payloads exceeding 1 MB should be rejected with 413."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
@@ -484,7 +496,9 @@ class TestWebhookPayloadSizeLimit:
         sqlite_engine: AsyncEngine,
     ) -> None:
         """Requests with Content-Length > 1 MB should be rejected early."""
-        session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            sqlite_engine, class_=AsyncSession, expire_on_commit=False
+        )
         app = _build_webhook_test_app(session_maker)
 
         monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)

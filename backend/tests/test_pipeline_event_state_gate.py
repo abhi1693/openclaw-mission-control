@@ -148,22 +148,26 @@ async def test_pipeline_event_post_rejected_when_task_status_is_rework(
 
     with pytest.raises(HTTPException) as exc_info:
         await _attempt_post_event(
-            sqlite_session, task=task, actor=worker, state="code_changed",
+            sqlite_session,
+            task=task,
+            actor=worker,
+            state="code_changed",
         )
 
     assert exc_info.value.status_code == 409, (
-        f"expected 409 Conflict on rework-state pipeline POST, "
-        f"got {exc_info.value.status_code}"
+        f"expected 409 Conflict on rework-state pipeline POST, " f"got {exc_info.value.status_code}"
     )
     detail = exc_info.value.detail
     assert isinstance(detail, dict), f"expected structured detail, got {type(detail).__name__}"
-    assert detail.get("code") == "pipeline_event_requires_in_progress", (
-        f"expected code=pipeline_event_requires_in_progress, got code={detail.get('code')!r}"
-    )
+    assert (
+        detail.get("code") == "pipeline_event_requires_in_progress"
+    ), f"expected code=pipeline_event_requires_in_progress, got code={detail.get('code')!r}"
     # Message must mention rework + the corrective PATCH so agents can act on it.
     assert "rework" in str(detail.get("message", "")).lower()
-    assert "in_progress" in str(detail.get("message", "")).lower() or \
-        "in progress" in str(detail.get("message", "")).lower()
+    assert (
+        "in_progress" in str(detail.get("message", "")).lower()
+        or "in progress" in str(detail.get("message", "")).lower()
+    )
 
 
 @pytest.mark.asyncio
@@ -179,7 +183,10 @@ async def test_pipeline_event_post_allowed_when_task_status_is_in_progress(
     )
     # Should not raise.
     await _attempt_post_event(
-        sqlite_session, task=task, actor=worker, state="code_changed",
+        sqlite_session,
+        task=task,
+        actor=worker,
+        state="code_changed",
     )
 
 
@@ -196,7 +203,10 @@ async def test_pipeline_event_post_allowed_when_task_status_is_review(
         status="review",
     )
     await _attempt_post_event(
-        sqlite_session, task=task, actor=worker, state="code_changed",
+        sqlite_session,
+        task=task,
+        actor=worker,
+        state="code_changed",
     )
 
 
@@ -212,7 +222,10 @@ async def test_pipeline_event_post_allowed_when_task_status_is_done(
         status="done",
     )
     await _attempt_post_event(
-        sqlite_session, task=task, actor=worker, state="code_changed",
+        sqlite_session,
+        task=task,
+        actor=worker,
+        state="code_changed",
     )
 
 
@@ -233,7 +246,10 @@ async def test_pipeline_event_post_rejected_when_task_status_is_inbox(
     )
     with pytest.raises(HTTPException) as exc_info:
         await _attempt_post_event(
-            sqlite_session, task=task, actor=worker, state="code_changed",
+            sqlite_session,
+            task=task,
+            actor=worker,
+            state="code_changed",
         )
     assert exc_info.value.status_code == 409
     detail = exc_info.value.detail
@@ -257,7 +273,10 @@ async def test_pipeline_event_post_rejected_when_task_status_is_cancelled(
     )
     with pytest.raises(HTTPException) as exc_info:
         await _attempt_post_event(
-            sqlite_session, task=task, actor=worker, state="code_changed",
+            sqlite_session,
+            task=task,
+            actor=worker,
+            state="code_changed",
         )
     assert exc_info.value.status_code == 409
     detail = exc_info.value.detail

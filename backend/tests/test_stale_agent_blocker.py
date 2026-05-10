@@ -58,9 +58,7 @@ async def seeded(
 
 def test_classifier_matches_pairing_required() -> None:
     assert (
-        classify_gateway_error(
-            OpenClawGatewayError("PAIRING_REQUIRED: scope upgrade needed")
-        )
+        classify_gateway_error(OpenClawGatewayError("PAIRING_REQUIRED: scope upgrade needed"))
         == StaleAgentGatewayReason.PAIRING_REQUIRED
     )
 
@@ -132,11 +130,7 @@ async def test_files_blocker_on_stale_session_when_flag_enabled(
         exc=OpenClawGatewayError("Stale agent session"),
     )
     assert blocker_id is not None
-    blocker = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.id) == blocker_id)
-        )
-    ).first()
+    blocker = (await session.exec(select(Blocker).where(col(Blocker.id) == blocker_id))).first()
     assert blocker is not None
     assert blocker.category == "operator"
     assert blocker.owner_role == "operator"
@@ -202,11 +196,7 @@ async def test_dedupes_on_same_task_agent(
     )
     assert first is not None
     assert second is None
-    rows = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.task_id) == task.id)
-        )
-    ).all()
+    rows = (await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))).all()
     assert len(rows) == 1
 
 
@@ -230,19 +220,13 @@ async def test_integrity_error_from_partial_unique_index_returns_none(
         exc=OpenClawGatewayError("Stale agent session"),
     )
     assert first is not None
-    baseline = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.task_id) == task.id)
-        )
-    ).all()
+    baseline = (await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))).all()
     assert len(baseline) == 1
 
     async def _always_false(*_args: object, **_kwargs: object) -> bool:
         return False
 
-    monkeypatch.setattr(
-        module, "_open_stale_agent_blocker_exists", _always_false
-    )
+    monkeypatch.setattr(module, "_open_stale_agent_blocker_exists", _always_false)
 
     second = await file_stale_agent_blocker_if_configured(
         session,
@@ -354,9 +338,7 @@ def test_extract_request_id_handles_paren_equals_format() -> None:
     """Canonical 4.20+ shape: ``... (request_id=req-abc-123)``."""
 
     assert (
-        extract_request_id(
-            "PAIRING_REQUIRED: scope upgrade needed (request_id=req-abc-123)"
-        )
+        extract_request_id("PAIRING_REQUIRED: scope upgrade needed (request_id=req-abc-123)")
         == "req-abc-123"
     )
 
@@ -365,21 +347,13 @@ def test_extract_request_id_handles_colon_format() -> None:
     """Also accept ``request_id: <val>`` for gateway builds that drop
     the equals in favor of key-value style."""
 
-    assert (
-        extract_request_id(
-            "Stale agent session. request_id: req-xyz-789"
-        )
-        == "req-xyz-789"
-    )
+    assert extract_request_id("Stale agent session. request_id: req-xyz-789") == "req-xyz-789"
 
 
 def test_extract_request_id_handles_camel_case() -> None:
     """Some gateway builds emit ``requestId`` (camelCase). Accept both."""
 
-    assert (
-        extract_request_id("PAIRING_REQUIRED (requestId=req-CAM-1)")
-        == "req-CAM-1"
-    )
+    assert extract_request_id("PAIRING_REQUIRED (requestId=req-CAM-1)") == "req-CAM-1"
 
 
 def test_extract_request_id_returns_none_on_absence() -> None:
@@ -402,8 +376,7 @@ async def test_filer_stamps_request_id_on_blocker(
         task_id=task.id,
         agent_name="frontend-dev",
         exc=OpenClawGatewayError(
-            "PAIRING_REQUIRED: re-pair required for frontend-dev "
-            "(request_id=req-live-001)"
+            "PAIRING_REQUIRED: re-pair required for frontend-dev " "(request_id=req-live-001)"
         ),
     )
     assert blocker_id is not None
@@ -457,9 +430,7 @@ def test_request_id_from_exc_falls_back_to_regex_when_no_details() -> None:
     """Pre-4.20 errors arrive with no structured ``details``; the
     regex-over-message path still wins the id for old builds."""
 
-    exc = OpenClawGatewayError(
-        "PAIRING_REQUIRED: scope upgrade needed (request_id=req-old-1)"
-    )
+    exc = OpenClawGatewayError("PAIRING_REQUIRED: scope upgrade needed (request_id=req-old-1)")
     assert request_id_from_exc(exc) == "req-old-1"
 
 

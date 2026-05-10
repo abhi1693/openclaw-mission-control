@@ -100,9 +100,7 @@ async def _seed(
         gateway_id=gateway_id,
         name="Board",
         slug="board",
-        rollout_flags=(
-            {"structured_blockers_v1": True} if structured_blockers_on else {}
-        ),
+        rollout_flags=({"structured_blockers_v1": True} if structured_blockers_on else {}),
     )
     session.add(board)
     agent = Agent(
@@ -151,9 +149,7 @@ async def test_report_files_runtime_blocker_when_flag_on() -> None:
         assert body["blocker_id"] is not None
         async with session_maker() as session:
             rows = (
-                await session.exec(
-                    select(Blocker).where(col(Blocker.task_id) == task.id)
-                )
+                await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))
             ).all()
             assert len(rows) == 1
             blocker = rows[0]
@@ -191,9 +187,7 @@ async def test_report_returns_null_blocker_when_flag_off() -> None:
         assert response.json()["blocker_id"] is None
         async with session_maker() as session:
             rows = (
-                await session.exec(
-                    select(Blocker).where(col(Blocker.task_id) == task.id)
-                )
+                await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))
             ).all()
             assert rows == []
     finally:

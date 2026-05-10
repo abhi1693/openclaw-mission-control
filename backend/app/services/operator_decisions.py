@@ -65,9 +65,7 @@ async def task_has_pending_operator_decision(
 
     stmt = select(
         exists()
-        .where(
-            col(OperatorDecisionTaskLink.decision_id) == col(OperatorDecision.id)
-        )
+        .where(col(OperatorDecisionTaskLink.decision_id) == col(OperatorDecision.id))
         .where(col(OperatorDecision.board_id) == board_id)
         .where(col(OperatorDecision.status) == "pending")
         .where(col(OperatorDecisionTaskLink.task_id) == task_id)

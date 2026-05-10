@@ -17,13 +17,13 @@ from app.schemas.gateway_api import (
     GatewayCommandsResponse,
     GatewayEvalApprovalResolveRequest,
     GatewayEvalSessionEnsureRequest,
-    OpenClawRuntimeStatusResponse,
     GatewayResolveQuery,
     GatewaySessionHistoryResponse,
     GatewaySessionMessageRequest,
     GatewaySessionResponse,
     GatewaySessionsResponse,
     GatewaysStatusResponse,
+    OpenClawRuntimeStatusResponse,
     ProjectedGatewaySession,
     ProjectedGatewaySessionsResponse,
 )
@@ -321,18 +321,13 @@ async def projected_gateway_sessions(
     # gateway-emitted agent_id from an UNRELATED org's session and
     # leak the row through the org-scoping check.
     org_gateway_ids = {
-        lookup
-        for a in org_agents
-        if (lookup := projection_lookup_id(a)) is not None
+        lookup for a in org_agents if (lookup := projection_lookup_id(a)) is not None
     }
     if agent_id is not None:
         org_gateway_ids = org_gateway_ids & {agent_id}
-    rows = await list_session_states_for_agent_ids(
-        session, agent_ids=org_gateway_ids
-    )
+    rows = await list_session_states_for_agent_ids(session, agent_ids=org_gateway_ids)
     return ProjectedGatewaySessionsResponse(
         sessions=[
-            ProjectedGatewaySession.model_validate(row, from_attributes=True)
-            for row in rows
+            ProjectedGatewaySession.model_validate(row, from_attributes=True) for row in rows
         ],
     )

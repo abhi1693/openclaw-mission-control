@@ -231,9 +231,7 @@ async def test_unblock_endpoint_clears_the_loop_for_human_user(
 
     await _reject_cycle(session, board=board, task_id=task_id, actor=actor)
     await _reject_cycle(session, board=board, task_id=task_id, actor=actor)
-    last_approval_id = await _reject_cycle(
-        session, board=board, task_id=task_id, actor=actor
-    )
+    last_approval_id = await _reject_cycle(session, board=board, task_id=task_id, actor=actor)
 
     # Without unblock, a new submission is blocked
     with pytest.raises(HTTPException) as exc:
@@ -327,9 +325,7 @@ async def test_board_lead_agent_can_unblock(
     # Rack up 3 rejections
     await _reject_cycle(session, board=board, task_id=task_id, actor=user_actor)
     await _reject_cycle(session, board=board, task_id=task_id, actor=user_actor)
-    last = await _reject_cycle(
-        session, board=board, task_id=task_id, actor=user_actor
-    )
+    last = await _reject_cycle(session, board=board, task_id=task_id, actor=user_actor)
 
     lead = await _lead_agent(session, gateway.id, board.id)
     lead_actor = ActorContext(actor_type="agent", agent=lead)
@@ -500,9 +496,7 @@ async def test_create_approval_rejects_non_pending_status_for_all_actors(
                 actor=actor,
             )
         assert exc_approved.value.status_code == 400
-        assert "create_approval only accepts status='pending'" in str(
-            exc_approved.value.detail
-        )
+        assert "create_approval only accepts status='pending'" in str(exc_approved.value.detail)
 
         # status=rejected seed rejected
         with pytest.raises(HTTPException) as exc_rejected:
@@ -576,9 +570,9 @@ async def test_multi_task_approval_blocks_only_exceeded_tasks(
                 session=session,
                 actor=actor,
             )
-        assert exc.value.status_code == 409, (
-            f"Task {blocked_task_id} should be blocked after 3 batch rejections"
-        )
+        assert (
+            exc.value.status_code == 409
+        ), f"Task {blocked_task_id} should be blocked after 3 batch rejections"
 
     # Unrelated task C is untouched and must still be submittable.
     fresh_c = await approvals_api.create_approval(

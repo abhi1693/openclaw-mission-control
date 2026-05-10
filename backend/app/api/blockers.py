@@ -37,27 +37,21 @@ if TYPE_CHECKING:
 
     from app.models.boards import Board
 
-router = APIRouter(
-    prefix="/boards/{board_id}/tasks/{task_id}/blockers", tags=["blockers"]
-)
+router = APIRouter(prefix="/boards/{board_id}/tasks/{task_id}/blockers", tags=["blockers"])
 
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 TASK_DEP = Depends(get_task_or_404)
 
 
-async def _load_blocker(
-    session: "AsyncSession", *, task: Task, blocker_id: UUID
-) -> Blocker:
+async def _load_blocker(session: "AsyncSession", *, task: Task, blocker_id: UUID) -> Blocker:
     """Load a blocker scoped to the task, or raise 404.
 
     The task-scoped filter is load-bearing — it prevents cross-task
     self-FK reuse when filing a superseding blocker.
     """
 
-    blocker = await Blocker.objects.filter_by(
-        id=blocker_id, task_id=task.id
-    ).first(session)
+    blocker = await Blocker.objects.filter_by(id=blocker_id, task_id=task.id).first(session)
     if blocker is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return blocker
@@ -71,10 +65,14 @@ async def _task_has_other_open_blockers(
     Used to decide whether a resolve transition was the LAST open
     Blocker on the task — only that case warrants the lead wake.
     """
-    other = await Blocker.objects.filter_by(task_id=task.id).filter(
-        col(Blocker.id) != exclude_blocker_id,
-        col(Blocker.resolved_at).is_(None),
-    ).first(session)
+    other = (
+        await Blocker.objects.filter_by(task_id=task.id)
+        .filter(
+            col(Blocker.id) != exclude_blocker_id,
+            col(Blocker.resolved_at).is_(None),
+        )
+        .first(session)
+    )
     return other is not None
 
 
@@ -102,9 +100,7 @@ async def list_task_blockers(
     bodies even when every Blocker was resolved.
     """
     statement = (
-        Blocker.objects.filter_by(task_id=task.id)
-        .order_by(Blocker.created_at.desc())
-        .statement
+        Blocker.objects.filter_by(task_id=task.id).order_by(Blocker.created_at.desc()).statement
     )
     if status == "open":
         statement = statement.where(col(Blocker.resolved_at).is_(None))
@@ -124,9 +120,7 @@ async def create_task_blocker(
     """File a new blocker against the task."""
 
     if payload.supersedes_blocker_id is not None:
-        prior = await _load_blocker(
-            session, task=task, blocker_id=payload.supersedes_blocker_id
-        )
+        prior = await _load_blocker(session, task=task, blocker_id=payload.supersedes_blocker_id)
         if prior.resolved_at is None:
             prior.resolved_at = utcnow()
             session.add(prior)
@@ -178,9 +172,8 @@ async def create_task_blocker(
         # blocker filed second, auto-resolved immediately) silently leaves
         # the task actionable but un-routed.
         from app.services.blockers import task_has_open_blocker
-        if not await task_has_open_blocker(
-            session, board_id=board.id, task_id=task.id
-        ):
+
+        if not await task_has_open_blocker(session, board_id=board.id, task_id=task.id):
             await notify_lead_after_blocker_resolved(session=session, task=task)
     return BlockerRead.model_validate(blocker, from_attributes=True)
 
@@ -220,9 +213,7 @@ async def update_task_blocker(
                 detail="blocker already acknowledged",
             )
         blocker.acknowledged_at = utcnow()
-        blocker.acknowledged_by_agent_id = (
-            actor.agent.id if actor.agent is not None else None
-        )
+        blocker.acknowledged_by_agent_id = actor.agent.id if actor.agent is not None else None
         mutated = True
     elif payload.status_transition == "resolve":
         if blocker.resolved_at is not None:
@@ -246,7 +237,9 @@ async def update_task_blocker(
     # instead of waiting for the next 5min heartbeat tick. Symmetric
     # with review-event PASS waking the next reviewer in tasks.py.
     if payload.status_transition == "resolve" and not await _task_has_other_open_blockers(
-        session, task=task, exclude_blocker_id=blocker.id,
+        session,
+        task=task,
+        exclude_blocker_id=blocker.id,
     ):
         await notify_lead_after_blocker_resolved(session=session, task=task)
     return BlockerRead.model_validate(blocker, from_attributes=True)

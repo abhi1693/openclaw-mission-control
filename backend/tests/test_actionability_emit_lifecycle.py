@@ -126,12 +126,18 @@ async def test_drain_waits_for_pending_emits(
     a = uuid4()
     b = uuid4()
     _schedule_actionability_violation_emit(
-        task_id=a, board_id=None, agent_id=None,
-        status_value="in_progress", missing_fields=["validation_target"],
+        task_id=a,
+        board_id=None,
+        agent_id=None,
+        status_value="in_progress",
+        missing_fields=["validation_target"],
     )
     _schedule_actionability_violation_emit(
-        task_id=b, board_id=None, agent_id=None,
-        status_value="in_progress", missing_fields=["validation_target"],
+        task_id=b,
+        board_id=None,
+        agent_id=None,
+        status_value="in_progress",
+        missing_fields=["validation_target"],
     )
 
     await drain_actionability_emit_tasks()

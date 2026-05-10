@@ -24,6 +24,7 @@ from app.api.deps import (
     require_user_auth,
     require_user_or_agent,
 )
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db import crud
 from app.db.pagination import paginate
@@ -80,38 +81,7 @@ from app.services.approval_task_links import (
     load_task_ids_by_approval,
     pending_approval_conflicts_by_task,
 )
-from app.services.mentions import extract_mentions, matches_agent_mention
-from app.services.openclaw.gateway_dispatch import GatewayDispatchService
-from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
-from app.services.openclaw.gateway_rpc import OpenClawGatewayError
-from app.services.stale_agent_blocker import (
-    file_stale_agent_blocker_if_configured,
-)
-from app.services.openclaw.provisioning_db import AgentLifecycleService
-from app.core.logging import get_logger
-from app.services.comment_policy import apply_comment_signal_filter
-from app.services.organizations import require_board_access
 from app.services.background_emitter import BackgroundEmitter
-from app.services.deploy_truth import (
-    DeployTruthFetchError,
-    fetch_build_metadata,
-    packet_sha_matches_live,
-)
-from app.services.echo_guard import classify_for_echo
-from app.services.lane_quieting import should_suppress_comment_for_blocked_lane
-from app.services.shadow_metrics import (
-    build_shadow_events_for_comment,
-    emit_actionability_violation_metric,
-    emit_deploy_validation_degraded_metric,
-    emit_lane_quieting_suppressed_metric,
-)
-
-from app.services.tags import (
-    TagState,
-    load_tag_state,
-    replace_tags,
-    validate_tag_ids,
-)
 from app.services.blockers import (
     auto_resolve_pipeline_blockers_if_ready,
     open_blocker_reason_codes_by_task_id,
@@ -119,17 +89,50 @@ from app.services.blockers import (
     task_has_open_blocker,
     task_ids_with_open_blocker,
 )
+from app.services.comment_policy import apply_comment_signal_filter
+from app.services.deploy_truth import (
+    DeployTruthFetchError,
+    fetch_build_metadata,
+    packet_sha_matches_live,
+)
+from app.services.echo_guard import classify_for_echo
+from app.services.lane_quieting import should_suppress_comment_for_blocked_lane
+from app.services.lead_notify import (
+    notify_lead_after_blocker_resolved,
+    notify_lead_after_dependency_cleared,
+)
+from app.services.mentions import extract_mentions, matches_agent_mention
+from app.services.openclaw.gateway_dispatch import GatewayDispatchService
+from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+from app.services.openclaw.gateway_rpc import OpenClawGatewayError
+from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.operator_decisions import (
     pending_operator_decision_reason_codes_by_task_id,
     task_has_pending_operator_decision,
     task_ids_with_pending_operator_decision,
 )
+from app.services.organizations import require_board_access
 from app.services.parent_cascade import (
     TERMINAL_STATUSES,
     maybe_cascade_umbrella_close,
     maybe_retire_pure_container_umbrella,
     non_terminal_children_of,
     orphan_children_by_parent_id,
+)
+from app.services.shadow_metrics import (
+    build_shadow_events_for_comment,
+    emit_actionability_violation_metric,
+    emit_deploy_validation_degraded_metric,
+    emit_lane_quieting_suppressed_metric,
+)
+from app.services.stale_agent_blocker import (
+    file_stale_agent_blocker_if_configured,
+)
+from app.services.tags import (
+    TagState,
+    load_tag_state,
+    replace_tags,
+    validate_tag_ids,
 )
 from app.services.task_dependencies import (
     blocked_by_dependency_ids,
@@ -139,10 +142,6 @@ from app.services.task_dependencies import (
     dependent_task_ids,
     replace_task_dependencies,
     validate_dependency_update,
-)
-from app.services.lead_notify import (
-    notify_lead_after_blocker_resolved,
-    notify_lead_after_dependency_cleared,
 )
 from app.services.task_pipeline import (
     FRONTEND_REVIEW_PIPELINE_STATES,
@@ -201,26 +200,28 @@ ALLOWED_STATUSES = {"inbox", "in_progress", "review", "rework", "done", "cancell
 # across all three roles would either lose information (drop the
 # side conditions) or recreate the per-role logic anyway. Codex
 # finding C (2026-04-24) considered and deferred on those grounds.
-_AGENT_PATH_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset({
-    # forward progress
-    ("inbox", "in_progress"),
-    ("rework", "in_progress"),
-    ("in_progress", "review"),
-    # completion — subject to downstream gates (require_review_before_done,
-    # approval linkage, deploy-truth) that run AFTER this transition check
-    ("in_progress", "done"),
-    ("review", "done"),
-    # agent-initiated backward / abandon
-    ("in_progress", "inbox"),
-    ("rework", "inbox"),
-    ("in_progress", "rework"),
-    # no-op self-moves
-    ("inbox", "inbox"),
-    ("in_progress", "in_progress"),
-    ("review", "review"),
-    ("rework", "rework"),
-    ("done", "done"),
-})
+_AGENT_PATH_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # forward progress
+        ("inbox", "in_progress"),
+        ("rework", "in_progress"),
+        ("in_progress", "review"),
+        # completion — subject to downstream gates (require_review_before_done,
+        # approval linkage, deploy-truth) that run AFTER this transition check
+        ("in_progress", "done"),
+        ("review", "done"),
+        # agent-initiated backward / abandon
+        ("in_progress", "inbox"),
+        ("rework", "inbox"),
+        ("in_progress", "rework"),
+        # no-op self-moves
+        ("inbox", "inbox"),
+        ("in_progress", "in_progress"),
+        ("review", "review"),
+        ("rework", "rework"),
+        ("done", "done"),
+    }
+)
 TASK_EVENT_TYPES = {
     "task.created",
     "task.updated",
@@ -470,8 +471,7 @@ def _open_blocker_block_error(
         status_code=status.HTTP_409_CONFLICT,
         detail={
             "message": (
-                "Task has open structured Blockers; resolve them before "
-                "transitioning forward."
+                "Task has open structured Blockers; resolve them before " "transitioning forward."
             ),
             "code": "task_blocked_open_blocker_cannot_transition",
             "open_blocker_ids": [str(blocker_id) for blocker_id, _ in open_blockers],
@@ -512,9 +512,7 @@ async def _validate_parent_task_id(
     if parent is None:
         raise _invalid_parent_task_error(f"parent task {parent_task_id} not found")
     if parent.board_id != board_id:
-        raise _invalid_parent_task_error(
-            "parent task belongs to a different board"
-        )
+        raise _invalid_parent_task_error("parent task belongs to a different board")
     if parent.status in TERMINAL_STATUSES:
         raise _invalid_parent_task_error(
             f"parent task {parent_task_id} is already {parent.status}; "
@@ -640,6 +638,8 @@ async def _require_lane_quieting_allows_comment(
         log_key=str(task.id),
     )
     raise _lane_quieting_suppressed_error()
+
+
 ERROR_CODE_DEPLOY_TRUTH_SHA_MISMATCH = "task_deploy_truth_sha_mismatch"
 ERROR_CODE_DEPLOY_TRUTH_MISSING_PACKET_SHA = "task_deploy_truth_missing_packet_sha"
 ERROR_CODE_DEPLOY_TRUTH_UNREACHABLE = "task_deploy_truth_target_unreachable"
@@ -684,8 +684,7 @@ def _delivery_contract_incomplete_error(
         f"Task is not actionable for {status_value}; missing owner "
         "and/or delivery contract metadata."
         if owner_missing
-        else f"Task is missing delivery contract metadata required for "
-        f"{status_value}."
+        else f"Task is missing delivery contract metadata required for " f"{status_value}."
     )
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
@@ -772,9 +771,7 @@ def _task_is_blocked(
     )
 
 
-async def _require_operator_decision_task_not_active(
-    session: AsyncSession, task: Task
-) -> None:
+async def _require_operator_decision_task_not_active(session: AsyncSession, task: Task) -> None:
     """Transition guard for operator-decision-blocked tasks.
 
     Honours both the legacy ``Task.operator_decision_required`` flag
@@ -785,10 +782,11 @@ async def _require_operator_decision_task_not_active(
     silently advance the task (advisory-only enforcement).
     """
 
-    exempt_via_status = (
-        task.assigned_agent_id is None
-        and task.status in {"inbox", "done", "cancelled"}
-    )
+    exempt_via_status = task.assigned_agent_id is None and task.status in {
+        "inbox",
+        "done",
+        "cancelled",
+    }
     if exempt_via_status:
         return
     if task.operator_decision_required:
@@ -1079,9 +1077,7 @@ async def _require_deploy_truth(
             status_value=task.status,
         )
 
-    if not packet_sha_matches_live(
-        packet_sha=task.packet_commit_sha, live_sha=metadata.sha
-    ):
+    if not packet_sha_matches_live(packet_sha=task.packet_commit_sha, live_sha=metadata.sha):
         raise _deploy_truth_error(
             code=ERROR_CODE_DEPLOY_TRUTH_SHA_MISMATCH,
             message=(
@@ -1271,7 +1267,8 @@ async def _task_has_pending_linked_approval(
 
 
 async def _require_validator_status_invariant(
-    session: AsyncSession, task: Task,
+    session: AsyncSession,
+    task: Task,
 ) -> None:
     """Reject the (assignee=review-only validator, status=in_progress)
     state at write time.
@@ -1295,11 +1292,7 @@ async def _require_validator_status_invariant(
     assignee = await Agent.objects.by_id(task.assigned_agent_id).first(session)
     if assignee is None:
         return
-    profile = (
-        assignee.identity_profile
-        if isinstance(assignee.identity_profile, dict)
-        else {}
-    )
+    profile = assignee.identity_profile if isinstance(assignee.identity_profile, dict) else {}
     is_validator = (
         profile.get("validation_flow") == "qa_validation"
         or profile.get("dev_acp_flow") == "review_only"
@@ -1648,7 +1641,9 @@ async def _try_unblock_or_retire_dependent(
     if await blocked_by_for_task(session, board_id=board_id, task_id=dependent.id):
         return None
     if await task_has_open_blocker(
-        session, board_id=board_id, task_id=dependent.id,
+        session,
+        board_id=board_id,
+        task_id=dependent.id,
     ):
         return None
     if await maybe_retire_pure_container_umbrella(session, task=dependent):
@@ -1738,7 +1733,9 @@ async def _reconcile_dependents_for_dependency_toggle(
                 board_id=dependent.board_id,
             )
             unblocked = await _try_unblock_or_retire_dependent(
-                session, board_id=board_id, dependent=dependent,
+                session,
+                board_id=board_id,
+                dependent=dependent,
             )
             if unblocked is not None:
                 newly_unblocked.append(unblocked)
@@ -2173,7 +2170,6 @@ async def _notify_lead_on_task_unassigned(
         await session.commit()
 
 
-
 async def _notify_lead_on_end_work_event(
     *,
     session: AsyncSession,
@@ -2234,7 +2230,9 @@ async def _notify_lead_on_end_work_event(
         await session.rollback()
         logger.warning(
             "end-work notify suppressed: %s (task=%s reason=%s)",
-            exc, task.id, reason,
+            exc,
+            task.id,
+            reason,
         )
 
 
@@ -2584,10 +2582,8 @@ async def _task_read_page(
     open_blocker_codes_by_task_id = await open_blocker_reason_codes_by_task_id(
         session, board_id=board_id, task_ids=task_ids
     )
-    pending_decision_codes_by_task_id = (
-        await pending_operator_decision_reason_codes_by_task_id(
-            session, board_id=board_id, task_ids=task_ids
-        )
+    pending_decision_codes_by_task_id = await pending_operator_decision_reason_codes_by_task_id(
+        session, board_id=board_id, task_ids=task_ids
     )
     terminal_parent_ids = [t.id for t in tasks if t.status in TERMINAL_STATUSES]
     orphan_children_map = (
@@ -2619,14 +2615,14 @@ async def _task_read_page(
                         task,
                         blocked_by,
                         has_open_blocker=task.id in blocked_task_ids,
-                        has_pending_operator_decision=(
-                            task.id in pending_decision_task_ids
-                        ),
+                        has_pending_operator_decision=(task.id in pending_decision_task_ids),
                     ),
                     "custom_field_values": custom_field_values_by_task_id.get(task.id, {}),
                     "orphan_child_task_ids": orphan_children_map.get(task.id, []),
                     "open_blocker_reason_codes": open_blocker_codes_by_task_id.get(task.id, []),
-                    "pending_operator_decision_reason_codes": pending_decision_codes_by_task_id.get(task.id, []),
+                    "pending_operator_decision_reason_codes": pending_decision_codes_by_task_id.get(
+                        task.id, []
+                    ),
                 },
             ),
         )
@@ -2673,10 +2669,8 @@ async def _stream_task_state(
     blocked_task_ids = await task_ids_with_open_blocker(
         session, board_id=board_id, task_ids=unique_task_ids
     )
-    pending_decision_task_ids = (
-        await task_ids_with_pending_operator_decision(
-            session, board_id=board_id, task_ids=unique_task_ids
-        )
+    pending_decision_task_ids = await task_ids_with_pending_operator_decision(
+        session, board_id=board_id, task_ids=unique_task_ids
     )
     dep_status: dict[UUID, str] = {}
     if dep_ids:
@@ -2740,10 +2734,7 @@ def _task_event_payload(
                 "is_blocked": _task_is_blocked(
                     task,
                     blocked_by,
-                    has_open_blocker=(
-                        blocked_task_ids is not None
-                        and task.id in blocked_task_ids
-                    ),
+                    has_open_blocker=(blocked_task_ids is not None and task.id in blocked_task_ids),
                     has_pending_operator_decision=(
                         pending_decision_task_ids is not None
                         and task.id in pending_decision_task_ids
@@ -2904,7 +2895,9 @@ async def create_task(
     )
     if blocked_by and (task.assigned_agent_id is not None or task.status != "inbox"):
         raise _blocked_task_error(blocked_by)
-    if task.operator_decision_required and (task.assigned_agent_id is not None or task.status != "inbox"):
+    if task.operator_decision_required and (
+        task.assigned_agent_id is not None or task.status != "inbox"
+    ):
         raise _operator_decision_block_error(task.operator_decision_summary)
     await _validate_parent_task_id(
         session,
@@ -3061,9 +3054,7 @@ _PIPELINE_EVENT_REJECTED_STATUSES: Final[frozenset[str]] = frozenset(
 # `if ... raise` (not `assert`) so the invariant survives `python -O`,
 # which strips assertions.
 if _PIPELINE_EVENT_REJECTED_STATUSES != STATUS_GATES["pipeline_event_rejected"]:
-    raise RuntimeError(
-        "pipeline-event rejected statuses drifted from schemas.tasks.STATUS_GATES"
-    )
+    raise RuntimeError("pipeline-event rejected statuses drifted from schemas.tasks.STATUS_GATES")
 
 
 def _pipeline_event_requires_in_progress_error(*, current_status: str) -> HTTPException:
@@ -3165,9 +3156,7 @@ async def get_task_pipeline_state(
         ready=not missing_states,
         events=[_task_pipeline_event_read(event) for event in events],
         latest_fallback_step=(
-            _task_pipeline_event_read(latest_fallback)
-            if latest_fallback is not None
-            else None
+            _task_pipeline_event_read(latest_fallback) if latest_fallback is not None else None
         ),
     )
 
@@ -3241,9 +3230,7 @@ async def record_task_pipeline_event(
                     if not await task_has_open_blocker(
                         session, board_id=task.board_id, task_id=task.id
                     ):
-                        await notify_lead_after_blocker_resolved(
-                            session=session, task=task
-                        )
+                        await notify_lead_after_blocker_resolved(session=session, task=task)
                 return _task_pipeline_event_read(existing)
     event = TaskPipelineEvent(
         board_id=task.board_id,
@@ -3273,12 +3260,8 @@ async def record_task_pipeline_event(
     )
     if resolved_count:
         await session.commit()
-        if not await task_has_open_blocker(
-            session, board_id=task.board_id, task_id=task.id
-        ):
-            await notify_lead_after_blocker_resolved(
-                session=session, task=task
-            )
+        if not await task_has_open_blocker(session, board_id=task.board_id, task_id=task.id):
+            await notify_lead_after_blocker_resolved(session=session, task=task)
     return _task_pipeline_event_read(event)
 
 
@@ -3366,7 +3349,10 @@ async def _notify_lead_on_review_event(
 
 
 _REVIEWER_ROLES_REQUIRING_SUPERVISOR_CITATION = {
-    "architect", "qa_unit", "qa_e2e", "devops",
+    "architect",
+    "qa_unit",
+    "qa_e2e",
+    "devops",
 }
 
 _LEAD_CITATION_PATTERN = re.compile(r"@(?:Supervisor|lead)\b")
@@ -3515,9 +3501,8 @@ async def _require_review_event_artifact_completeness(
     if payload.verdict != "pass":
         return
 
-    if (
-        payload.reviewer_role == "qa_e2e"
-        and "qa_e2e" in required_review_roles(task.review_packet_type)
+    if payload.reviewer_role == "qa_e2e" and "qa_e2e" in required_review_roles(
+        task.review_packet_type
     ):
         issues = qa_e2e_pass_evidence_issues(
             evidence_type=payload.evidence_type,
@@ -3545,10 +3530,7 @@ async def _require_review_event_artifact_completeness(
                 },
             )
 
-    if (
-        payload.reviewer_role != "architect"
-        or task.review_packet_type != "review_only"
-    ):
+    if payload.reviewer_role != "architect" or task.review_packet_type != "review_only":
         return
     evidence = payload.evidence if isinstance(payload.evidence, dict) else {}
     if evidence.get("no_child_tasks_required") is True:
@@ -3639,7 +3621,10 @@ async def record_task_review_event(
     _require_reviewer_role_allowed(actor=actor, reviewer_role=payload.reviewer_role)
     await _require_review_event_artifact_completeness(payload, task, session)
     await _require_supervisor_citation_in_verdict_comment(
-        payload, task, session, actor_agent_id=agent_id,
+        payload,
+        task,
+        session,
+        actor_agent_id=agent_id,
     )
     event = TaskReviewEvent(
         board_id=task.board_id,
@@ -3764,7 +3749,9 @@ async def record_task_review_event(
         except Exception:
             logger.exception(
                 "next_reviewer_wake.unexpected board_id=%s task_id=%s event_id=%s",
-                task.board_id, task.id, event.id,
+                task.board_id,
+                task.id,
+                event.id,
             )
     try:
         await _notify_lead_on_review_event(session=session, task=task, event=event)
@@ -3849,7 +3836,7 @@ async def _apply_review_anti_loop_signals(
         streak.append(ev)
     if len(streak) < _ANTI_LOOP_SUMMON_THRESHOLD:
         return
-    if any((ev.target or None) != target for ev in streak[: _ANTI_LOOP_SUMMON_THRESHOLD]):
+    if any((ev.target or None) != target for ev in streak[:_ANTI_LOOP_SUMMON_THRESHOLD]):
         return
 
     await _post_idempotent_marker(
@@ -4320,10 +4307,7 @@ async def _notify_task_comment_targets(
                 session,
                 event_type="task.comment_notify_failed",
                 task_id=request.task.id,
-                message=(
-                    f"Failed to notify {agent.name} "
-                    f"(deliver={should_deliver}): {error}"
-                ),
+                message=(f"Failed to notify {agent.name} " f"(deliver={should_deliver}): {error}"),
                 agent_id=agent.id,
             )
 
@@ -4430,9 +4414,7 @@ async def _task_read_response(
     )
     if _status_clears_blockers(task.status):
         blocked_ids = []
-    has_open_blocker = await task_has_open_blocker(
-        session, board_id=board_id, task_id=task.id
-    )
+    has_open_blocker = await task_has_open_blocker(session, board_id=board_id, task_id=task.id)
     has_pending_decision = await task_has_pending_operator_decision(
         session, board_id=board_id, task_id=task.id
     )
@@ -4676,13 +4658,9 @@ async def _lead_apply_status(
             # review-only), use ``review`` instead of ``in_progress``.
             # Validators only process review-status tasks — assigning
             # them as in_progress leaves the task in a dead state.
-            target_agent_id = _optional_assigned_agent_id(
-                update.updates["assigned_agent_id"]
-            )
+            target_agent_id = _optional_assigned_agent_id(update.updates["assigned_agent_id"])
             if target_agent_id is not None:
-                target_agent = await Agent.objects.by_id(target_agent_id).first(
-                    session
-                )
+                target_agent = await Agent.objects.by_id(target_agent_id).first(session)
                 if target_agent is not None:
                     profile = (
                         target_agent.identity_profile
@@ -4888,9 +4866,7 @@ async def _apply_lead_task_update(
         if attempted_transition:
             raise _blocked_task_error(blocked_by)
     attempted_fields = set(update.updates.keys())
-    attempted_transition = (
-        "assigned_agent_id" in attempted_fields or "status" in attempted_fields
-    )
+    attempted_transition = "assigned_agent_id" in attempted_fields or "status" in attempted_fields
     # Phase V §I9 — open structured ``Blocker`` rows must veto forward
     # status transitions (in_progress/review/done) on the lead path,
     # mirroring the dependency and OperatorDecision vetoes above. Until
@@ -4913,10 +4889,7 @@ async def _apply_lead_task_update(
             )
             if open_blockers:
                 raise _open_blocker_block_error(open_blockers)
-    if (
-        "operator_decision_required" in attempted_fields
-        and effective_operator_decision_required
-    ):
+    if "operator_decision_required" in attempted_fields and effective_operator_decision_required:
         target_status = _required_status_value(
             update.updates.get("status", update.task.status),
         )
@@ -5015,7 +4988,8 @@ async def _apply_lead_task_update(
 
     await _require_validator_status_invariant(session, update.task)
     await _require_pipeline_complete_for_review(
-        session, update=update,
+        session,
+        update=update,
     )
     await _require_no_pending_approval_for_status_change_when_enabled(
         session,
@@ -5088,9 +5062,7 @@ async def _apply_lead_task_update(
     # without this, lead-driven terminal transitions silently leave
     # retired umbrellas in inbox forever (codex review 2026-05-03).
     if update.task.status in TERMINAL_STATUSES:
-        cascaded_parent = await maybe_cascade_umbrella_close(
-            session, task=update.task
-        )
+        cascaded_parent = await maybe_cascade_umbrella_close(session, task=update.task)
         if cascaded_parent is not None:
             await session.commit()
     return await _task_read_response(
@@ -5210,10 +5182,7 @@ async def _apply_non_lead_agent_task_rules(
         # Fires only on real status changes, leaving the no-op
         # claim PATCH (``status=in_progress`` while already
         # in_progress, used to assign the actor) unaffected.
-        if (
-            status_value in {"in_progress", "review", "done"}
-            and status_value != update.task.status
-        ):
+        if status_value in {"in_progress", "review", "done"} and status_value != update.task.status:
             open_blockers = await open_blocker_summary_for_task(
                 session,
                 board_id=update.board_id,
@@ -5416,9 +5385,7 @@ async def _record_task_comment_from_update(
     # so the whole PATCH (task mutation + comment) commits atomically
     # or rejects atomically. No second gate call here.
     agent_id = (
-        update.actor.agent.id
-        if update.actor.actor_type == "agent" and update.actor.agent
-        else None
+        update.actor.agent.id if update.actor.actor_type == "agent" and update.actor.agent else None
     )
     event = ActivityEvent(
         event_type="task.comment",
@@ -5770,10 +5737,7 @@ async def _finalize_updated_task(
     # persisted while the caller sees a 403. Check the gate here,
     # pre-commit, so the whole PATCH either lands atomically or
     # rejects atomically.
-    if (
-        update.comment is not None
-        and update.comment.strip()
-    ):
+    if update.comment is not None and update.comment.strip():
         _validate_task_comment_format_for_actor(update.comment, update.actor)
         _require_rendered_live_pass_has_browser_evidence(update.comment, update.actor)
         if update.updates.get("status") != "rework":
@@ -5782,9 +5746,7 @@ async def _finalize_updated_task(
                 message=update.comment,
                 actor=update.actor,
             )
-        await _require_lane_quieting_allows_comment(
-            session, task=update.task, actor=update.actor
-        )
+        await _require_lane_quieting_allows_comment(session, task=update.task, actor=update.actor)
         await _require_echo_guard_allows_comment(
             session,
             task=update.task,
@@ -5866,7 +5828,8 @@ async def _finalize_updated_task(
             raise _comment_validation_error()
     await _require_worker_review_evidence_packet(session, update=update)
     await _require_pipeline_complete_for_review(
-        session, update=update,
+        session,
+        update=update,
     )
     if status_raw == "review" and _actor_is_implementation_agent(update.actor):
         update.task.rework_started_at = None
@@ -5904,10 +5867,7 @@ async def _finalize_updated_task(
     # Wake the lead immediately when a worker moves a task to review
     # or resubmits from rework, so the Supervisor doesn't wait for
     # the next heartbeat to start routing reviewers.
-    if (
-        update.task.status == "review"
-        and update.previous_status in ("in_progress", "rework")
-    ):
+    if update.task.status == "review" and update.previous_status in ("in_progress", "rework"):
         await _notify_lead_on_end_work_event(
             session=session,
             task=update.task,
@@ -5917,9 +5877,7 @@ async def _finalize_updated_task(
     # parent retires the parent (and its grandparent, recursively).
     # Without this, retired-umbrella rows accumulate in inbox forever.
     if update.task.status in TERMINAL_STATUSES:
-        cascaded_parent = await maybe_cascade_umbrella_close(
-            session, task=update.task
-        )
+        cascaded_parent = await maybe_cascade_umbrella_close(session, task=update.task)
         if cascaded_parent is not None:
             await session.commit()
 
@@ -5946,9 +5904,7 @@ async def create_task_comment(
         message=payload.message,
         actor=actor,
     )
-    await _require_lane_quieting_allows_comment(
-        session, task=task, actor=actor
-    )
+    await _require_lane_quieting_allows_comment(session, task=task, actor=actor)
     await _require_echo_guard_allows_comment(
         session, task=task, actor=actor, message=payload.message
     )

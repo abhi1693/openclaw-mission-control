@@ -54,19 +54,13 @@ async def _purge_table(
     return int(getattr(result, "rowcount", 0) or 0)
 
 
-async def purge_shadow_metric_events_once(
-    session: AsyncSession, *, retention_days: int
-) -> int:
+async def purge_shadow_metric_events_once(session: AsyncSession, *, retention_days: int) -> int:
     """Delete shadow_metric_events rows older than ``retention_days`` days."""
 
-    return await _purge_table(
-        session, model=ShadowMetricEvent, retention_days=retention_days
-    )
+    return await _purge_table(session, model=ShadowMetricEvent, retention_days=retention_days)
 
 
-async def purge_heartbeat_repair_events_once(
-    session: AsyncSession, *, retention_days: int
-) -> int:
+async def purge_heartbeat_repair_events_once(session: AsyncSession, *, retention_days: int) -> int:
     """Delete agent_heartbeat_repair_events rows older than ``retention_days``."""
 
     return await _purge_table(
@@ -95,9 +89,7 @@ async def run_retention_purge_once(retention_days: int) -> dict[str, int]:
     }
 
 
-async def retention_purge_loop(
-    stop_event: asyncio.Event, *, retention_days: int
-) -> None:
+async def retention_purge_loop(stop_event: asyncio.Event, *, retention_days: int) -> None:
     """Long-running task: daily purge until stopped.
 
     Runs the sweep immediately on startup (so a freshly-restarted worker
@@ -133,9 +125,7 @@ async def retention_purge_loop(
         logger.info("retention_purge.loop_stopped")
 
 
-async def stop_retention_purge(
-    task: asyncio.Task[None] | None, stop_event: asyncio.Event
-) -> None:
+async def stop_retention_purge(task: asyncio.Task[None] | None, stop_event: asyncio.Event) -> None:
     """Graceful shutdown for the retention purge loop."""
 
     stop_event.set()

@@ -87,8 +87,7 @@ _NEG_EVIDENCE_PARTS: tuple[re.Pattern[str], ...] = (
     # `FAIL\s*:\b` form was broken — `\b` after `:` needed a following
     # word char, which `FAIL: 1 test failing` never provides).
     re.compile(
-        r"\b(PASS|FAIL|running tests?|lighthouse|playwright|vitest|"
-        r"build PASS|HTTP \d{3})\b"
+        r"\b(PASS|FAIL|running tests?|lighthouse|playwright|vitest|" r"build PASS|HTTP \d{3})\b"
     ),
 )
 
@@ -148,6 +147,7 @@ def has_new_negative_evidence(message: str, prior: str | None) -> bool:
     if prior is None:
         return True
     return bool(current - evidence_markers(prior))
+
 
 # Routing/hand-off verbs. The verb alone is sufficient signal — requiring
 # a specific follower (to|back|this|it|up|over) missed bare "reassigning"

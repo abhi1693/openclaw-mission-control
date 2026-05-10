@@ -164,8 +164,7 @@ async def task_ids_with_children(
         .distinct()
     )
     return frozenset(
-        parent_id for parent_id in (await session.exec(stmt)).all()
-        if parent_id is not None
+        parent_id for parent_id in (await session.exec(stmt)).all() if parent_id is not None
     )
 
 
@@ -252,7 +251,8 @@ async def maybe_cascade_umbrella_close(
         logger.warning(
             "umbrella cascade truncated at MAX_DEPTH=%d (last cancelled task=%s); "
             "check parent_task_id chain for unexpected depth or cycles",
-            _UMBRELLA_CASCADE_MAX_DEPTH, cursor.id,
+            _UMBRELLA_CASCADE_MAX_DEPTH,
+            cursor.id,
         )
         record_activity(
             session,
@@ -280,9 +280,7 @@ async def _qualifying_umbrella_parent(
     if parent_id is None:
         return None
 
-    parent = (
-        await session.exec(select(Task).where(col(Task.id) == parent_id))
-    ).first()
+    parent = (await session.exec(select(Task).where(col(Task.id) == parent_id))).first()
     if parent is None:
         return None
     if parent.status != "inbox":
@@ -300,7 +298,9 @@ async def _qualifying_umbrella_parent(
 
     if parent.board_id is not None:
         retired_ids = await task_ids_with_umbrella_retired_marker(
-            session, board_id=parent.board_id, task_ids=[parent.id],
+            session,
+            board_id=parent.board_id,
+            task_ids=[parent.id],
         )
         if parent.id not in retired_ids:
             return None
@@ -350,30 +350,41 @@ async def maybe_retire_pure_container_umbrella(
         return False
 
     retired_ids = await task_ids_with_umbrella_retired_marker(
-        session, board_id=task.board_id, task_ids=[task.id],
+        session,
+        board_id=task.board_id,
+        task_ids=[task.id],
     )
     if task.id not in retired_ids:
         return False
 
     deps_map = await dependency_ids_by_task_id(
-        session, board_id=task.board_id, task_ids=[task.id],
+        session,
+        board_id=task.board_id,
+        task_ids=[task.id],
     )
     dep_ids = deps_map.get(task.id, [])
     if not dep_ids:
         return False
     remaining = await blocked_by_for_task(
-        session, board_id=task.board_id, task_id=task.id, dependency_ids=dep_ids,
+        session,
+        board_id=task.board_id,
+        task_id=task.id,
+        dependency_ids=dep_ids,
     )
     if remaining:
         return False
 
     if await task_has_open_blocker(
-        session, board_id=task.board_id, task_id=task.id,
+        session,
+        board_id=task.board_id,
+        task_id=task.id,
     ):
         return False
 
     open_children = await non_terminal_children_of(
-        session, board_id=task.board_id, parent_task_id=task.id,
+        session,
+        board_id=task.board_id,
+        parent_task_id=task.id,
     )
     if open_children:
         return False
@@ -443,9 +454,7 @@ async def maybe_cascade_umbrella_close_by_id(
     task_id: UUID,
 ) -> Task | None:
     """Convenience wrapper for paths that only carry the task id."""
-    task = (
-        await session.exec(select(Task).where(col(Task.id) == task_id))
-    ).first()
+    task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
     if task is None:
         return None
     return await maybe_cascade_umbrella_close(session, task=task)

@@ -20,6 +20,7 @@ from app.api.deps import (
     require_user_or_agent,
 )
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
@@ -27,11 +28,11 @@ from app.models.agents import Agent
 from app.models.board_memory import BoardMemory
 from app.schemas.board_memory import BoardMemoryCreate, BoardMemoryRead
 from app.schemas.pagination import DefaultLimitOffsetPage
-from app.core.logging import get_logger
 from app.services.board_memory_intake import reconcile_board_memory_intake
 from app.services.mentions import extract_mentions, matches_agent_mention
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
-from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig, openclaw_call
+from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+from app.services.openclaw.gateway_rpc import openclaw_call
 
 logger = get_logger(__name__)
 
@@ -187,8 +188,7 @@ async def _send_control_command(
             str(exc),
         )
     logger.info(
-        "board_memory.control_command.heartbeats "
-        "command=%s board_id=%s enabled=%s",
+        "board_memory.control_command.heartbeats " "command=%s board_id=%s enabled=%s",
         command,
         board.id,
         enable,

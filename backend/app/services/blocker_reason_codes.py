@@ -28,9 +28,9 @@ from uuid import UUID
 
 ReasonCodeClass = Literal[
     "infra_self_resolvable",  # gateway / runtime issues that may have recovered
-    "deploy_drift",           # source vs. live target divergence; recheck mechanically
-    "external_dependency",    # waiting on a vendor/3rd-party signal
-    "operator_durable",       # human policy/judgment; never auto-revalidates
+    "deploy_drift",  # source vs. live target divergence; recheck mechanically
+    "external_dependency",  # waiting on a vendor/3rd-party signal
+    "operator_durable",  # human policy/judgment; never auto-revalidates
 ]
 
 # Static union of recognised codes. Adding a new code requires editing
@@ -76,8 +76,7 @@ assert set(get_args(KnownReasonCode)) == set(_CODE_CLASS), (
 # operator_durable codes — those represent human decisions we don't
 # auto-clear on infra recovery.
 AUTO_REVALIDATABLE_CODES: Final[frozenset[str]] = frozenset(
-    code for code, cls in _CODE_CLASS.items()
-    if cls in {"infra_self_resolvable", "deploy_drift"}
+    code for code, cls in _CODE_CLASS.items() if cls in {"infra_self_resolvable", "deploy_drift"}
 )
 
 

@@ -152,19 +152,13 @@ def _evaluate_gate(
     for rule in (ClassifierFlag.ACK_ONLY.value, ClassifierFlag.NEAR_DUPLICATE.value):
         hrate = healthy.rule_rate(rule)
         if hrate > HEALTHY_MAX_FLAG_RATE:
-            failures.append(
-                f"healthy[{rule}]: {hrate:.1%} > {HEALTHY_MAX_FLAG_RATE:.0%} gate"
-            )
+            failures.append(f"healthy[{rule}]: {hrate:.1%} > {HEALTHY_MAX_FLAG_RATE:.0%} gate")
         prate = pathological.rule_rate(rule)
         lo, hi = PATHOLOGICAL_TARGETS[rule]
         if prate < lo:
-            failures.append(
-                f"pathological[{rule}]: {prate:.1%} < {lo:.0%} gate"
-            )
+            failures.append(f"pathological[{rule}]: {prate:.1%} < {lo:.0%} gate")
         if prate > hi:
-            failures.append(
-                f"pathological[{rule}]: {prate:.1%} > {hi:.0%} gate"
-            )
+            failures.append(f"pathological[{rule}]: {prate:.1%} > {hi:.0%} gate")
 
     # Per-packet healthy gate
     for packet, total in healthy.per_packet_total.items():
@@ -175,8 +169,7 @@ def _evaluate_gate(
             rate = counts.get(rule, 0) / total
             if rate > HEALTHY_MAX_FLAG_RATE:
                 failures.append(
-                    f"healthy[{packet}][{rule}]: {rate:.1%} > "
-                    f"{HEALTHY_MAX_FLAG_RATE:.0%} gate"
+                    f"healthy[{packet}][{rule}]: {rate:.1%} > " f"{HEALTHY_MAX_FLAG_RATE:.0%} gate"
                 )
     return failures
 
@@ -209,8 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         "gates": {
             "healthy_max_flag_rate": HEALTHY_MAX_FLAG_RATE,
             "pathological_targets": {
-                rule: {"min": lo, "max": hi}
-                for rule, (lo, hi) in PATHOLOGICAL_TARGETS.items()
+                rule: {"min": lo, "max": hi} for rule, (lo, hi) in PATHOLOGICAL_TARGETS.items()
             },
         },
         "failures": failures,

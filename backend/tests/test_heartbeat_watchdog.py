@@ -299,7 +299,8 @@ async def test_sweep_does_not_alert_on_first_repair(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("disabled_value", ["off", "none", "disabled", "0m", "0"])
 async def test_sweep_skips_disabled_heartbeat_spellings(
-    monkeypatch: pytest.MonkeyPatch, disabled_value: str,
+    monkeypatch: pytest.MonkeyPatch,
+    disabled_value: str,
 ) -> None:
     """Agents with explicitly-disabled heartbeat must not be repaired.
 
@@ -489,6 +490,7 @@ async def test_auth_status_fetch_timeout_survives_to_null(
 
         async def exec(self, _stmt: Any) -> Any:
             from app.models.gateways import Gateway
+
             gw = Gateway(
                 id=self.gateway_id,
                 organization_id=uuid4(),

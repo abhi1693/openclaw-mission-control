@@ -119,9 +119,7 @@ async def _seed_payload(
 async def test_agent_can_fetch_webhook_payload(
     sqlite_engine: AsyncEngine, sqlite_session: AsyncSession
 ) -> None:
-    session_maker = async_sessionmaker(
-        sqlite_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
     app = _build_test_app(session_maker)
 
     token, board, webhook, payload = await _seed_payload(sqlite_session)
@@ -145,9 +143,7 @@ async def test_agent_can_fetch_webhook_payload(
 async def test_agent_payload_read_rejects_invalid_token(
     sqlite_engine: AsyncEngine, sqlite_session: AsyncSession
 ) -> None:
-    session_maker = async_sessionmaker(
-        sqlite_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
     app = _build_test_app(session_maker)
 
     _token, board, webhook, payload = await _seed_payload(sqlite_session)
@@ -165,9 +161,7 @@ async def test_agent_payload_read_rejects_invalid_token(
 async def test_agent_payload_read_truncates_json_preview_with_ellipsis(
     sqlite_engine: AsyncEngine, sqlite_session: AsyncSession
 ) -> None:
-    session_maker = async_sessionmaker(
-        sqlite_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
     app = _build_test_app(session_maker)
 
     payload_value: dict[str, object] = {"event": "push", "ref": "refs/heads/master"}
@@ -195,14 +189,10 @@ async def test_agent_payload_read_truncates_json_preview_with_ellipsis(
 async def test_agent_payload_read_truncates_string_preview_without_json_quoting(
     sqlite_engine: AsyncEngine, sqlite_session: AsyncSession
 ) -> None:
-    session_maker = async_sessionmaker(
-        sqlite_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
     app = _build_test_app(session_maker)
 
-    token, board, webhook, payload = await _seed_payload(
-        sqlite_session, payload_value="abcdef"
-    )
+    token, board, webhook, payload = await _seed_payload(sqlite_session, payload_value="abcdef")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
@@ -220,9 +210,7 @@ async def test_agent_payload_read_truncates_string_preview_without_json_quoting(
 async def test_agent_payload_read_rejects_cross_board_access(
     sqlite_engine: AsyncEngine, sqlite_session: AsyncSession
 ) -> None:
-    session_maker = async_sessionmaker(
-        sqlite_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_maker = async_sessionmaker(sqlite_engine, class_=AsyncSession, expire_on_commit=False)
     app = _build_test_app(session_maker)
 
     token, board, webhook, payload = await _seed_payload(sqlite_session)

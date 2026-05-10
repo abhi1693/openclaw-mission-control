@@ -10,9 +10,9 @@ from uuid import UUID
 from sqlalchemy import desc
 from sqlmodel import col, select
 
-from app.models.tasks import Task
 from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.task_review_events import TaskReviewEvent
+from app.models.tasks import Task
 from app.schemas.task_pipeline_events import TaskPipelineEventRead
 from app.schemas.task_review_events import TaskReviewEventRead, TaskReviewReadinessRead
 from app.services.task_pipeline import (
@@ -276,9 +276,13 @@ def build_review_readiness(
         )
     )
     artifact_issues.extend(review_only_artifact_issues)
-    ready = bool(required_roles) and not missing_roles and not blocking_roles and all(
-        latest_by_role[role].verdict == PASS_VERDICT for role in required_roles
-    ) and not artifact_issues
+    ready = (
+        bool(required_roles)
+        and not missing_roles
+        and not blocking_roles
+        and all(latest_by_role[role].verdict == PASS_VERDICT for role in required_roles)
+        and not artifact_issues
+    )
     fallback_payload: TaskPipelineEventRead | None = None
     if latest_fallback_step is not None:
         fallback_payload = TaskPipelineEventRead.model_validate(
@@ -398,9 +402,7 @@ async def get_task_review_readiness_batch(
 
     task_ids = [task.id for task in tasks]
     events_by_task = await list_task_review_events_for_tasks(session, task_ids=task_ids)
-    fallback_by_task = await fetch_latest_model_fallback_steps_for_tasks(
-        session, task_ids=task_ids
-    )
+    fallback_by_task = await fetch_latest_model_fallback_steps_for_tasks(session, task_ids=task_ids)
 
     out: dict[UUID, TaskReviewReadinessRead] = {}
     for task in tasks:
@@ -410,11 +412,7 @@ async def get_task_review_readiness_batch(
             events = [event for event in events if event.created_at >= since]
 
         latest_fallback = fallback_by_task.get(task.id)
-        if (
-            latest_fallback is not None
-            and since is not None
-            and latest_fallback.created_at < since
-        ):
+        if latest_fallback is not None and since is not None and latest_fallback.created_at < since:
             latest_fallback = None
 
         board_task_ids = (

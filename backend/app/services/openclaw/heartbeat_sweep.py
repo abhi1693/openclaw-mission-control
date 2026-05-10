@@ -36,6 +36,7 @@ STUCK_TASK_THRESHOLD = timedelta(minutes=60)
 # Maps task_id → last nudge timestamp. Pruned each cycle.
 NUDGE_COOLDOWN = timedelta(minutes=60)
 from datetime import datetime as _datetime_type
+
 _recently_nudged_tasks: dict[str, _datetime_type] = {}
 
 
@@ -143,9 +144,7 @@ async def sweep_once() -> dict[str, int]:
 
     async with async_session_maker() as session:
         agents = (
-            await session.exec(
-                select(Agent).where(Agent.checkin_deadline_at.is_not(None))
-            )
+            await session.exec(select(Agent).where(Agent.checkin_deadline_at.is_not(None)))
         ).all()
 
         for agent in agents:
@@ -163,7 +162,9 @@ async def sweep_once() -> dict[str, int]:
             if agent.wake_attempts >= MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN:
                 agent.status = "offline"
                 agent.checkin_deadline_at = None
-                agent.last_provision_error = "Heartbeat sweep marked agent offline after max wake attempts"
+                agent.last_provision_error = (
+                    "Heartbeat sweep marked agent offline after max wake attempts"
+                )
                 agent.updated_at = now
                 session.add(agent)
                 await session.commit()
@@ -286,7 +287,7 @@ async def sweep_stuck_tasks() -> dict[str, int]:
 
             age_min = int((now - task.updated_at).total_seconds() / 60)
             nudge_message = (
-                f"SWEEP: Task \"{task.title}\" ({task.id}) has been in_progress "
+                f'SWEEP: Task "{task.title}" ({task.id}) has been in_progress '
                 f"for {age_min} min with no status update. "
                 f"Post a progress comment or report a blocker. @lead"
             )
@@ -319,18 +320,16 @@ async def sweep_stuck_tasks() -> dict[str, int]:
                 )
             else:
                 logger.warning(
-                    "heartbeat_sweep.stuck_task_nudge_failed task_id=%s "
-                    "agent_id=%s error=%s",
+                    "heartbeat_sweep.stuck_task_nudge_failed task_id=%s " "agent_id=%s error=%s",
                     task.id,
                     agent.id,
                     str(error),
                 )
 
     # Prune entries older than the cooldown so they can be re-nudged.
-    _recently_nudged_tasks.update({
-        k: v for k, v in list(_recently_nudged_tasks.items())
-        if (now - v) < NUDGE_COOLDOWN
-    })
+    _recently_nudged_tasks.update(
+        {k: v for k, v in list(_recently_nudged_tasks.items()) if (now - v) < NUDGE_COOLDOWN}
+    )
     # Remove expired entries
     for k in list(_recently_nudged_tasks):
         if (now - _recently_nudged_tasks[k]) >= NUDGE_COOLDOWN:

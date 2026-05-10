@@ -120,8 +120,7 @@ async def test_dependency_queries_and_replace_and_dependents(
 
     # cover empty input short-circuit
     assert (
-        await td.dependency_status_by_id(sqlite_session, board_id=board_id, dependency_ids=[])
-        == {}
+        await td.dependency_status_by_id(sqlite_session, board_id=board_id, dependency_ids=[]) == {}
     )
 
     status_map = await td.dependency_status_by_id(
@@ -151,9 +150,7 @@ async def test_dependency_queries_and_replace_and_dependents(
     await sqlite_session.commit()
     assert out == [t3]
 
-    deps_map2 = await td.dependency_ids_by_task_id(
-        sqlite_session, board_id=board_id, task_ids=[t1]
-    )
+    deps_map2 = await td.dependency_ids_by_task_id(sqlite_session, board_id=board_id, task_ids=[t1])
     assert deps_map2[t1] == [t3]
 
     dependents = await td.dependent_task_ids(

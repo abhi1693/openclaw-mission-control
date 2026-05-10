@@ -13,9 +13,8 @@ section A.1 (failure mode F1).
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID, uuid4
-
 from typing import Any
+from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, Column, ForeignKey, Index, Uuid
 from sqlmodel import Field

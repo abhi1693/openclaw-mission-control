@@ -22,7 +22,6 @@ from app.services.mc_gateway_subscriber.session_state_repo import (
     list_session_states_for_agent,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixture: a session_factory that yields the test sqlite session every call.
 #
@@ -225,7 +224,8 @@ async def test_db_projector_handler_does_not_raise_on_malformed_frame(
     await p({"type": "event", "event": "sessions.changed"})  # no payload
     await p({"type": "event", "event": "sessions.changed", "payload": None})
     await p({"type": "event", "event": "sessions.changed", "payload": "oops"})
-    await p({"type": "event", "event": "sessions.changed",
-             "payload": {"phase": "message"}})  # no sessionKey
+    await p(
+        {"type": "event", "event": "sessions.changed", "payload": {"phase": "message"}}
+    )  # no sessionKey
     rows = await list_all_session_states(sqlite_session)
     assert rows == []

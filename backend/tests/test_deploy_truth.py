@@ -29,16 +29,13 @@ from app.services.deploy_truth import (
     packet_sha_matches_live,
 )
 
-
 # --------------------------------------------------------------------
 # packet_sha_matches_live
 # --------------------------------------------------------------------
 
 
 def test_exact_full_match() -> None:
-    assert packet_sha_matches_live(
-        packet_sha="a" * 40, live_sha="a" * 40
-    )
+    assert packet_sha_matches_live(packet_sha="a" * 40, live_sha="a" * 40)
 
 
 def test_short_prefix_matches_full() -> None:
@@ -59,18 +56,14 @@ def test_full_packet_against_short_live_rejected() -> None:
 
 
 def test_different_prefixes_do_not_match() -> None:
-    assert not packet_sha_matches_live(
-        packet_sha="abcdef1", live_sha="0000000"
-    )
+    assert not packet_sha_matches_live(packet_sha="abcdef1", live_sha="0000000")
 
 
 def test_drift_at_or_beyond_short_length_rejected() -> None:
     """If the shorter prefix diverges at any character, the two SHAs
     are treated as different commits — no fuzzy match."""
 
-    assert not packet_sha_matches_live(
-        packet_sha="abcde01", live_sha="abcde99" + "f" * 33
-    )
+    assert not packet_sha_matches_live(packet_sha="abcde01", live_sha="abcde99" + "f" * 33)
 
 
 # --------------------------------------------------------------------
@@ -94,9 +87,7 @@ async def test_fetch_returns_normalised_metadata() -> None:
 
     transport = httpx.MockTransport(_handler)
     async with httpx.AsyncClient(transport=transport) as client:
-        md = await fetch_build_metadata(
-            "https://example.test", client=client
-        )
+        md = await fetch_build_metadata("https://example.test", client=client)
     # SHA is lowercased to match the schema validator's normalisation.
     assert md == BuildMetadata(
         sha="abcdef1234567890",
@@ -111,21 +102,15 @@ async def test_fetch_raises_on_non_200() -> None:
     transport = httpx.MockTransport(lambda r: httpx.Response(404))
     async with httpx.AsyncClient(transport=transport) as client:
         with pytest.raises(DeployTruthFetchError, match="HTTP 404"):
-            await fetch_build_metadata(
-                "https://example.test", client=client
-            )
+            await fetch_build_metadata("https://example.test", client=client)
 
 
 @pytest.mark.asyncio
 async def test_fetch_raises_on_non_json_body() -> None:
-    transport = httpx.MockTransport(
-        lambda r: httpx.Response(200, text="not json")
-    )
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, text="not json"))
     async with httpx.AsyncClient(transport=transport) as client:
         with pytest.raises(DeployTruthFetchError, match="non-JSON"):
-            await fetch_build_metadata(
-                "https://example.test", client=client
-            )
+            await fetch_build_metadata("https://example.test", client=client)
 
 
 @pytest.mark.asyncio
@@ -135,14 +120,10 @@ async def test_fetch_rejects_malformed_live_sha() -> None:
     false-pass the deploy-truth gate. Live SHA must satisfy the same
     hex shape the packet validator enforces."""
 
-    transport = httpx.MockTransport(
-        lambda r: httpx.Response(200, json={"sha": "abcdef1zzz"})
-    )
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, json={"sha": "abcdef1zzz"}))
     async with httpx.AsyncClient(transport=transport) as client:
         with pytest.raises(DeployTruthFetchError, match="malformed sha"):
-            await fetch_build_metadata(
-                "https://example.test", client=client
-            )
+            await fetch_build_metadata("https://example.test", client=client)
 
 
 @pytest.mark.asyncio
@@ -155,9 +136,7 @@ async def test_fetch_handles_trailing_slash_target() -> None:
 
     transport = httpx.MockTransport(_handler)
     async with httpx.AsyncClient(transport=transport) as client:
-        await fetch_build_metadata(
-            "https://example.test/", client=client
-        )
+        await fetch_build_metadata("https://example.test/", client=client)
     # No double-slash after the host.
     assert observed == ["https://example.test/__build"]
 
@@ -199,17 +178,13 @@ async def test_guard_skips_when_no_validation_target() -> None:
     """Content/review-only tasks legitimately have no target; the
     gate has nothing to check."""
 
-    await _require_deploy_truth(
-        _task(validation_target=None), actor_agent_id=None
-    )
+    await _require_deploy_truth(_task(validation_target=None), actor_agent_id=None)
 
 
 @pytest.mark.asyncio
 async def test_guard_rejects_missing_packet_sha_when_capable() -> None:
     with pytest.raises(HTTPException) as exc:
-        await _require_deploy_truth(
-            _task(packet_commit_sha=None), actor_agent_id=None
-        )
+        await _require_deploy_truth(_task(packet_commit_sha=None), actor_agent_id=None)
     assert exc.value.status_code == 409
     assert exc.value.detail["code"] == ERROR_CODE_DEPLOY_TRUTH_MISSING_PACKET_SHA  # type: ignore[index]
 
@@ -228,15 +203,9 @@ async def test_guard_degrades_silently_when_capability_false_or_none(
     def _spy(**kwargs: object) -> None:
         captured.append(tuple(sorted(kwargs.items())))
 
-    monkeypatch.setattr(
-        tasks_module, "_schedule_deploy_degraded_emit", _spy
-    )
-    await _require_deploy_truth(
-        _task(supports_build_metadata=False), actor_agent_id=None
-    )
-    await _require_deploy_truth(
-        _task(supports_build_metadata=None), actor_agent_id=None
-    )
+    monkeypatch.setattr(tasks_module, "_schedule_deploy_degraded_emit", _spy)
+    await _require_deploy_truth(_task(supports_build_metadata=False), actor_agent_id=None)
+    await _require_deploy_truth(_task(supports_build_metadata=None), actor_agent_id=None)
     assert len(captured) == 2
 
 

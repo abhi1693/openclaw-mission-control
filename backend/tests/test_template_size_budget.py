@@ -23,11 +23,10 @@ from __future__ import annotations
 
 import json
 import os
-
-from jinja2 import FileSystemLoader
 from pathlib import Path
 
 import pytest
+from jinja2 import FileSystemLoader
 
 _SKIP_LOCAL_TEMPLATE_PHILOSOPHY = pytest.mark.skip(
     reason=(
@@ -250,7 +249,10 @@ def test_lead_bootstrap_requires_fresh_exec_attempt_before_declaring_blocked() -
     )
 
     assert "Do not assume exec is blocked based on an earlier session." in rendered
-    assert "Attempt the required command once in this session before saying you are blocked." in rendered
+    assert (
+        "Attempt the required command once in this session before saying you are blocked."
+        in rendered
+    )
     assert "Only say exec is blocked after a fresh tool result in this session" in rendered
 
 
@@ -305,9 +307,9 @@ def test_lead_board_playbook_includes_recovery_and_health_scan() -> None:
         is_board_lead=True,
         **_BOARD_RULE_DEFAULTS,
     )
-    assert "Lead Board Playbook" in heartbeat_rendered, (
-        "HEARTBEAT must point workers at AGENTS.md § Lead Board Playbook"
-    )
+    assert (
+        "Lead Board Playbook" in heartbeat_rendered
+    ), "HEARTBEAT must point workers at AGENTS.md § Lead Board Playbook"
 
 
 def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -> None:
@@ -338,11 +340,10 @@ def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -
     )
     assert '"agentId"' not in worker_soul, (
         "SOUL.md must not embed the ACP sessions_spawn JSON payload "
-        "(no `\"agentId\"` field) — reference AGENTS.md instead"
+        '(no `"agentId"` field) — reference AGENTS.md instead'
     )
     assert "## ACP Delegation" not in worker_soul, (
-        "SOUL.md must not have a dedicated ACP Delegation section — "
-        "that belongs in AGENTS.md"
+        "SOUL.md must not have a dedicated ACP Delegation section — " "that belongs in AGENTS.md"
     )
 
     worker_identity = _render_template(
@@ -358,9 +359,9 @@ def test_acp_delegation_lives_in_agents_md_not_in_soul_identity_or_heartbeat() -
         "IDENTITY.md must not reference `sessions_spawn` — identity is "
         "name/vibe/emoji, not tool-use mechanics"
     )
-    assert '"agentId"' not in worker_identity, (
-        "IDENTITY.md is for name/vibe/emoji only — no ACP JSON payload"
-    )
+    assert (
+        '"agentId"' not in worker_identity
+    ), "IDENTITY.md is for name/vibe/emoji only — no ACP JSON payload"
     assert "ACP Delegation" not in worker_identity, (
         "IDENTITY.md must not have an ACP Delegation section — that "
         "pollutes identity with operational mechanics"
@@ -397,22 +398,22 @@ def test_agents_md_code_delegation_references_skill() -> None:
             agent_id="w-id",
             identity_dev_acp_flow=flow,
         )
-        assert "## Code Delegation (ACP)" in agents, (
-            f"AGENTS.md must have Code Delegation section (flow={flow!r})"
-        )
-        assert "acp-delegation" in agents, (
-            f"AGENTS.md must tell agents to use the acp-delegation skill (flow={flow!r})"
-        )
-        assert "acp-post-review" in agents, (
-            f"AGENTS.md must tell agents to use the acp-post-review skill after child completion (flow={flow!r})"
-        )
-        assert "use" in agents.lower() and "skill" in agents.lower(), (
-            f"AGENTS.md must explicitly say 'use ... skill' (flow={flow!r})"
-        )
+        assert (
+            "## Code Delegation (ACP)" in agents
+        ), f"AGENTS.md must have Code Delegation section (flow={flow!r})"
+        assert (
+            "acp-delegation" in agents
+        ), f"AGENTS.md must tell agents to use the acp-delegation skill (flow={flow!r})"
+        assert (
+            "acp-post-review" in agents
+        ), f"AGENTS.md must tell agents to use the acp-post-review skill after child completion (flow={flow!r})"
+        assert (
+            "use" in agents.lower() and "skill" in agents.lower()
+        ), f"AGENTS.md must explicitly say 'use ... skill' (flow={flow!r})"
         # Inline payloads must NOT be in the template
-        assert '"agentId": "claude"' not in agents, (
-            f"ACP payloads must be in the skill, not inline (flow={flow!r})"
-        )
+        assert (
+            '"agentId": "claude"' not in agents
+        ), f"ACP payloads must be in the skill, not inline (flow={flow!r})"
         assert "The ACP prompt must include this Board API boundary verbatim" not in agents
         assert "ACP retry budget is per task" not in agents
         assert "Large/shared files: plan first" not in agents
@@ -473,12 +474,12 @@ def test_soul_skips_oversized_directory_persona_preamble() -> None:
         is_main_agent=False,
         directory_role_soul_markdown=large_persona,
     )
-    assert "Philosophy line" not in soul_with_large, (
-        "SOUL.md must skip Souls Directory persona over 2000 chars"
-    )
-    assert "Ralph Loop" in soul_with_large, (
-        "Ralph Loop section must still render even when persona is skipped"
-    )
+    assert (
+        "Philosophy line" not in soul_with_large
+    ), "SOUL.md must skip Souls Directory persona over 2000 chars"
+    assert (
+        "Ralph Loop" in soul_with_large
+    ), "Ralph Loop section must still render even when persona is skipped"
     assert "skipped" in soul_with_large.lower(), (
         "SOUL.md must include an operator-visible warning when persona is "
         "skipped due to size — silent drops are hard to debug"
@@ -492,9 +493,9 @@ def test_soul_skips_oversized_directory_persona_preamble() -> None:
         is_main_agent=False,
         directory_role_soul_markdown=small_persona,
     )
-    assert "Short useful guidance" in soul_with_small, (
-        "Small Souls Directory personas (<= 2000 chars) must still render"
-    )
+    assert (
+        "Short useful guidance" in soul_with_small
+    ), "Small Souls Directory personas (<= 2000 chars) must still render"
 
 
 def test_qa_agents_get_validation_specific_checklist_not_developer_checklist() -> None:
@@ -513,12 +514,12 @@ def test_qa_agents_get_validation_specific_checklist_not_developer_checklist() -
             "identity_validation_flow": "qa_validation",
         },
     )
-    assert "QA VALIDATION" in qa_agents or "validation" in qa_agents.lower(), (
-        "QA VALIDATING section must exist"
-    )
-    assert "npm run build" not in qa_agents, (
-        "QA agents must NOT get developer build checks (npm run build)"
-    )
+    assert (
+        "QA VALIDATION" in qa_agents or "validation" in qa_agents.lower()
+    ), "QA VALIDATING section must exist"
+    assert (
+        "npm run build" not in qa_agents
+    ), "QA agents must NOT get developer build checks (npm run build)"
 
     # Non-QA worker keeps developer checklist
     dev_agents = _render_template(
@@ -532,9 +533,9 @@ def test_qa_agents_get_validation_specific_checklist_not_developer_checklist() -
             "identity_role": "Frontend Developer",
         },
     )
-    assert "typecheck" in dev_agents.lower() or "build" in dev_agents.lower(), (
-        "Developer workers must include build/typecheck validation"
-    )
+    assert (
+        "typecheck" in dev_agents.lower() or "build" in dev_agents.lower()
+    ), "Developer workers must include build/typecheck validation"
 
 
 def test_hard_rules_in_agents_not_identity() -> None:
@@ -552,12 +553,12 @@ def test_hard_rules_in_agents_not_identity() -> None:
         identity_communication_style="methodical",
         identity_emoji=":gear:",
     )
-    assert "HARD RULES" not in worker_identity, (
-        "IDENTITY.md must not have HARD RULES — they belong in AGENTS.md"
-    )
-    assert "MANDATORY" not in worker_identity, (
-        "IDENTITY.md must not have nudge mandate — it belongs in AGENTS.md"
-    )
+    assert (
+        "HARD RULES" not in worker_identity
+    ), "IDENTITY.md must not have HARD RULES — they belong in AGENTS.md"
+    assert (
+        "MANDATORY" not in worker_identity
+    ), "IDENTITY.md must not have nudge mandate — it belongs in AGENTS.md"
 
     # AGENTS.md must have QA-specific hard rules
     qa_agents = _render_template(
@@ -571,15 +572,11 @@ def test_hard_rules_in_agents_not_identity() -> None:
             "identity_validation_flow": "qa_validation",
         },
     )
-    assert "validation" in qa_agents.lower(), (
-        "QA workers must have validation instructions"
-    )
-    assert "Fabricating evidence" in qa_agents, (
-        "Fabrication rule must apply to ALL agents"
-    )
-    assert "nudge" in qa_agents.lower() or "board memory" in qa_agents.lower() or "@lead" in qa_agents, (
-        "Supervisor notification mechanism must be in AGENTS.md for workers"
-    )
+    assert "validation" in qa_agents.lower(), "QA workers must have validation instructions"
+    assert "Fabricating evidence" in qa_agents, "Fabrication rule must apply to ALL agents"
+    assert (
+        "nudge" in qa_agents.lower() or "board memory" in qa_agents.lower() or "@lead" in qa_agents
+    ), "Supervisor notification mechanism must be in AGENTS.md for workers"
 
     # Developer AGENTS.md must have developer hard rules
     dev_agents = _render_template(
@@ -592,9 +589,9 @@ def test_hard_rules_in_agents_not_identity() -> None:
             "agent_id": "pb-id",
         },
     )
-    assert "fabricating evidence" in dev_agents.lower(), (
-        "Developer workers must have fabrication rule"
-    )
+    assert (
+        "fabricating evidence" in dev_agents.lower()
+    ), "Developer workers must have fabrication rule"
 
 
 def test_qa_discriminator_does_not_false_positive_on_name_containing_qa() -> None:
@@ -619,9 +616,9 @@ def test_qa_discriminator_does_not_false_positive_on_name_containing_qa() -> Non
         "QA-Security with Security Auditor role must NOT get QA validation section — "
         "the discriminator must key on identity_validation_flow, not agent_name"
     )
-    assert "implement" in qa_security.lower() or "delegate" in qa_security.lower(), (
-        "QA-Security should get the default implementation workflow"
-    )
+    assert (
+        "implement" in qa_security.lower() or "delegate" in qa_security.lower()
+    ), "QA-Security should get the default implementation workflow"
 
 
 def test_phase1_review_loop_guardrails_render_for_frontend_architect_and_lead() -> None:
@@ -637,11 +634,25 @@ def test_phase1_review_loop_guardrails_render_for_frontend_architect_and_lead() 
         },
     )
     assert "one or more active blockers" in frontend_agents
-    assert "Do not replace requested live/browser evidence with grep, build, or source-only proof." in frontend_agents
-    assert "If multiple reviewers identified blockers, address each one explicitly." in frontend_agents
-    assert "Do not reopen a resolved product decision unless `@lead` or Architect changes it." in frontend_agents
-    assert "Treat `review_packet_type` and `validation_target*` as authoritative unless `@lead` changes them." in frontend_agents
-    assert "do not claim deploy blockage without outage or runtime/source mismatch evidence." in frontend_agents
+    assert (
+        "Do not replace requested live/browser evidence with grep, build, or source-only proof."
+        in frontend_agents
+    )
+    assert (
+        "If multiple reviewers identified blockers, address each one explicitly." in frontend_agents
+    )
+    assert (
+        "Do not reopen a resolved product decision unless `@lead` or Architect changes it."
+        in frontend_agents
+    )
+    assert (
+        "Treat `review_packet_type` and `validation_target*` as authoritative unless `@lead` changes them."
+        in frontend_agents
+    )
+    assert (
+        "do not claim deploy blockage without outage or runtime/source mismatch evidence."
+        in frontend_agents
+    )
     # `Active blocker cleared:` lives in the rework-resubmit skill (the
     # template references the skill by name); assert in both places.
     assert "rework-resubmit" in frontend_agents
@@ -662,7 +673,10 @@ def test_phase1_review_loop_guardrails_render_for_frontend_architect_and_lead() 
             "identity_dev_acp_flow": "review_only",
         },
     )
-    assert "Review against the declared `review_packet_type` and `validation_target*` fields." in architect_agents
+    assert (
+        "Review against the declared `review_packet_type` and `validation_target*` fields."
+        in architect_agents
+    )
     assert "and no newer commits or evidence reopen the issue" in architect_agents
 
     lead_agents = _render_template(
@@ -712,7 +726,9 @@ def test_pf_pb_and_acp_skills_enforce_tdd_discipline() -> None:
     )
 
     for rendered in (pb_agents, pf_agents):
-        assert "TDD is required for feature, bugfix, refactor, and behavior-change code." in rendered
+        assert (
+            "TDD is required for feature, bugfix, refactor, and behavior-change code." in rendered
+        )
         assert "write or update a failing automated test first" in rendered
         assert "capture the failing output before implementation" in rendered
         assert "capture passing output after the smallest implementation" in rendered
@@ -760,7 +776,10 @@ def test_architect_templates_are_review_only_without_worker_leakage() -> None:
     assert "Fix ALL bugs in one pass" not in agents
     assert "Deploy target comes from the **task description**" not in agents
     assert "**Deploy verification**" not in agents
-    assert "**Browser validation REQUIRED for frontend/UI tasks** before moving to review." not in agents
+    assert (
+        "**Browser validation REQUIRED for frontend/UI tasks** before moving to review."
+        not in agents
+    )
     assert "Worker gate applies" not in agents
     assert "When you need to delegate coding work" not in agents
     assert "begin the normal role workflow" not in agents
@@ -808,12 +827,15 @@ def test_qa_unit_templates_are_validation_only_without_worker_leakage() -> None:
     assert "BUILD/SOURCE DRIFT @lead" not in agents
     assert 'Infra issues (not code bugs): <list or "none">\n  @lead' not in agents
     assert "Lead wake: structured-review-verdict review event" not in agents
-    assert 'tasks/$TASK_ID/review-events' not in agents
+    assert "tasks/$TASK_ID/review-events" not in agents
     assert '"reviewer_role":"qa_unit"' not in agents
     assert "Worker gate applies" not in agents
     assert "When you finish a slice" not in agents
     assert "**Deploy verification**" not in agents
-    assert "**Browser validation REQUIRED for frontend/UI tasks** before moving to review." not in agents
+    assert (
+        "**Browser validation REQUIRED for frontend/UI tasks** before moving to review."
+        not in agents
+    )
     assert "When a specialist claims an eligible `rework` task" not in agents
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
@@ -850,7 +872,10 @@ def test_devops_templates_have_dedicated_deploy_evidence_lane() -> None:
     assert "Artifact parity" not in agents
     assert "Service/process state" not in agents
     assert "Risk/rollback" not in agents
-    assert "If the selected task was already in `review`, run **deploy/infra validation only**" not in agents
+    assert (
+        "If the selected task was already in `review`, run **deploy/infra validation only**"
+        not in agents
+    )
     assert "DEVOPS DIAGNOSIS for $TASK_ID rejection" not in agents
     assert "Deploy verification packet REQUIRED" in agents
     assert "Browser validation REQUIRED for frontend/UI tasks" not in agents
@@ -1006,7 +1031,10 @@ def test_worker_heartbeat_allows_explicit_worktree_parallelism_only_by_profile_f
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
     assert "Worker Parallel Scheduler Gate" in heartbeat
-    assert "Opt-in worktree task parallelism is enabled by `identity.worker_parallel_mode=worktree`" in heartbeat
+    assert (
+        "Opt-in worktree task parallelism is enabled by `identity.worker_parallel_mode=worktree`"
+        in heartbeat
+    )
     assert "Cap-aware scheduler (4 active concurrent, one-per-tick spawn rate)" in heartbeat
     assert "Cap = 4 active implementation tasks" in heartbeat
     assert "**≥ 4?**" in heartbeat
@@ -1021,10 +1049,7 @@ def test_worker_heartbeat_allows_explicit_worktree_parallelism_only_by_profile_f
 def test_worker_parallel_mode_profile_field_is_exported_to_templates() -> None:
     from app.services.openclaw.constants import EXTRA_IDENTITY_PROFILE_FIELDS
 
-    assert (
-        EXTRA_IDENTITY_PROFILE_FIELDS["worker_parallel_mode"]
-        == "identity_worker_parallel_mode"
-    )
+    assert EXTRA_IDENTITY_PROFILE_FIELDS["worker_parallel_mode"] == "identity_worker_parallel_mode"
 
 
 def test_acp_delegation_documents_explicit_worktree_cwd_mode() -> None:
@@ -1215,9 +1240,7 @@ def test_soul_and_heartbeat_reference_agents_md_for_delegation() -> None:
         agent_name="Programmer-Backend",
         is_board_lead=False,
     )
-    assert "AGENTS.md" in worker_soul, (
-        "SOUL.md must reference AGENTS.md for the execution loop"
-    )
+    assert "AGENTS.md" in worker_soul, "SOUL.md must reference AGENTS.md for the execution loop"
 
     worker_heartbeat = _render_template(
         "BOARD_HEARTBEAT.md.j2",
@@ -1225,6 +1248,6 @@ def test_soul_and_heartbeat_reference_agents_md_for_delegation() -> None:
         is_board_lead=False,
         **_BOARD_RULE_DEFAULTS,
     )
-    assert "AGENTS.md" in worker_heartbeat and "Code Delegation" in worker_heartbeat, (
-        "HEARTBEAT.md IMPLEMENTING state must point at AGENTS.md § Code Delegation"
-    )
+    assert (
+        "AGENTS.md" in worker_heartbeat and "Code Delegation" in worker_heartbeat
+    ), "HEARTBEAT.md IMPLEMENTING state must point at AGENTS.md § Code Delegation"

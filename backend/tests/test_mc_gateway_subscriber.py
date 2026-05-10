@@ -67,11 +67,15 @@ async def stub_gateway():
         connections.append(ws)
         headers_seen.append(dict(ws.request.headers))
         # 1. Send connect.challenge.
-        await ws.send(json.dumps({
-            "type": "event",
-            "event": "connect.challenge",
-            "payload": {"nonce": "stub-nonce-xyz"},
-        }))
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "event",
+                    "event": "connect.challenge",
+                    "payload": {"nonce": "stub-nonce-xyz"},
+                }
+            )
+        )
 
         async def receive_loop() -> None:
             try:
@@ -82,12 +86,16 @@ async def stub_gateway():
                     sent_to_server.append(msg)
                     # Reply ok to any req.
                     if msg.get("type") == "req":
-                        await ws.send(json.dumps({
-                            "type": "res",
-                            "id": msg.get("id"),
-                            "ok": True,
-                            "payload": {"echo": msg.get("method")},
-                        }))
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "type": "res",
+                                    "id": msg.get("id"),
+                                    "ok": True,
+                                    "payload": {"echo": msg.get("method")},
+                                }
+                            )
+                        )
             except websockets.exceptions.ConnectionClosed:
                 pass
 
@@ -121,11 +129,13 @@ async def stub_gateway():
 
         @staticmethod
         async def push_event(event_name: str, payload: dict[str, Any] | None = None) -> None:
-            await event_queue.put({
-                "type": "event",
-                "event": event_name,
-                "payload": payload or {},
-            })
+            await event_queue.put(
+                {
+                    "type": "event",
+                    "event": event_name,
+                    "payload": payload or {},
+                }
+            )
 
         @staticmethod
         async def kick_connection() -> None:
@@ -208,7 +218,9 @@ async def test_subscriber_sends_bearer_token_on_connect(stub_gateway) -> None:
     stop = asyncio.Event()
     task = asyncio.create_task(sub.run(stop))
     await _wait_for(lambda: bool(handle.headers_first()))
-    auth = handle.headers_first().get("Authorization") or handle.headers_first().get("authorization")
+    auth = handle.headers_first().get("Authorization") or handle.headers_first().get(
+        "authorization"
+    )
     assert auth == "Bearer my-secret-token"
     stop.set()
     await asyncio.wait_for(task, timeout=2.0)
@@ -376,11 +388,15 @@ async def test_subscriber_does_not_reset_backoff_on_handshake_then_close(stub_ga
         accept_count += 1
         # Send the challenge so handshake proceeds (so reconnect logic is
         # exercised AFTER a handshake). Then immediately close.
-        await ws.send(json.dumps({
-            "type": "event",
-            "event": "connect.challenge",
-            "payload": {"nonce": "stub-n"},
-        }))
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "event",
+                    "event": "connect.challenge",
+                    "payload": {"nonce": "stub-n"},
+                }
+            )
+        )
         await asyncio.sleep(0.01)  # let subscriber send connect req
         await ws.close()
 
@@ -409,9 +425,9 @@ async def test_subscriber_does_not_reset_backoff_on_handshake_then_close(stub_ga
     # Bug version (delay reset every connect): delays_observed[1] ≈ delays_observed[0] (both ~0.05s).
     # Fixed version (delay escalates while connection is unhealthy): delays_observed[1] > delays_observed[0].
     assert len(delays_observed) >= 2, f"need at least 2 inter-connect deltas, got {delays_observed}"
-    assert delays_observed[1] > delays_observed[0] * 1.5, (
-        f"backoff did not escalate after handshake-then-close: deltas={delays_observed}"
-    )
+    assert (
+        delays_observed[1] > delays_observed[0] * 1.5
+    ), f"backoff did not escalate after handshake-then-close: deltas={delays_observed}"
 
 
 @pytest.mark.asyncio
@@ -463,9 +479,9 @@ async def test_subscriber_aborts_handshake_when_first_frame_is_not_challenge(
 
     # The bug version sent a `connect` req anyway. The fix must not.
     methods = [m.get("method") for m in sent_to_server if m.get("type") == "req"]
-    assert "connect" not in methods, (
-        f"subscriber sent connect req against a non-challenge first frame: methods={methods}"
-    )
+    assert (
+        "connect" not in methods
+    ), f"subscriber sent connect req against a non-challenge first frame: methods={methods}"
 
 
 @pytest.mark.asyncio
@@ -485,11 +501,15 @@ async def test_subscriber_does_not_subscribe_when_connect_res_is_not_ok(
     sent_to_server: list[dict[str, Any]] = []
 
     async def auth_failing_handler(ws):
-        await ws.send(json.dumps({
-            "type": "event",
-            "event": "connect.challenge",
-            "payload": {"nonce": "n"},
-        }))
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "event",
+                    "event": "connect.challenge",
+                    "payload": {"nonce": "n"},
+                }
+            )
+        )
         try:
             async for raw in ws:
                 if isinstance(raw, bytes):
@@ -497,12 +517,16 @@ async def test_subscriber_does_not_subscribe_when_connect_res_is_not_ok(
                 msg = json.loads(raw)
                 sent_to_server.append(msg)
                 if msg.get("type") == "req" and msg.get("method") == "connect":
-                    await ws.send(json.dumps({
-                        "type": "res",
-                        "id": msg["id"],
-                        "ok": False,
-                        "error": {"message": "bad token"},
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "type": "res",
+                                "id": msg["id"],
+                                "ok": False,
+                                "error": {"message": "bad token"},
+                            }
+                        )
+                    )
                     # Keep the connection open after the failed res so
                     # the subscriber has a clear opportunity to send
                     # subscribe reqs (which it MUST NOT do). The test
@@ -531,9 +555,9 @@ async def test_subscriber_does_not_subscribe_when_connect_res_is_not_ok(
     await server.wait_closed()
 
     methods = [m.get("method") for m in sent_to_server if m.get("type") == "req"]
-    assert "sessions.subscribe" not in methods, (
-        f"subscriber sent subscribe after a failed connect: methods={methods}"
-    )
+    assert (
+        "sessions.subscribe" not in methods
+    ), f"subscriber sent subscribe after a failed connect: methods={methods}"
 
 
 @pytest.mark.asyncio
@@ -592,9 +616,7 @@ async def test_subscriber_silent_gateway_backs_off_geometrically(
     assert len(deltas) >= 2
     # Bug version: each attempt waits ~handshake_timeout + initial_delay,
     # roughly flat. Fixed version: deltas escalate geometrically.
-    assert deltas[1] > deltas[0], (
-        f"silent-gateway path did not escalate backoff: deltas={deltas}"
-    )
+    assert deltas[1] > deltas[0], f"silent-gateway path did not escalate backoff: deltas={deltas}"
 
 
 @pytest.mark.asyncio
@@ -655,8 +677,8 @@ async def test_subscriber_sends_control_ui_client_identity(stub_gateway) -> None
     assert client.get("id") == "openclaw-control-ui"
     assert client.get("mode") == "ui"
     assert client.get("platform"), "client.platform is required by the gateway"
-    assert "connectNonce" not in params, (
-        "connectNonce at root is rejected by the gateway in control-UI mode"
-    )
+    assert (
+        "connectNonce" not in params
+    ), "connectNonce at root is rejected by the gateway in control-UI mode"
     stop.set()
     await asyncio.wait_for(task, timeout=2.0)

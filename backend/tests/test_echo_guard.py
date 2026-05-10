@@ -26,7 +26,6 @@ from app.models.tasks import Task
 from app.services.comment_classifier import ClassifierFlag
 from app.services.echo_guard import classify_for_echo
 
-
 _ARCH_SAMPLE = (
     "@Supervisor @QA-E2E @Programmer-Frontend @lead Acknowledged. "
     "I am holding D.1 on that exact truth. No QA-forward path and no "
@@ -112,12 +111,8 @@ async def test_architect_storm_sample_is_suppressed(
     was the half the current ack_only classifier missed. Gate must catch it."""
 
     session, _board, task, agent_id = seeded
-    await _seed_prior_comment(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
+    await _seed_prior_comment(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
     assert result.should_suppress is True
     assert ClassifierFlag.ECHO_SHAPE in result.classifier_flags
 
@@ -127,12 +122,8 @@ async def test_supervisor_storm_sample_is_suppressed(
     seeded: tuple[AsyncSession, Board, Task, "UUID"],
 ) -> None:
     session, _board, task, agent_id = seeded
-    await _seed_prior_comment(
-        session, task=task, agent_id=agent_id, message=_SUPE_SAMPLE
-    )
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=_SUPE_SAMPLE
-    )
+    await _seed_prior_comment(session, task=task, agent_id=agent_id, message=_SUPE_SAMPLE)
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=_SUPE_SAMPLE)
     assert result.should_suppress is True
 
 
@@ -148,9 +139,7 @@ async def test_first_same_task_comment_not_suppressed(
     """No prior within the window → not an echo by definition."""
 
     session, _board, task, agent_id = seeded
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
     assert result.should_suppress is False
 
 
@@ -161,9 +150,7 @@ async def test_user_operator_never_suppressed(
     """``agent_id=None`` is the user-token caller — always exempt."""
 
     session, _board, task, _agent = seeded
-    result = await classify_for_echo(
-        session, task=task, agent_id=None, message=_ARCH_SAMPLE
-    )
+    result = await classify_for_echo(session, task=task, agent_id=None, message=_ARCH_SAMPLE)
     assert result.should_suppress is False
 
 
@@ -176,16 +163,12 @@ async def test_message_with_evidence_not_suppressed(
     negative-evidence gate."""
 
     session, _board, task, agent_id = seeded
-    await _seed_prior_comment(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
+    await _seed_prior_comment(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
     legit = (
         "Acknowledged. Retested at commit abc123f. Lighthouse CLS=0.08 "
         "PASS. Screenshot: http://192.168.2.60:3000/runs/abc123f.png"
     )
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=legit
-    )
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=legit)
     assert result.should_suppress is False
 
 
@@ -204,9 +187,7 @@ async def test_prior_outside_window_not_suppressed(
         message=_ARCH_SAMPLE,
         seconds_ago=60 * 60,  # 1h ago — well outside window
     )
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
     assert result.should_suppress is False
 
 
@@ -219,7 +200,10 @@ async def test_blocker_filed_since_prior_not_suppressed(
 
     session, _board, task, agent_id = seeded
     prior = await _seed_prior_comment(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE,
+        session,
+        task=task,
+        agent_id=agent_id,
+        message=_ARCH_SAMPLE,
         seconds_ago=120.0,
     )
     # Blocker filed AFTER the prior comment, BEFORE this one.
@@ -234,9 +218,7 @@ async def test_blocker_filed_since_prior_not_suppressed(
         )
     )
     await session.commit()
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
     assert result.should_suppress is False
 
 
@@ -251,12 +233,8 @@ async def test_flag_off_observes_but_does_not_suppress(
     board.rollout_flags = {}
     session.add(board)
     await session.commit()
-    await _seed_prior_comment(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE
-    )
+    await _seed_prior_comment(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=_ARCH_SAMPLE)
     assert result.should_suppress is False
     assert result.reason == "observe"
     assert ClassifierFlag.ECHO_SHAPE in result.classifier_flags
@@ -271,7 +249,9 @@ async def test_non_echo_shape_message_not_suppressed(
 
     session, _board, task, agent_id = seeded
     await _seed_prior_comment(
-        session, task=task, agent_id=agent_id,
+        session,
+        task=task,
+        agent_id=agent_id,
         message="Moving to in_progress. Starting on the Admin form fix.",
     )
     progress = (
@@ -279,7 +259,5 @@ async def test_non_echo_shape_message_not_suppressed(
         "section. Running Playwright on http://192.168.2.60:3000/admin "
         "next."
     )
-    result = await classify_for_echo(
-        session, task=task, agent_id=agent_id, message=progress
-    )
+    result = await classify_for_echo(session, task=task, agent_id=agent_id, message=progress)
     assert result.should_suppress is False

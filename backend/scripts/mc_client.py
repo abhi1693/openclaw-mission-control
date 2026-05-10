@@ -83,9 +83,7 @@ def _request(
 def _resolve_token(args: argparse.Namespace) -> str:
     token = args.token or os.environ.get("LOCAL_AUTH_TOKEN")
     if not token:
-        raise SystemExit(
-            "no auth token: set LOCAL_AUTH_TOKEN env var or pass --token"
-        )
+        raise SystemExit("no auth token: set LOCAL_AUTH_TOKEN env var or pass --token")
     return token
 
 
@@ -108,9 +106,7 @@ def _resolve_board(args: argparse.Namespace) -> str:
         )
     board = flag_board or env_board
     if not board:
-        raise SystemExit(
-            "no board id: set BOARD_ID env var or pass --board"
-        )
+        raise SystemExit("no board id: set BOARD_ID env var or pass --board")
     return board
 
 

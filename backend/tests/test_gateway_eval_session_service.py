@@ -5,13 +5,13 @@ from uuid import uuid4
 import pytest
 
 import app.services.openclaw.session_service as session_service
-from app.services.openclaw.gateway_rpc import GatewayConfig
-from app.services.openclaw.session_service import GatewaySessionService
 from app.schemas.gateway_api import (
     GatewayEvalApprovalResolveRequest,
     GatewayEvalSessionEnsureRequest,
     GatewaySessionMessageRequest,
 )
+from app.services.openclaw.gateway_rpc import GatewayConfig
+from app.services.openclaw.session_service import GatewaySessionService
 
 
 @pytest.mark.asyncio
@@ -108,10 +108,7 @@ async def test_resolve_eval_session_exec_approval_uses_gateway_operator_scope(
                     "content": [
                         {
                             "type": "text",
-                            "text": (
-                                "Approval required (id a6da1eb3, full "
-                                f"{approval_id})."
-                            ),
+                            "text": ("Approval required (id a6da1eb3, full " f"{approval_id})."),
                         }
                     ],
                 }
@@ -186,14 +183,19 @@ async def test_ensure_eval_session_binds_to_agent_workspace_session(
         observed["params"] = params
         observed["config"] = config
         if method == "sessions.create":
-            return {"key": "agent:programmer-frontend:eval-programmer-frontend-1", "label": "Eval PF"}
+            return {
+                "key": "agent:programmer-frontend:eval-programmer-frontend-1",
+                "label": "Eval PF",
+            }
         if method == "sessions.reset":
             return {"ok": True}
         raise AssertionError(f"unexpected method {method}")
 
     monkeypatch.setattr(service, "require_gateway", fake_require_gateway)
     monkeypatch.setattr(service, "_require_same_org", fake_require_same_org)
-    monkeypatch.setattr(service, "_resolve_eval_agent_gateway_id", fake_resolve_eval_agent_gateway_id)
+    monkeypatch.setattr(
+        service, "_resolve_eval_agent_gateway_id", fake_resolve_eval_agent_gateway_id
+    )
     monkeypatch.setattr(session_service, "require_board_access", fake_require_board_access)
     monkeypatch.setattr(session_service, "openclaw_call", fake_openclaw_call)
 

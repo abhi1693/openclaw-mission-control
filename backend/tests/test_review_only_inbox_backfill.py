@@ -32,16 +32,25 @@ async def test_backfill_advances_review_only_inbox_to_review(
     session.add_all([org, board, user])
 
     stuck = Task(
-        id=uuid4(), board_id=board.id, title="stuck",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="stuck",
+        status="inbox",
+        review_packet_type="review_only",
     )
     legit = Task(
-        id=uuid4(), board_id=board.id, title="real",
-        status="inbox", review_packet_type="frontend_ui",
+        id=uuid4(),
+        board_id=board.id,
+        title="real",
+        status="inbox",
+        review_packet_type="frontend_ui",
     )
     done = Task(
-        id=uuid4(), board_id=board.id, title="finished",
-        status="done", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="finished",
+        status="done",
+        review_packet_type="review_only",
     )
     session.add_all([stuck, legit, done])
     await session.commit()
@@ -68,21 +77,24 @@ async def test_backfill_records_status_change_activity(
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b2")
     user = User(id=uuid4(), clerk_user_id="cu", email="op@example.com")
     stuck = Task(
-        id=uuid4(), board_id=board.id, title="stuck",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="stuck",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add_all([org, board, user, stuck])
     await session.commit()
 
     await backfill_async(session, actor_user=user, dry_run=False)
 
-    events = (await session.exec(
-        select(ActivityEvent).where(ActivityEvent.task_id == stuck.id)
-    )).all()
+    events = (
+        await session.exec(select(ActivityEvent).where(ActivityEvent.task_id == stuck.id))
+    ).all()
     status_events = [e for e in events if e.event_type == "task.status_changed"]
-    assert len(status_events) == 1, (
-        f"expected exactly 1 status_changed event; got {[e.event_type for e in events]!r}"
-    )
+    assert (
+        len(status_events) == 1
+    ), f"expected exactly 1 status_changed event; got {[e.event_type for e in events]!r}"
     # Proves the admin path used a user actor (not an agent) — agent_id is
     # None when record_activity is called from the user-actor side of
     # _record_task_update_activity. This is the strongest assertion we can
@@ -99,8 +111,11 @@ async def test_backfill_dry_run_does_not_mutate(
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b3")
     user = User(id=uuid4(), clerk_user_id="cu", email="op@example.com")
     stuck = Task(
-        id=uuid4(), board_id=board.id, title="stuck",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="stuck",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add_all([org, board, user, stuck])
     await session.commit()
@@ -120,8 +135,11 @@ async def test_backfill_idempotent(
     board = Board(id=uuid4(), organization_id=org.id, name="b", slug="b4")
     user = User(id=uuid4(), clerk_user_id="cu", email="op@example.com")
     stuck = Task(
-        id=uuid4(), board_id=board.id, title="stuck",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="stuck",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add_all([org, board, user, stuck])
     await session.commit()
@@ -143,18 +161,27 @@ async def test_backfill_scoped_to_board_id(
     board_b = Board(id=uuid4(), organization_id=org.id, name="B", slug="bb")
     user = User(id=uuid4(), clerk_user_id="cu", email="op@example.com")
     stuck_a = Task(
-        id=uuid4(), board_id=board_a.id, title="A",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board_a.id,
+        title="A",
+        status="inbox",
+        review_packet_type="review_only",
     )
     stuck_b = Task(
-        id=uuid4(), board_id=board_b.id, title="B",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board_b.id,
+        title="B",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add_all([org, board_a, board_b, user, stuck_a, stuck_b])
     await session.commit()
 
     advanced = await backfill_async(
-        session, actor_user=user, dry_run=False, board_id=board_a.id,
+        session,
+        actor_user=user,
+        dry_run=False,
+        board_id=board_a.id,
     )
     assert advanced == [stuck_a.id]
     await session.refresh(stuck_b)

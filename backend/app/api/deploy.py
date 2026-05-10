@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from app.core.logging import get_logger
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlmodel import col, select
 
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.session import async_session_maker
 from app.models.agents import Agent
@@ -83,9 +83,7 @@ async def _resolve_target_agent(session) -> tuple[Board, Agent]:
 async def _require_board_task(session, *, board_id: UUID, task_id: UUID) -> Task:
     task = (
         await session.exec(
-            select(Task)
-            .where(col(Task.id) == task_id)
-            .where(col(Task.board_id) == board_id)
+            select(Task).where(col(Task.id) == task_id).where(col(Task.board_id) == board_id)
         )
     ).first()
     if task is None:
@@ -193,7 +191,9 @@ async def api_deploy_notify(payload: DeployNotifyPayload = Body(...)) -> DeployN
         dispatch = GatewayDispatchService(session)
         config = await dispatch.optional_gateway_config_for_board(board)
         if config is None:
-            raise HTTPException(status_code=503, detail="Gateway config unavailable for QA-E2E dispatch")
+            raise HTTPException(
+                status_code=503, detail="Gateway config unavailable for QA-E2E dispatch"
+            )
 
         error = await dispatch.try_send_agent_message(
             session_key=agent.openclaw_session_id,

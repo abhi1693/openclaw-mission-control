@@ -150,9 +150,7 @@ async def test_resolve_sets_value_and_stamps_resolved_at(
     )
     resolved = await update_operator_decision(
         decision_id=created.id,
-        payload=OperatorDecisionUpdate(
-            status_transition="resolve", resolved_value="yes, proceed"
-        ),
+        payload=OperatorDecisionUpdate(status_transition="resolve", resolved_value="yes, proceed"),
         board=board,
         session=session,
         _actor=actor,  # type: ignore[arg-type]
@@ -197,9 +195,7 @@ async def test_double_resolve_conflicts(
     )
     await update_operator_decision(
         decision_id=created.id,
-        payload=OperatorDecisionUpdate(
-            status_transition="resolve", resolved_value="yes"
-        ),
+        payload=OperatorDecisionUpdate(status_transition="resolve", resolved_value="yes"),
         board=board,
         session=session,
         _actor=actor,  # type: ignore[arg-type]
@@ -207,9 +203,7 @@ async def test_double_resolve_conflicts(
     with pytest.raises(HTTPException) as exc:
         await update_operator_decision(
             decision_id=created.id,
-            payload=OperatorDecisionUpdate(
-                status_transition="resolve", resolved_value="yes"
-            ),
+            payload=OperatorDecisionUpdate(status_transition="resolve", resolved_value="yes"),
             board=board,
             session=session,
             _actor=actor,  # type: ignore[arg-type]
@@ -233,9 +227,7 @@ async def test_update_resolved_decision_metadata_conflicts(
     )
     await update_operator_decision(
         decision_id=created.id,
-        payload=OperatorDecisionUpdate(
-            status_transition="resolve", resolved_value="yes"
-        ),
+        payload=OperatorDecisionUpdate(status_transition="resolve", resolved_value="yes"),
         board=board,
         session=session,
         _actor=actor,  # type: ignore[arg-type]
@@ -383,15 +375,11 @@ async def test_orm_path_rejects_cross_board_task_link(
             status="in_progress",
         ),
     )
-    decision = OperatorDecision(
-        board_id=board.id, question="cross-board?"
-    )
+    decision = OperatorDecision(board_id=board.id, question="cross-board?")
     session.add(decision)
     await session.flush()
     session.add(
-        OperatorDecisionTaskLink(
-            decision_id=decision.id, task_id=foreign_task_id
-        ),
+        OperatorDecisionTaskLink(decision_id=decision.id, task_id=foreign_task_id),
     )
     with pytest.raises(IntegrityError):
         await session.commit()

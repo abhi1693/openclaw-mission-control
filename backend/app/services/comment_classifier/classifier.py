@@ -80,9 +80,7 @@ def _is_echo_shape(
 
     if not _has_echo_shape(message):
         return False
-    if has_negative_evidence(message) and has_new_negative_evidence(
-        message, prior_comment
-    ):
+    if has_negative_evidence(message) and has_new_negative_evidence(message, prior_comment):
         return False
     if word_count(message) > ACK_MAX_WORDS:
         return False
@@ -121,9 +119,7 @@ def _is_ack_only(
 
     if not _has_ack_shape(message):
         return False
-    if has_negative_evidence(message) and has_new_negative_evidence(
-        message, prior_comment
-    ):
+    if has_negative_evidence(message) and has_new_negative_evidence(message, prior_comment):
         return False
     if word_count(message) > ACK_MAX_WORDS:
         return False
@@ -186,9 +182,7 @@ def classify(
 
     flags: list[ClassifierFlag] = []
 
-    if _is_ack_only(
-        message, packet_type=packet_type, prior_comment=prior_comment
-    ):
+    if _is_ack_only(message, packet_type=packet_type, prior_comment=prior_comment):
         flags.append(ClassifierFlag.ACK_ONLY)
 
     # ECHO_SHAPE shares every exemption with ACK_ONLY (negative
@@ -198,9 +192,7 @@ def classify(
     # 2026-04-17 storm exposed. Fires independently of ACK_ONLY so
     # operator dashboards can observe the gate-signal without losing
     # the legacy ack_only tuning surface.
-    if _is_echo_shape(
-        message, packet_type=packet_type, prior_comment=prior_comment
-    ):
+    if _is_echo_shape(message, packet_type=packet_type, prior_comment=prior_comment):
         flags.append(ClassifierFlag.ECHO_SHAPE)
 
     gap: float | None = None

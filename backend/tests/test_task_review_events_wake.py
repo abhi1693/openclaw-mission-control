@@ -378,8 +378,7 @@ async def test_record_task_review_event_fail_auto_transitions_review_to_rework(
         )
     ).all()
     rework_events = [
-        e for e in auto_status_events
-        if (e.message or "").startswith("Task moved to rework:")
+        e for e in auto_status_events if (e.message or "").startswith("Task moved to rework:")
     ]
     assert len(rework_events) == 1
     assert "auto-transition" in (rework_events[0].message or "")
@@ -402,8 +401,8 @@ async def test_record_task_review_event_fail_skips_auto_rework_when_approval_pen
     moves the task once they decide whether to keep or cancel the
     pending approval.
     """
-    from app.models.approvals import Approval
     from app.models.approval_task_links import ApprovalTaskLink
+    from app.models.approvals import Approval
 
     org_id = uuid4()
     gateway_id = uuid4()
@@ -435,24 +434,35 @@ async def test_record_task_review_event_fail_skips_auto_rework_when_approval_pen
         ),
     )
     lead = Agent(
-        id=lead_id, board_id=board_id, gateway_id=gateway_id,
-        name="Supervisor", is_board_lead=True,
+        id=lead_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
+        name="Supervisor",
+        is_board_lead=True,
         openclaw_session_id="agent:lead:main",
     )
     worker = Agent(
-        id=worker_id, board_id=board_id, gateway_id=gateway_id,
-        name="Programmer-Frontend", openclaw_session_id="agent:pf:main",
+        id=worker_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
+        name="Programmer-Frontend",
+        openclaw_session_id="agent:pf:main",
     )
     reviewer = Agent(
-        id=reviewer_id, board_id=board_id, gateway_id=gateway_id,
-        name="Architect", openclaw_session_id="agent:architect:main",
+        id=reviewer_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
+        name="Architect",
+        openclaw_session_id="agent:architect:main",
         identity_profile={"role": "System Architect and Code Reviewer"},
     )
     sqlite_session.add(lead)
     sqlite_session.add(worker)
     sqlite_session.add(reviewer)
     task = Task(
-        id=task_id, board_id=board_id, title="Review with pending approval",
+        id=task_id,
+        board_id=board_id,
+        title="Review with pending approval",
         status="review",
     )
     sqlite_session.add(task)
@@ -460,25 +470,33 @@ async def test_record_task_review_event_fail_skips_auto_rework_when_approval_pen
     # by a silent auto-rework.
     sqlite_session.add(
         Approval(
-            id=approval_id, board_id=board_id,
-            action_type="move_to_done", status="pending",
+            id=approval_id,
+            board_id=board_id,
+            action_type="move_to_done",
+            status="pending",
             agent_id=worker_id,
             confidence=0.9,
         ),
     )
     sqlite_session.add(
         ApprovalTaskLink(
-            board_id=board_id, approval_id=approval_id, task_id=task_id,
+            board_id=board_id,
+            approval_id=approval_id,
+            task_id=task_id,
         ),
     )
     await sqlite_session.commit()
     await sqlite_session.refresh(task)
 
     class _NoopDispatch:
-        def __init__(self, session): self.session = session
+        def __init__(self, session):
+            self.session = session
+
         async def optional_gateway_config_for_board(self, board):
             return GatewayConfig(url="ws://gateway.example/ws")
-        async def try_send_agent_message(self, **kwargs): return None
+
+        async def try_send_agent_message(self, **kwargs):
+            return None
 
     monkeypatch.setattr(tasks_api, "GatewayDispatchService", _NoopDispatch)
 
@@ -510,8 +528,7 @@ async def test_record_task_review_event_fail_skips_auto_rework_when_approval_pen
             select(ActivityEvent)
             .where(ActivityEvent.task_id == task_id)
             .where(
-                ActivityEvent.event_type
-                == "review_event.auto_rework_skipped_pending_approval",
+                ActivityEvent.event_type == "review_event.auto_rework_skipped_pending_approval",
             ),
         )
     ).all()

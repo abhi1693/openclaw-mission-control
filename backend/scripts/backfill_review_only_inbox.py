@@ -42,14 +42,13 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.api.deps import ActorContext
 from app.api.tasks import (
-    _TaskUpdateInput,
     _apply_admin_task_rules,
     _finalize_updated_task,
+    _TaskUpdateInput,
 )
 from app.db.session import async_session_maker
 from app.models.tasks import Task
 from app.models.users import User
-
 
 _SYSTEM_USER_EMAIL = "system-backfill@local"
 _SYSTEM_USER_CLERK_ID = "system-backfill"
@@ -57,9 +56,7 @@ _SYSTEM_USER_CLERK_ID = "system-backfill"
 
 async def _ensure_system_user(session: AsyncSession) -> User:
     """Create or find the system actor user used to attribute backfill events."""
-    user = (
-        await session.exec(select(User).where(User.email == _SYSTEM_USER_EMAIL))
-    ).first()
+    user = (await session.exec(select(User).where(User.email == _SYSTEM_USER_EMAIL))).first()
     if user is None:
         user = User(
             clerk_user_id=_SYSTEM_USER_CLERK_ID,

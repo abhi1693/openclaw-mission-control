@@ -5,34 +5,45 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select, text
 
+from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db.session import async_session_maker
 from app.models.agents import Agent
 from app.models.boards import Board
-from app.core.logging import get_logger
-from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig, openclaw_call
+from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
+from app.services.openclaw.gateway_rpc import openclaw_call
 
 logger = get_logger(__name__)
 
+
 async def _get_gateway_config_for_board(session, board_id):
     """Get gateway config for a board, with fallback URL if gateway has no URL configured."""
-    from app.services.openclaw.gateway_dispatch import GatewayDispatchService
     from app.models.gateways import Gateway
-    
+    from app.services.openclaw.gateway_dispatch import GatewayDispatchService
+
     board = (await session.exec(select(Board).where(Board.id == board_id))).first()
-    logger.info("pause/resume: board=%s gateway_id=%s", board_id, board.gateway_id if board else None)
+    logger.info(
+        "pause/resume: board=%s gateway_id=%s", board_id, board.gateway_id if board else None
+    )
     if not board or not board.gateway_id:
         logger.warning("pause/resume: no board or gateway_id")
         return None
-    
+
     dispatch = GatewayDispatchService(session)
     config = await dispatch.optional_gateway_config_for_board(board)
     logger.info("pause/resume: dispatch.config=%s", config)
-    
+
     # Fallback: if gateway has no URL configured, use the known gateway URL
     if config is None:
-        gateway = (await session.exec(select(Gateway).where(Gateway.id == board.gateway_id))).first()
-        logger.info("pause/resume: gateway=%s url=%s token=%s", gateway.id if gateway else None, gateway.url if gateway else None, gateway.token[:10] if gateway and gateway.token else None)
+        gateway = (
+            await session.exec(select(Gateway).where(Gateway.id == board.gateway_id))
+        ).first()
+        logger.info(
+            "pause/resume: gateway=%s url=%s token=%s",
+            gateway.id if gateway else None,
+            gateway.url if gateway else None,
+            gateway.token[:10] if gateway and gateway.token else None,
+        )
         if gateway:
             cfg = GatewayClientConfig(
                 url="ws://192.168.2.60:18789",
@@ -41,7 +52,7 @@ async def _get_gateway_config_for_board(session, board_id):
             )
             logger.info("pause/resume: using fallback config")
             return cfg
-    
+
     return config
 
 
@@ -78,11 +89,17 @@ async def mission_control_heartbeats() -> dict:
                 "board_name": boards.get(agent.board_id).name if agent.board_id in boards else None,
                 "status": agent.status,
                 "enabled": True,
-                "last_seen_at": agent.last_seen_at.isoformat() + "Z" if agent.last_seen_at else None,
+                "last_seen_at": (
+                    agent.last_seen_at.isoformat() + "Z" if agent.last_seen_at else None
+                ),
                 "checkin_deadline_at": deadline.isoformat() + "Z" if deadline else None,
                 "wake_attempts": agent.wake_attempts,
-                "last_wake_sent_at": agent.last_wake_sent_at.isoformat() + "Z" if agent.last_wake_sent_at else None,
-                "seconds_until_deadline": int((deadline - now).total_seconds()) if deadline else None,
+                "last_wake_sent_at": (
+                    agent.last_wake_sent_at.isoformat() + "Z" if agent.last_wake_sent_at else None
+                ),
+                "seconds_until_deadline": (
+                    int((deadline - now).total_seconds()) if deadline else None
+                ),
                 "overdue": bool(deadline and deadline < now),
                 "is_board_lead": bool(agent.is_board_lead),
             }
@@ -100,6 +117,7 @@ async def mission_control_heartbeats() -> dict:
 # ---------------------------------------------------------------------------
 # Board pause/resume endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.post("/boards/{board_id}/pause", status_code=200)
 async def api_pause_board(board_id: str):
@@ -119,7 +137,7 @@ async def api_pause_board(board_id: str):
     async with async_session_maker() as session:
         # Fetch board for gateway config
         board = (await session.exec(select(Board).where(Board.id == bid))).first()
-        
+
         await session.exec(text("""
             INSERT INTO board_pause_states (board_id, is_paused, paused_at, paused_by)
             VALUES (:board_id, TRUE, :paused_at, 'human')

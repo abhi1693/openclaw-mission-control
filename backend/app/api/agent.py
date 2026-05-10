@@ -63,12 +63,12 @@ from app.schemas.health import AgentHealthStatusResponse
 from app.schemas.lead_actions import LeadNextActionRead
 from app.schemas.pagination import DefaultLimitOffsetPage
 from app.schemas.tags import TagRef
+from app.schemas.task_pipeline_events import TaskPipelineStateRead
 from app.schemas.task_review_events import (
     TaskReviewEventCreate,
     TaskReviewEventRead,
     TaskReviewReadinessRead,
 )
-from app.schemas.task_pipeline_events import TaskPipelineStateRead
 from app.schemas.tasks import (
     TaskCommentCreate,
     TaskCommentRead,
@@ -79,14 +79,12 @@ from app.schemas.tasks import (
 )
 from app.schemas.view_models import TaskCardRead
 from app.services.activity_log import record_activity
-from app.services.board_memory_intake import reconcile_board_memory_intake
-from app.services.openclaw.coordination_service import GatewayCoordinationService
-from app.services.openclaw.internal.agent_key import projection_lookup_id
-from app.services.openclaw.policies import OpenClawAuthorizationPolicy
-from app.services.openclaw.provisioning_db import AgentLifecycleService
-from app.services.mc_gateway_subscriber.session_state_repo import (
-    list_main_session_states_for_agent_ids,
+from app.services.blockers import (
+    open_blocker_reason_codes_by_task_id,
+    open_blocker_rows_by_task_id,
+    task_ids_with_open_blocker,
 )
+from app.services.board_memory_intake import reconcile_board_memory_intake
 from app.services.lead_next_action import (
     ApprovalState,
     LeadInputs,
@@ -94,26 +92,13 @@ from app.services.lead_next_action import (
     latest_approval_state_by_task_id,
     select_lead_next_action,
 )
-from app.services.tags import replace_tags, validate_tag_ids
-from app.services.task_pipeline import (
-    frontend_pipeline_required,
-    list_task_pipeline_events_for_tasks,
-    pipeline_missing_states,
+from app.services.mc_gateway_subscriber.session_state_repo import (
+    list_main_session_states_for_agent_ids,
 )
-from app.services.task_review_events import (
-    get_task_review_readiness_batch,
-)
-from app.services.task_dependencies import (
-    blocked_by_dependency_ids,
-    dependency_status_by_id,
-    validate_dependency_update,
-    dependency_ids_by_task_id,
-)
-from app.services.blockers import (
-    open_blocker_reason_codes_by_task_id,
-    open_blocker_rows_by_task_id,
-    task_ids_with_open_blocker,
-)
+from app.services.openclaw.coordination_service import GatewayCoordinationService
+from app.services.openclaw.internal.agent_key import projection_lookup_id
+from app.services.openclaw.policies import OpenClawAuthorizationPolicy
+from app.services.openclaw.provisioning_db import AgentLifecycleService
 from app.services.operator_decisions import (
     pending_operator_decision_reason_codes_by_task_id,
     task_ids_with_pending_operator_decision,
@@ -123,6 +108,21 @@ from app.services.parent_cascade import (
     orphan_children_with_terminal_parent,
     task_ids_with_children,
     task_ids_with_umbrella_retired_marker,
+)
+from app.services.tags import replace_tags, validate_tag_ids
+from app.services.task_dependencies import (
+    blocked_by_dependency_ids,
+    dependency_ids_by_task_id,
+    dependency_status_by_id,
+    validate_dependency_update,
+)
+from app.services.task_pipeline import (
+    frontend_pipeline_required,
+    list_task_pipeline_events_for_tasks,
+    pipeline_missing_states,
+)
+from app.services.task_review_events import (
+    get_task_review_readiness_batch,
 )
 
 if TYPE_CHECKING:
@@ -209,9 +209,7 @@ def _task_card_with_reason_codes(
     # from the user-auth path. Replace enrichment fields instead of
     # passing duplicate keyword arguments into the Pydantic constructor.
     task_payload["open_blocker_reason_codes"] = open_blocker_reason_codes
-    task_payload["pending_operator_decision_reason_codes"] = (
-        pending_operator_decision_reason_codes
-    )
+    task_payload["pending_operator_decision_reason_codes"] = pending_operator_decision_reason_codes
     return TaskCardRead(**task_payload)
 
 
@@ -786,10 +784,14 @@ async def list_tasks(
     # (response_model=TaskRead); we widen the agent response here only.
     page_task_ids = [task.id for task in page.items]
     blocker_codes = await open_blocker_reason_codes_by_task_id(
-        session, board_id=board.id, task_ids=page_task_ids,
+        session,
+        board_id=board.id,
+        task_ids=page_task_ids,
     )
     decision_codes = await pending_operator_decision_reason_codes_by_task_id(
-        session, board_id=board.id, task_ids=page_task_ids,
+        session,
+        board_id=board.id,
+        task_ids=page_task_ids,
     )
     enriched = [
         _task_card_with_reason_codes(
@@ -840,7 +842,8 @@ async def get_lead_next_action(
     _guard_board_access(agent_ctx, board)
     _require_board_lead(agent_ctx)
     retired_umbrellas = await auto_retire_pure_container_umbrellas(
-        session, board_id=board.id,
+        session,
+        board_id=board.id,
     )
     if retired_umbrellas:
         await session.commit()
@@ -871,7 +874,9 @@ async def get_lead_next_action(
         tasks=tasks,
     )
     open_blocker_ids = await task_ids_with_open_blocker(
-        session, board_id=board.id, task_ids=task_ids,
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
     )
     # Phase V §I9 Fix 3 — batched fetch of full open Blocker rows so
     # the new ``inspect_stale_blocker`` tier in select_lead_next_action
@@ -879,7 +884,9 @@ async def get_lead_next_action(
     # selecting per task. Convert the raw tuples to ``OpenBlockerRow``
     # NamedTuples at the boundary so the gate's signature is typed.
     open_blocker_rows_raw = await open_blocker_rows_by_task_id(
-        session, board_id=board.id, task_ids=task_ids,
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
     )
     open_blockers_by_task_id_typed: dict[UUID, list[OpenBlockerRow]] = {
         task_id: [
@@ -896,16 +903,23 @@ async def get_lead_next_action(
         for task_id, rows in open_blocker_rows_raw.items()
     }
     pending_operator_decision_ids = await task_ids_with_pending_operator_decision(
-        session, board_id=board.id, task_ids=task_ids,
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
     )
     orphan_children = await orphan_children_with_terminal_parent(
-        session, board_id=board.id,
+        session,
+        board_id=board.id,
     )
     parents_already_materialized = await task_ids_with_children(
-        session, board_id=board.id, task_ids=task_ids,
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
     )
     parents_with_retired_marker = await task_ids_with_umbrella_retired_marker(
-        session, board_id=board.id, task_ids=task_ids,
+        session,
+        board_id=board.id,
+        task_ids=task_ids,
     )
     # Slice 5: gateway session projection for in-progress tasks. The
     # selector adds ``gateway_session`` to inspect_stale_in_progress
@@ -926,18 +940,14 @@ async def get_lead_next_action(
     in_progress_agents = (
         list(
             (
-                await session.exec(
-                    select(Agent).where(col(Agent.id).in_(in_progress_agent_uuids))
-                )
+                await session.exec(select(Agent).where(col(Agent.id).in_(in_progress_agent_uuids)))
             ).all()
         )
         if in_progress_agent_uuids
         else []
     )
     gateway_lookup_id_by_agent_uuid = {
-        a.id: lookup
-        for a in in_progress_agents
-        if (lookup := projection_lookup_id(a)) is not None
+        a.id: lookup for a in in_progress_agents if (lookup := projection_lookup_id(a)) is not None
     }
     gateway_state_by_lookup_id = await list_main_session_states_for_agent_ids(
         session, agent_ids=list(gateway_lookup_id_by_agent_uuid.values())
@@ -1221,7 +1231,9 @@ async def create_task(
                 "blocked_by_task_ids": [str(value) for value in blocked_by],
             },
         )
-    if task.operator_decision_required and (task.assigned_agent_id is not None or task.status != "inbox"):
+    if task.operator_decision_required and (
+        task.assigned_agent_id is not None or task.status != "inbox"
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -1712,7 +1724,9 @@ async def reconcile_board_memory_intake_endpoint(
     _guard_board_access(agent_ctx, board)
     _require_board_lead(agent_ctx)
     if board.id is None:
-        from fastapi import HTTPException, status as http_status
+        from fastapi import HTTPException
+        from fastapi import status as http_status
+
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND)
     result = await reconcile_board_memory_intake(session, board_id=board.id)
     return BoardMemoryIntakeResultRead(

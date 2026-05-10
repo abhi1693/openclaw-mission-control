@@ -157,9 +157,7 @@ def compute_repair_deadline(agent: Agent, *, now: datetime) -> datetime:
         if isinstance(every, str) and every.strip():
             with suppress(ValueError):
                 seconds = parse_every_to_seconds(every)
-                interval = (
-                    timedelta(seconds=seconds) + HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
-                )
+                interval = timedelta(seconds=seconds) + HEARTBEAT_RECOVERY_GRACE_AFTER_INTERVAL
     return now + interval
 
 
@@ -199,11 +197,7 @@ async def _fetch_auth_status_by_gateway(
 
     if not gateway_ids:
         return {}
-    gateways = (
-        await session.exec(
-            select(Gateway).where(col(Gateway.id).in_(gateway_ids))
-        )
-    ).all()
+    gateways = (await session.exec(select(Gateway).where(col(Gateway.id).in_(gateway_ids)))).all()
     snapshots: dict[UUID, dict[str, Any] | None] = {}
     for gateway in gateways:
         config = optional_gateway_client_config(gateway)
@@ -251,8 +245,7 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
     candidates = [
         agent
         for agent in raw_candidates
-        if _is_heartbeat_enabled(agent)
-        and _null_deadline_is_suspicious(agent, now=now)
+        if _is_heartbeat_enabled(agent) and _null_deadline_is_suspicious(agent, now=now)
     ]
     report = SweepReport(total_scanned=len(candidates))
     if not candidates:
@@ -262,12 +255,8 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
     # Part E.1: one authStatus fetch per unique gateway in this sweep,
     # cached here and stamped on every repair row. Older gateways
     # (pre-4.15) return None via the helper's best-effort wrapper.
-    gateway_ids = {
-        agent.gateway_id for agent in candidates if agent.gateway_id is not None
-    }
-    auth_status_by_gateway = await _fetch_auth_status_by_gateway(
-        session, gateway_ids=gateway_ids
-    )
+    gateway_ids = {agent.gateway_id for agent in candidates if agent.gateway_id is not None}
+    auth_status_by_gateway = await _fetch_auth_status_by_gateway(session, gateway_ids=gateway_ids)
     pending_logs: list[tuple[RepairOutcome, bool]] = []
     new_this_sweep: dict[UUID, int] = {}
 
@@ -286,9 +275,7 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
                     reason=f"deadline-compute-error: {exc!r}",
                 )
             )
-            logger.exception(
-                "heartbeat_watchdog.compute_failed agent_id=%s", agent.id
-            )
+            logger.exception("heartbeat_watchdog.compute_failed agent_id=%s", agent.id)
             continue
 
         # Compare-and-swap: only repair if the deadline is still null. A
@@ -318,9 +305,7 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
             continue
 
         elapsed = (
-            (now - agent.last_seen_at).total_seconds()
-            if agent.last_seen_at is not None
-            else None
+            (now - agent.last_seen_at).total_seconds() if agent.last_seen_at is not None else None
         )
         event = AgentHeartbeatRepairEvent(
             agent_id=agent.id,
@@ -407,9 +392,7 @@ async def heartbeat_watchdog_loop(stop_event: asyncio.Event) -> None:
             except Exception:
                 logger.exception("heartbeat_watchdog.iteration_failed")
             try:
-                await asyncio.wait_for(
-                    stop_event.wait(), timeout=WATCHDOG_INTERVAL_SECONDS
-                )
+                await asyncio.wait_for(stop_event.wait(), timeout=WATCHDOG_INTERVAL_SECONDS)
             except TimeoutError:
                 continue
     finally:

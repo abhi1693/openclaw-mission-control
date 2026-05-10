@@ -16,13 +16,14 @@ from app.api.agent import router as agent_router
 from app.api.agents import router as agents_router
 from app.api.approvals import router as approvals_router
 from app.api.auth import router as auth_router
+from app.api.blockers import router as blockers_router
 from app.api.board_group_memory import router as board_group_memory_router
 from app.api.board_groups import router as board_groups_router
 from app.api.board_memory import router as board_memory_router
 from app.api.board_onboarding import router as board_onboarding_router
-from app.api.blockers import router as blockers_router
 from app.api.board_webhooks import router as board_webhooks_router
 from app.api.boards import router as boards_router
+from app.api.deploy import router as deploy_router
 from app.api.gateway import router as gateway_router
 from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
@@ -34,9 +35,13 @@ from app.api.skills_marketplace import router as skills_marketplace_router
 from app.api.souls_directory import router as souls_directory_router
 from app.api.tags import router as tags_router
 from app.api.task_custom_fields import router as task_custom_fields_router
+from app.api.tasks import (
+    drain_actionability_emit_tasks,
+    drain_deploy_degraded_emit_tasks,
+    drain_lane_quieting_emit_tasks,
+)
 from app.api.tasks import router as tasks_router
 from app.api.users import router as users_router
-from app.api.deploy import router as deploy_router
 from app.core.config import settings
 from app.core.error_handling import install_error_handling
 from app.core.logging import configure_logging, get_logger
@@ -45,19 +50,14 @@ from app.core.rate_limit_backend import RateLimitBackend
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import init_db
 from app.schemas.health import HealthStatusResponse
-from app.api.tasks import (
-    drain_actionability_emit_tasks,
-    drain_deploy_degraded_emit_tasks,
-    drain_lane_quieting_emit_tasks,
-)
 from app.services.openclaw.heartbeat_sweep import heartbeat_sweep_loop, stop_heartbeat_sweep
-from app.services.openclaw.lead_scoring_sweep import (
-    lead_scoring_sweep_loop,
-    stop_lead_scoring_sweep,
-)
 from app.services.openclaw.heartbeat_watchdog import (
     heartbeat_watchdog_loop,
     stop_heartbeat_watchdog,
+)
+from app.services.openclaw.lead_scoring_sweep import (
+    lead_scoring_sweep_loop,
+    stop_lead_scoring_sweep,
 )
 from app.services.openclaw.provisioning import reconcile_agent_heartbeat_enabled_flags
 from app.services.retention import retention_purge_loop, stop_retention_purge
@@ -474,7 +474,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         reconcile_result.get("updated_agents", 0),
     )
     sweep_stop_event = asyncio.Event()
-    sweep_task = asyncio.create_task(heartbeat_sweep_loop(sweep_stop_event), name="heartbeat-sweep-loop")
+    sweep_task = asyncio.create_task(
+        heartbeat_sweep_loop(sweep_stop_event), name="heartbeat-sweep-loop"
+    )
     watchdog_stop_event = asyncio.Event()
     watchdog_task = asyncio.create_task(
         heartbeat_watchdog_loop(watchdog_stop_event), name="heartbeat-watchdog-loop"
@@ -496,9 +498,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await stop_lead_scoring_sweep(
-            lead_scoring_task, lead_scoring_stop_event
-        )
+        await stop_lead_scoring_sweep(lead_scoring_task, lead_scoring_stop_event)
         await stop_retention_purge(retention_task, retention_stop_event)
         await stop_heartbeat_watchdog(watchdog_task, watchdog_stop_event)
         await stop_heartbeat_sweep(sweep_task, sweep_stop_event)

@@ -46,11 +46,11 @@ def _event(
         agent_id=uuid4(),
         reviewer_role=reviewer_role,
         verdict=verdict,
-        evidence_type=evidence_type
-        if evidence_type is not None
-        else "browser"
-        if reviewer_role == "qa_e2e"
-        else "review",
+        evidence_type=(
+            evidence_type
+            if evidence_type is not None
+            else "browser" if reviewer_role == "qa_e2e" else "review"
+        ),
         target=target,
         build_hash=build_hash,
         evidence=evidence,
@@ -380,9 +380,7 @@ def test_review_only_architect_pass_requires_child_task_evidence() -> None:
     )
 
     assert readiness.ready is False
-    assert readiness.artifact_issues == [
-        "review_only_architect_pass_missing_child_task_evidence"
-    ]
+    assert readiness.artifact_issues == ["review_only_architect_pass_missing_child_task_evidence"]
 
 
 def test_review_only_architect_pass_accepts_declared_child_task_ids() -> None:
@@ -425,9 +423,7 @@ def test_review_only_architect_pass_blocks_missing_declared_child_task_ids() -> 
     assert readiness.ready is False
     assert readiness.declared_child_task_ids == [child_task_id]
     assert readiness.missing_child_task_ids == [child_task_id]
-    assert readiness.artifact_issues == [
-        "review_only_architect_pass_child_tasks_not_found"
-    ]
+    assert readiness.artifact_issues == ["review_only_architect_pass_child_tasks_not_found"]
 
 
 def test_review_only_architect_pass_accepts_explicit_no_child_tasks_required() -> None:

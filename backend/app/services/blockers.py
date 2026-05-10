@@ -105,18 +105,26 @@ async def open_blocker_rows_by_task_id(
         .where(col(Blocker.resolved_at).is_(None))
         .order_by(col(Blocker.task_id), col(Blocker.created_at))
     )
-    grouped: dict[UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime, datetime | None]]] = {}
+    grouped: dict[
+        UUID, list[tuple[UUID, str | None, str | None, UUID | None, datetime, datetime | None]]
+    ] = {}
     for row in (await session.exec(stmt)).all():
-        task_id, blocker_id, reason_code, owner_role, owner_agent_id, created_at, acknowledged_at = row
+        (
+            task_id,
+            blocker_id,
+            reason_code,
+            owner_role,
+            owner_agent_id,
+            created_at,
+            acknowledged_at,
+        ) = row
         grouped.setdefault(task_id, []).append(
             (blocker_id, reason_code, owner_role, owner_agent_id, created_at, acknowledged_at),
         )
     return grouped
 
 
-async def task_has_open_blocker(
-    session: AsyncSession, *, board_id: UUID, task_id: UUID
-) -> bool:
+async def task_has_open_blocker(session: AsyncSession, *, board_id: UUID, task_id: UUID) -> bool:
     """Single-task EXISTS — cheaper than pulling the id set for the
     PATCH response path where we only need a boolean."""
 
@@ -159,12 +167,6 @@ async def auto_resolve_pipeline_blockers_if_ready(
     the count is non-zero — keeping commit out of this helper lets
     callers batch with their own transaction work.
     """
-    from app.models.tasks import Task
-    from app.services.task_pipeline import (
-        list_task_pipeline_events,
-        pipeline_missing_states,
-    )
-
     # System-authored signal: only auto-resolve Blockers whose
     # ``created_by_agent_id`` matches a current board-lead agent. The
     # API allows arbitrary ``reason_code`` values on POST /blockers,
@@ -176,10 +178,19 @@ async def auto_resolve_pipeline_blockers_if_ready(
     # materialization paths emit these) while letting operator-filed
     # blockers remain manually-resolved.
     from app.models.agents import Agent
+    from app.models.tasks import Task
+    from app.services.task_pipeline import (
+        list_task_pipeline_events,
+        pipeline_missing_states,
+    )
 
-    lead_ids_stmt = select(col(Agent.id)).where(
-        col(Agent.board_id) == board_id,
-    ).where(col(Agent.is_board_lead).is_(True))
+    lead_ids_stmt = (
+        select(col(Agent.id))
+        .where(
+            col(Agent.board_id) == board_id,
+        )
+        .where(col(Agent.is_board_lead).is_(True))
+    )
     lead_ids = list((await session.exec(lead_ids_stmt)).all())
 
     open_blockers_stmt = (
@@ -200,15 +211,11 @@ async def auto_resolve_pipeline_blockers_if_ready(
     if not open_blockers:
         return 0
 
-    task = (
-        await session.exec(select(Task).where(col(Task.id) == task_id))
-    ).first()
+    task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
     if task is None:
         return 0
     cycle_since = task.in_progress_at or task.previous_in_progress_at
-    events = await list_task_pipeline_events(
-        session, task_id=task_id, since=cycle_since
-    )
+    events = await list_task_pipeline_events(session, task_id=task_id, since=cycle_since)
     if pipeline_missing_states(events):
         # Pipeline still has missing required states for the current
         # cycle — keep Blockers open.

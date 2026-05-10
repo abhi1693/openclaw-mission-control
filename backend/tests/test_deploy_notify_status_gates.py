@@ -57,20 +57,29 @@ async def deploy_seed(
         session.add(Organization(id=org_id, name="org"))
         session.add(
             Gateway(
-                id=gateway_id, organization_id=org_id, name="gateway",
-                url="ws://gateway.example/ws", workspace_root="/tmp/ws",
+                id=gateway_id,
+                organization_id=org_id,
+                name="gateway",
+                url="ws://gateway.example/ws",
+                workspace_root="/tmp/ws",
             ),
         )
         session.add(
             Board(
-                id=board_id, organization_id=org_id, gateway_id=gateway_id,
-                name="Dev Squad", slug="dev-squad",
+                id=board_id,
+                organization_id=org_id,
+                gateway_id=gateway_id,
+                name="Dev Squad",
+                slug="dev-squad",
             ),
         )
         session.add(
             Agent(
-                id=agent_id, board_id=board_id, gateway_id=gateway_id,
-                name="QA-E2E", openclaw_session_id="agent:qa-e2e:main",
+                id=agent_id,
+                board_id=board_id,
+                gateway_id=gateway_id,
+                name="QA-E2E",
+                openclaw_session_id="agent:qa-e2e:main",
             ),
         )
         await session.commit()
@@ -89,7 +98,8 @@ async def deploy_seed(
     sent: list[dict[str, object]] = []
 
     class _FakeDispatch:
-        def __init__(self, session): self.session = session
+        def __init__(self, session):
+            self.session = session
 
         async def optional_gateway_config_for_board(self, board):
             return GatewayConfig(url="ws://gateway.example/ws")
@@ -101,7 +111,9 @@ async def deploy_seed(
     monkeypatch.setattr(deploy_api, "GatewayDispatchService", _FakeDispatch)
 
     handles: dict[str, object] = {
-        "engine": engine, "board_id": board_id, "agent_id": agent_id,
+        "engine": engine,
+        "board_id": board_id,
+        "agent_id": agent_id,
         "sent": sent,
     }
     try:
@@ -113,10 +125,14 @@ async def deploy_seed(
 async def _seed_task(engine: AsyncEngine, *, board_id, status: str) -> Task:
     task_id = uuid4()
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        session.add(Task(
-            id=task_id, board_id=board_id, title=f"task-{status}",
-            status=status,
-        ))
+        session.add(
+            Task(
+                id=task_id,
+                board_id=board_id,
+                title=f"task-{status}",
+                status=status,
+            )
+        )
         await session.commit()
         task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
         assert task is not None
@@ -125,8 +141,10 @@ async def _seed_task(engine: AsyncEngine, *, board_id, status: str) -> Task:
 
 def _payload(task_id) -> DeployNotifyPayload:
     return DeployNotifyPayload(
-        task_id=task_id, build_hash="rnK5F4Fe",
-        deploy_target="http://192.168.2.63:3002", commit_sha="c2ba7f76",
+        task_id=task_id,
+        build_hash="rnK5F4Fe",
+        deploy_target="http://192.168.2.63:3002",
+        commit_sha="c2ba7f76",
     )
 
 
@@ -154,9 +172,7 @@ async def test_deploy_notify_rejects_cancelled_task(
                 select(TaskPipelineEvent).where(col(TaskPipelineEvent.task_id) == task.id),
             ),
         )
-        assert events == [], (
-            "rejected deploy_notify must not leave half-written pipeline events"
-        )
+        assert events == [], "rejected deploy_notify must not leave half-written pipeline events"
 
     assert handles["sent"] == [], "no QA dispatch on a cancelled task"
 
@@ -182,9 +198,9 @@ async def test_deploy_notify_records_audit_when_task_inbox(
                 .where(col(ActivityEvent.event_type) == "task.deploy_notify_on_non_active_status"),
             ),
         )
-        assert len(audit) == 1, (
-            "inbox deploy_notify must record an audit event for operator visibility"
-        )
+        assert (
+            len(audit) == 1
+        ), "inbox deploy_notify must record an audit event for operator visibility"
         assert "inbox" in (audit[0].message or "")
 
 

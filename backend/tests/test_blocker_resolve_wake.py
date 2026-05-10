@@ -153,6 +153,7 @@ def _patch_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
             return None
 
     import app.services.lead_notify as lead_notify
+
     monkeypatch.setattr(lead_notify, "GatewayDispatchService", _FakeDispatch)
     return sent
 
@@ -194,8 +195,9 @@ async def test_blocker_resolve_wakes_lead_when_last_open_blocker(
     assert sent[0]["session_key"] == "agent:lead:main"
     assert sent[0]["agent_name"] == "Supervisor"
     assert sent[0]["deliver"] is True
-    assert str(task.id) in str(sent[0]["message"]), \
-        "wake message must reference the unblocked task id"
+    assert str(task.id) in str(
+        sent[0]["message"]
+    ), "wake message must reference the unblocked task id"
 
 
 @pytest.mark.asyncio
@@ -242,14 +244,18 @@ async def test_blocker_resolve_no_wake_when_other_blockers_still_open(
         payload=BlockerCreate.model_validate(
             {"category": "operator", "owner_role": "operator", "reason_code": "operator_policy"},
         ),
-        board=board, task=task, session=session,
+        board=board,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=worker),  # type: ignore[arg-type]
     )
     b = await create_task_blocker(
         payload=BlockerCreate.model_validate(
             {"category": "source", "owner_role": "frontend-dev", "reason_code": "source_pending"},
         ),
-        board=board, task=task, session=session,
+        board=board,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=worker),  # type: ignore[arg-type]
     )
     assert sent == [], "creates must not wake"
@@ -258,7 +264,8 @@ async def test_blocker_resolve_no_wake_when_other_blockers_still_open(
     await update_task_blocker(
         blocker_id=a.id,
         payload=BlockerUpdate(status_transition="resolve"),
-        task=task, session=session,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=worker),  # type: ignore[arg-type]
     )
     assert sent == [], "resolve must not wake while other Blockers remain open"
@@ -267,7 +274,8 @@ async def test_blocker_resolve_no_wake_when_other_blockers_still_open(
     await update_task_blocker(
         blocker_id=b.id,
         payload=BlockerUpdate(status_transition="resolve"),
-        task=task, session=session,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=worker),  # type: ignore[arg-type]
     )
     assert len(sent) == 1, "wake must fire exactly once on the LAST resolve"
@@ -294,19 +302,23 @@ async def test_blocker_resolve_succeeds_when_lead_wake_fails(
             raise RuntimeError("simulated dispatch failure")
 
     import app.services.lead_notify as lead_notify
+
     monkeypatch.setattr(lead_notify, "GatewayDispatchService", _BoomDispatch)
 
     created = await create_task_blocker(
         payload=BlockerCreate.model_validate(
             {"category": "operator", "owner_role": "operator"},
         ),
-        board=board, task=task, session=session,
+        board=board,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=worker),  # type: ignore[arg-type]
     )
     resolved = await update_task_blocker(
         blocker_id=created.id,
         payload=BlockerUpdate(status_transition="resolve"),
-        task=task, session=session,
+        task=task,
+        session=session,
         actor=_ActorStub(agent=worker),  # type: ignore[arg-type]
     )
     # Resolution must persist despite the wake failure.

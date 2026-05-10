@@ -1,0 +1,375 @@
+{% set is_main = (is_main_agent | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set is_lead = (is_board_lead | default(false) | string | lower) in ["true", "1", "yes"] %}
+{% set role_text = ((identity_role | default("")) ~ " " ~ (agent_name | default(""))) | lower %}
+{% set is_architect = "architect" in role_text %}
+{% set is_devops = "devops" in role_text %}
+{% set is_backend = "backend" in role_text or "api" in role_text or "database" in role_text or "service" in role_text %}
+{% set is_frontend = "frontend" in role_text or "ui" in role_text or "react" in role_text %}
+{% set is_qa = "qa" in role_text %}
+{% set is_qa_e2e = "qa-e2e" in role_text or "e2e" in role_text %}
+{% if is_main %}
+# HEARTBEAT.md
+
+Main agent heartbeat. Scope, communication rules, Mission Control API,
+and consolidation playbooks live in `AGENTS.md` — this file is only the
+per-tick checklist.
+
+## Required Runtime
+- `BASE_URL`
+- `AUTH_TOKEN`
+- `AGENT_ID`
+- `AGENT_NAME`
+
+Read these from `TOOLS.md` or the environment. If any are missing, stop
+and request reprovisioning.
+
+## This Heartbeat
+1. **Check in.** `POST $BASE_URL/api/v1/agent/heartbeat` with header `X-Agent-Token: $AUTH_TOKEN`. If this fails (5xx or network), stop. Do not write memory updates until the next successful check-in.
+2. **Handle pending `LEAD REQUEST: ASK USER`** per `AGENTS.md § User outreach requests`.
+3. **Return `HEARTBEAT_OK`** only when:
+   - check-in succeeded
+   - any pending high-priority gateway-main duty was handled
+   - no outage rule was violated
+
+On the first cycle after wake/bootstrap, run the check-in immediately.
+Do not claim or move board tasks unless `AGENTS.md` explicitly tells you
+to do so.
+{% elif is_lead %}
+# HEARTBEAT.md
+
+Board lead heartbeat. Operating rules, health scan, routing, and
+synthesis all live in `AGENTS.md § Lead Board Playbook` — this file is
+only the per-tick checklist.
+
+## Required Runtime
+- `BASE_URL`
+- `AUTH_TOKEN`
+- `BOARD_ID`
+- `AGENT_ID`
+- `AGENT_NAME`
+- `BOARD_TIMEZONE` when present
+
+Read these from `TOOLS.md` or the environment. If any required value is
+missing, stop and request reprovisioning.
+
+## Rules
+- **Board API is source of truth.** Do not rely on memory for current task state.
+- Post to task comments for task work; use board chat only for real routing or coordination.
+- Use `$BOARD_TIMEZONE` for date displays when it exists.
+- If heartbeat pre-flight fails, stop. Do not write task or memory updates.
+- One heartbeat should advance, park, or close one task. If it cannot, record the first friction once in the right routing object and stop.
+- Do not post "hold unchanged" / "still fail-closed" / "no status change" loops.
+
+## This Heartbeat
+1. **Check in.**
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TOKEN"
+```
+If this fails for any 4xx/5xx/network error, stop. Do not continue.
+For 401/403/404/429, report `HEARTBEAT_FAILED` once with the HTTP
+status/body or tool error so provisioning, permission, endpoint, or rate-limit
+drift is visible. Do not assume exec is blocked from old context; try the
+check-in command once in this session before declaring a tool/runtime block.
+
+2. **Memory Intake Gate.** Before health scan, run
+`AGENTS.md § Lead Board Playbook / Step 1 — Board Memory Intake`.
+HEARTBEAT_OK is forbidden until this gate proves there are zero unlinked actionable operator memories, or creates exactly one linked task for the
+newest missing operator review/findings memory. If the gate prints
+`MEMORY_INTAKE_FAILED` or task creation fails, report `HEARTBEAT_FAILED`.
+
+3. **Lead Next Action Gate.** Run
+`AGENTS.md § Lead Board Playbook / Step 2 — Lead Next Action Gate`.
+Do not manually scan the task list before this gate. /lead/next-action is authoritative for the next heartbeat action.
+HEARTBEAT_OK is forbidden when it prints `LEAD_NEXT_ACTION_REQUIRED` unless
+this tick applies the returned action or records the first concrete friction
+that prevents it.
+
+4. **Run the rest of the Lead Board Playbook** per `AGENTS.md § Lead Board Playbook`:
+   - health scan and first-friction handling
+   - inbox routing and post-assignment nudges
+   - review routing and gate enforcement
+   - dependency/blocker handling
+   - synthesis when the board is complete
+
+5. **Board Rule Snapshot**
+`require_approval_for_done={{ board_rule_require_approval_for_done | default(false) }}` `block_status_with_pending_approval={{ board_rule_block_status_changes_with_pending_approval | default(false) }}` `only_lead_can_change_status={{ board_rule_only_lead_can_change_status | default(false) }}`
+
+6. **HEARTBEAT_OK Gate.** Return `HEARTBEAT_OK` only when all are true:
+   - check-in succeeded
+   - Memory Intake Gate passed
+   - Lead Next Action Gate passed or its returned action was applied/parked on a real routing object
+   - health scan ran
+   - one closest-to-done task was advanced, parked on a real routing object, or left alone because it is already waiting on a known owner
+   - synthesis ran if the board is fully complete
+{% else %}
+# HEARTBEAT.md
+
+Worker heartbeat. Execution loop, validation rules, and idle pattern
+live in `AGENTS.md § Worker Execution Loop` — this file is only the
+per-tick checklist.
+
+## Required Runtime
+- `BASE_URL`
+- `AUTH_TOKEN`
+- `BOARD_ID`
+- `AGENT_ID`
+- `AGENT_NAME`
+- `BOARD_TIMEZONE` when present
+
+Read these from `TOOLS.md` or the environment. If any required value is
+missing, stop and request reprovisioning.
+
+## Rules
+- **Board API is source of truth.** Do not rely on memory for task status.
+- Post only high-signal task comments. Never use chat as a keepalive channel.
+- Use `$BOARD_TIMEZONE` for date displays when it exists.
+- If heartbeat pre-flight fails, stop. Do not write task or memory updates.
+- Parked tasks: `is_blocked=true` means do not touch. Do not post progress, do not post "still blocked", and do not move status.
+
+## This Heartbeat
+1. **Check in.**
+```bash
+curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TOKEN"
+```
+If this fails (5xx/network), stop. Do not continue.
+
+2. **Select one task and act on it.** Do not end the tick after the task
+   query. Fetch your assigned work, choose the first non-blocked task in this
+   order, and act on it now:
+{% if is_qa %}
+   - assigned `review`
+   - assigned `inbox`
+{% elif is_architect %}
+   - assigned `review`
+   - assigned `inbox`
+{% else %}
+   - active `in_progress`
+   - assigned `rework`
+   - assigned `inbox`
+   - assigned `review`
+{% endif %}
+
+```bash
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?assigned_agent_id=$AGENT_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/mc-my-tasks.json
+python3 - <<'PY'
+import json
+order = [{% if is_qa or is_architect %}"review", "inbox"{% else %}"in_progress", "rework", "inbox", "review"{% endif %}]
+tasks = json.load(open("/tmp/mc-my-tasks.json")).get("items", [])
+for status in order:
+    for task in tasks:
+        if task.get("status") != status:
+            continue
+        print(json.dumps({
+            "id": task.get("id"),
+            "status": status,
+            "blocked": bool(task.get("is_blocked")),
+            "title": task.get("title"),
+            "description": task.get("description"),
+        }))
+        raise SystemExit
+print("NO_TASK")
+PY
+```
+
+If this prints `NO_TASK`, return `HEARTBEAT_OK`. If it prints
+`"blocked": true`, pick another task from the JSON if one exists; otherwise
+return `HEARTBEAT_OK` without posting.
+
+{% if is_qa %}
+For a chosen `inbox` validation task, move it to `review` before validating.
+Do not move QA tasks to `in_progress`, and do not implement or deploy:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "review"}'
+```
+{% elif is_architect %}
+For a chosen `inbox` review task, move it to `review` before reviewing.
+Do not move Architect tasks to `in_progress`, do not claim `rework`, and do not implement or deploy:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "review"}'
+```
+{% else %}
+For a chosen `inbox` or `rework` task, move it before working:
+```bash
+curl -fsS -X PATCH "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID" \
+  -H "X-Agent-Token: $AUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"status": "in_progress"}'
+```
+{% endif %}
+
+Then fetch comments:
+```bash
+curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks/$TASK_ID/comments?limit=20" \
+  -H "X-Agent-Token: $AUTH_TOKEN"
+```
+
+{% if is_architect or is_qa %}
+3. **Execute review/validation in this session.** Give a verdict from fresh
+   evidence, post the result to the task comment, and tag `@lead`. Do not
+   return `HEARTBEAT_OK` while a review task is selected and untested.
+{% else %}
+3. **Spawn the executor for this task.** Use the `acp-delegation` skill for
+   the spawn payload, Board API firewall, label scheme, and chunk strategy,
+   plus the role-specific post-child review gate (`acp-post-review`). Include
+   the task id, title, description, acceptance criteria/comments, `BASE_URL`,
+   `BOARD_ID`, `AGENT_ID`, and the role evidence packet from `acp-post-review`.
+   {% if is_devops %}
+   - "Work this one DevOps task end-to-end. First classify it as deploy
+     implementation, deploy validation, infra drift, credential/operator
+     action, service config, migration, rollback, source bug, or external
+     outage. If the selected task is already in review, validate deployed
+     state only: do not edit, deploy, or move status; post PASS/FAIL/
+     INCONCLUSIVE with suggested routing. For implementation/rework, use only
+     approved source host/path and deploy scripts; never edit production
+     source directly. The DevOps deploy evidence packet must include: source
+     host/path and commit SHA; deploy script/command and exit status; target
+     host/env/service; artifact hash/id/package path; service/process status,
+     start time, version/env, and relevant log tail; exact live curl/API
+     command with HTTP status/body; loaded frontend build hash/artifact id for
+     frontend deploys; migration/config readback when applicable; first-cause
+     classification for persistence/state failures; rollback command/path or
+     backup/snapshot reference for risky deploy/auth/migration/cross-host
+     work. For frontend_ui/mixed deploy work, record structured deploy state
+     with /deploy/notify or `$HQCTL pipeline-event $TASK_ID built --artifact-hash HASH --deploy-target URL`
+     and `... deployed --artifact-hash HASH --deploy-target URL` before asking for
+     review. The evidence packet is not a substitute for structured pipeline
+     state. If target/env/rollback is ambiguous, post the first friction with
+     exact missing item and stop."
+   {% elif is_backend %}
+   - "Work this one task end-to-end. Read the repo and contract, edit code, run
+     checks, iterate, and post literal runtime evidence, not descriptions. For
+     backend/API work, resolve the runtime target in this order: task
+     validation_target*, task BASE_URL, then a local service explicitly labeled
+     local-runtime if no target exists. The evidence packet must include: exact
+     curl command + HTTP status + response body for every affected endpoint;
+     exact trigger/event plus log/API/DB observation for non-HTTP behavior
+     such as jobs, queues, WebSockets, middleware, or service calls;
+     write-then-GET or before/after DB readback for every state-changing AC;
+     migration command output plus schema/readback proof if schema changed; for
+     bugfixes, original failure evidence or a safe non-repro explanation plus
+     equivalent regression proof; deploy target URL plus commit SHA/artifact
+     digest/process start time/service version evidence when a deploy target
+     exists. Do not use source grep, local tests, OpenAPI presence, or healthz
+     alone as completion evidence. If blocked, post the first friction with
+     exact command/output."
+   {% elif is_frontend %}
+   - "Work this one task end-to-end. Read the repo, edit code, run checks,
+     iterate, and post literal browser evidence, not descriptions. For
+     frontend/UI work, resolve the browser target in this order: task
+     validation_target*, task BASE_URL, deployed URL, then a local dev server
+     explicitly labeled local-browser-runtime if no target exists. The evidence
+     packet must include: exact target URL; browser navigation plus snapshot
+     output for every changed route/state; DOM text dump and raw i18n-key scan
+     output, failing any visible raw keys such as namespace.section.key or
+     items[0].title; console error output; failed-network-request output; exact
+     click/type/hover action plus before/after observation for every functional
+     AC; screenshot/snapshot evidence for responsive/layout/visual ACs;
+     API/readback proof for API-backed UI state; deploy target URL plus commit
+     SHA and loaded build hash/artifact id when a deploy target exists. Do not
+     use source grep, local build, locale JSON, t() call counts, or bundle grep
+     alone as completion evidence. For CSS data-URL SVGs or generated visual
+     layers, prove the live rendered state with DOM plus computed
+     style/background-image, screenshot/pixel, or Playwright locator evidence.
+     Post snapshot output, not code descriptions.
+     If browser access is unavailable, post the first friction with exact
+     target/error output."
+   {% else %}
+   - "Work this one task end-to-end. Read the repo, edit code, run checks,
+     iterate, and move to review only when every acceptance criterion has fresh
+     evidence. If blocked, post the first friction with exact command/output."
+   {% endif %}
+
+   After spawn returns `accepted`, follow the `acp-delegation` skill for the
+   `ACP_EXECUTOR_STARTED` marker (label scheme `mc-task-<TASK_ID>-<STAGE>-a<N>`),
+   the No Double Spawn rule, and the Retry Budget. If the child wrote task
+   comments/status/memory/heartbeats anyway, run `acp-post-review` § Child Write
+   Contamination Gate before posting any parent evidence.
+{% endif %}
+
+{% if not is_qa and not is_architect %}
+## Inbox Pickup Gate
+
+Before self-picking any unassigned `Inbox` task, confirm all of the following:
+
+1. the task is fully within your role scope,
+2. it is unambiguous enough to execute directly,
+3. it requires no cross-role input, approval, handoff, or dependency work before execution,
+4. it has `4` acceptance criteria or fewer.
+
+If any check fails:
+- do not self-pick it,
+- leave it for `Supervisor` decomposition or routing.
+
+Acceptance-criteria count is a routing heuristic only; it does not permit ignoring cross-role complexity, ambiguity, dependencies, or decomposition needs.
+
+If the task passes the gate, self-pick it atomically:
+1. assign it to yourself,
+2. move it to `in_progress`,
+3. start work.
+
+Do not begin work on an `Inbox` task before ownership and status are updated.
+
+## Rework Pickup Gate
+
+When checking `rework`:
+
+1. continue any `rework` task already assigned to you,
+2. do not claim a `rework` task already assigned by `Supervisor`,
+3. only self-pick an unassigned `rework` task if the required rework is fully within your role scope and does not require decomposition, cross-role coordination, approval, or unresolved dependency work.
+
+If the task fails that gate, leave it for `Supervisor` routing.
+
+If the task passes the gate, claim it atomically:
+1. assign it to yourself,
+2. move it to `in_progress`,
+3. start work.
+{% endif %}
+
+{% if is_architect %}
+3. **Architect lane.**
+   - Stay in review mode: verdict first, findings second.
+   - Review only tasks in `review`; an assigned `inbox` task is only review intake and must be moved to `review` before assessment.
+   - Do not continue `in_progress`, claim `rework`, implement, deploy, or re-submit worker output.
+   - Enforce the declared `review_packet_type` and `validation_target*`.
+   - Frontend/UI PASS requires the submitted browser evidence packet: target URL, navigation/snapshot, DOM/raw i18n-key scan, console/network output, click/observe proof for functional ACs, responsive/layout proof when applicable, and loaded build hash for deployed targets.
+   - Backend/API PASS requires the submitted runtime evidence packet: exact endpoint status/body, non-HTTP trigger/log/readback, persistence readback, migration proof, bugfix proof, and deploy version proof when applicable.
+   - Missing required evidence is `FAIL` or `INCONCLUSIVE`, not PASS from source analysis.
+{% elif is_devops %}
+3. **DevOps lane.**
+   - Treat source, artifact, service, and live behavior as separate checks.
+   - Do not report deploy success from source changes or service restarts alone.
+   - If a selected task is already in `review`, validate deployed state only; do not implement, redeploy, or move status unless the lead routes rework.
+   - Deploy PASS requires source commit, artifact hash/id, deploy command output, target host/service, process status, log tail, live HTTP/API output, and loaded frontend build hash when applicable.
+   - For risky deploy/auth/migration/cross-host work, confirm rollback/preflight evidence before changing live state.
+   - Classify rework before fixing: infra drift, deploy failure, config mismatch, migration not applied, wrong target/env, source bug, external outage, or credential/operator action.
+{% elif is_qa %}
+3. **QA lane.**
+   - Validation-only: do not implement, deploy, or move a task to `review` after testing.
+   - Do not return PASS from source inspection alone.
+{% if is_qa_e2e %}
+   - For UI validation, use real browser evidence for every PASS: target URL, browser navigation/snapshot, DOM text/raw i18n-key scan, console errors, failed network requests, and click/observe output for functional ACs.
+   - Start the task comment with `VERDICT: PASS/FAIL/INCONCLUSIVE/INFRA BLOCKED`. For frontend_ui/mixed PASS, also record structured runtime evidence after the browser packet: `$HQCTL pipeline-event $TASK_ID runtime_verified --evidence qa_browser_snapshot=posted --evidence qa_dom_scan=posted --source $AGENT_NAME`.
+   - If browser access is unavailable, post INFRA/BLOCKED with exact target/error output, not PASS.
+{% else %}
+   - Confirm the implementation exists before behavioral validation or signoff.
+   - Unit/contract PASS requires AC-to-check mapping, exact command/API output, changed-code coverage, and source/commit parity with the submitted evidence.
+   - Backend/API/persistence PASS requires the submitted backend runtime evidence packet when applicable; source grep, unrelated green tests, OpenAPI presence, or healthz alone are not enough.
+{% endif %}
+   - Do not move `review` to `rework`. For FAIL/PARTIAL, post the validation verdict with `Suggested routing: lead move to rework for <owner/reason>` and stop.
+{% else %}
+3. **When blocked or idle.**
+   - For a new blocker not already represented by a dependency, blocker, or OperatorDecision, post one precise friction comment naming the missing artifact, URL/status, or endpoint.
+   - If the blocker is already represented or there is no active task, return `HEARTBEAT_OK`.
+{% endif %}
+
+4. **HEARTBEAT_OK** only when check-in succeeded and this tick produced one of:
+   - completed work with evidence
+   - one precise new friction report
+   - an idle/parked outcome with no task comment
+
+If your draft says only "still blocked", "unchanged", "same failure", or "waiting", do not post it. Return `HEARTBEAT_OK`.
+{% endif %}

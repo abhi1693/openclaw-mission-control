@@ -29,9 +29,7 @@ from app.services.comment_policy import (
 
 
 def _base_statement() -> object:
-    return select(ActivityEvent).where(
-        ActivityEvent.event_type == "task.comment"
-    )
+    return select(ActivityEvent).where(ActivityEvent.event_type == "task.comment")
 
 
 def _where_filters_on_classifier_flags(statement: object) -> bool:
@@ -151,9 +149,7 @@ async def _seed_events(
 ) -> tuple[ActivityEvent, ActivityEvent, ActivityEvent, ActivityEvent]:
     null_evt = ActivityEvent(event_type="task.comment", classifier_flags=None)
     empty_evt = ActivityEvent(event_type="task.comment", classifier_flags=[])
-    flagged_evt = ActivityEvent(
-        event_type="task.comment", classifier_flags=["ack_only"]
-    )
+    flagged_evt = ActivityEvent(event_type="task.comment", classifier_flags=["ack_only"])
     legacy_evt = ActivityEvent(event_type="task.comment", classifier_flags=[])
     session.add_all([null_evt, empty_evt, flagged_evt, legacy_evt])
     await session.commit()

@@ -173,8 +173,11 @@ class Subscriber:
         try:
             first_raw = await asyncio.wait_for(ws.recv(), timeout=self._handshake_timeout_seconds)
         except asyncio.TimeoutError:
-            logger.warning("gateway did not send %s within %ss",
-                           EVENT_CONNECT_CHALLENGE, self._handshake_timeout_seconds)
+            logger.warning(
+                "gateway did not send %s within %ss",
+                EVENT_CONNECT_CHALLENGE,
+                self._handshake_timeout_seconds,
+            )
             return False
         try:
             first = json.loads(first_raw if isinstance(first_raw, str) else first_raw.decode())
@@ -235,14 +238,16 @@ class Subscriber:
         while True:
             remaining = deadline - asyncio.get_event_loop().time()
             if remaining <= 0:
-                logger.warning("no res for connect req within %ss; aborting",
-                               _CONNECT_RES_TIMEOUT_SECONDS)
+                logger.warning(
+                    "no res for connect req within %ss; aborting", _CONNECT_RES_TIMEOUT_SECONDS
+                )
                 return False
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
             except asyncio.TimeoutError:
-                logger.warning("no res for connect req within %ss; aborting",
-                               _CONNECT_RES_TIMEOUT_SECONDS)
+                logger.warning(
+                    "no res for connect req within %ss; aborting", _CONNECT_RES_TIMEOUT_SECONDS
+                )
                 return False
             try:
                 msg = json.loads(raw if isinstance(raw, str) else raw.decode())
@@ -267,7 +272,8 @@ class Subscriber:
         stop_task = asyncio.create_task(stop.wait())
         try:
             done, _ = await asyncio.wait(
-                {recv_task, stop_task}, return_when=asyncio.FIRST_COMPLETED,
+                {recv_task, stop_task},
+                return_when=asyncio.FIRST_COMPLETED,
             )
             if stop_task in done:
                 await ws.close()

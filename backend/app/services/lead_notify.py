@@ -67,7 +67,10 @@ async def _send_lead_wake(
     if lead is None:
         return
     await _send_agent_wake(
-        session=session, board_id=task.board_id, agent=lead, message=message,
+        session=session,
+        board_id=task.board_id,
+        agent=lead,
+        message=message,
     )
 
 
@@ -92,7 +95,9 @@ async def notify_lead_after_blocker_resolved(
         await _send_lead_wake(session=session, task=task, message=message)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "blocker-resolve notify suppressed: %s (task=%s)", exc, task.id,
+            "blocker-resolve notify suppressed: %s (task=%s)",
+            exc,
+            task.id,
         )
 
 
@@ -106,7 +111,10 @@ async def send_agent_wake(
     """Public alias for _send_agent_wake — used by the next-reviewer
     auto-wake path."""
     return await _send_agent_wake(
-        session=session, board_id=board_id, agent=agent, message=message,
+        session=session,
+        board_id=board_id,
+        agent=agent,
+        message=message,
     )
 
 
@@ -133,5 +141,7 @@ async def notify_lead_after_dependency_cleared(
         await _send_lead_wake(session=session, task=task, message=message)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "dependency-clear notify suppressed: %s (task=%s)", exc, task.id,
+            "dependency-clear notify suppressed: %s (task=%s)",
+            exc,
+            task.id,
         )

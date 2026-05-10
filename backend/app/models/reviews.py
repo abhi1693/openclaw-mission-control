@@ -54,9 +54,7 @@ class Review(TenantScoped, table=True):
     # rows; this is plain text so the Supervisor can render it inline
     # without schema churn.
     citation: str | None = None
-    reviewer_agent_id: UUID | None = Field(
-        default=None, foreign_key="agents.id", index=True
-    )
+    reviewer_agent_id: UUID | None = Field(default=None, foreign_key="agents.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
 
 

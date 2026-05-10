@@ -137,15 +137,11 @@ async def test_fail_with_blockers_creates_review_and_linked_blockers(
     assert {b.category for b in read.blockers} == {"deploy", "contract"}
 
     blocker_rows = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.task_id) == task.id)
-        )
+        await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))
     ).all()
     assert len(blocker_rows) == 2
     link_rows = (
-        await session.exec(
-            select(ReviewBlocker).where(col(ReviewBlocker.review_id) == read.id)
-        )
+        await session.exec(select(ReviewBlocker).where(col(ReviewBlocker.review_id) == read.id))
     ).all()
     assert len(link_rows) == 2
 
@@ -164,14 +160,7 @@ async def test_pass_verdict_creates_review_without_blockers(
     )
     assert read.verdict == "pass"
     assert read.blockers == []
-    assert (
-        (
-            await session.exec(
-                select(Blocker).where(col(Blocker.task_id) == task.id)
-            )
-        ).all()
-        == []
-    )
+    assert (await session.exec(select(Blocker).where(col(Blocker.task_id) == task.id))).all() == []
 
 
 @pytest.mark.asyncio
@@ -189,11 +178,7 @@ async def test_list_reviews_hydrates_blockers(
         session=session,
         actor=actor,  # type: ignore[arg-type]
     )
-    reviews = (
-        await session.exec(
-            select(Review).where(col(Review.task_id) == task.id)
-        )
-    ).all()
+    reviews = (await session.exec(select(Review).where(col(Review.task_id) == task.id))).all()
     assert len(reviews) == 1
     blockers_by_id = await _blockers_by_review(session, [reviews[0].id])
     hydrated = _review_read(reviews[0], blockers_by_id[reviews[0].id])
@@ -228,9 +213,7 @@ async def test_per_blocker_citation_persists(
     )
     assert read.blockers[0].citation == "see deploy log line 42"
     persisted = (
-        await session.exec(
-            select(Blocker).where(col(Blocker.id) == read.blockers[0].blocker_id)
-        )
+        await session.exec(select(Blocker).where(col(Blocker.id) == read.blockers[0].blocker_id))
     ).first()
     assert persisted is not None
     assert persisted.citation == "see deploy log line 42"

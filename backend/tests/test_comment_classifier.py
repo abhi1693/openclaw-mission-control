@@ -14,7 +14,6 @@ import pytest
 
 from app.services.comment_classifier import ClassifierFlag, classify
 
-
 # --- Rule A: ack-only detection ------------------------------------------
 
 
@@ -343,10 +342,7 @@ def test_echo_shape_fires_when_evidence_matches_prior_verbatim() -> None:
     ``has_negative_evidence``. Now the prior-relative check kicks in:
     delta is empty → echo-shape fires."""
 
-    prior = (
-        "Confirmed. D.3 stays fail-closed. http://192.168.2.64:3000/docs "
-        "is still HTTP 404."
-    )
+    prior = "Confirmed. D.3 stays fail-closed. http://192.168.2.64:3000/docs " "is still HTTP 404."
     new = (
         "Confirmed. D.3 stays fail-closed. No net-new lead evidence. "
         "http://192.168.2.64:3000/docs still HTTP 404."
@@ -361,13 +357,9 @@ def test_echo_shape_does_not_fire_on_new_http_code_vs_prior() -> None:
     so the classifier doesn't punish real unblocking updates."""
 
     prior = (
-        "Confirmed. http://192.168.2.64:3000/docs is HTTP 404 — still "
-        "not the shipped DocsPage."
+        "Confirmed. http://192.168.2.64:3000/docs is HTTP 404 — still " "not the shipped DocsPage."
     )
-    new = (
-        "Confirmed. http://192.168.2.64:3000/docs now returns HTTP 200 "
-        "— deploy landed."
-    )
+    new = "Confirmed. http://192.168.2.64:3000/docs now returns HTTP 200 " "— deploy landed."
     flags = classify(new, packet_type="frontend_ui", prior_comment=prior)
     assert ClassifierFlag.ECHO_SHAPE not in flags
 
@@ -376,10 +368,7 @@ def test_echo_shape_does_not_fire_when_new_sha_added() -> None:
     """Evidence delta = new SHA reference. Must not suppress."""
 
     prior = "Confirmed. Retested http://192.168.2.60:3000/app. Still HTTP 404."
-    new = (
-        "Confirmed. Retested http://192.168.2.60:3000/app at commit "
-        "abc1234 — still HTTP 404."
-    )
+    new = "Confirmed. Retested http://192.168.2.60:3000/app at commit " "abc1234 — still HTTP 404."
     flags = classify(new, packet_type="frontend_ui", prior_comment=prior)
     assert ClassifierFlag.ECHO_SHAPE not in flags
 

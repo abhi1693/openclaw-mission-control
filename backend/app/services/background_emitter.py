@@ -42,9 +42,7 @@ class BackgroundEmitter:
         self._max_pending = max_pending
         self._pending: set[asyncio.Task[None]] = set()
 
-    def schedule(
-        self, coro: Coroutine[Any, Any, None], *, log_key: str
-    ) -> bool:
+    def schedule(self, coro: Coroutine[Any, Any, None], *, log_key: str) -> bool:
         """Schedule ``coro`` to run in the background.
 
         ``log_key`` is any string identifier (task id, board id, etc.)

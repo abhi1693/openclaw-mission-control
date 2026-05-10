@@ -410,9 +410,7 @@ def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
         # Business / API failure: surface to the LLM via tool result with
         # isError=true (per MCP spec), not as a JSON-RPC protocol error.
         return {
-            "content": [
-                {"type": "text", "text": f"HTTP {exc.status}: {exc.body[:1000]}"}
-            ],
+            "content": [{"type": "text", "text": f"HTTP {exc.status}: {exc.body[:1000]}"}],
             "isError": True,
         }
     except ValueError as exc:

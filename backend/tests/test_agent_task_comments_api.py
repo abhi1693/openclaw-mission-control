@@ -375,7 +375,9 @@ async def test_lead_rework_routing_comment_requires_status_transition(message: s
             )
 
         assert response.status_code == 409
-        assert response.json()["detail"]["code"] == "rework_routing_comment_requires_status_transition"
+        assert (
+            response.json()["detail"]["code"] == "rework_routing_comment_requires_status_transition"
+        )
     finally:
         await engine.dispose()
 

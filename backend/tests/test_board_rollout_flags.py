@@ -107,9 +107,7 @@ def test_board_update_rejects_coerced_string_bools() -> None:
 def test_board_update_accepts_strict_bools() -> None:
     """Actual bool values pass through BoardUpdate unchanged."""
 
-    update = BoardUpdate(
-        rollout_flags={"comment_policy_v1": True, "heartbeat_watchdog_v1": False}
-    )
+    update = BoardUpdate(rollout_flags={"comment_policy_v1": True, "heartbeat_watchdog_v1": False})
     assert update.rollout_flags == {
         "comment_policy_v1": True,
         "heartbeat_watchdog_v1": False,

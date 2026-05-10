@@ -188,9 +188,9 @@ def test_orphan_action_uses_lowest_id_for_determinism() -> None:
             approval_state_by_task_id={},
             pipeline_missing_by_task_id={},
             orphan_children_with_terminal_parent={
-            orphan_a.id: parent.id,
-            orphan_b.id: parent.id,
-        },
+                orphan_a.id: parent.id,
+                orphan_b.id: parent.id,
+            },
         ),
     )
 
@@ -308,9 +308,7 @@ def test_materialize_decomposition_plan_fires_for_inbox_assigned_no_children() -
     assert action.action == "materialize_decomposition_plan"
     assert action.reason_code == "inbox_assigned_awaiting_subtask_materialization"
     assert action.task_id == architect_assigned_inbox.id
-    assert action.details["assigned_agent_id"] == str(
-        architect_assigned_inbox.assigned_agent_id
-    )
+    assert action.details["assigned_agent_id"] == str(architect_assigned_inbox.assigned_agent_id)
 
 
 def test_materialize_skipped_when_already_has_children() -> None:

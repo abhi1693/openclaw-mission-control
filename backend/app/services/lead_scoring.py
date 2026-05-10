@@ -38,10 +38,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.logging import get_logger
 from app.core.time import utcnow
+from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.blockers import Blocker
 from app.models.boards import Board
-from app.models.activity_events import ActivityEvent
 from app.models.shadow_metric_events import ShadowMetricEvent
 from app.schemas.boards import LEAD_SCORING_V1_FLAG, board_rollout_flag_enabled
 from app.services.shadow_metrics import (
@@ -70,7 +70,6 @@ _LEAD_ACTION_EVENT_TYPES: frozenset[str] = frozenset(
         "task.status_changed",
     }
 )
-
 
 
 async def lead_has_any_action_since(
@@ -137,9 +136,7 @@ _SCORING_EVENT_TYPES = frozenset(
 )
 
 
-async def last_scoring_bookmark(
-    session: AsyncSession, *, agent_id: UUID
-) -> datetime | None:
+async def last_scoring_bookmark(session: AsyncSession, *, agent_id: UUID) -> datetime | None:
     """Return the most-recent scoring timestamp for the lead, or None
     if they've never been scored. Reads from shadow_metric_events so
     no new state columns are needed — the event table is the truth.
@@ -166,10 +163,7 @@ async def _previous_noop_candidate_at(
     return await session.scalar(
         select(func.max(col(ShadowMetricEvent.created_at)))
         .where(col(ShadowMetricEvent.agent_id) == agent_id)
-        .where(
-            col(ShadowMetricEvent.event_type)
-            == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE
-        )
+        .where(col(ShadowMetricEvent.event_type) == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE)
         .where(col(ShadowMetricEvent.created_at) >= cutoff)
     )
 

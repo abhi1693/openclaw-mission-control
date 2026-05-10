@@ -128,7 +128,10 @@ async def test_cascade_fires_when_last_child_reaches_done(
     """AC: every sibling done -> parent auto-cancels."""
     board = await _seed_board(sqlite_session, slug="cascade-happy")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=3, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=3,
+        child_status="done",
     )
     assert parent.status == "inbox"
 
@@ -149,7 +152,10 @@ async def test_cascade_fires_when_last_child_reaches_cancelled(
     cascade trigger same as done."""
     board = await _seed_board(sqlite_session, slug="cascade-cancelled-trigger")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=2, child_status="cancelled",
+        sqlite_session,
+        board=board,
+        n_children=2,
+        child_status="cancelled",
     )
     cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
     assert cascaded is not None
@@ -163,7 +169,10 @@ async def test_cascade_no_op_when_some_siblings_still_active(
     """If even one sibling is non-terminal, the parent must NOT close."""
     board = await _seed_board(sqlite_session, slug="cascade-active-sibling")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=3, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=3,
+        child_status="done",
     )
     # Mutate one sibling back to in_progress.
     children[0].status = "in_progress"
@@ -208,7 +217,10 @@ async def test_cascade_skips_when_parent_already_terminal(
     cascading again would be a no-op overwrite — skip cleanly."""
     board = await _seed_board(sqlite_session, slug="cascade-terminal-parent")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=1, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=1,
+        child_status="done",
     )
     parent.status = "done"
     sqlite_session.add(parent)
@@ -246,7 +258,10 @@ async def test_cascade_no_op_for_non_terminal_trigger(
     transitions warrant a cascade attempt."""
     board = await _seed_board(sqlite_session, slug="cascade-non-terminal-trigger")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=2, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=2,
+        child_status="done",
     )
     # Mutate the triggering task to in_progress; even though peers are
     # done, we shouldn't cascade off a non-terminal trigger.
@@ -271,7 +286,10 @@ async def test_cascade_records_activity_event(
 
     board = await _seed_board(sqlite_session, slug="cascade-activity-event")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=1, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=1,
+        child_status="done",
     )
     cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
     assert cascaded is not None
@@ -304,7 +322,10 @@ async def test_cascade_skips_parent_with_only_conversational_umbrella_retired_me
 
     board = await _seed_board(sqlite_session, slug="cascade-conversational-mention")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=1, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=1,
+        child_status="done",
         add_retired_marker=False,
     )
     sqlite_session.add(
@@ -342,7 +363,10 @@ async def test_cascade_skips_parent_without_umbrella_retired_marker(
     prerequisites — the marker is the only reliable discriminator."""
     board = await _seed_board(sqlite_session, slug="cascade-no-marker")
     parent, children = await _seed_umbrella_with_children(
-        sqlite_session, board=board, n_children=2, child_status="done",
+        sqlite_session,
+        board=board,
+        n_children=2,
+        child_status="done",
         add_retired_marker=False,
     )
     cascaded = await maybe_cascade_umbrella_close(sqlite_session, task=children[-1])
@@ -365,26 +389,38 @@ async def test_cascade_stops_at_max_depth(
     # Build a 12-level chain: child -> p1 -> p2 -> ... -> p11
     # with each parent never-executed and its only-child terminal.
     from app.models.activity_events import ActivityEvent
+
     chain: list[Task] = []
     parent_id = None
     for i in range(11):
         node = Task(
-            id=uuid4(), board_id=board.id, title=f"chain-{i}",
-            status="inbox", in_progress_at=None, previous_in_progress_at=None,
+            id=uuid4(),
+            board_id=board.id,
+            title=f"chain-{i}",
+            status="inbox",
+            in_progress_at=None,
+            previous_in_progress_at=None,
             parent_task_id=parent_id,
         )
         sqlite_session.add(node)
         chain.append(node)
         # Each chain node is a retired umbrella so the cascade qualifies.
-        sqlite_session.add(ActivityEvent(
-            event_type="task.comment", task_id=node.id, board_id=board.id,
-            message=f"UMBRELLA_RETIRED: chain level {i}.",
-        ))
+        sqlite_session.add(
+            ActivityEvent(
+                event_type="task.comment",
+                task_id=node.id,
+                board_id=board.id,
+                message=f"UMBRELLA_RETIRED: chain level {i}.",
+            )
+        )
         parent_id = node.id
     # Bottom child (12th node) is the terminal trigger.
     bottom = Task(
-        id=uuid4(), board_id=board.id, title="bottom",
-        status="done", parent_task_id=parent_id,
+        id=uuid4(),
+        board_id=board.id,
+        title="bottom",
+        status="done",
+        parent_task_id=parent_id,
     )
     sqlite_session.add(bottom)
     await sqlite_session.commit()
@@ -404,9 +440,9 @@ async def test_cascade_stops_at_max_depth(
         await sqlite_session.refresh(n)
         if n.status == "cancelled":
             cancelled_count += 1
-    assert cancelled_count == 10, (
-        f"expected exactly MAX_DEPTH=10 levels cancelled, got {cancelled_count}"
-    )
+    assert (
+        cancelled_count == 10
+    ), f"expected exactly MAX_DEPTH=10 levels cancelled, got {cancelled_count}"
     assert chain[0].status == "inbox", (
         "max-depth safety must stop recursion before walking all 11 levels; "
         f"top ancestor chain[0].status={chain[0].status}"
@@ -416,10 +452,12 @@ async def test_cascade_stops_at_max_depth(
     from sqlmodel import col, select
 
     from app.models.activity_events import ActivityEvent
+
     truncate_events = list(
         await sqlite_session.exec(
-            select(ActivityEvent)
-            .where(col(ActivityEvent.event_type) == "task.umbrella_cascade_truncated"),
+            select(ActivityEvent).where(
+                col(ActivityEvent.event_type) == "task.umbrella_cascade_truncated"
+            ),
         ),
     )
     assert len(truncate_events) >= 1, (
@@ -446,20 +484,31 @@ async def test_cascade_no_false_truncation_audit_when_chain_exactly_max_depth(
     # Build exactly 10 ancestors (chain[0]=top, chain[9]=immediate parent).
     for i in range(10):
         node = Task(
-            id=uuid4(), board_id=board.id, title=f"chain-{i}",
-            status="inbox", in_progress_at=None, previous_in_progress_at=None,
+            id=uuid4(),
+            board_id=board.id,
+            title=f"chain-{i}",
+            status="inbox",
+            in_progress_at=None,
+            previous_in_progress_at=None,
             parent_task_id=parent_id,
         )
         sqlite_session.add(node)
         chain.append(node)
-        sqlite_session.add(ActivityEvent(
-            event_type="task.comment", task_id=node.id, board_id=board.id,
-            message=f"UMBRELLA_RETIRED: chain level {i}.",
-        ))
+        sqlite_session.add(
+            ActivityEvent(
+                event_type="task.comment",
+                task_id=node.id,
+                board_id=board.id,
+                message=f"UMBRELLA_RETIRED: chain level {i}.",
+            )
+        )
         parent_id = node.id
     bottom = Task(
-        id=uuid4(), board_id=board.id, title="bottom",
-        status="done", parent_task_id=parent_id,
+        id=uuid4(),
+        board_id=board.id,
+        title="bottom",
+        status="done",
+        parent_task_id=parent_id,
     )
     sqlite_session.add(bottom)
     await sqlite_session.commit()
@@ -480,8 +529,9 @@ async def test_cascade_no_false_truncation_audit_when_chain_exactly_max_depth(
     # No truncation audit row — chain was fully processed.
     truncate_events = list(
         await sqlite_session.exec(
-            select(ActivityEvent)
-            .where(col(ActivityEvent.event_type) == "task.umbrella_cascade_truncated"),
+            select(ActivityEvent).where(
+                col(ActivityEvent.event_type) == "task.umbrella_cascade_truncated"
+            ),
         ),
     )
     assert truncate_events == [], (
@@ -502,17 +552,28 @@ async def test_cascade_recurses_through_multi_level_chain(
 
     # Build: grandparent -> parent -> child (all never-executed)
     grandparent = Task(
-        id=uuid4(), board_id=board.id, title="grandparent",
-        status="inbox", in_progress_at=None, previous_in_progress_at=None,
+        id=uuid4(),
+        board_id=board.id,
+        title="grandparent",
+        status="inbox",
+        in_progress_at=None,
+        previous_in_progress_at=None,
     )
     parent = Task(
-        id=uuid4(), board_id=board.id, title="parent",
-        status="inbox", in_progress_at=None, previous_in_progress_at=None,
+        id=uuid4(),
+        board_id=board.id,
+        title="parent",
+        status="inbox",
+        in_progress_at=None,
+        previous_in_progress_at=None,
         parent_task_id=grandparent.id,
     )
     child = Task(
-        id=uuid4(), board_id=board.id, title="child",
-        status="done", parent_task_id=parent.id,
+        id=uuid4(),
+        board_id=board.id,
+        title="child",
+        status="done",
+        parent_task_id=parent.id,
     )
     sqlite_session.add(grandparent)
     sqlite_session.add(parent)
@@ -520,14 +581,23 @@ async def test_cascade_recurses_through_multi_level_chain(
     # Both ancestor levels need the UMBRELLA_RETIRED marker for the
     # cascade to walk through them.
     from app.models.activity_events import ActivityEvent
-    sqlite_session.add(ActivityEvent(
-        event_type="task.comment", task_id=grandparent.id, board_id=board.id,
-        message="UMBRELLA_RETIRED: top-level umbrella decomposed.",
-    ))
-    sqlite_session.add(ActivityEvent(
-        event_type="task.comment", task_id=parent.id, board_id=board.id,
-        message="UMBRELLA_RETIRED: mid-level umbrella decomposed.",
-    ))
+
+    sqlite_session.add(
+        ActivityEvent(
+            event_type="task.comment",
+            task_id=grandparent.id,
+            board_id=board.id,
+            message="UMBRELLA_RETIRED: top-level umbrella decomposed.",
+        )
+    )
+    sqlite_session.add(
+        ActivityEvent(
+            event_type="task.comment",
+            task_id=parent.id,
+            board_id=board.id,
+            message="UMBRELLA_RETIRED: mid-level umbrella decomposed.",
+        )
+    )
     await sqlite_session.commit()
     await sqlite_session.refresh(grandparent)
     await sqlite_session.refresh(parent)

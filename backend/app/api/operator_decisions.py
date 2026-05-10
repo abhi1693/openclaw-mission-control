@@ -46,16 +46,12 @@ if TYPE_CHECKING:
 
     from app.models.boards import Board
 
-router = APIRouter(
-    prefix="/boards/{board_id}/operator_decisions", tags=["operator_decisions"]
-)
+router = APIRouter(prefix="/boards/{board_id}/operator_decisions", tags=["operator_decisions"])
 
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 
-STATUS_FILTER_QUERY: OperatorDecisionStatus | None = Query(
-    default=None, alias="status"
-)
+STATUS_FILTER_QUERY: OperatorDecisionStatus | None = Query(default=None, alias="status")
 
 
 async def _task_ids_by_decision(
@@ -81,9 +77,7 @@ async def _task_ids_by_decision(
     return grouped
 
 
-def _decision_read(
-    decision: OperatorDecision, task_ids: list[UUID]
-) -> OperatorDecisionRead:
+def _decision_read(decision: OperatorDecision, task_ids: list[UUID]) -> OperatorDecisionRead:
     return OperatorDecisionRead(
         id=decision.id,
         board_id=decision.board_id,
@@ -105,9 +99,9 @@ async def _load_decision(
 ) -> OperatorDecision:
     """Load a decision scoped to the board, or raise 404."""
 
-    decision = await OperatorDecision.objects.filter_by(
-        id=decision_id, board_id=board_id
-    ).first(session)
+    decision = await OperatorDecision.objects.filter_by(id=decision_id, board_id=board_id).first(
+        session
+    )
     if decision is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return decision
@@ -135,9 +129,7 @@ async def list_board_operator_decisions(
                 msg = "Expected OperatorDecision rows from pagination query."
                 raise TypeError(msg)
             decisions.append(row)
-        tasks_by_decision = await _task_ids_by_decision(
-            session, (d.id for d in decisions)
-        )
+        tasks_by_decision = await _task_ids_by_decision(session, (d.id for d in decisions))
         return [
             _decision_read(decision, tasks_by_decision.get(decision.id, []))
             for decision in decisions
@@ -145,9 +137,7 @@ async def list_board_operator_decisions(
 
     statement = OperatorDecision.objects.filter_by(board_id=board.id)
     if status_filter is not None:
-        statement = statement.filter(
-            col(OperatorDecision.status) == status_filter
-        )
+        statement = statement.filter(col(OperatorDecision.status) == status_filter)
     statement = statement.order_by(col(OperatorDecision.created_at).desc())
     return await paginate(session, statement.statement, transformer=_transform)
 
@@ -196,11 +186,7 @@ async def create_operator_decision(
             )
         ).all()
         resolved_set = set(resolved)
-        missing = [
-            str(task_id)
-            for task_id in unique_task_ids
-            if task_id not in resolved_set
-        ]
+        missing = [str(task_id) for task_id in unique_task_ids if task_id not in resolved_set]
         if missing:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -221,17 +207,13 @@ async def create_operator_decision(
     session.add(decision)
     for task_id in unique_task_ids:
         session.add(
-            OperatorDecisionTaskLink(
-                decision_id=decision.id, task_id=task_id
-            ),
+            OperatorDecisionTaskLink(decision_id=decision.id, task_id=task_id),
         )
     await session.commit()
     return _decision_read(decision, unique_task_ids)
 
 
-@router.patch(
-    "/{decision_id}", response_model=OperatorDecisionRead
-)
+@router.patch("/{decision_id}", response_model=OperatorDecisionRead)
 async def update_operator_decision(
     decision_id: UUID,
     payload: OperatorDecisionUpdate,
@@ -241,9 +223,7 @@ async def update_operator_decision(
 ) -> OperatorDecisionRead:
     """Resolve, cancel, or sharpen a pending operator decision."""
 
-    decision = await _load_decision(
-        session, board_id=board.id, decision_id=decision_id
-    )
+    decision = await _load_decision(session, board_id=board.id, decision_id=decision_id)
     # Preload the task-id list alongside the load so the response can
     # be synthesised without a post-commit refetch. PATCH never
     # mutates the link set today, so the list is invariant across the

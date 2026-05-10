@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import timedelta
-import re
 from typing import TYPE_CHECKING
 from uuid import UUID
 

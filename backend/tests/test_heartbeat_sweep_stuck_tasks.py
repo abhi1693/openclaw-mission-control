@@ -110,29 +110,38 @@ async def test_stuck_task_nudge_resets_worker_session_before_delivery(
 def test_stuck_task_nudge_candidate_skips_operator_blocked_tasks() -> None:
     task = SimpleNamespace(operator_decision_required=True, assigned_agent_id=uuid4())
 
-    assert heartbeat_sweep._stuck_task_nudge_candidate(
-        task,
-        attempted_agent_ids=set(),
-        blocked_by_task_ids=[],
-    ) is False
+    assert (
+        heartbeat_sweep._stuck_task_nudge_candidate(
+            task,
+            attempted_agent_ids=set(),
+            blocked_by_task_ids=[],
+        )
+        is False
+    )
 
 
 def test_stuck_task_nudge_candidate_limits_to_one_task_per_agent() -> None:
     agent_id = uuid4()
     task = SimpleNamespace(operator_decision_required=False, assigned_agent_id=agent_id)
 
-    assert heartbeat_sweep._stuck_task_nudge_candidate(
-        task,
-        attempted_agent_ids={str(agent_id)},
-        blocked_by_task_ids=[],
-    ) is False
+    assert (
+        heartbeat_sweep._stuck_task_nudge_candidate(
+            task,
+            attempted_agent_ids={str(agent_id)},
+            blocked_by_task_ids=[],
+        )
+        is False
+    )
 
 
 def test_stuck_task_nudge_candidate_skips_dependency_blocked_tasks() -> None:
     task = SimpleNamespace(operator_decision_required=False, assigned_agent_id=uuid4())
 
-    assert heartbeat_sweep._stuck_task_nudge_candidate(
-        task,
-        attempted_agent_ids=set(),
-        blocked_by_task_ids=[uuid4()],
-    ) is False
+    assert (
+        heartbeat_sweep._stuck_task_nudge_candidate(
+            task,
+            attempted_agent_ids=set(),
+            blocked_by_task_ids=[uuid4()],
+        )
+        is False
+    )

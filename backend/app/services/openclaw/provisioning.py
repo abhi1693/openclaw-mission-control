@@ -16,9 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlmodel import select, text
-
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
+from sqlmodel import select, text
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -26,12 +25,11 @@ from app.db.session import async_session_maker
 from app.models.agents import Agent
 from app.models.boards import Board
 from app.models.gateways import Gateway
-from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services import souls_directory
 from app.services.openclaw.constants import (
     BOARD_SHARED_TEMPLATE_MAP,
-    DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES,
     DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY,
+    DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES,
     DEFAULT_GATEWAY_FILES,
     DEFAULT_HEARTBEAT_CONFIG,
     DEFAULT_IDENTITY_PROFILE,
@@ -47,6 +45,7 @@ from app.services.openclaw.constants import (
     MAIN_TEMPLATE_MAP,
     PRESERVE_AGENT_EDITABLE_FILES,
 )
+from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
 from app.services.openclaw.gateway_rpc import (
     OpenClawGatewayError,
@@ -319,7 +318,9 @@ def _openclaw_426_runtime_patch(config_data: dict[str, Any]) -> dict[str, Any] |
     if merged_compaction.get("truncateAfterCompaction") is not True:
         merged_compaction["truncateAfterCompaction"] = True
     if _disabled_byte_guard(merged_compaction.get("maxActiveTranscriptBytes")):
-        merged_compaction["maxActiveTranscriptBytes"] = DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES
+        merged_compaction["maxActiveTranscriptBytes"] = (
+            DEFAULT_COMPACTION_MAX_ACTIVE_TRANSCRIPT_BYTES
+        )
     if merged_compaction != compaction:
         agents_patch.setdefault("defaults", {})["compaction"] = merged_compaction
 
@@ -1376,7 +1377,9 @@ async def _gateway_config_for_board_id(board_id: UUID) -> GatewayClientConfig | 
         if config is not None:
             return config
 
-        gateway = (await session.exec(select(Gateway).where(Gateway.id == board.gateway_id))).first()
+        gateway = (
+            await session.exec(select(Gateway).where(Gateway.id == board.gateway_id))
+        ).first()
         if gateway is None:
             return None
         return GatewayClientConfig(
@@ -1389,18 +1392,14 @@ async def _gateway_config_for_board_id(board_id: UUID) -> GatewayClientConfig | 
 
 async def _any_board_active_on_gateway(gateway_id: UUID) -> bool:
     async with async_session_maker() as session:
-        paused_rows = await session.exec(
-            text(
-                """
+        paused_rows = await session.exec(text("""
                 SELECT b.id
                 FROM boards b
                 LEFT JOIN board_pause_states bps ON bps.board_id = b.id
                 WHERE b.gateway_id = :gateway_id
                   AND COALESCE(bps.is_paused, FALSE) = FALSE
                 LIMIT 1
-                """
-            ).bindparams(gateway_id=gateway_id)
-        )
+                """).bindparams(gateway_id=gateway_id))
         return paused_rows.first() is not None
 
 
@@ -1584,7 +1583,12 @@ class OpenClawGatewayProvisioner:
         await openclaw_call(
             "set-heartbeats",
             {"enabled": True},
-            config=GatewayClientConfig(url=gateway.url, token=gateway.token, allow_insecure_tls=gateway.allow_insecure_tls, disable_device_pairing=gateway.disable_device_pairing),
+            config=GatewayClientConfig(
+                url=gateway.url,
+                token=gateway.token,
+                allow_insecure_tls=gateway.allow_insecure_tls,
+                disable_device_pairing=gateway.disable_device_pairing,
+            ),
         )
         await manager.provision(
             agent=agent,

@@ -13,9 +13,9 @@ from uuid import uuid4
 import pytest
 
 import app.services.openclaw.session_service as session_service
+from app.schemas.gateway_api import GatewaySessionMessageRequest
 from app.services.openclaw.gateway_rpc import GatewayConfig
 from app.services.openclaw.session_service import GatewaySessionService
-from app.schemas.gateway_api import GatewaySessionMessageRequest
 
 
 def _patch_common(

@@ -11,12 +11,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+import app.services.openclaw.runtime_status as runtime_status
 from app.api.gateway import router as gateway_router
 from app.core import auth as auth_module
 from app.core.auth_mode import AuthMode
 from app.core.config import settings
 from app.db.session import get_session
-import app.services.openclaw.runtime_status as runtime_status
 
 
 def test_extract_json_payload_tolerates_openclaw_config_warnings() -> None:

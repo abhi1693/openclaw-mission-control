@@ -432,10 +432,7 @@ async def test_openclaw_call_once_passes_ssl_context_for_insecure_wss(
 
 
 def test_redact_strips_token_query_param() -> None:
-    msg = (
-        "ConnectionError: failed to reach "
-        "wss://gateway.local/ws?token=super-secret-shared-key"
-    )
+    msg = "ConnectionError: failed to reach " "wss://gateway.local/ws?token=super-secret-shared-key"
     cleaned = redact_gateway_error_message(msg)
     assert "super-secret-shared-key" not in cleaned
     assert "token=<redacted>" in cleaned

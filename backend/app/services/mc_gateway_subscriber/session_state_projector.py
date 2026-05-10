@@ -158,9 +158,7 @@ def build_state_from_frame(frame: dict[str, Any]) -> SessionState | None:
     session = payload.get("session") or {}
 
     def _pick_str(field: str) -> str | None:
-        return _optional_str(payload.get(field)) or _optional_str(
-            session.get(field)
-        )
+        return _optional_str(payload.get(field)) or _optional_str(session.get(field))
 
     def _pick_int(field: str) -> int | None:
         top = _optional_int(payload.get(field))
@@ -184,8 +182,7 @@ def build_state_from_frame(frame: dict[str, Any]) -> SessionState | None:
         # would silently flip aborted_last_run to True. Mirror the
         # _optional_int defensive pattern.
         aborted_last_run=(
-            payload.get("abortedLastRun") is True
-            or session.get("abortedLastRun") is True
+            payload.get("abortedLastRun") is True or session.get("abortedLastRun") is True
         ),
         # Slice-6 ACP-completion signals. Always top-level on lifecycle
         # events (server-session-events.ts createLifecycleEventBroadcastHandler).
@@ -225,9 +222,7 @@ class SessionStateProjector:
     def get(self, agent_id: str) -> tuple[SessionState, ...]:
         """Return all session snapshots for ``agent_id`` (empty tuple if
         nothing recorded yet)."""
-        return tuple(
-            s for (aid, _), s in self._state.items() if aid == agent_id
-        )
+        return tuple(s for (aid, _), s in self._state.items() if aid == agent_id)
 
     def snapshot(self) -> tuple[SessionState, ...]:
         """Return all currently-projected session snapshots. The

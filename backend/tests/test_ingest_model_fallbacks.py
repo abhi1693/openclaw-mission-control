@@ -66,7 +66,7 @@ def test_parse_yields_only_model_fallback_events(tmp_path: Path) -> None:
                     "fallbackStepChainPosition": 1,
                     "fallbackStepFinalOutcome": "next_fallback",
                 },
-                "_meta": {"name": "{\"subsystem\":\"model-fallback/decision\"}"},
+                "_meta": {"name": '{"subsystem":"model-fallback/decision"}'},
                 "time": "2026-04-30T12:01:00.000Z",
             },
         ],
@@ -305,12 +305,8 @@ class TestStateFile:
         from unittest import mock
 
         state_file = tmp_path / "state.json"
-        state_file.write_text(
-            __import__("json").dumps({"posted_hashes": ["original"]})
-        )
-        with mock.patch.object(
-            os_mod, "replace", side_effect=OSError("simulated fs error")
-        ):
+        state_file.write_text(__import__("json").dumps({"posted_hashes": ["original"]}))
+        with mock.patch.object(os_mod, "replace", side_effect=OSError("simulated fs error")):
             with pytest.raises(OSError):
                 save_state(state_file, {"new1", "new2"})
         # Original state preserved

@@ -51,7 +51,9 @@ async def test_gateway_coordination_recover_runs_lifecycle(
     session = _FakeSession()
     service = coordination_lifecycle.GatewayCoordinationService(session)  # type: ignore[arg-type]
     board = _BoardStub(id=uuid4(), gateway_id=uuid4(), name="Roadmap")
-    actor = _AgentStub(id=uuid4(), name="Supervisor", gateway_id=board.gateway_id, board_id=board.id)
+    actor = _AgentStub(
+        id=uuid4(), name="Supervisor", gateway_id=board.gateway_id, board_id=board.id
+    )
     target = _AgentStub(
         id=uuid4(),
         name="DevOps",
@@ -97,6 +99,7 @@ async def test_gateway_coordination_recover_runs_lifecycle(
         "_board_agent_or_404",
         _fake_board_agent_or_404,
     )
+
     async def _fake_existing_auth_token(**_kwargs: object) -> str:
         return "existing-token"
 
@@ -110,7 +113,9 @@ async def test_gateway_coordination_recover_runs_lifecycle(
         "_control_plane_for_gateway",
         lambda _gateway: object(),
     )
-    monkeypatch.setattr(coordination_lifecycle, "Gateway", SimpleNamespace(objects=_GatewayObjects()))
+    monkeypatch.setattr(
+        coordination_lifecycle, "Gateway", SimpleNamespace(objects=_GatewayObjects())
+    )
     monkeypatch.setattr(coordination_lifecycle, "AgentLifecycleOrchestrator", _OrchestratorStub)
 
     await service.recover_board_agent(
@@ -140,7 +145,9 @@ async def test_gateway_coordination_recover_rejects_recent_repeat_wake(
     session = _FakeSession()
     service = coordination_lifecycle.GatewayCoordinationService(session)  # type: ignore[arg-type]
     board = _BoardStub(id=uuid4(), gateway_id=uuid4(), name="Roadmap")
-    actor = _AgentStub(id=uuid4(), name="Supervisor", gateway_id=board.gateway_id, board_id=board.id)
+    actor = _AgentStub(
+        id=uuid4(), name="Supervisor", gateway_id=board.gateway_id, board_id=board.id
+    )
     target = _AgentStub(
         id=uuid4(),
         name="DevOps",
@@ -182,7 +189,9 @@ async def test_gateway_coordination_recover_requires_existing_auth_token(
     session = _FakeSession()
     service = coordination_lifecycle.GatewayCoordinationService(session)  # type: ignore[arg-type]
     board = _BoardStub(id=uuid4(), gateway_id=uuid4(), name="Roadmap")
-    actor = _AgentStub(id=uuid4(), name="Supervisor", gateway_id=board.gateway_id, board_id=board.id)
+    actor = _AgentStub(
+        id=uuid4(), name="Supervisor", gateway_id=board.gateway_id, board_id=board.id
+    )
     target = _AgentStub(id=uuid4(), name="DevOps", gateway_id=board.gateway_id, board_id=board.id)
 
     async def _fake_board_agent_or_404(
@@ -208,11 +217,16 @@ async def test_gateway_coordination_recover_requires_existing_auth_token(
         "_board_agent_or_404",
         _fake_board_agent_or_404,
     )
-    monkeypatch.setattr(coordination_lifecycle, "Gateway", SimpleNamespace(objects=_GatewayObjects()))
+    monkeypatch.setattr(
+        coordination_lifecycle, "Gateway", SimpleNamespace(objects=_GatewayObjects())
+    )
+
     async def _fake_missing_auth_token(**_kwargs: object) -> None:
         return None
 
-    monkeypatch.setattr(coordination_lifecycle, "_get_existing_auth_token", _fake_missing_auth_token)
+    monkeypatch.setattr(
+        coordination_lifecycle, "_get_existing_auth_token", _fake_missing_auth_token
+    )
     monkeypatch.setattr(
         coordination_lifecycle,
         "_control_plane_for_gateway",

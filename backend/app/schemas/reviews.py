@@ -16,8 +16,7 @@ from pydantic import model_validator
 from sqlmodel import Field, SQLModel
 
 from app.schemas.blockers import BlockerCategory
-from app.schemas.common import ReasonCode
-from app.schemas.common import NonEmptyStr
+from app.schemas.common import NonEmptyStr, ReasonCode
 
 ReviewVerdict = Literal["pass", "fail", "needs_changes"]
 
@@ -59,9 +58,7 @@ class ReviewCreate(SQLModel):
         # CHECK pins the verdict vocabulary but cannot see the
         # blockers[] list, so this guard sits in Pydantic.
         if self.verdict == "fail" and not self.blockers:
-            raise ValueError(
-                "verdict=fail requires at least one blocker row"
-            )
+            raise ValueError("verdict=fail requires at least one blocker row")
         return self
 
 

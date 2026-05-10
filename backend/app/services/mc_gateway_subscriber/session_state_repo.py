@@ -214,7 +214,7 @@ async def _orphan_agent_ids_for_owner(
         # Defensive: a malformed <prefix><tail> row is left for manual
         # operator review, not silently deleted.
         try:
-            parsed_uuid_by_agent_id[agent_id] = UUID(agent_id[len(prefix):])
+            parsed_uuid_by_agent_id[agent_id] = UUID(agent_id[len(prefix) :])
         except ValueError:
             continue
     if not parsed_uuid_by_agent_id:

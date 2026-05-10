@@ -124,9 +124,7 @@ async def seeded(
     yield sqlite_session, board, dep_task, umbrella_task, lead, worker
 
 
-def _seed_umbrella_retired_marker(
-    session: AsyncSession, *, board_id, task_id, agent_id
-) -> None:
+def _seed_umbrella_retired_marker(session: AsyncSession, *, board_id, task_id, agent_id) -> None:
     """Emulate the lead posting the canonical UMBRELLA_RETIRED comment."""
     session.add(
         ActivityEvent(
@@ -192,8 +190,7 @@ async def test_pure_container_umbrella_not_retired_without_marker(
 
     await session.refresh(umbrella_task)
     assert umbrella_task.status == "inbox", (
-        f"expected umbrella to stay inbox without marker; "
-        f"status={umbrella_task.status}"
+        f"expected umbrella to stay inbox without marker; " f"status={umbrella_task.status}"
     )
 
 

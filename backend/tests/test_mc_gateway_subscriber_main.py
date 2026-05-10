@@ -22,7 +22,6 @@ import pytest
 
 from app.services.mc_gateway_subscriber import __main__ as entry
 
-
 # --- env-file parsing (mirrors mc_hooks.py contracts) ---
 
 
@@ -42,24 +41,20 @@ class TestEnvFileLoader:
 
     def test_strips_inline_comment_on_unquoted_value(self, tmp_path: Path) -> None:
         env_file = tmp_path / "env"
-        env_file.write_text(
-            "OPENCLAW_GATEWAY_TOKEN=abc123 # prod token\n", encoding="utf-8"
-        )
+        env_file.write_text("OPENCLAW_GATEWAY_TOKEN=abc123 # prod token\n", encoding="utf-8")
         cfg = entry.load_env_file(str(env_file))
         assert cfg["OPENCLAW_GATEWAY_TOKEN"] == "abc123"
 
     def test_preserves_inline_hash_inside_quoted_value(self, tmp_path: Path) -> None:
         env_file = tmp_path / "env"
-        env_file.write_text(
-            'OPENCLAW_GATEWAY_TOKEN="abc#123"\n', encoding="utf-8"
-        )
+        env_file.write_text('OPENCLAW_GATEWAY_TOKEN="abc#123"\n', encoding="utf-8")
         cfg = entry.load_env_file(str(env_file))
         assert cfg["OPENCLAW_GATEWAY_TOKEN"] == "abc#123"
 
     def test_strips_quotes(self, tmp_path: Path) -> None:
         env_file = tmp_path / "env"
         env_file.write_text(
-            'OPENCLAW_GATEWAY_TOKEN="quoted"\nOPENCLAW_GATEWAY_WS_URL=\'single\'\n',
+            "OPENCLAW_GATEWAY_TOKEN=\"quoted\"\nOPENCLAW_GATEWAY_WS_URL='single'\n",
             encoding="utf-8",
         )
         cfg = entry.load_env_file(str(env_file))
@@ -90,9 +85,7 @@ class TestEnvFileLoader:
 
 
 class TestConfigResolution:
-    def test_env_var_wins_over_file(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_env_var_wins_over_file(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         env_file = tmp_path / "env"
         env_file.write_text("OPENCLAW_GATEWAY_TOKEN=from-file\n", encoding="utf-8")
         monkeypatch.setenv("OPENCLAW_GATEWAY_WS_URL", "ws://from-env")
@@ -136,18 +129,14 @@ class TestConfigResolution:
         # node.invoke.request, etc.) flow through that subscription.
         assert "sessions.subscribe" in cfg.subscriptions
 
-    def test_missing_url_exits(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_missing_url_exits(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.delenv("OPENCLAW_GATEWAY_WS_URL", raising=False)
         monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "t")
         with pytest.raises(SystemExit) as exc:
             entry.resolve_config(env_file_path=str(tmp_path / "no-such"))
         assert "OPENCLAW_GATEWAY_WS_URL" in str(exc.value)
 
-    def test_missing_token_exits(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_missing_token_exits(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setenv("OPENCLAW_GATEWAY_WS_URL", "ws://x")
         monkeypatch.delenv("OPENCLAW_GATEWAY_TOKEN", raising=False)
         with pytest.raises(SystemExit) as exc:
@@ -201,9 +190,7 @@ class TestConfigResolution:
 
 class TestMainLifecycle:
     @pytest.mark.asyncio
-    async def test_run_async_stops_when_event_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_run_async_stops_when_event_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``run_async(stop, config)`` returns when the stop event is set,
         without raising.
         """
@@ -276,6 +263,6 @@ class TestMainLifecycle:
         await asyncio.gather(entry.run_async(stop, cfg), stopper())
 
         registered = [name for (name, _) in captured["on_calls"]]
-        assert "sessions.changed" in registered, (
-            f"sessions.changed handler not registered; on_calls={registered}"
-        )
+        assert (
+            "sessions.changed" in registered
+        ), f"sessions.changed handler not registered; on_calls={registered}"

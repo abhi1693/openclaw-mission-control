@@ -16,14 +16,14 @@ from app.models.board_webhooks import BoardWebhook
 from app.models.boards import Board
 from app.models.gateway_session_state import GatewaySessionState
 from app.models.gateways import Gateway
-from app.models.organization_board_access import OrganizationBoardAccess
-from app.models.organization_invite_board_access import OrganizationInviteBoardAccess
-from app.models.organization_invites import OrganizationInvite
-from app.models.organization_members import OrganizationMember
 from app.models.operator_decisions import (
     OperatorDecision,
     OperatorDecisionTaskLink,
 )
+from app.models.organization_board_access import OrganizationBoardAccess
+from app.models.organization_invite_board_access import OrganizationInviteBoardAccess
+from app.models.organization_invites import OrganizationInvite
+from app.models.organization_members import OrganizationMember
 from app.models.organizations import Organization
 from app.models.reviews import Review, ReviewBlocker
 from app.models.shadow_metric_events import ShadowMetricEvent

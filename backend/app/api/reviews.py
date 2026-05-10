@@ -39,18 +39,14 @@ if TYPE_CHECKING:
 
     from app.models.boards import Board
 
-router = APIRouter(
-    prefix="/boards/{board_id}/tasks/{task_id}/reviews", tags=["reviews"]
-)
+router = APIRouter(prefix="/boards/{board_id}/tasks/{task_id}/reviews", tags=["reviews"])
 
 BOARD_READ_DEP = Depends(get_board_for_actor_read)
 BOARD_WRITE_DEP = Depends(get_board_for_actor_write)
 TASK_DEP = Depends(get_task_or_404)
 
 
-def _to_review_blocker_read(
-    link: ReviewBlocker, blocker: Blocker
-) -> ReviewBlockerRead:
+def _to_review_blocker_read(link: ReviewBlocker, blocker: Blocker) -> ReviewBlockerRead:
     return ReviewBlockerRead(
         id=link.id,
         blocker_id=blocker.id,
@@ -84,9 +80,7 @@ async def _blockers_by_review(
     return grouped
 
 
-def _review_read(
-    review: Review, blockers: list[ReviewBlockerRead]
-) -> ReviewRead:
+def _review_read(review: Review, blockers: list[ReviewBlockerRead]) -> ReviewRead:
     return ReviewRead(
         id=review.id,
         board_id=review.board_id,
@@ -115,18 +109,11 @@ async def list_task_reviews(
                 msg = "Expected Review rows from reviews pagination query."
                 raise TypeError(msg)
             reviews.append(row)
-        blockers_by_id = await _blockers_by_review(
-            session, (r.id for r in reviews)
-        )
-        return [
-            _review_read(review, blockers_by_id.get(review.id, []))
-            for review in reviews
-        ]
+        blockers_by_id = await _blockers_by_review(session, (r.id for r in reviews))
+        return [_review_read(review, blockers_by_id.get(review.id, [])) for review in reviews]
 
     statement = (
-        Review.objects.filter_by(task_id=task.id)
-        .order_by(Review.created_at.desc())
-        .statement
+        Review.objects.filter_by(task_id=task.id).order_by(Review.created_at.desc()).statement
     )
     return await paginate(session, statement, transformer=_transform)
 

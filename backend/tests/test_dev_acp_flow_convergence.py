@@ -16,13 +16,8 @@ def _profile(role: str, flow: str | None = None) -> dict[str, str]:
 def test_role_default_mapping_is_deterministic() -> None:
     assert desired_dev_acp_flow_for_role("Backend Developer") == "codex_then_claude_review"
     assert desired_dev_acp_flow_for_role("Frontend Developer") == "claude_then_codex_review"
-    assert (
-        desired_dev_acp_flow_for_role("System Architect and Code Reviewer") == "review_only"
-    )
-    assert (
-        desired_dev_acp_flow_for_role("DevOps Engineer")
-        == "claude_with_optional_claude_review"
-    )
+    assert desired_dev_acp_flow_for_role("System Architect and Code Reviewer") == "review_only"
+    assert desired_dev_acp_flow_for_role("DevOps Engineer") == "claude_with_optional_claude_review"
 
 
 def test_converges_missing_frontend_flow() -> None:

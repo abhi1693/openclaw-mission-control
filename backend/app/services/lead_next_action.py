@@ -260,10 +260,7 @@ def _blocker_effective_age_at(
     created = as_naive_utc(blocker.created_at)
     if blocker.acknowledged_at is None:
         return created
-    if (
-        lead_agent_id is not None
-        and blocker.acknowledged_by_agent_id == lead_agent_id
-    ):
+    if lead_agent_id is not None and blocker.acknowledged_by_agent_id == lead_agent_id:
         return created
     return max(created, as_naive_utc(blocker.acknowledged_at))
 
@@ -326,11 +323,7 @@ def select_lead_next_action(
         approval_state = inputs.approval_state_by_task_id.get(task.id, "none")
         readiness = review_readiness_by_task_id.get(task.id)
         missing_pipeline = list(inputs.pipeline_missing_by_task_id.get(task.id, []))
-        if (
-            approval_state == "none"
-            and _review_readiness_ready(readiness)
-            and not missing_pipeline
-        ):
+        if approval_state == "none" and _review_readiness_ready(readiness) and not missing_pipeline:
             return _action(
                 task=task,
                 action_required=True,
@@ -452,7 +445,8 @@ def select_lead_next_action(
     if inputs.orphan_children_with_terminal_parent:
         orphan_candidates = sorted(
             (
-                task for task in inputs.tasks
+                task
+                for task in inputs.tasks
                 if task.id in inputs.orphan_children_with_terminal_parent
                 and task.status not in TERMINAL_STATUSES
                 and task.status not in {"review", "in_progress"}
@@ -492,9 +486,7 @@ def select_lead_next_action(
     # pre-Phase-V umbrellas where children predate ``parent_task_id``
     # and so don't show up in ``tasks_with_children``).
     tasks_with_children = inputs.tasks_with_children or frozenset()
-    tasks_with_umbrella_retired_marker = (
-        inputs.tasks_with_umbrella_retired_marker or frozenset()
-    )
+    tasks_with_umbrella_retired_marker = inputs.tasks_with_umbrella_retired_marker or frozenset()
     for task in ordered:
         if task.status != "inbox" or task.assigned_agent_id is None:
             continue
@@ -553,8 +545,10 @@ def select_lead_next_action(
                 and task.id in inputs.open_blockers_by_task_id
                 and any(
                     _blocker_effective_age_at(
-                        blocker, lead_agent_id=inputs.lead_agent_id,
-                    ) < stale_threshold
+                        blocker,
+                        lead_agent_id=inputs.lead_agent_id,
+                    )
+                    < stale_threshold
                     for blocker in inputs.open_blockers_by_task_id.get(task.id, ())
                 )
             ),
@@ -566,7 +560,8 @@ def select_lead_next_action(
             oldest = min(
                 blockers,
                 key=lambda b: _blocker_effective_age_at(
-                    b, lead_agent_id=inputs.lead_agent_id,
+                    b,
+                    lead_agent_id=inputs.lead_agent_id,
                 ),
             )
             return _action(
@@ -577,9 +572,7 @@ def select_lead_next_action(
                 details={
                     "blocker_count": len(blockers),
                     "blocker_ids": [str(b.id) for b in blockers],
-                    "reason_codes": [
-                        b.reason_code for b in blockers if b.reason_code is not None
-                    ],
+                    "reason_codes": [b.reason_code for b in blockers if b.reason_code is not None],
                     "owner_role": oldest.owner_role,
                     "acknowledged_by_agent_id": (
                         str(oldest.acknowledged_by_agent_id)
@@ -677,10 +670,7 @@ def select_lead_next_action(
             fresh_in_progress_count += 1
 
     other_active_count = (
-        active_state_count
-        - pending_approval_count
-        - blocked_count
-        - fresh_in_progress_count
+        active_state_count - pending_approval_count - blocked_count - fresh_in_progress_count
     )
     clear_details: dict[str, object] = {
         "active_state_count": active_state_count,

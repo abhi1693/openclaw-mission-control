@@ -143,9 +143,7 @@ async def test_get_lead_next_action_marks_gateway_session_null_for_unprovisioned
     org = Organization(name="org")
     sqlite_session.add(org)
     await sqlite_session.flush()
-    gateway = Gateway(
-        organization_id=org.id, name="gw", url="ws://x", workspace_root="/tmp"
-    )
+    gateway = Gateway(organization_id=org.id, name="gw", url="ws://x", workspace_root="/tmp")
     sqlite_session.add(gateway)
     await sqlite_session.flush()
     board = Board(organization_id=org.id, name="b", slug="b")

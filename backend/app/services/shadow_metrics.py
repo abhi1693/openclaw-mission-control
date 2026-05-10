@@ -84,15 +84,11 @@ EVENT_COMMENT_LANE_QUIETING_SUPPRESSED = "comment.lane_quieting_suppressed"
 # a lead emits two consecutive candidates — this is the operator-
 # alert signal §I5 requires.
 EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE = "supervisor.heartbeat_noop_candidate"
-EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT = (
-    "supervisor.heartbeat_noop_streak_alert"
-)
+EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT = "supervisor.heartbeat_noop_streak_alert"
 # First-ever scoring for a lead: emit a bootstrap marker so subsequent
 # sweeps have a bookmark, without counting the boot-window as a real
 # no-op observation (which would falsely chain into a streak alert).
-EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP = (
-    "supervisor.heartbeat_scoring_bootstrap"
-)
+EVENT_SUPERVISOR_HEARTBEAT_SCORING_BOOTSTRAP = "supervisor.heartbeat_scoring_bootstrap"
 
 
 async def _emit_shadow_metric(
@@ -202,9 +198,7 @@ async def emit_supervisor_heartbeat_noop_streak_alert(
         log_context=f"agent_id={agent_id}",
         board_id=board_id,
         agent_id=agent_id,
-        classifier_metadata={
-            "previous_candidate_at": previous_candidate_at.isoformat()
-        },
+        classifier_metadata={"previous_candidate_at": previous_candidate_at.isoformat()},
     )
 
 

@@ -705,13 +705,9 @@ async def test_lead_can_set_legacy_operator_decision_on_terminal_assigned_task()
             )
             await session.commit()
 
-            task = (
-                await session.exec(select(Task).where(col(Task.id) == task_id))
-            ).first()
+            task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert task is not None
-            lead = (
-                await session.exec(select(Agent).where(col(Agent.id) == lead_id))
-            ).first()
+            lead = (await session.exec(select(Agent).where(col(Agent.id) == lead_id))).first()
             assert lead is not None
 
             updated = await tasks_api.update_task(
@@ -725,10 +721,7 @@ async def test_lead_can_set_legacy_operator_decision_on_terminal_assigned_task()
             )
 
             assert updated.operator_decision_required is True
-            assert (
-                updated.operator_decision_summary
-                == "Compatibility flag on terminal task."
-            )
+            assert updated.operator_decision_summary == "Compatibility flag on terminal task."
     finally:
         await engine.dispose()
 
@@ -1276,9 +1269,7 @@ async def test_lead_moves_review_task_to_inbox_and_preserves_explicit_reroute_as
 
             assert reverted.status == "inbox"
             assert reverted.assigned_agent_id == reroute_worker_id
-            reroute_messages = [
-                item for item in sent if item["session_key"] == "reroute-session"
-            ]
+            reroute_messages = [item for item in sent if item["session_key"] == "reroute-session"]
             assert reroute_messages
             final_message = reroute_messages[-1]["message"]
             assert "TASK ASSIGNED" in final_message
@@ -1976,9 +1967,7 @@ async def test_non_lead_agent_inbox_to_review_is_refused() -> None:
             assert exc.value.status_code == 403
             assert "Invalid status transition" in str(exc.value.detail)
 
-            refreshed = (
-                await session.exec(select(Task).where(col(Task.id) == task_id))
-            ).first()
+            refreshed = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert refreshed is not None
             assert refreshed.status == "inbox"
             assert refreshed.in_progress_at is None
@@ -2122,9 +2111,7 @@ async def test_admin_noop_review_preserves_previous_in_progress_at() -> None:
                 actor=ActorContext(actor_type="user", agent=None),
             )
 
-            refreshed = (
-                await session.exec(select(Task).where(col(Task.id) == task_id))
-            ).first()
+            refreshed = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert refreshed is not None
             assert refreshed.previous_in_progress_at == original_in_progress
     finally:
@@ -2341,27 +2328,39 @@ async def _seed_validator_invariant_setup(
     session.add(Organization(id=org_id, name="org"))
     session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name="gateway",
-            url="https://gateway.local", workspace_root="/tmp/workspace",
+            id=gateway_id,
+            organization_id=org_id,
+            name="gateway",
+            url="https://gateway.local",
+            workspace_root="/tmp/workspace",
         ),
     )
     session.add(
         Board(
-            id=board_id, organization_id=org_id, name="board",
-            slug="board", gateway_id=gateway_id,
+            id=board_id,
+            organization_id=org_id,
+            name="board",
+            slug="board",
+            gateway_id=gateway_id,
         ),
     )
     session.add(
         Agent(
-            id=validator_id, name="Validator", board_id=board_id,
-            gateway_id=gateway_id, status="online",
+            id=validator_id,
+            name="Validator",
+            board_id=board_id,
+            gateway_id=gateway_id,
+            status="online",
             identity_profile=profile,
         ),
     )
     session.add(
         Task(
-            id=task_id, board_id=board_id, title="task",
-            description="", status="inbox",
+            id=task_id,
+            board_id=board_id,
+            title="task",
+            description="",
+            status="inbox",
             assigned_agent_id=validator_id,
             review_packet_type="review_only",
         ),
@@ -2390,10 +2389,9 @@ async def test_validator_self_claim_inbox_to_in_progress_rejects() -> None:
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:
-            board_id, validator_id, task_id = (
-                await _seed_validator_invariant_setup(
-                    session, profile={"dev_acp_flow": "review_only"},
-                )
+            board_id, validator_id, task_id = await _seed_validator_invariant_setup(
+                session,
+                profile={"dev_acp_flow": "review_only"},
             )
             task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert task is not None
@@ -2424,10 +2422,9 @@ async def test_validator_self_claim_inbox_to_in_progress_qa_flow_rejects() -> No
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:
-            board_id, validator_id, task_id = (
-                await _seed_validator_invariant_setup(
-                    session, profile={"validation_flow": "qa_validation"},
-                )
+            board_id, validator_id, task_id = await _seed_validator_invariant_setup(
+                session,
+                profile={"validation_flow": "qa_validation"},
             )
             task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert task is not None
@@ -2468,27 +2465,39 @@ async def test_implementer_self_claim_inbox_to_in_progress_succeeds() -> None:
             session.add(Organization(id=org_id, name="org"))
             session.add(
                 Gateway(
-                    id=gateway_id, organization_id=org_id, name="gateway",
-                    url="https://gateway.local", workspace_root="/tmp/workspace",
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
                 ),
             )
             session.add(
                 Board(
-                    id=board_id, organization_id=org_id, name="board",
-                    slug="board", gateway_id=gateway_id,
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
                 ),
             )
             # Implementer agent (no validation_flow / dev_acp_flow markers).
             session.add(
                 Agent(
-                    id=worker_id, name="Programmer-Frontend", board_id=board_id,
-                    gateway_id=gateway_id, status="online",
+                    id=worker_id,
+                    name="Programmer-Frontend",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
                 ),
             )
             session.add(
                 Task(
-                    id=task_id, board_id=board_id, title="impl task",
-                    description="", status="inbox",
+                    id=task_id,
+                    board_id=board_id,
+                    title="impl task",
+                    description="",
+                    status="inbox",
                     assigned_agent_id=worker_id,
                     review_packet_type="review_only",
                 ),
@@ -2497,9 +2506,7 @@ async def test_implementer_self_claim_inbox_to_in_progress_succeeds() -> None:
 
             task = (await session.exec(select(Task).where(col(Task.id) == task_id))).first()
             assert task is not None
-            worker = (
-                await session.exec(select(Agent).where(col(Agent.id) == worker_id))
-            ).first()
+            worker = (await session.exec(select(Agent).where(col(Agent.id) == worker_id))).first()
             assert worker is not None
 
             updated = await tasks_api.update_task(
@@ -2531,33 +2538,50 @@ async def test_lead_inbox_to_in_progress_auto_corrects_to_review_for_qa_validati
             session.add(Organization(id=org_id, name="org"))
             session.add(
                 Gateway(
-                    id=gateway_id, organization_id=org_id, name="gateway",
-                    url="https://gateway.local", workspace_root="/tmp/workspace",
+                    id=gateway_id,
+                    organization_id=org_id,
+                    name="gateway",
+                    url="https://gateway.local",
+                    workspace_root="/tmp/workspace",
                 ),
             )
             session.add(
                 Board(
-                    id=board_id, organization_id=org_id, name="board",
-                    slug="board", gateway_id=gateway_id,
+                    id=board_id,
+                    organization_id=org_id,
+                    name="board",
+                    slug="board",
+                    gateway_id=gateway_id,
                 ),
             )
             session.add(
                 Agent(
-                    id=lead_id, name="Supervisor", board_id=board_id,
-                    gateway_id=gateway_id, status="online", is_board_lead=True,
+                    id=lead_id,
+                    name="Supervisor",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
+                    is_board_lead=True,
                 ),
             )
             session.add(
                 Agent(
-                    id=qa_id, name="QA-E2E", board_id=board_id,
-                    gateway_id=gateway_id, status="online",
+                    id=qa_id,
+                    name="QA-E2E",
+                    board_id=board_id,
+                    gateway_id=gateway_id,
+                    status="online",
                     identity_profile={"validation_flow": "qa_validation"},
                 ),
             )
             session.add(
                 Task(
-                    id=task_id, board_id=board_id, title="qa task",
-                    description="", status="inbox", review_packet_type="review_only",
+                    id=task_id,
+                    board_id=board_id,
+                    title="qa task",
+                    description="",
+                    status="inbox",
+                    review_packet_type="review_only",
                 ),
             )
             await session.commit()

@@ -35,9 +35,7 @@ async def lead_scoring_sweep_loop(stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
             try:
                 async with async_session_maker() as session:
-                    emitted = await score_all_leads_once(
-                        session, sweep_interval=sweep_interval
-                    )
+                    emitted = await score_all_leads_once(session, sweep_interval=sweep_interval)
                 if emitted:
                     logger.info(
                         "lead_scoring_sweep.candidates_emitted count=%s",
@@ -46,9 +44,7 @@ async def lead_scoring_sweep_loop(stop_event: asyncio.Event) -> None:
             except Exception:
                 logger.exception("lead_scoring_sweep.iteration_failed")
             try:
-                await asyncio.wait_for(
-                    stop_event.wait(), timeout=interval_seconds
-                )
+                await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
             except TimeoutError:
                 continue
     finally:

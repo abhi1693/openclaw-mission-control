@@ -91,9 +91,9 @@ async def test_lead_pipeline_missing_batch_uses_one_query_for_n_tasks() -> None:
             for missing in result.values():
                 assert "built" in missing
                 assert "code_changed" not in missing  # already present
-            assert query_count == 1, (
-                f"expected 1 batch query for 5 frontend tasks; got {query_count}"
-            )
+            assert (
+                query_count == 1
+            ), f"expected 1 batch query for 5 frontend tasks; got {query_count}"
     finally:
         await engine.dispose()
 

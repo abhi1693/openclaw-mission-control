@@ -137,9 +137,7 @@ async def test_sweep_retires_umbrella_whose_dep_cleared_before_fix_shipped(
     session.add(dep)
     session.add(umbrella)
     session.add(
-        TaskDependency(
-            board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id
-        ),
+        TaskDependency(board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id),
     )
     _seed_marker(session, board_id=board.id, task_id=umbrella.id, agent_id=lead.id)
     await session.commit()
@@ -166,9 +164,7 @@ async def test_sweep_retires_multiple_qualifying_umbrellas_in_one_pass(
         session.add(dep)
         session.add(umbrella)
         session.add(
-            TaskDependency(
-                board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id
-            ),
+            TaskDependency(board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id),
         )
         _seed_marker(session, board_id=board.id, task_id=umbrella.id, agent_id=lead.id)
         umbrellas.append(umbrella)
@@ -197,9 +193,7 @@ async def test_sweep_skips_umbrella_without_marker(
     session.add(dep)
     session.add(umbrella)
     session.add(
-        TaskDependency(
-            board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id
-        ),
+        TaskDependency(board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id),
     )
     await session.commit()
 
@@ -248,14 +242,10 @@ async def test_sweep_skips_umbrella_with_open_dep(
     session.add(dep_open)
     session.add(umbrella)
     session.add(
-        TaskDependency(
-            board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep_done.id
-        ),
+        TaskDependency(board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep_done.id),
     )
     session.add(
-        TaskDependency(
-            board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep_open.id
-        ),
+        TaskDependency(board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep_open.id),
     )
     _seed_marker(session, board_id=board.id, task_id=umbrella.id, agent_id=lead.id)
     await session.commit()
@@ -279,9 +269,7 @@ async def test_sweep_skips_umbrella_with_open_parent_task_id_child(
     session.add(dep)
     session.add(umbrella)
     session.add(
-        TaskDependency(
-            board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id
-        ),
+        TaskDependency(board_id=board.id, task_id=umbrella.id, depends_on_task_id=dep.id),
     )
     _seed_marker(session, board_id=board.id, task_id=umbrella.id, agent_id=lead.id)
     open_child = Task(

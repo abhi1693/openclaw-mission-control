@@ -52,14 +52,17 @@ class TestDeployParityMatch:
         """Live /__build SHA matches packet_commit_sha -> no action."""
         task = _make_parity_task(packet_sha="a885428")
 
-        with patch(
-            "app.services.deploy_parity.fetch_build_metadata",
-            new_callable=AsyncMock,
-            return_value=BuildMetadata(sha="a8854286b141ef8a3857ef753c9864f7218556f5"),
-        ), patch(
-            "app.services.deploy_parity._revert_to_in_progress",
-            new_callable=AsyncMock,
-        ) as mock_revert:
+        with (
+            patch(
+                "app.services.deploy_parity.fetch_build_metadata",
+                new_callable=AsyncMock,
+                return_value=BuildMetadata(sha="a8854286b141ef8a3857ef753c9864f7218556f5"),
+            ),
+            patch(
+                "app.services.deploy_parity._revert_to_in_progress",
+                new_callable=AsyncMock,
+            ) as mock_revert,
+        ):
             await process_deploy_parity_task(task)
             mock_revert.assert_not_called()
 
@@ -68,14 +71,17 @@ class TestDeployParityMatch:
         """Live /__build returns no SHA (degraded) -> no revert."""
         task = _make_parity_task(packet_sha="a885428")
 
-        with patch(
-            "app.services.deploy_parity.fetch_build_metadata",
-            new_callable=AsyncMock,
-            return_value=BuildMetadata(sha=None),
-        ), patch(
-            "app.services.deploy_parity._revert_to_in_progress",
-            new_callable=AsyncMock,
-        ) as mock_revert:
+        with (
+            patch(
+                "app.services.deploy_parity.fetch_build_metadata",
+                new_callable=AsyncMock,
+                return_value=BuildMetadata(sha=None),
+            ),
+            patch(
+                "app.services.deploy_parity._revert_to_in_progress",
+                new_callable=AsyncMock,
+            ) as mock_revert,
+        ):
             await process_deploy_parity_task(task)
             mock_revert.assert_not_called()
 
@@ -88,14 +94,17 @@ class TestDeployParityMismatch:
         """Live SHA differs from packet -> revert called."""
         task = _make_parity_task(packet_sha="a885428")
 
-        with patch(
-            "app.services.deploy_parity.fetch_build_metadata",
-            new_callable=AsyncMock,
-            return_value=BuildMetadata(sha="deadbeef1234567890abcdef1234567890abcdef"),
-        ), patch(
-            "app.services.deploy_parity._revert_to_in_progress",
-            new_callable=AsyncMock,
-        ) as mock_revert:
+        with (
+            patch(
+                "app.services.deploy_parity.fetch_build_metadata",
+                new_callable=AsyncMock,
+                return_value=BuildMetadata(sha="deadbeef1234567890abcdef1234567890abcdef"),
+            ),
+            patch(
+                "app.services.deploy_parity._revert_to_in_progress",
+                new_callable=AsyncMock,
+            ) as mock_revert,
+        ):
             await process_deploy_parity_task(task)
             mock_revert.assert_called_once()
             call_kwargs = mock_revert.call_args.kwargs

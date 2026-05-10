@@ -28,6 +28,7 @@ def _settings_or_none() -> Any:
         return None
     return _settings
 
+
 TRACE_LEVEL = 5
 EXC_INFO_TUPLE_SIZE = 3
 logging.addLevelName(TRACE_LEVEL, "TRACE")

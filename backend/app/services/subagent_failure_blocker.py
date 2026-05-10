@@ -56,6 +56,7 @@ def _is_dedupe_integrity_error(exc: IntegrityError) -> bool:
     combined = f"{exc} {exc.orig}"
     return any(sig in combined for sig in _DEDUPE_SIGNATURES)
 
+
 # ``Blocker.owner_role`` is ``VARCHAR(64)`` in Postgres; cap parser
 # output below that to fail closed on payload-level malformation rather
 # than at commit time (Postgres raises, SQLite silently truncates).
@@ -94,19 +95,13 @@ def parse_subagent_failure_payload(
     """
 
     if not isinstance(raw, dict):
-        logger.warning(
-            "subagent_failure_blocker.payload_not_dict type=%s", type(raw).__name__
-        )
+        logger.warning("subagent_failure_blocker.payload_not_dict type=%s", type(raw).__name__)
         return None
     requested_role = raw.get("requested_role")
     runtime_ms = raw.get("runtime_ms")
     error_class = raw.get("error_class")
     role_clean = requested_role.strip() if isinstance(requested_role, str) else ""
-    if (
-        not isinstance(requested_role, str)
-        or not role_clean
-        or len(role_clean) > _MAX_ROLE_LENGTH
-    ):
+    if not isinstance(requested_role, str) or not role_clean or len(role_clean) > _MAX_ROLE_LENGTH:
         logger.warning(
             "subagent_failure_blocker.missing_requested_role raw_keys=%s",
             _safe_key_list(raw),
@@ -208,9 +203,7 @@ async def file_subagent_failure_blocker_if_configured(
     :func:`file_stale_agent_blocker_if_configured`'s contract.
     """
 
-    if not board_rollout_flag_enabled(
-        board.rollout_flags, STRUCTURED_BLOCKERS_V1_FLAG
-    ):
+    if not board_rollout_flag_enabled(board.rollout_flags, STRUCTURED_BLOCKERS_V1_FLAG):
         return None
 
     if await _open_subagent_runtime_blocker_exists(
@@ -249,8 +242,7 @@ async def file_subagent_failure_blocker_if_configured(
         )
         return None
     logger.info(
-        "subagent_failure_blocker.filed task_id=%s role=%s runtime_ms=%d "
-        "error=%s blocker_id=%s",
+        "subagent_failure_blocker.filed task_id=%s role=%s runtime_ms=%d " "error=%s blocker_id=%s",
         task_id,
         payload.requested_role,
         payload.runtime_ms,

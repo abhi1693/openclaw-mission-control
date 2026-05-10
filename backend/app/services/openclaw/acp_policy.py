@@ -22,7 +22,9 @@ def desired_dev_acp_flow_for_role(role: str) -> str | None:
     return None
 
 
-def converge_identity_dev_acp_flow(identity_profile: dict[str, Any] | None) -> dict[str, Any] | None:
+def converge_identity_dev_acp_flow(
+    identity_profile: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     profile = dict(identity_profile) if isinstance(identity_profile, dict) else {}
     role = str(profile.get("role") or "").strip()
     desired = desired_dev_acp_flow_for_role(role)

@@ -48,10 +48,7 @@ class DbSessionStateProjector:
                 agent_id=new_state.agent_id,
                 session_label=new_state.session_label,
             )
-            if (
-                existing is not None
-                and new_state.last_changed_at_ms <= existing.last_changed_at_ms
-            ):
+            if existing is not None and new_state.last_changed_at_ms <= existing.last_changed_at_ms:
                 return
             await upsert_session_state(session, new_state)
             await session.commit()

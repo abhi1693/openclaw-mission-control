@@ -75,23 +75,15 @@ async def fetch_build_metadata(
         try:
             resp = await client.get(normalised)
         except httpx.HTTPError as exc:
-            raise DeployTruthFetchError(
-                f"unable to reach {normalised}: {exc}"
-            ) from exc
+            raise DeployTruthFetchError(f"unable to reach {normalised}: {exc}") from exc
         if resp.status_code != 200:
-            raise DeployTruthFetchError(
-                f"{normalised} returned HTTP {resp.status_code}"
-            )
+            raise DeployTruthFetchError(f"{normalised} returned HTTP {resp.status_code}")
         try:
             payload = resp.json()
         except ValueError as exc:
-            raise DeployTruthFetchError(
-                f"{normalised} returned non-JSON body"
-            ) from exc
+            raise DeployTruthFetchError(f"{normalised} returned non-JSON body") from exc
         if not isinstance(payload, dict):
-            raise DeployTruthFetchError(
-                f"{normalised} returned a non-object body"
-            )
+            raise DeployTruthFetchError(f"{normalised} returned a non-object body")
         raw_sha = payload.get("sha")
         sha = raw_sha.strip().lower() if isinstance(raw_sha, str) else None
         sha = sha or None
@@ -101,9 +93,7 @@ async def fetch_build_metadata(
             # ``live.startswith(packet)`` for packet ``"abcdef1"``, so
             # the comparator would false-pass. Reuse the same
             # 7–40 lowercase-hex validator the packet fields use.
-            raise DeployTruthFetchError(
-                f"{normalised} returned a malformed sha: {sha!r}"
-            )
+            raise DeployTruthFetchError(f"{normalised} returned a malformed sha: {sha!r}")
         return BuildMetadata(
             sha=sha,
             built_at=_as_str(payload.get("built_at")),
@@ -119,9 +109,7 @@ def _as_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def packet_sha_matches_live(
-    *, packet_sha: str, live_sha: str
-) -> bool:
+def packet_sha_matches_live(*, packet_sha: str, live_sha: str) -> bool:
     """Compare a packet-claimed SHA against the live-fetched SHA.
 
     The live SHA is the ground truth — the packet is asserting *what

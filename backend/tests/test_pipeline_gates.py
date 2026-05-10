@@ -208,6 +208,7 @@ class TestAgentAllowlist:
         }
         # Read the source to verify (belt-and-suspenders).
         import inspect
+
         from app.api import tasks as tasks_module
 
         source = inspect.getsource(tasks_module._apply_non_lead_agent_task_rules)

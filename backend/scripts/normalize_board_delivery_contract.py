@@ -16,7 +16,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 
 
 from app.api.deps import ActorContext
-from app.api.tasks import _TaskUpdateInput, _apply_admin_task_rules, _finalize_updated_task
+from app.api.tasks import _apply_admin_task_rules, _finalize_updated_task, _TaskUpdateInput
 from app.db.session import async_session_maker
 from app.models.tasks import Task
 from app.models.users import User
@@ -97,7 +97,9 @@ async def _resolve_actor_user(
     user_id: UUID | None,
 ) -> User:
     if user_id is None:
-        raise SystemExit("--user-id (or manifest actor_user_id) is required unless --dry-run is used")
+        raise SystemExit(
+            "--user-id (or manifest actor_user_id) is required unless --dry-run is used"
+        )
     async with async_session_maker() as session:
         user = await session.get(User, user_id)
         if user is None:

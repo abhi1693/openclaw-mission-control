@@ -170,20 +170,36 @@ async def _post_full_pipeline(
     await _post_event(session, task=task, actor=actor, state="code_changed", commit_sha=commit_sha)
     await _post_event(session, task=task, actor=actor, state="committed", commit_sha=commit_sha)
     await _post_event(
-        session, task=task, actor=actor, state="built",
-        commit_sha=commit_sha, artifact_hash=artifact_hash,
+        session,
+        task=task,
+        actor=actor,
+        state="built",
+        commit_sha=commit_sha,
+        artifact_hash=artifact_hash,
     )
     await _post_event(
-        session, task=task, actor=actor, state="deployed",
-        artifact_hash=artifact_hash, deploy_target=deploy_target,
+        session,
+        task=task,
+        actor=actor,
+        state="deployed",
+        artifact_hash=artifact_hash,
+        deploy_target=deploy_target,
     )
     await _post_event(
-        session, task=task, actor=actor, state="live_build_verified",
-        deploy_target=deploy_target, live_sha=live_sha,
+        session,
+        task=task,
+        actor=actor,
+        state="live_build_verified",
+        deploy_target=deploy_target,
+        live_sha=live_sha,
     )
     await _post_event(
-        session, task=task, actor=actor, state="runtime_verified",
-        deploy_target=deploy_target, evidence={"qa_browser_snapshot": "ok"},
+        session,
+        task=task,
+        actor=actor,
+        state="runtime_verified",
+        deploy_target=deploy_target,
+        evidence={"qa_browser_snapshot": "ok"},
     )
 
 
@@ -246,13 +262,13 @@ async def test_pipeline_blocker_does_not_resolve_when_pipeline_partial(
     await sqlite_session.refresh(blocker)
 
     # Only post code_changed + committed — built/deployed/etc. missing.
-    await _post_event(sqlite_session, task=task, actor=worker, state="code_changed", commit_sha="abc")
+    await _post_event(
+        sqlite_session, task=task, actor=worker, state="code_changed", commit_sha="abc"
+    )
     await _post_event(sqlite_session, task=task, actor=worker, state="committed", commit_sha="abc")
 
     await sqlite_session.refresh(blocker)
-    assert blocker.resolved_at is None, (
-        "Blocker must stay open while pipeline.ready=false"
-    )
+    assert blocker.resolved_at is None, "Blocker must stay open while pipeline.ready=false"
 
 
 @pytest.mark.asyncio
@@ -326,8 +342,7 @@ async def test_pipeline_event_does_not_resolve_other_task_blockers(
 
     await sqlite_session.refresh(blocker_b)
     assert blocker_b.resolved_at is None, (
-        "Pipeline events on task A must not auto-resolve Blockers "
-        "scoped to task B"
+        "Pipeline events on task A must not auto-resolve Blockers " "scoped to task B"
     )
 
 
@@ -362,7 +377,10 @@ async def test_pipeline_blocker_does_not_resolve_using_old_cycle_events(
         ("built", {"commit_sha": "old", "artifact_hash": "olddead"}),
         ("deployed", {"artifact_hash": "olddead", "deploy_target": "http://old"}),
         ("live_build_verified", {"deploy_target": "http://old", "live_sha": "oldlive"}),
-        ("runtime_verified", {"deploy_target": "http://old", "evidence": {"qa_browser_snapshot": "old"}}),
+        (
+            "runtime_verified",
+            {"deploy_target": "http://old", "evidence": {"qa_browser_snapshot": "old"}},
+        ),
     ):
         sqlite_session.add(
             TaskPipelineEvent(
@@ -406,12 +424,11 @@ async def test_pipeline_blocker_does_not_resolve_using_old_cycle_events(
     await sqlite_session.commit()
     await sqlite_session.refresh(blocker)
     assert resolved == 0, (
-        f"Expected 0 resolutions (old cycle events shouldn't satisfy new cycle); "
-        f"got {resolved}"
+        f"Expected 0 resolutions (old cycle events shouldn't satisfy new cycle); " f"got {resolved}"
     )
-    assert blocker.resolved_at is None, (
-        "Old-cycle pipeline events must NOT auto-resolve a new-cycle Blocker"
-    )
+    assert (
+        blocker.resolved_at is None
+    ), "Old-cycle pipeline events must NOT auto-resolve a new-cycle Blocker"
 
 
 @pytest.mark.asyncio
@@ -430,7 +447,9 @@ async def test_pipeline_blocker_auto_resolves_on_overwrite_merge_path(
         task_title="Merge-path resolver coverage",
     )
     # Post 5 of 6 events normally.
-    await _post_event(sqlite_session, task=task, actor=worker, state="code_changed", commit_sha="abc")
+    await _post_event(
+        sqlite_session, task=task, actor=worker, state="code_changed", commit_sha="abc"
+    )
     await _post_event(sqlite_session, task=task, actor=worker, state="committed", commit_sha="abc")
     # `built` event posted WITHOUT artifact_hash via overwrite path.
     # Actually, the API rejects missing required fields — so simulate
@@ -451,16 +470,28 @@ async def test_pipeline_blocker_auto_resolves_on_overwrite_merge_path(
     await sqlite_session.commit()
     # Posts the rest normally.
     await _post_event(
-        sqlite_session, task=task, actor=worker, state="deployed",
-        artifact_hash="dead", deploy_target="http://target",
+        sqlite_session,
+        task=task,
+        actor=worker,
+        state="deployed",
+        artifact_hash="dead",
+        deploy_target="http://target",
     )
     await _post_event(
-        sqlite_session, task=task, actor=worker, state="live_build_verified",
-        deploy_target="http://target", live_sha="live",
+        sqlite_session,
+        task=task,
+        actor=worker,
+        state="live_build_verified",
+        deploy_target="http://target",
+        live_sha="live",
     )
     await _post_event(
-        sqlite_session, task=task, actor=worker, state="runtime_verified",
-        deploy_target="http://target", evidence={"ok": True},
+        sqlite_session,
+        task=task,
+        actor=worker,
+        state="runtime_verified",
+        deploy_target="http://target",
+        evidence={"ok": True},
     )
     # Now open the Blocker. Pipeline still NOT ready — built has no artifact_hash.
     blocker = Blocker(
@@ -596,8 +627,7 @@ async def test_lead_authored_blocker_with_pipeline_reason_code_still_auto_resolv
 
     await sqlite_session.refresh(blocker)
     assert blocker.resolved_at is not None, (
-        "Lead-authored pipeline Blocker must still auto-resolve "
-        "(AC5 repro shape)"
+        "Lead-authored pipeline Blocker must still auto-resolve " "(AC5 repro shape)"
     )
 
 

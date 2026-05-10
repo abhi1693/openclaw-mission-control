@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import replace
-from dataclasses import dataclass
 import re
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -528,11 +527,14 @@ class GatewaySessionService(OpenClawDBService):
                     config=config,
                 )
                 if isinstance(ensured, dict):
-                    resolved_session_key = str(
-                        ensured.get("key")
-                        or (ensured.get("entry") or {}).get("key")
+                    resolved_session_key = (
+                        str(
+                            ensured.get("key")
+                            or (ensured.get("entry") or {}).get("key")
+                            or session_id
+                        ).strip()
                         or session_id
-                    ).strip() or session_id
+                    )
             else:
                 ensured = await ensure_session(session_id, config=config, label=label)
             if payload.reset:

@@ -54,7 +54,7 @@ class TestParseEvidence:
 
     def test_json_array_rejected(self) -> None:
         with pytest.raises(SystemExit) as exc:
-            _parse_evidence('[1, 2, 3]')
+            _parse_evidence("[1, 2, 3]")
         assert "JSON object" in str(exc.value)
 
 
@@ -81,9 +81,7 @@ class TestArgparse:
     def test_pipeline_event_state_constrained(self) -> None:
         parser = build_parser()
         with pytest.raises(SystemExit):
-            parser.parse_args(
-                ["pipeline-event-create", "--task", "abc", "--state", "bogus_state"]
-            )
+            parser.parse_args(["pipeline-event-create", "--task", "abc", "--state", "bogus_state"])
 
     def test_pipeline_event_accepts_model_fallback(self) -> None:
         parser = build_parser()
@@ -191,22 +189,24 @@ class TestArgparse:
 
 
 class TestEnvFallback:
-    def test_token_required_when_neither_flag_nor_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_token_required_when_neither_flag_nor_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("LOCAL_AUTH_TOKEN", raising=False)
         with pytest.raises(SystemExit) as exc:
             main(["task-read", "--task", "abc"])
         assert "LOCAL_AUTH_TOKEN" in str(exc.value)
 
-    def test_board_required_when_neither_flag_nor_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_board_required_when_neither_flag_nor_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("LOCAL_AUTH_TOKEN", "tok")
         monkeypatch.delenv("BOARD_ID", raising=False)
         with pytest.raises(SystemExit) as exc:
             main(["task-read", "--task", "abc"])
         assert "BOARD_ID" in str(exc.value)
 
-    def test_board_flag_must_match_env_when_both_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_board_flag_must_match_env_when_both_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Codex 3rd-pass finding: skill claims cross-board enforcement;
         verify the guard actually fires when --board disagrees with $BOARD_ID.
         """
@@ -219,9 +219,7 @@ class TestEnvFallback:
         assert "different-board" in message
         assert "board-from-env" in message
 
-    def test_board_flag_alone_works_when_env_unset(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_board_flag_alone_works_when_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--board override is fine when $BOARD_ID is unset (no conflict)."""
         from unittest import mock
 
@@ -255,9 +253,7 @@ class TestEnvFallback:
             )
         assert rc == 0
 
-    def test_board_flag_matches_env_succeeds(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_board_flag_matches_env_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Idempotent: passing --board with the same value as $BOARD_ID is fine."""
         from unittest import mock
 

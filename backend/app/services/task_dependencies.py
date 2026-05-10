@@ -87,9 +87,7 @@ def blocked_by_dependency_ids(
     cancelled task that will never complete).
     """
     return [
-        dep_id
-        for dep_id in dependency_ids
-        if status_by_id.get(dep_id) not in TERMINAL_STATUSES
+        dep_id for dep_id in dependency_ids if status_by_id.get(dep_id) not in TERMINAL_STATUSES
     ]
 
 

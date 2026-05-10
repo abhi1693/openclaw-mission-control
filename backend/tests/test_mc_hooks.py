@@ -81,14 +81,21 @@ class TestArgparse:
 
     def test_agent_full_payload(self) -> None:
         parser = build_parser()
-        args = parser.parse_args([
-            "agent",
-            "--message", "ping",
-            "--name", "smoke-test",
-            "--agent-id", "lead-x",
-            "--model", "openai-codex/gpt-5.4",
-            "--timeout-seconds", "60",
-        ])
+        args = parser.parse_args(
+            [
+                "agent",
+                "--message",
+                "ping",
+                "--name",
+                "smoke-test",
+                "--agent-id",
+                "lead-x",
+                "--model",
+                "openai-codex/gpt-5.4",
+                "--timeout-seconds",
+                "60",
+            ]
+        )
         assert args.name == "smoke-test"
         assert args.agent_id == "lead-x"
         assert args.model == "openai-codex/gpt-5.4"
@@ -169,9 +176,7 @@ class TestTokenResolution:
         """
         monkeypatch.delenv("OPENCLAW_HOOK_TOKEN", raising=False)
         env_file = tmp_path / "env"
-        env_file.write_text(
-            "OPENCLAW_HOOK_TOKEN=abc123 # prod token\n", encoding="utf-8"
-        )
+        env_file.write_text("OPENCLAW_HOOK_TOKEN=abc123 # prod token\n", encoding="utf-8")
         monkeypatch.setattr(_module, "DEFAULT_TOKEN_FILE", str(env_file))
         assert _module._resolve_token(_namespace(token=None)) == "abc123"
 
@@ -184,15 +189,11 @@ class TestTokenResolution:
         """
         monkeypatch.delenv("OPENCLAW_HOOK_TOKEN", raising=False)
         env_file = tmp_path / "env"
-        env_file.write_text(
-            'OPENCLAW_HOOK_TOKEN="abc#123"\n', encoding="utf-8"
-        )
+        env_file.write_text('OPENCLAW_HOOK_TOKEN="abc#123"\n', encoding="utf-8")
         monkeypatch.setattr(_module, "DEFAULT_TOKEN_FILE", str(env_file))
         assert _module._resolve_token(_namespace(token=None)) == "abc#123"
 
-    def test_token_file_handles_crlf(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_token_file_handles_crlf(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Windows-style line endings shouldn't bleed CR into the token."""
         monkeypatch.delenv("OPENCLAW_HOOK_TOKEN", raising=False)
         env_file = tmp_path / "env"
@@ -234,9 +235,7 @@ class TestStdinMessage:
         _module._resolve_message_stdin(ns)
         assert ns.message == "body from stdin"
 
-    def test_dash_strips_trailing_newlines_only(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dash_strips_trailing_newlines_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO("multi\nline\n  body\n\n"))
         ns = _namespace(message="-")
         _module._resolve_message_stdin(ns)
@@ -286,10 +285,17 @@ class TestHttpFlow:
             return _StubResponse(b'{"ok":true,"mode":"now"}')
 
         with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
-            rc = main([
-                "--base-url", "http://test:18789",
-                "wake", "--text", "external trigger", "--mode", "now",
-            ])
+            rc = main(
+                [
+                    "--base-url",
+                    "http://test:18789",
+                    "wake",
+                    "--text",
+                    "external trigger",
+                    "--mode",
+                    "now",
+                ]
+            )
 
         assert rc == 0
         assert captured["url"] == "http://test:18789/hooks/wake"
@@ -299,9 +305,7 @@ class TestHttpFlow:
         out = capsys.readouterr().out
         assert json.loads(out) == {"ok": True, "mode": "now"}
 
-    def test_agent_posts_full_payload(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_agent_posts_full_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENCLAW_HOOK_TOKEN", "tok")
         captured: dict[str, Any] = {}
 
@@ -311,15 +315,23 @@ class TestHttpFlow:
             return _StubResponse(b'{"ok":true,"runId":"r-1"}')
 
         with mock.patch.object(_module.urllib.request, "urlopen", fake_urlopen):
-            rc = main([
-                "--base-url", "http://test:18789",
-                "agent",
-                "--message", "summarize",
-                "--name", "smoke",
-                "--agent-id", "lead-x",
-                "--model", "openai-codex/gpt-5.4",
-                "--timeout-seconds", "30",
-            ])
+            rc = main(
+                [
+                    "--base-url",
+                    "http://test:18789",
+                    "agent",
+                    "--message",
+                    "summarize",
+                    "--name",
+                    "smoke",
+                    "--agent-id",
+                    "lead-x",
+                    "--model",
+                    "openai-codex/gpt-5.4",
+                    "--timeout-seconds",
+                    "30",
+                ]
+            )
 
         assert rc == 0
         assert captured["url"] == "http://test:18789/hooks/agent"
@@ -330,9 +342,7 @@ class TestHttpFlow:
         assert body["model"] == "openai-codex/gpt-5.4"
         assert body["timeoutSeconds"] == 30
 
-    def test_agent_omits_unset_optional_keys(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_agent_omits_unset_optional_keys(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Optional flags shouldn't show up as ``null`` in the payload — they
         should be omitted entirely so the gateway picks its own defaults."""
         monkeypatch.setenv("OPENCLAW_HOOK_TOKEN", "tok")
@@ -357,7 +367,10 @@ class TestHttpFlow:
 
         def fake_urlopen(req, timeout=None):
             raise urllib.error.HTTPError(
-                req.full_url, 401, "Unauthorized", hdrs={},  # type: ignore[arg-type]
+                req.full_url,
+                401,
+                "Unauthorized",
+                hdrs={},  # type: ignore[arg-type]
                 fp=io.BytesIO(b"Unauthorized"),
             )
 
@@ -392,6 +405,7 @@ class TestHttpFlow:
 def _namespace(**kwargs: Any) -> Any:
     """Build an argparse.Namespace-like object with arbitrary attributes."""
     import argparse
+
     ns = argparse.Namespace()
     for k, v in kwargs.items():
         setattr(ns, k, v)

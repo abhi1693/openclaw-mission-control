@@ -346,7 +346,7 @@ def test_aware_in_progress_at_with_offset_uses_utc_age() -> None:
     from datetime import UTC, timezone
 
     fixed_now = utcnow()
-    aware_started = (fixed_now - IN_PROGRESS_PIPELINE_NUDGE_GRACE - timedelta(hours=1))
+    aware_started = fixed_now - IN_PROGRESS_PIPELINE_NUDGE_GRACE - timedelta(hours=1)
     aware_started = aware_started.replace(tzinfo=UTC).astimezone(timezone(timedelta(hours=-3)))
     task = _task(
         status="in_progress",
@@ -560,20 +560,28 @@ def test_pending_operator_decision_excludes_task_from_active_queue() -> None:
 def test_all_four_blocker_sources_filter_independently() -> None:
     """Each of the four blocker sources independently filters a task."""
     by_dependency = _task(
-        status="in_progress", title="dep-blocked", assigned=True,
+        status="in_progress",
+        title="dep-blocked",
+        assigned=True,
         in_progress_at=_stale_in_progress_at(),
     )
     by_legacy_flag = _task(
-        status="in_progress", title="legacy-flag-blocked", assigned=True,
+        status="in_progress",
+        title="legacy-flag-blocked",
+        assigned=True,
         in_progress_at=_stale_in_progress_at(),
     )
     by_legacy_flag.operator_decision_required = True
     by_open_blocker = _task(
-        status="in_progress", title="structured-blocker", assigned=True,
+        status="in_progress",
+        title="structured-blocker",
+        assigned=True,
         in_progress_at=_stale_in_progress_at(),
     )
     by_pending_decision = _task(
-        status="in_progress", title="pending-decision", assigned=True,
+        status="in_progress",
+        title="pending-decision",
+        assigned=True,
         in_progress_at=_stale_in_progress_at(),
     )
     inbox_task = _task(status="inbox", title="Available inbox work")
@@ -740,9 +748,9 @@ def test_clear_only_pending_approval_with_multiple_pending_reviews() -> None:
             tasks=[review_a, review_b],
             blocked_by_task_id={},
             approval_state_by_task_id={
-            review_a.id: "pending",
-            review_b.id: "pending",
-        },
+                review_a.id: "pending",
+                review_b.id: "pending",
+            },
             pipeline_missing_by_task_id={},
         ),
     )
@@ -865,9 +873,9 @@ def test_inspect_stale_blocker_respects_owner_ack() -> None:
         ),
     )
 
-    assert action.action != "inspect_stale_blocker", (
-        f"owner-acked blocker still fired stale; action={action.action}"
-    )
+    assert (
+        action.action != "inspect_stale_blocker"
+    ), f"owner-acked blocker still fired stale; action={action.action}"
 
 
 def test_inspect_stale_blocker_resets_clock_on_acknowledgement() -> None:

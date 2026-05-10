@@ -6,12 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
-_SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "check_agent_workspace_drift.py"
-)
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "check_agent_workspace_drift.py"
 _spec = importlib.util.spec_from_file_location("check_agent_workspace_drift", _SCRIPT)
 assert _spec is not None and _spec.loader is not None
 _module = importlib.util.module_from_spec(_spec)

@@ -7,7 +7,6 @@ from uuid import UUID
 
 from sqlmodel import Field, SQLModel
 
-
 LeadNextActionName = Literal[
     "mark_done",
     "inspect_review_gates",

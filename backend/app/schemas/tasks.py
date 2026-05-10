@@ -75,13 +75,13 @@ _VALIDATION_TARGET_BLOCKED_HOSTS: frozenset[str] = frozenset(
 # without dragging an ``ipaddress.ip_network`` import into schema-time
 # validation.
 _VALIDATION_TARGET_BLOCKED_PREFIXES: tuple[str, ...] = (
-    "127.",           # 127.0.0.0/8 loopback
-    "0.",             # 0.0.0.0/8 unspecified
-    "169.254.",       # 169.254.0.0/16 link-local (incl. AWS IMDS)
-    "fe80:",          # IPv6 link-local
-    "fc00:",          # IPv6 unique-local
-    "fd00:",          # IPv6 unique-local (alt)
-    "::ffff:127.",    # IPv4-mapped loopback
+    "127.",  # 127.0.0.0/8 loopback
+    "0.",  # 0.0.0.0/8 unspecified
+    "169.254.",  # 169.254.0.0/16 link-local (incl. AWS IMDS)
+    "fe80:",  # IPv6 link-local
+    "fc00:",  # IPv6 unique-local
+    "fd00:",  # IPv6 unique-local (alt)
+    "::ffff:127.",  # IPv4-mapped loopback
     "::ffff:169.254.",  # IPv4-mapped link-local
 )
 
@@ -97,9 +97,7 @@ def _strip_optional_text(value: object) -> object | None:
     return stripped or None
 
 
-def _guard_url_shaped_target(
-    target: str | None, kind: str | None, field_name: str
-) -> None:
+def _guard_url_shaped_target(target: str | None, kind: str | None, field_name: str) -> None:
     """Schema-time SSRF guard.
 
     Fires only when ``kind`` says the target is a URL. Other kinds
@@ -114,9 +112,7 @@ def _guard_url_shaped_target(
     if target is None or kind not in _VALIDATION_TARGET_URL_KINDS:
         return
     if len(target) > _VALIDATION_TARGET_MAX_LENGTH:
-        raise ValueError(
-            f"{field_name} exceeds {_VALIDATION_TARGET_MAX_LENGTH} chars"
-        )
+        raise ValueError(f"{field_name} exceeds {_VALIDATION_TARGET_MAX_LENGTH} chars")
     try:
         parsed = urlparse(target)
     except ValueError as exc:
@@ -124,22 +120,16 @@ def _guard_url_shaped_target(
     scheme = parsed.scheme.lower()
     if scheme not in _VALIDATION_TARGET_ALLOWED_SCHEMES:
         raise ValueError(
-            f"{field_name} must use http:// or https:// when kind={kind!r} "
-            f"(got {scheme!r})"
+            f"{field_name} must use http:// or https:// when kind={kind!r} " f"(got {scheme!r})"
         )
     hostname = (parsed.hostname or "").lower()
     if not hostname:
         raise ValueError(f"{field_name} is missing a hostname")
     if hostname in _VALIDATION_TARGET_BLOCKED_HOSTS:
-        raise ValueError(
-            f"{field_name} resolves to a blocked host ({hostname!r})"
-        )
+        raise ValueError(f"{field_name} resolves to a blocked host ({hostname!r})")
     for prefix in _VALIDATION_TARGET_BLOCKED_PREFIXES:
         if hostname.startswith(prefix):
-            raise ValueError(
-                f"{field_name} resolves to a blocked network prefix "
-                f"({prefix!r})"
-            )
+            raise ValueError(f"{field_name} resolves to a blocked network prefix " f"({prefix!r})")
 
 
 def _normalise_and_validate_sha(value: object, field_name: str) -> object | None:
@@ -351,7 +341,9 @@ class TaskBase(SQLModel):
             self.validation_target_kind,
             self.validation_target_scope,
         )
-        if any(piece is not None for piece in pieces) and not all(piece is not None for piece in pieces):
+        if any(piece is not None for piece in pieces) and not all(
+            piece is not None for piece in pieces
+        ):
             raise ValueError(
                 "validation_target, validation_target_kind, and validation_target_scope must be provided together"
             )

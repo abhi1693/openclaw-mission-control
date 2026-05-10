@@ -22,7 +22,6 @@ from app.services.mc_gateway_subscriber.session_state_projector import (
     parse_session_key,
 )
 
-
 # ---------------------------------------------------------------------------
 # parse_session_key — pure helper
 # ---------------------------------------------------------------------------
@@ -33,26 +32,30 @@ def test_parse_session_key_extracts_agent_and_label() -> None:
     where ``agent_id`` is the MC-side identifier (``mc-<uuid>`` /
     ``lead-<uuid>`` / ``mc-gateway-<uuid>``) and ``label`` is the
     per-agent session bucket (typically ``main``)."""
-    assert parse_session_key(
-        "agent:mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66:main"
-    ) == ("mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66", "main")
+    assert parse_session_key("agent:mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66:main") == (
+        "mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66",
+        "main",
+    )
 
 
 def test_parse_session_key_supports_lead_and_gateway_prefixes() -> None:
-    assert parse_session_key(
-        "agent:lead-aaaa1234-1111-2222-3333-444444444444:main"
-    ) == ("lead-aaaa1234-1111-2222-3333-444444444444", "main")
-    assert parse_session_key(
-        "agent:mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e:main"
-    ) == ("mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e", "main")
+    assert parse_session_key("agent:lead-aaaa1234-1111-2222-3333-444444444444:main") == (
+        "lead-aaaa1234-1111-2222-3333-444444444444",
+        "main",
+    )
+    assert parse_session_key("agent:mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e:main") == (
+        "mc-gateway-3821a85a-984c-412a-9340-cda50eaf174e",
+        "main",
+    )
 
 
 def test_parse_session_key_supports_non_main_label() -> None:
     """Some sessions use labels other than ``main`` (e.g. side-channel
     bots). The parser must not hard-code the label."""
-    assert parse_session_key(
-        "agent:mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66:debug"
-    ) == ("mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66", "debug")
+    assert parse_session_key("agent:mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66:debug") == (
+        "mc-dd1abee5-97f0-4aaa-8d34-ecac1f7ddf66",
+        "debug",
+    )
 
 
 def test_parse_session_key_accepts_4_segment_sub_label() -> None:
@@ -64,12 +67,14 @@ def test_parse_session_key_accepts_4_segment_sub_label() -> None:
     so the row IS captured under its full discriminator. ``heartbeat``
     is on the ``_STABLE_SUB_LABELS`` allowlist; per-run sub-labels
     (e.g. ``acp:<uuid>``) are rejected separately."""
-    assert parse_session_key(
-        "agent:lead-05002170-201b-4c66-bae1-26c0c833f206:main:heartbeat"
-    ) == ("lead-05002170-201b-4c66-bae1-26c0c833f206", "main:heartbeat")
-    assert parse_session_key(
-        "agent:mc-3461451b-5824-4ed0-872c-d14d5d2be107:debug:heartbeat"
-    ) == ("mc-3461451b-5824-4ed0-872c-d14d5d2be107", "debug:heartbeat")
+    assert parse_session_key("agent:lead-05002170-201b-4c66-bae1-26c0c833f206:main:heartbeat") == (
+        "lead-05002170-201b-4c66-bae1-26c0c833f206",
+        "main:heartbeat",
+    )
+    assert parse_session_key("agent:mc-3461451b-5824-4ed0-872c-d14d5d2be107:debug:heartbeat") == (
+        "mc-3461451b-5824-4ed0-872c-d14d5d2be107",
+        "debug:heartbeat",
+    )
 
 
 @pytest.mark.parametrize(
@@ -94,12 +99,8 @@ def test_parse_session_key_drops_per_run_acp_child_keys() -> None:
     ACP run AND those rows evade ``cleanup_orphaned_session_states``
     because the cleanup namespace allowlist is mc-/mc-gateway-/lead-.
     Verify per-run ACP child keys are dropped at the parser."""
-    assert parse_session_key(
-        "agent:claude:acp:019de388-26cb-79e0-95f5-72a424d8e152"
-    ) is None
-    assert parse_session_key(
-        "agent:codex:acp:019ddc4c-b027-7ce0-9e49-aa10435bea59"
-    ) is None
+    assert parse_session_key("agent:claude:acp:019de388-26cb-79e0-95f5-72a424d8e152") is None
+    assert parse_session_key("agent:codex:acp:019ddc4c-b027-7ce0-9e49-aa10435bea59") is None
 
 
 def test_parse_session_key_drops_cron_run_keys() -> None:

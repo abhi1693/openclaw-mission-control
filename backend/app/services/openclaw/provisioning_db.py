@@ -75,11 +75,11 @@ from app.services.openclaw.internal.session_keys import (
     board_agent_session_key,
     board_lead_session_key,
 )
+from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
 from app.services.openclaw.lifecycle_queue import (
     QueuedAgentLifecycleReconcile,
     enqueue_lifecycle_reconcile,
 )
-from app.services.openclaw.lifecycle_orchestrator import AgentLifecycleOrchestrator
 from app.services.openclaw.policies import OpenClawAuthorizationPolicy
 from app.services.openclaw.provisioning import (
     OpenClawGatewayControlPlane,

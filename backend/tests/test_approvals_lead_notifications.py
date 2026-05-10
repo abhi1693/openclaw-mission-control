@@ -123,9 +123,7 @@ async def test_update_approval_notifies_lead_when_approved(
     fake_approval_model = type("FakeApprovalModel", (), {"objects": _ApprovalObjects(approval)})
     monkeypatch.setattr(approvals, "Approval", fake_approval_model)
 
-    async def _fake_lock_approval_for_update(
-        _session: object, _approval_id: object
-    ) -> Approval:
+    async def _fake_lock_approval_for_update(_session: object, _approval_id: object) -> Approval:
         return approval
 
     monkeypatch.setattr(approvals, "_lock_approval_for_update", _fake_lock_approval_for_update)
@@ -210,9 +208,7 @@ async def test_update_approval_skips_notify_when_status_not_resolved(
     fake_approval_model = type("FakeApprovalModel", (), {"objects": _ApprovalObjects(approval)})
     monkeypatch.setattr(approvals, "Approval", fake_approval_model)
 
-    async def _fake_lock_approval_for_update(
-        _session: object, _approval_id: object
-    ) -> Approval:
+    async def _fake_lock_approval_for_update(_session: object, _approval_id: object) -> Approval:
         return approval
 
     monkeypatch.setattr(approvals, "_lock_approval_for_update", _fake_lock_approval_for_update)

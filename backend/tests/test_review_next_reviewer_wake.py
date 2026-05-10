@@ -68,28 +68,40 @@ async def _seed_frontend_ui_board(
     sqlite_session.add(Organization(id=org_id, name=f"org-{slug}"))
     sqlite_session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name=f"gw-{slug}",
-            url="ws://gateway.example/ws", workspace_root="/tmp/openclaw",
+            id=gateway_id,
+            organization_id=org_id,
+            name=f"gw-{slug}",
+            url="ws://gateway.example/ws",
+            workspace_root="/tmp/openclaw",
         ),
     )
     board = Board(
-        id=board_id, organization_id=org_id, gateway_id=gateway_id,
-        name=slug, slug=slug,
+        id=board_id,
+        organization_id=org_id,
+        gateway_id=gateway_id,
+        name=slug,
+        slug=slug,
     )
     sqlite_session.add(board)
     architect = Agent(
-        id=architect_id, board_id=board_id, gateway_id=gateway_id,
+        id=architect_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
         name="Architect",
         openclaw_session_id=f"agent:{slug}:architect",
         identity_profile={"dev_acp_flow": "review_only"},
     )
     qa_e2e = Agent(
-        id=qa_id, board_id=board_id, gateway_id=gateway_id,
+        id=qa_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
         name="QA-E2E",
         openclaw_session_id=f"agent:{slug}:qa-e2e",
     )
     lead = Agent(
-        id=lead_id, board_id=board_id, gateway_id=gateway_id,
+        id=lead_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
         name="Supervisor",
         is_board_lead=True,
         openclaw_session_id=f"agent:{slug}:lead",
@@ -98,8 +110,10 @@ async def _seed_frontend_ui_board(
     sqlite_session.add(qa_e2e)
     sqlite_session.add(lead)
     task = Task(
-        id=task_id, board_id=board_id,
-        title=f"task-{slug}", status="review",
+        id=task_id,
+        board_id=board_id,
+        title=f"task-{slug}",
+        status="review",
         review_packet_type="frontend_ui",
         assigned_agent_id=architect_id,
         packet_commit_sha="abc1234",
@@ -121,17 +135,26 @@ def _patch_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
             return GatewayConfig(url="ws://gateway.example/ws")
 
         async def try_send_agent_message(
-            self, *, session_key, config, agent_name, message, deliver,
+            self,
+            *,
+            session_key,
+            config,
+            agent_name,
+            message,
+            deliver,
         ):
-            sent.append({
-                "session_key": session_key,
-                "agent_name": agent_name,
-                "message": message,
-                "deliver": deliver,
-            })
+            sent.append(
+                {
+                    "session_key": session_key,
+                    "agent_name": agent_name,
+                    "message": message,
+                    "deliver": deliver,
+                }
+            )
             return None
 
     import app.services.lead_notify as lead_notify
+
     monkeypatch.setattr(lead_notify, "GatewayDispatchService", _FakeDispatch)
     return sent
 
@@ -209,14 +232,16 @@ async def test_architect_pass_wakes_qa_e2e_on_frontend_ui(
     the API must wake the QA-E2E agent (gateway dispatch) so it picks
     up the task before its next heartbeat tick."""
     board, architect, qa_e2e, lead, task = await _seed_frontend_ui_board(
-        sqlite_session, slug="next-wake-arch-pass",
+        sqlite_session,
+        slug="next-wake-arch-pass",
     )
     sent = _patch_dispatch(monkeypatch)
 
     await _post_architect_pass(sqlite_session, task=task, architect=architect)
 
     qa_wakes = [
-        s for s in sent
+        s
+        for s in sent
         if s.get("session_key") == qa_e2e.openclaw_session_id
         and "NEXT_REVIEWER" in str(s.get("message", ""))
     ]
@@ -231,9 +256,9 @@ async def test_architect_pass_wakes_qa_e2e_on_frontend_ui(
             .where(col(ActivityEvent.event_type) == "task.next_reviewer_woken"),
         ),
     )
-    assert len(rows) == 1, (
-        f"expected exactly one task.next_reviewer_woken activity event; got {len(rows)}"
-    )
+    assert (
+        len(rows) == 1
+    ), f"expected exactly one task.next_reviewer_woken activity event; got {len(rows)}"
 
 
 @pytest.mark.asyncio
@@ -245,7 +270,8 @@ async def test_no_wake_when_all_required_roles_passed(
     review-readiness is now ready=True and the existing lead-only wake
     handles routing. Don't double-wake any reviewer."""
     board, architect, qa_e2e, lead, task = await _seed_frontend_ui_board(
-        sqlite_session, slug="next-wake-all-passed",
+        sqlite_session,
+        slug="next-wake-all-passed",
     )
     sent = _patch_dispatch(monkeypatch)
     # Pre-seed Architect PASS so this Architect call IS the first one
@@ -268,18 +294,16 @@ async def test_no_wake_when_all_required_roles_passed(
     ).first()
     assert fake_event is not None
     from app.api.tasks import _wake_next_required_reviewer_after_pass
+
     await _wake_next_required_reviewer_after_pass(
-        session=sqlite_session, task=task, latest_event=fake_event,
+        session=sqlite_session,
+        task=task,
+        latest_event=fake_event,
         actor_agent_id=qa_e2e.id,
     )
 
-    next_wakes = [
-        s for s in sent
-        if "NEXT_REVIEWER" in str(s.get("message", ""))
-    ]
-    assert next_wakes == [], (
-        f"unexpected NEXT_REVIEWER wake after final PASS; sent={sent}"
-    )
+    next_wakes = [s for s in sent if "NEXT_REVIEWER" in str(s.get("message", ""))]
+    assert next_wakes == [], f"unexpected NEXT_REVIEWER wake after final PASS; sent={sent}"
 
 
 @pytest.mark.asyncio
@@ -291,7 +315,8 @@ async def test_idempotent_no_double_wake_for_same_role(
     quick succession (e.g. retry, double-submit), only one QA-E2E
     wake should fire. Idempotency via activity-event marker check."""
     board, architect, qa_e2e, lead, task = await _seed_frontend_ui_board(
-        sqlite_session, slug="next-wake-idempotent",
+        sqlite_session,
+        slug="next-wake-idempotent",
     )
     sent = _patch_dispatch(monkeypatch)
 
@@ -308,13 +333,17 @@ async def test_idempotent_no_double_wake_for_same_role(
     ).first()
     assert fake_event is not None
     from app.api.tasks import _wake_next_required_reviewer_after_pass
+
     await _wake_next_required_reviewer_after_pass(
-        session=sqlite_session, task=task, latest_event=fake_event,
+        session=sqlite_session,
+        task=task,
+        latest_event=fake_event,
         actor_agent_id=architect.id,
     )
 
     qa_wakes = [
-        s for s in sent
+        s
+        for s in sent
         if s.get("session_key") == qa_e2e.openclaw_session_id
         and "NEXT_REVIEWER" in str(s.get("message", ""))
     ]
@@ -340,25 +369,35 @@ async def test_no_wake_when_no_agent_for_missing_role(
     sqlite_session.add(Organization(id=org_id, name="org-noagent"))
     sqlite_session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name="gw-noagent",
-            url="ws://gateway.example/ws", workspace_root="/tmp/openclaw",
+            id=gateway_id,
+            organization_id=org_id,
+            name="gw-noagent",
+            url="ws://gateway.example/ws",
+            workspace_root="/tmp/openclaw",
         ),
     )
     board = Board(
-        id=board_id, organization_id=org_id, gateway_id=gateway_id,
-        name="noagent", slug="noagent",
+        id=board_id,
+        organization_id=org_id,
+        gateway_id=gateway_id,
+        name="noagent",
+        slug="noagent",
     )
     sqlite_session.add(board)
     architect = Agent(
-        id=architect_id, board_id=board_id, gateway_id=gateway_id,
+        id=architect_id,
+        board_id=board_id,
+        gateway_id=gateway_id,
         name="Architect",
         openclaw_session_id="agent:noagent:architect",
         identity_profile={"dev_acp_flow": "review_only"},
     )
     sqlite_session.add(architect)
     task = Task(
-        id=task_id, board_id=board_id,
-        title="noagent-task", status="review",
+        id=task_id,
+        board_id=board_id,
+        title="noagent-task",
+        status="review",
         review_packet_type="frontend_ui",  # requires architect + qa_e2e
         assigned_agent_id=architect_id,
         packet_commit_sha="def5678",
@@ -371,6 +410,6 @@ async def test_no_wake_when_no_agent_for_missing_role(
     await _post_architect_pass(sqlite_session, task=task, architect=architect)
 
     qa_wakes = [s for s in sent if "NEXT_REVIEWER" in str(s.get("message", ""))]
-    assert qa_wakes == [], (
-        f"unexpected NEXT_REVIEWER wake when no QA-E2E agent on board; sent={sent}"
-    )
+    assert (
+        qa_wakes == []
+    ), f"unexpected NEXT_REVIEWER wake when no QA-E2E agent on board; sent={sent}"

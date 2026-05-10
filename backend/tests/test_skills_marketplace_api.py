@@ -555,8 +555,7 @@ async def test_list_skill_packs_includes_skill_count(
                 organization_id=organization.id,
                 name="Skill Two",
                 source_url=(
-                    "https://github.com/sickn33/antigravity-awesome-skills"
-                    "/tree/main/skills/beta"
+                    "https://github.com/sickn33/antigravity-awesome-skills" "/tree/main/skills/beta"
                 ),
             )
         )

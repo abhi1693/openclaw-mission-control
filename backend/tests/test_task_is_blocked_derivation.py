@@ -78,9 +78,7 @@ async def test_scalar_exists_returns_false_on_empty_table(
     """task_has_open_blocker on a task with no rows must be False —
     guards against a ``Row``-truthiness false positive."""
 
-    assert not await task_has_open_blocker(
-        sqlite_session, board_id=uuid4(), task_id=uuid4()
-    )
+    assert not await task_has_open_blocker(sqlite_session, board_id=uuid4(), task_id=uuid4())
 
 
 @pytest.mark.asyncio
@@ -112,9 +110,7 @@ async def test_scalar_exists_honors_resolved_at(
     sqlite_session.add(resolved)
     await sqlite_session.commit()
 
-    assert await task_has_open_blocker(
-        sqlite_session, board_id=board_id, task_id=open_task_id
-    )
+    assert await task_has_open_blocker(sqlite_session, board_id=board_id, task_id=open_task_id)
     assert not await task_has_open_blocker(
         sqlite_session, board_id=board_id, task_id=resolved_task_id
     )
@@ -132,21 +128,15 @@ async def test_pending_decision_preloader_joins_link_and_filters_pending(
     resolved_task_id = uuid4()
     unlinked_task_id = uuid4()
     pending = OperatorDecision(board_id=board_id, question="pending?")
-    resolved = OperatorDecision(
-        board_id=board_id, question="resolved?", status="resolved"
-    )
+    resolved = OperatorDecision(board_id=board_id, question="resolved?", status="resolved")
     sqlite_session.add(pending)
     sqlite_session.add(resolved)
     await sqlite_session.commit()
     sqlite_session.add(
-        OperatorDecisionTaskLink(
-            decision_id=pending.id, task_id=pending_task_id
-        ),
+        OperatorDecisionTaskLink(decision_id=pending.id, task_id=pending_task_id),
     )
     sqlite_session.add(
-        OperatorDecisionTaskLink(
-            decision_id=resolved.id, task_id=resolved_task_id
-        ),
+        OperatorDecisionTaskLink(decision_id=resolved.id, task_id=resolved_task_id),
     )
     await sqlite_session.commit()
 

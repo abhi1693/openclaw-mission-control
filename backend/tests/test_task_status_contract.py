@@ -142,9 +142,7 @@ def test_delivery_contract_allows_content_copy_without_validation_target() -> No
 # --------------------------------------------------------------------
 
 
-def _actionability(
-    status: str, *, owner: bool
-) -> list[str]:
+def _actionability(status: str, *, owner: bool) -> list[str]:
     """Call the pure helper with a complete contract triplet so only
     the owner check matters for the assertion."""
 
@@ -323,14 +321,17 @@ def test_actionability_validates_against_done_when_approval_gates_move_to_done()
     ) == ["assigned_agent_id"]
     # Same payload against the current state ``review`` would NOT
     # flag the owner — the carve-out intentionally skips it.
-    assert actionability_missing_fields(
-        status="review",
-        review_packet_type="review_only",
-        validation_target=None,
-        validation_target_kind=None,
-        validation_target_scope=None,
-        assigned_agent_id=None,
-    ) == []
+    assert (
+        actionability_missing_fields(
+            status="review",
+            review_packet_type="review_only",
+            validation_target=None,
+            validation_target_kind=None,
+            validation_target_scope=None,
+            assigned_agent_id=None,
+        )
+        == []
+    )
 
 
 # --------------------------------------------------------------------

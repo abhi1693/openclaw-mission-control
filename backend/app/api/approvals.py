@@ -434,9 +434,7 @@ async def _ensure_no_rejection_loop(
         elif event.event_type == HISTORY_EVENT_REJECTED:
             streaks[event_task_id] = streaks.get(event_task_id, 0) + 1
     exceeded = [
-        (task_id, count)
-        for task_id, count in streaks.items()
-        if count >= REJECTION_LOOP_THRESHOLD
+        (task_id, count) for task_id, count in streaks.items() if count >= REJECTION_LOOP_THRESHOLD
     ]
     if not exceeded:
         return
@@ -795,10 +793,7 @@ async def update_approval(
         # history, or firing lead notifications. Mirrors the OpenClaw 4.27
         # gateway-side approval idempotency contract so client retries after
         # a transient network blip do not double-record.
-        if (
-            target_status in {"approved", "rejected"}
-            and prior_status == target_status
-        ):
+        if target_status in {"approved", "rejected"} and prior_status == target_status:
             reads = await _approval_reads(session, [approval])
             return reads[0]
         # Conflict guard: refuse to flip an already-resolved approval to a
@@ -814,8 +809,7 @@ async def update_approval(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "message": (
-                        "Approval is already resolved; refusing conflicting "
-                        "terminal decision."
+                        "Approval is already resolved; refusing conflicting " "terminal decision."
                     ),
                     "approval_id": str(approval.id),
                     "current_status": prior_status,
@@ -893,9 +887,8 @@ async def update_approval(
             task_ids_by_approval = await load_task_ids_by_approval(
                 session, approval_ids=[approval.id]
             )
-            history_task_ids_for_event = (
-                task_ids_by_approval.get(approval.id)
-                or ([approval.task_id] if approval.task_id is not None else [])
+            history_task_ids_for_event = task_ids_by_approval.get(approval.id) or (
+                [approval.task_id] if approval.task_id is not None else []
             )
         await _record_approval_history_event(
             session,
@@ -911,12 +904,16 @@ async def update_approval(
     if approval.status == "approved" and prior_status != "approved":
         try:
             await _auto_transition_tasks_to_done_after_approval(
-                session=session, board=board, approval=approval, actor=actor,
+                session=session,
+                board=board,
+                approval=approval,
+                actor=actor,
             )
         except Exception:
             logger.exception(
                 "approval.auto_transition_unexpected board_id=%s approval_id=%s",
-                board.id, approval.id,
+                board.id,
+                approval.id,
             )
     if approval.status in {"approved", "rejected"} and approval.status != prior_status:
         try:
@@ -955,9 +952,7 @@ async def _auto_transition_tasks_to_done_after_approval(
     """
     if approval.action_type not in DONE_APPROVAL_ACTION_TYPES:
         return
-    task_ids_by_approval = await load_task_ids_by_approval(
-        session, approval_ids=[approval.id]
-    )
+    task_ids_by_approval = await load_task_ids_by_approval(session, approval_ids=[approval.id])
     task_ids = list(task_ids_by_approval.get(approval.id, []) or [])
     if not task_ids and approval.task_id is not None:
         task_ids = [approval.task_id]
@@ -974,9 +969,7 @@ async def _auto_transition_tasks_to_done_after_approval(
 
     tasks = list(
         await session.exec(
-            select(Task)
-            .where(col(Task.board_id) == board.id)
-            .where(col(Task.id).in_(task_ids))
+            select(Task).where(col(Task.board_id) == board.id).where(col(Task.id).in_(task_ids))
         ),
     )
     for task in tasks:
@@ -1009,7 +1002,9 @@ async def _auto_transition_tasks_to_done_after_approval(
         await session.refresh(task)
         for dependent in newly_unblocked:
             await notify_lead_after_dependency_cleared(
-                session=session, task=dependent, dependency_task=task,
+                session=session,
+                task=dependent,
+                dependency_task=task,
             )
         cascaded = await maybe_cascade_umbrella_close(session, task=task)
         if cascaded is not None:
@@ -1040,17 +1035,12 @@ async def unblock_approval(
         if not actor.agent.is_board_lead:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Only board leads or human operators can unblock "
-                    "rejection loops."
-                ),
+                detail=("Only board leads or human operators can unblock " "rejection loops."),
             )
     approval = await Approval.objects.by_id(approval_id).first(session)
     if approval is None or approval.board_id != board.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    task_ids_by_approval = await load_task_ids_by_approval(
-        session, approval_ids=[approval.id]
-    )
+    task_ids_by_approval = await load_task_ids_by_approval(session, approval_ids=[approval.id])
     approval_task_ids = task_ids_by_approval.get(approval.id)
     if not approval_task_ids and approval.task_id is not None:
         approval_task_ids = [approval.task_id]

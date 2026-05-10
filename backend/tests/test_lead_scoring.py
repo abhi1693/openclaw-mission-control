@@ -48,9 +48,7 @@ async def seeded(
     test_session_maker = async_sessionmaker(
         sqlite_engine, class_=AsyncSession, expire_on_commit=False
     )
-    monkeypatch.setattr(
-        shadow_metrics_module, "async_session_maker", test_session_maker
-    )
+    monkeypatch.setattr(shadow_metrics_module, "async_session_maker", test_session_maker)
 
     org = Organization(id=uuid4(), name="org")
     sqlite_session.add(org)
@@ -238,9 +236,7 @@ async def test_first_sweep_emits_bootstrap_not_candidate(
     assert fired is False
     events = (
         await session.exec(
-            select(ShadowMetricEvent).where(
-                col(ShadowMetricEvent.agent_id) == lead.id
-            )
+            select(ShadowMetricEvent).where(col(ShadowMetricEvent.agent_id) == lead.id)
         )
     ).all()
     assert len(events) == 1
@@ -273,8 +269,7 @@ async def test_second_sweep_after_bootstrap_emits_noop_candidate(
     candidates = (
         await session.exec(
             select(ShadowMetricEvent).where(
-                col(ShadowMetricEvent.event_type)
-                == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE
+                col(ShadowMetricEvent.event_type) == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE
             )
         )
     ).all()
@@ -339,16 +334,14 @@ async def test_consecutive_noops_emit_streak_alert(
     candidates = (
         await session.exec(
             select(ShadowMetricEvent).where(
-                col(ShadowMetricEvent.event_type)
-                == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE
+                col(ShadowMetricEvent.event_type) == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE
             )
         )
     ).all()
     alerts = (
         await session.exec(
             select(ShadowMetricEvent).where(
-                col(ShadowMetricEvent.event_type)
-                == EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT
+                col(ShadowMetricEvent.event_type) == EVENT_SUPERVISOR_HEARTBEAT_NOOP_STREAK_ALERT
             )
         )
     ).all()
@@ -366,9 +359,7 @@ async def test_score_all_leads_skips_boards_without_flag(
     board.rollout_flags = {}
     session.add(board)
     await session.commit()
-    emitted = await score_all_leads_once(
-        session, sweep_interval=timedelta(minutes=5)
-    )
+    emitted = await score_all_leads_once(session, sweep_interval=timedelta(minutes=5))
     assert emitted == 0
 
 
@@ -392,14 +383,10 @@ async def test_score_all_leads_only_scores_board_leads(
     )
     await session.commit()
     # First pass: warmup — bootstrap, no candidate.
-    emitted_first = await score_all_leads_once(
-        session, sweep_interval=timedelta(minutes=5)
-    )
+    emitted_first = await score_all_leads_once(session, sweep_interval=timedelta(minutes=5))
     assert emitted_first == 0
     # Second pass: real scoring — exactly one lead, one candidate.
-    emitted_second = await score_all_leads_once(
-        session, sweep_interval=timedelta(minutes=5)
-    )
+    emitted_second = await score_all_leads_once(session, sweep_interval=timedelta(minutes=5))
     assert emitted_second == 1
 
 

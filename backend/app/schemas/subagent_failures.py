@@ -30,8 +30,7 @@ class SubagentFailureReport(SQLModel):
 
     requested_role: str = Field(
         description=(
-            "Role name of the child agent that failed — becomes the "
-            "Blocker's owner_role."
+            "Role name of the child agent that failed — becomes the " "Blocker's owner_role."
         ),
         examples=["codex", "claude-haiku"],
         max_length=64,
@@ -50,8 +49,7 @@ class SubagentFailureReport(SQLModel):
     parent_turn_id: str | None = Field(
         default=None,
         description=(
-            "Optional gateway turn id for log correlation. Not "
-            "load-bearing for routing."
+            "Optional gateway turn id for log correlation. Not " "load-bearing for routing."
         ),
         max_length=128,
     )

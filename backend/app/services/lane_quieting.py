@@ -63,9 +63,7 @@ async def should_suppress_comment_for_blocked_lane(
     if task.board_id is None:
         return False
 
-    board_flags = await session.scalar(
-        select(Board.rollout_flags).where(Board.id == task.board_id)
-    )
+    board_flags = await session.scalar(select(Board.rollout_flags).where(Board.id == task.board_id))
     if not board_rollout_flag_enabled(board_flags, STRUCTURED_BLOCKERS_V1_FLAG):
         return False
 

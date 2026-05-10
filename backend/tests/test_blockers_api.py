@@ -16,10 +16,9 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from fastapi_pagination import set_params
 from fastapi_pagination.limit_offset import LimitOffsetParams
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.blockers import create_task_blocker, list_task_blockers, update_task_blocker
 from app.models.agents import Agent
@@ -158,6 +157,7 @@ async def test_create_blocker_rejects_malformed_reason_code(
     """``reason_code`` must match ``^[a-z][a-z0-9_]{0,63}$``. Garbage
     input is 422'd at the schema layer, before reaching the DB."""
     import pytest as pytest_mod
+
     with pytest_mod.raises(Exception):
         # spaces + capital letters are not allowed
         BlockerCreate.model_validate(
@@ -174,11 +174,13 @@ async def test_create_blocker_normalizes_reason_code(
     code vocabulary."""
     session, board, task, actor = seeded
     read = await create_task_blocker(
-        payload=BlockerCreate.model_validate({
-            "category": "runtime",
-            "owner_role": "PF",
-            "reason_code": "  Gateway_WS_Timeout  ",
-        }),
+        payload=BlockerCreate.model_validate(
+            {
+                "category": "runtime",
+                "owner_role": "PF",
+                "reason_code": "  Gateway_WS_Timeout  ",
+            }
+        ),
         board=board,
         task=task,
         session=session,
@@ -195,6 +197,7 @@ async def test_blocker_update_can_patch_reason_code(
     cleanup, manual remediation) must work via PATCH BlockerUpdate."""
     from app.api.blockers import update_task_blocker
     from app.schemas.blockers import BlockerUpdate
+
     session, board, task, actor = seeded
     read = await create_task_blocker(
         payload=_create_payload(reason_code="infra_other"),

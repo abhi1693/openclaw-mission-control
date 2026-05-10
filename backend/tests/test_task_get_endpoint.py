@@ -84,15 +84,19 @@ async def test_get_task_projects_open_blocker_reason_codes(
     board, task = await _seed_board_and_task(sqlite_session)
     sqlite_session.add(
         Blocker(
-            board_id=board.id, task_id=task.id,
-            category="source", reason_code="operator_reject_demo",
+            board_id=board.id,
+            task_id=task.id,
+            category="source",
+            reason_code="operator_reject_demo",
             owner_role="programmer_frontend",
         ),
     )
     await sqlite_session.commit()
 
     page = await _task_read_page(
-        session=sqlite_session, board_id=board.id, tasks=[task],
+        session=sqlite_session,
+        board_id=board.id,
+        tasks=[task],
     )
     assert page
     read = page[0]
@@ -118,13 +122,17 @@ async def test_get_task_projects_pending_operator_decision_reason_codes(
     await sqlite_session.commit()
     sqlite_session.add(
         OperatorDecisionTaskLink(
-            board_id=board.id, decision_id=decision.id, task_id=task.id,
+            board_id=board.id,
+            decision_id=decision.id,
+            task_id=task.id,
         ),
     )
     await sqlite_session.commit()
 
     page = await _task_read_page(
-        session=sqlite_session, board_id=board.id, tasks=[task],
+        session=sqlite_session,
+        board_id=board.id,
+        tasks=[task],
     )
     assert page
     read = page[0]
@@ -143,9 +151,7 @@ async def test_get_task_envelope_matches_list_endpoint_shape(
     board, task = await _seed_board_and_task(sqlite_session)
 
     single = await get_task(task=task, session=sqlite_session)
-    page = await _task_read_page(
-        session=sqlite_session, board_id=board.id, tasks=[task]
-    )
+    page = await _task_read_page(session=sqlite_session, board_id=board.id, tasks=[task])
 
     assert page, "list-page transformer should yield one row"
     assert single.model_dump() == page[0].model_dump()

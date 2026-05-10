@@ -45,7 +45,10 @@ class _FakeSession:
             task.id
             for task in self.tasks
             if task.source_memory_id in memory_ids
-            or any(f"source_memory_id={memory_id}" in (task.description or "") for memory_id in memory_ids)
+            or any(
+                f"source_memory_id={memory_id}" in (task.description or "")
+                for memory_id in memory_ids
+            )
         ]
         return _ExecResult(linked)
 
@@ -65,7 +68,9 @@ class _FakeSession:
         yield
 
 
-def _memory(*, tags: list[str], content: str = "Operator findings\n\nhttps://example.test") -> BoardMemory:
+def _memory(
+    *, tags: list[str], content: str = "Operator findings\n\nhttps://example.test"
+) -> BoardMemory:
     return BoardMemory(
         board_id=uuid4(),
         content=content,

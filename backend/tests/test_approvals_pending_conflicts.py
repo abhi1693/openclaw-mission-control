@@ -256,9 +256,7 @@ async def test_create_move_to_done_approval_rejects_non_review_task() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_move_to_done_approval_rejects_review_task_missing_delivery_contract() -> (
-    None
-):
+async def test_create_move_to_done_approval_rejects_review_task_missing_delivery_contract() -> None:
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:

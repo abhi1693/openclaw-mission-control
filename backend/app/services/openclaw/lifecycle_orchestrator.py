@@ -158,6 +158,7 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
             if raw_token and locked.agent_token_hash:
                 # Verify the TOOLS.md token matches the DB hash. If not, resync.
                 from app.core.agent_tokens import hash_agent_token, verify_agent_token
+
                 if not verify_agent_token(raw_token, locked.agent_token_hash):
                     locked.agent_token_hash = hash_agent_token(raw_token)
                     locked.updated_at = utcnow()
@@ -285,8 +286,7 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
             # successful lifecycle invocation.
             locked.checkin_deadline_at = None
             locked.last_provision_error = (
-                "Wake skipped: "
-                f"{lifecycle_result.wake_skip_reason or 'unknown reason'}"
+                "Wake skipped: " f"{lifecycle_result.wake_skip_reason or 'unknown reason'}"
             )
             locked.updated_at = now
         else:

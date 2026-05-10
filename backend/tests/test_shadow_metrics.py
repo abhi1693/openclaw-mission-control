@@ -91,9 +91,7 @@ async def test_ack_only_comment_emits_paired_candidate_events() -> None:
         "comment.echo_shape_candidate",
     }
     assert len(result.flags) == 2
-    ack_event = next(
-        e for e in result.shadow_events if e.event_type == EVENT_COMMENT_ACK_ONLY
-    )
+    ack_event = next(e for e in result.shadow_events if e.event_type == EVENT_COMMENT_ACK_ONLY)
     assert isinstance(ack_event, ShadowMetricEvent)
     assert ack_event.task_id == task_id
     assert ack_event.agent_id == agent_id

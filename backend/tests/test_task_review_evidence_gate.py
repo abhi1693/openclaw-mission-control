@@ -22,10 +22,8 @@ from app.models.organizations import Organization
 from app.models.task_pipeline_events import TaskPipelineEvent
 from app.models.task_review_events import TaskReviewEvent
 from app.models.tasks import Task
-from app.schemas.tasks import TaskCreate
-from app.schemas.tasks import TaskUpdate
+from app.schemas.tasks import TaskCreate, TaskUpdate
 from app.services.task_pipeline import FRONTEND_REVIEW_PIPELINE_STATES, pipeline_missing_states
-
 
 OLD_COMMIT_SHA = "a" * 40
 NEW_COMMIT_SHA = "b" * 40
@@ -81,9 +79,11 @@ async def _seed_worker_task(
         board_id=board_id,
         gateway_id=gateway_id,
         status="online",
-        identity_profile=identity_profile
-        if identity_profile is not None
-        else {"dev_acp_flow": "claude_then_codex_review"},
+        identity_profile=(
+            identity_profile
+            if identity_profile is not None
+            else {"dev_acp_flow": "claude_then_codex_review"}
+        ),
     )
     session.add(worker)
     session.add(
@@ -370,7 +370,9 @@ async def test_worktree_parallel_review_transition_accepts_post_merge_marker() -
 
 
 @pytest.mark.asyncio
-async def test_frontend_review_transition_rejects_structured_pipeline_stuck_at_commit_state() -> None:
+async def test_frontend_review_transition_rejects_structured_pipeline_stuck_at_commit_state() -> (
+    None
+):
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:
@@ -606,7 +608,9 @@ async def test_rework_review_transition_accepts_new_packet_commit_sha() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rework_review_transition_rejects_missing_packet_commit_sha_with_null_snapshot() -> None:
+async def test_rework_review_transition_rejects_missing_packet_commit_sha_with_null_snapshot() -> (
+    None
+):
     engine = await _make_engine()
     try:
         async with await _make_session(engine) as session:
@@ -871,7 +875,8 @@ async def _board_lead(session: AsyncSession, board: Board) -> Agent:
 
 
 async def _disable_review_comment_requirement(
-    session: AsyncSession, board: Board,
+    session: AsyncSession,
+    board: Board,
 ) -> None:
     board.comment_required_for_review = False
     session.add(board)
@@ -879,7 +884,8 @@ async def _disable_review_comment_requirement(
 
 
 async def _seed_validator_for_board(
-    session: AsyncSession, board: Board,
+    session: AsyncSession,
+    board: Board,
 ) -> Agent:
     """Add an Architect (dev_acp_flow=review_only) to the board so the
     lead's inbox→in_progress auto-correct routes the task into
@@ -911,7 +917,8 @@ async def test_lead_inbox_to_review_autocorrect_rejects_incomplete_pipeline() ->
     try:
         async with await _make_session(engine) as session:
             board, _worker, task = await _seed_worker_task(
-                session, status="inbox",
+                session,
+                status="inbox",
             )
             await _disable_review_comment_requirement(session, board)
             validator = await _seed_validator_for_board(session, board)
@@ -943,11 +950,15 @@ async def test_lead_inbox_to_review_autocorrect_accepts_complete_pipeline() -> N
     try:
         async with await _make_session(engine) as session:
             board, worker, task = await _seed_worker_task(
-                session, status="inbox",
+                session,
+                status="inbox",
             )
             await _disable_review_comment_requirement(session, board)
             await _record_frontend_pipeline_ready(
-                session, board=board, worker=worker, task=task,
+                session,
+                board=board,
+                worker=worker,
+                task=task,
             )
             validator = await _seed_validator_for_board(session, board)
             lead = await _board_lead(session, board)
@@ -976,7 +987,9 @@ async def test_lead_inbox_to_review_autocorrect_skips_gate_for_review_only_packe
     try:
         async with await _make_session(engine) as session:
             board, _worker, task = await _seed_worker_task(
-                session, status="inbox", review_packet_type="review_only",
+                session,
+                status="inbox",
+                review_packet_type="review_only",
             )
             await _disable_review_comment_requirement(session, board)
             task.validation_target = None
@@ -1002,7 +1015,9 @@ async def test_lead_inbox_to_review_autocorrect_skips_gate_for_review_only_packe
 
 
 @pytest.mark.asyncio
-async def test_lead_packet_type_change_into_pipeline_required_rejects_when_pipeline_incomplete() -> None:
+async def test_lead_packet_type_change_into_pipeline_required_rejects_when_pipeline_incomplete() -> (
+    None
+):
     """An already-``review`` task with ``review_packet_type=review_only``
     has no pipeline contract. A lead PATCH that flips it to
     ``frontend_ui`` introduces the pipeline contract — the gate must
@@ -1013,7 +1028,9 @@ async def test_lead_packet_type_change_into_pipeline_required_rejects_when_pipel
     try:
         async with await _make_session(engine) as session:
             board, _worker, task = await _seed_worker_task(
-                session, status="review", review_packet_type="review_only",
+                session,
+                status="review",
+                review_packet_type="review_only",
             )
             await _disable_review_comment_requirement(session, board)
             lead = await _board_lead(session, board)
@@ -1043,7 +1060,9 @@ async def test_lead_packet_type_change_relaxing_contract_does_not_fire_gate() ->
     try:
         async with await _make_session(engine) as session:
             board, _worker, task = await _seed_worker_task(
-                session, status="review", review_packet_type="frontend_ui",
+                session,
+                status="review",
+                review_packet_type="frontend_ui",
             )
             await _disable_review_comment_requirement(session, board)
             lead = await _board_lead(session, board)
@@ -1070,13 +1089,17 @@ async def test_lead_idempotent_review_patch_does_not_fire_gate_on_legacy_state()
     try:
         async with await _make_session(engine) as session:
             board, _worker, task = await _seed_worker_task(
-                session, status="review", review_packet_type="frontend_ui",
+                session,
+                status="review",
+                review_packet_type="frontend_ui",
             )
             await _disable_review_comment_requirement(session, board)
             lead = await _board_lead(session, board)
             other = Agent(
-                id=uuid4(), name="Programmer-Frontend",
-                board_id=board.id, gateway_id=board.gateway_id,
+                id=uuid4(),
+                name="Programmer-Frontend",
+                board_id=board.id,
+                gateway_id=board.gateway_id,
                 status="online",
                 identity_profile={"dev_acp_flow": "claude_then_codex_review"},
             )

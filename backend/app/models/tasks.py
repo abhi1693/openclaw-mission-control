@@ -18,9 +18,7 @@ class Task(TenantScoped, table=True):
     """Board-scoped task entity with ownership, status, and timing fields."""
 
     __tablename__ = "tasks"  # pyright: ignore[reportAssignmentType]
-    __table_args__ = (
-        UniqueConstraint("source_memory_id", name="uq_tasks_source_memory_id"),
-    )
+    __table_args__ = (UniqueConstraint("source_memory_id", name="uq_tasks_source_memory_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     board_id: UUID | None = Field(default=None, foreign_key="boards.id", index=True)

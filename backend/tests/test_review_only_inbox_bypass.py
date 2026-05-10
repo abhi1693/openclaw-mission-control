@@ -8,6 +8,7 @@ resolution. The fix: review_only tasks are created in `review`
 directly, and PATCHes that recategorize an inbox task to review_only
 auto-advance.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -17,8 +18,8 @@ from fastapi import HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api import tasks as tasks_api
 from app.api import agent as agent_api
+from app.api import tasks as tasks_api
 from app.api.deps import ActorContext
 from app.core.agent_auth import AgentAuthContext
 from app.core.auth import AuthContext
@@ -44,7 +45,8 @@ async def _user_actor(session: AsyncSession) -> ActorContext:
 
 
 async def _user_actor_with_board_write(
-    session: AsyncSession, board: Board,
+    session: AsyncSession,
+    board: Board,
 ) -> ActorContext:
     """User actor with org-owner membership on ``board``'s organization,
     so user-route PATCHes pass ``_require_task_user_write_access``."""
@@ -70,17 +72,24 @@ async def _seed_board_with_lead(session: AsyncSession) -> tuple[Board, Agent]:
     session.add(Organization(id=org_id, name=f"org-{board_id}"))
     session.add(
         Gateway(
-            id=gateway_id, organization_id=org_id, name="gw",
-            url="ws://example/ws", workspace_root="/tmp/wks",
+            id=gateway_id,
+            organization_id=org_id,
+            name="gw",
+            url="ws://example/ws",
+            workspace_root="/tmp/wks",
         ),
     )
     board = Board(
-        id=board_id, organization_id=org_id, name="b",
+        id=board_id,
+        organization_id=org_id,
+        name="b",
         slug=f"b-{board_id.hex[:6]}",
     )
     session.add(board)
     lead = Agent(
-        id=uuid4(), board_id=board_id, gateway_id=gateway_id,
+        id=uuid4(),
+        board_id=board_id,
+        gateway_id=gateway_id,
         name="Lead",
         is_board_lead=True,
     )
@@ -108,7 +117,8 @@ async def test_user_route_create_review_only_starts_in_review(
             validation_target_scope="review",
             status="inbox",  # caller hint must be overridden
         ),
-        board=board, session=session,
+        board=board,
+        session=session,
         auth=AuthContext(actor_type="user", user=actor.user),
     )
     assert created.status == "review"
@@ -134,7 +144,9 @@ async def test_agent_lead_route_create_review_only_starts_in_review(
             validation_target_kind="live_url",
             validation_target_scope="review",
         ),
-        board=board, session=session, agent_ctx=agent_ctx,
+        board=board,
+        session=session,
+        agent_ctx=agent_ctx,
     )
     assert created.status == "review"
 
@@ -155,7 +167,8 @@ async def test_create_non_review_only_keeps_default_inbox(
             validation_target_kind="live_url",
             validation_target_scope="review",
         ),
-        board=board, session=session,
+        board=board,
+        session=session,
         auth=AuthContext(actor_type="user", user=actor.user),
     )
     assert created.status == "inbox"
@@ -176,17 +189,20 @@ async def test_taskread_does_not_rewrite_legacy_inbox_review_only(
     session = sqlite_session
     board, _ = await _seed_board_with_lead(session)
     legacy = Task(
-        id=uuid4(), board_id=board.id, title="legacy stuck task",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="legacy stuck task",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add(legacy)
     await session.commit()
     await session.refresh(legacy)
 
     serialized = TaskRead.model_validate(legacy, from_attributes=True)
-    assert serialized.status == "inbox", (
-        f"TaskRead must mirror DB state, not rewrite it; got {serialized.status!r}"
-    )
+    assert (
+        serialized.status == "inbox"
+    ), f"TaskRead must mirror DB state, not rewrite it; got {serialized.status!r}"
 
 
 @pytest.mark.asyncio
@@ -201,8 +217,11 @@ async def test_user_patch_to_review_only_advances_inbox_with_comment(
     board, _ = await _seed_board_with_lead(session)
     actor = await _user_actor_with_board_write(session, board)
     task = Task(
-        id=uuid4(), board_id=board.id, title="Final acceptance",
-        status="inbox", review_packet_type="mixed",
+        id=uuid4(),
+        board_id=board.id,
+        title="Final acceptance",
+        status="inbox",
+        review_packet_type="mixed",
     )
     session.add(task)
     await session.commit()
@@ -234,8 +253,11 @@ async def test_user_patch_review_only_inbox_to_review_with_comment(
     board, _ = await _seed_board_with_lead(session)
     actor = await _user_actor_with_board_write(session, board)
     task = Task(
-        id=uuid4(), board_id=board.id, title="Stuck review-only",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="Stuck review-only",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add(task)
     await session.commit()
@@ -270,8 +292,11 @@ async def test_lead_patch_review_only_inbox_to_review(
     session = sqlite_session
     board, lead = await _seed_board_with_lead(session)
     task = Task(
-        id=uuid4(), board_id=board.id, title="Track F design-pass",
-        status="inbox", review_packet_type="review_only",
+        id=uuid4(),
+        board_id=board.id,
+        title="Track F design-pass",
+        status="inbox",
+        review_packet_type="review_only",
     )
     session.add(task)
     await session.commit()
@@ -300,8 +325,11 @@ async def test_patch_review_only_without_comment_with_required_flag(
     await session.commit()
     actor = await _user_actor_with_board_write(session, board)
     task = Task(
-        id=uuid4(), board_id=board.id, title="t",
-        status="inbox", review_packet_type="mixed",
+        id=uuid4(),
+        board_id=board.id,
+        title="t",
+        status="inbox",
+        review_packet_type="mixed",
     )
     session.add(task)
     await session.commit()
@@ -329,8 +357,11 @@ async def test_patch_review_only_blocked_by_legacy_operator_decision(
     board, _ = await _seed_board_with_lead(session)
     actor = await _user_actor_with_board_write(session, board)
     task = Task(
-        id=uuid4(), board_id=board.id, title="t",
-        status="inbox", review_packet_type="mixed",
+        id=uuid4(),
+        board_id=board.id,
+        title="t",
+        status="inbox",
+        review_packet_type="mixed",
         operator_decision_required=True,
         operator_decision_summary="awaiting policy decision",
     )
@@ -372,13 +403,19 @@ async def test_non_lead_agent_patch_review_only_rejected(
     board, lead = await _seed_board_with_lead(session)
     # Seed a non-lead agent (worker) on the same gateway as the lead.
     worker = Agent(
-        id=uuid4(), board_id=board.id, gateway_id=lead.gateway_id,
-        name="Worker", is_board_lead=False,
+        id=uuid4(),
+        board_id=board.id,
+        gateway_id=lead.gateway_id,
+        name="Worker",
+        is_board_lead=False,
     )
     session.add(worker)
     task = Task(
-        id=uuid4(), board_id=board.id, title="t",
-        status="inbox", review_packet_type="mixed",
+        id=uuid4(),
+        board_id=board.id,
+        title="t",
+        status="inbox",
+        review_packet_type="mixed",
     )
     session.add(task)
     await session.commit()
@@ -387,7 +424,8 @@ async def test_non_lead_agent_patch_review_only_rejected(
     with pytest.raises(HTTPException) as exc:
         await tasks_api.update_task(
             payload=TaskUpdate(review_packet_type="review_only"),
-            task=task, session=session,
+            task=task,
+            session=session,
             actor=ActorContext(actor_type="agent", agent=worker),
         )
     assert exc.value.status_code == 403
@@ -407,8 +445,11 @@ async def test_lead_patch_recategorize_to_review_only_advances_inbox(
     session = sqlite_session
     board, lead = await _seed_board_with_lead(session)
     task = Task(
-        id=uuid4(), board_id=board.id, title="recat candidate",
-        status="inbox", review_packet_type="mixed",
+        id=uuid4(),
+        board_id=board.id,
+        title="recat candidate",
+        status="inbox",
+        review_packet_type="mixed",
     )
     session.add(task)
     await session.commit()
@@ -419,7 +460,8 @@ async def test_lead_patch_recategorize_to_review_only_advances_inbox(
             review_packet_type="review_only",
             status="review",
         ),
-        task=task, session=session,
+        task=task,
+        session=session,
         actor=ActorContext(actor_type="agent", agent=lead),
     )
     assert updated.review_packet_type == "review_only"

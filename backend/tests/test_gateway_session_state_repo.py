@@ -155,9 +155,7 @@ async def test_list_for_agent_filters_to_matching_agent_id(
 async def test_list_for_agent_empty_for_unknown_agent(
     sqlite_session: AsyncSession,
 ) -> None:
-    rows = await list_session_states_for_agent(
-        sqlite_session, agent_id="mc-nonexistent"
-    )
+    rows = await list_session_states_for_agent(sqlite_session, agent_id="mc-nonexistent")
     assert rows == []
 
 
@@ -176,9 +174,7 @@ async def test_upsert_persists_aborted_flag(
     """``aborted_last_run`` is the operator-visible "this session crashed"
     flag — must round-trip through the DB faithfully even when the
     column default would otherwise mask it."""
-    await upsert_session_state(
-        sqlite_session, _state(aborted_last_run=True)
-    )
+    await upsert_session_state(sqlite_session, _state(aborted_last_run=True))
     await sqlite_session.commit()
     rows = await list_all_session_states(sqlite_session)
     assert rows[0].aborted_last_run is True
@@ -194,15 +190,9 @@ async def test_list_main_for_agent_ids_batched(
     a_id = "mc-aaaaaaaa-1111-2222-3333-444444444444"
     b_id = "mc-bbbbbbbb-1111-2222-3333-444444444444"
     c_id = "mc-cccccccc-1111-2222-3333-444444444444"
-    await upsert_session_state(
-        sqlite_session, _state(agent_id=a_id, session_label="main")
-    )
-    await upsert_session_state(
-        sqlite_session, _state(agent_id=a_id, session_label="debug")
-    )
-    await upsert_session_state(
-        sqlite_session, _state(agent_id=b_id, session_label="main")
-    )
+    await upsert_session_state(sqlite_session, _state(agent_id=a_id, session_label="main"))
+    await upsert_session_state(sqlite_session, _state(agent_id=a_id, session_label="debug"))
+    await upsert_session_state(sqlite_session, _state(agent_id=b_id, session_label="main"))
     # c_id has no row at all
     await sqlite_session.commit()
 
@@ -221,9 +211,7 @@ async def test_list_main_for_agent_ids_empty_input_returns_empty(
     """Defensive: handler may pass an empty list when no in-progress
     tasks have assigned agents — must not run a `WHERE agent_id IN ()`
     query, which Postgres rejects as a syntax error."""
-    rows = await list_main_session_states_for_agent_ids(
-        sqlite_session, agent_ids=[]
-    )
+    rows = await list_main_session_states_for_agent_ids(sqlite_session, agent_ids=[])
     assert rows == {}
 
 
@@ -268,9 +256,7 @@ async def _seed_org_and_gateway(session: AsyncSession) -> Gateway:
     org = Organization(name="cleanup-org")
     session.add(org)
     await session.flush()
-    gateway = Gateway(
-        organization_id=org.id, name="gw", url="ws://x", workspace_root="/tmp"
-    )
+    gateway = Gateway(organization_id=org.id, name="gw", url="ws://x", workspace_root="/tmp")
     session.add(gateway)
     await session.flush()
     return gateway
@@ -290,9 +276,7 @@ async def test_cleanup_preserves_rows_for_existing_org_agents(
             openclaw_session_id=f"agent:mc-{agent_uuid}:main",
         )
     )
-    await upsert_session_state(
-        sqlite_session, _state(agent_id=f"mc-{agent_uuid}")
-    )
+    await upsert_session_state(sqlite_session, _state(agent_id=f"mc-{agent_uuid}"))
     await sqlite_session.commit()
 
     deleted_count = await cleanup_orphaned_session_states(sqlite_session)
