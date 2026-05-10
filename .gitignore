@@ -27,3 +27,7 @@ backend/coverage.*
 backend/.coverage
 frontend/coverage
 backend/app/services/openclaw/.device-keys
+# Operator-managed backup snapshots (kept on host, never committed)
+*.bak-*
+*.local-edits
+*.orig
