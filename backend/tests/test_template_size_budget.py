@@ -958,7 +958,7 @@ def test_supervisor_heartbeat_has_failure_and_drift_guardrails() -> None:
     assert "newer than the latest blocking review verdict" not in agents
 
 
-def test_frontend_heartbeat_forbids_implicit_worktree_parallelism() -> None:
+def test_worker_heartbeat_forbids_implicit_worktree_parallelism() -> None:
     ctx = {
         **_REALISTIC_RENDER_CONTEXT,
         "is_main_agent": False,
@@ -970,7 +970,7 @@ def test_frontend_heartbeat_forbids_implicit_worktree_parallelism() -> None:
     }
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
-    assert "Frontend Parallel Mode" in heartbeat
+    assert "Worker Parallel Mode" in heartbeat
     assert "Do not create git worktrees" in heartbeat
     assert "Only if `@lead` explicitly routes independent parallel slices" in heartbeat
     assert "acp-post-review" in heartbeat
@@ -982,24 +982,39 @@ def test_frontend_heartbeat_forbids_implicit_worktree_parallelism() -> None:
     assert "After all ACs pass, use the ACP review flow" in agents
 
 
-def test_frontend_heartbeat_allows_explicit_worktree_parallelism_only_by_profile_flag() -> None:
+def test_worker_heartbeat_allows_explicit_worktree_parallelism_only_by_profile_flag() -> None:
     ctx = {
         **_REALISTIC_RENDER_CONTEXT,
         "is_main_agent": False,
         "is_board_lead": False,
-        "agent_name": "Programmer-Frontend",
-        "agent_id": "frontend-id",
-        "identity_role": "Frontend Developer",
-        "identity_dev_acp_flow": "claude_then_codex_review",
-        "identity_frontend_parallel_mode": "worktree",
+        "agent_name": "Programmer-Backend",
+        "agent_id": "backend-id",
+        "identity_role": "Backend Developer",
+        "identity_dev_acp_flow": "codex_then_claude_review",
+        "identity_worker_parallel_mode": "worktree",
     }
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
-    assert "Experimental opt-in worktree task parallelism is enabled" in heartbeat
-    assert "Cap at 2 active implementation tasks" in heartbeat
+    assert "Worker Parallel Scheduler Gate" in heartbeat
+    assert "Opt-in worktree task parallelism is enabled by `identity.worker_parallel_mode=worktree`" in heartbeat
+    assert "Cap-aware scheduler (4 active concurrent, one-per-tick spawn rate)" in heartbeat
+    assert "Cap = 4 active implementation tasks" in heartbeat
+    assert "**≥ 4?**" in heartbeat
     assert "`acp-delegation` § Worktree Task Mode" in heartbeat
-    assert "Completion-woken ticks process child results only" in heartbeat
     assert "sessions_spawn({" not in heartbeat
+
+    agents = _render_template("BOARD_AGENTS.md.j2", **ctx)
+    assert "cap is 4 active implementation tasks" in agents
+    assert "worker-parallel-scheduler" in agents
+
+
+def test_worker_parallel_mode_profile_field_is_exported_to_templates() -> None:
+    from app.services.openclaw.constants import EXTRA_IDENTITY_PROFILE_FIELDS
+
+    assert (
+        EXTRA_IDENTITY_PROFILE_FIELDS["worker_parallel_mode"]
+        == "identity_worker_parallel_mode"
+    )
 
 
 def test_acp_delegation_documents_explicit_worktree_cwd_mode() -> None:
@@ -1007,7 +1022,9 @@ def test_acp_delegation_documents_explicit_worktree_cwd_mode() -> None:
     assert "### Worktree Task Mode" in skill
     assert "git worktree add" in skill
     assert "explicit opt-in only" in skill
-    assert '"cwd": "/tmp/wt-<TASK_ID>"' in skill
+    assert "worker worktree mode" in skill
+    assert 'WT_PATH="/tmp/mc-${BOARD_SHORT}-wt-$TASK_SHORT"' in skill
+    assert '"cwd": "$WT_PATH"' in skill
     assert "There is one worktree per task, not per acceptance criterion" in skill
     assert "acp-router" not in skill
     assert "ACP transport unavailable" in skill

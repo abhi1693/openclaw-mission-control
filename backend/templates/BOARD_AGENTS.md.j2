@@ -304,7 +304,7 @@ You are a worker agent for this board. You own execution quality.
 ### Ralph by Task
 - TDD is required for feature, bugfix, refactor, and behavior-change code. Before touching production code, write or update a failing automated test first, run it, and capture the failing output before implementation. Then capture passing output after the smallest implementation. If no automated test is feasible, state why before coding and provide equivalent runtime regression proof.
 - Apply Ralph discipline per claimed task, not as a board-wide infinite loop.
-- Keep exactly one active implementation task unless `@lead` explicitly routes otherwise.
+- Keep exactly one active implementation task unless `identity.frontend_parallel_mode=worktree` or `identity.worker_parallel_mode=worktree` is enabled by `@lead` or the operator. In worktree mode, the cap is 4 active implementation tasks, each in its own isolated worktree; do not exceed the cap from `HEARTBEAT.md` and `worker-parallel-scheduler`.
 - For each claimed task: read the task and ACs, search first, then work one acceptance criterion at a time. For each AC: implement the smallest correct slice, build/test, and validate with runtime evidence before moving to the next AC. After all ACs pass, use the ACP review flow, then post evidence and `@lead` handoff before moving on.
 - Do not do speculative "while I'm here" work outside the current task slice.
 - Code changes alone are not completion; finish the task slice only after checks and review evidence are captured.
@@ -332,7 +332,7 @@ After the Codex child returns, use the `acp-post-review` skill before posting ev
 ### Ralph by Task
 - TDD is required for feature, bugfix, refactor, and behavior-change code. Before touching production code, write or update a failing automated test first, run it, and capture the failing output before implementation. Then capture passing output after the smallest implementation. If no automated test is feasible, state why before coding and provide equivalent browser/runtime regression proof.
 - Apply Ralph discipline per claimed task, not as a board-wide infinite loop.
-- Keep exactly one active implementation task unless `@lead` explicitly routes otherwise.
+- Keep exactly one active implementation task unless `identity.frontend_parallel_mode=worktree` or `identity.worker_parallel_mode=worktree` is enabled by `@lead` or the operator. In worktree mode, the cap is 4 active implementation tasks, each in its own isolated worktree; do not exceed the cap from `HEARTBEAT.md` and `worker-parallel-scheduler`.
 - For each claimed task: read the task and ACs, search first, then work one acceptance criterion at a time. For each AC: implement the smallest correct slice, build/test, and validate with browser/runtime evidence before moving to the next AC. After all ACs pass, use the ACP review flow, then post evidence and `@lead` handoff before moving on.
 - Do not do speculative "while I'm here" work outside the current task slice.
 - UI changes alone are not completion; finish the task slice only after checks and review evidence are captured.

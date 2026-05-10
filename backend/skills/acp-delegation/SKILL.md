@@ -70,10 +70,13 @@ one complete feedback cycle per AC.
 ### Worktree Task Mode
 
 Worktree task parallelism is explicit opt-in only. Use it only when the parent
-heartbeat or lead instruction says PF worktree mode is enabled for this board
-and provides or derives the worktree path. Never invent a `cwd` outside that
-gate. A heartbeat-derived `WT_PATH` counts as the supplied worktree path. If
-the scheduler created `WT_PATH`, do not omit `cwd` because the lead did not spell out the path.
+heartbeat or lead instruction says worker worktree mode is enabled for this
+board and provides or derives the worktree path. Never invent a `cwd` outside
+that gate. A heartbeat-derived `WT_PATH` counts as the supplied worktree path.
+If the scheduler created `WT_PATH`, do not omit `cwd` because the lead did not
+spell out the path.
+This applies to workers with `identity.worker_parallel_mode=worktree` or the
+legacy `identity.frontend_parallel_mode=worktree` flag.
 
 When worktree mode is enabled:
 
@@ -83,7 +86,7 @@ When worktree mode is enabled:
 - There is one worktree per task, not per acceptance criterion.
 - The Ralph Loop Rule still applies inside the executor session.
 - Add `"cwd": "$WT_PATH"` to the implementation payload after the scheduler
-  defines `WT_PATH="/tmp/wt-$TASK_SHORT"`.
+  defines `WT_PATH="/tmp/mc-${BOARD_SHORT}-wt-$TASK_SHORT"`.
 - Do not add `cwd` for review-only payloads unless the parent explicitly says
   the review must inspect that worktree before merge.
 
