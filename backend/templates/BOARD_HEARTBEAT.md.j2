@@ -8,7 +8,9 @@
 {% set is_qa = "qa" in role_text %}
 {% set is_qa_e2e = "qa-e2e" in role_text or "e2e" in role_text %}
 {% set frontend_parallel_mode = identity_frontend_parallel_mode | default("") | lower %}
-{% set frontend_worktree_parallel_enabled = is_frontend and frontend_parallel_mode in ["worktree", "worktree_parallel", "enabled", "true"] %}
+{% set worker_parallel_mode = (identity_worker_parallel_mode | default("") | lower) or frontend_parallel_mode %}
+{% set worker_worktree_parallel_enabled = (is_frontend or is_backend) and worker_parallel_mode in ["worktree", "worktree_parallel", "enabled", "true"] %}
+{% set frontend_worktree_parallel_enabled = worker_worktree_parallel_enabled %}
 {% if is_main %}
 # HEARTBEAT.md
 
@@ -177,8 +179,8 @@ per-tick checklist.
 - `AGENT_ID`
 - `AGENT_NAME`
 - `BOARD_TIMEZONE` when present
-{% if frontend_worktree_parallel_enabled %}
-- `WORKSPACE_PATH` when `identity.frontend_parallel_mode` is worktree
+{% if worker_worktree_parallel_enabled %}
+- `WORKSPACE_PATH` when `identity.worker_parallel_mode` (or legacy `identity.frontend_parallel_mode`) is `worktree`
 {% endif %}
 
 Read these from `TOOLS.md` or the environment. If any required value is
@@ -199,156 +201,23 @@ curl -fsS -X POST "$BASE_URL/api/v1/agent/heartbeat" -H "X-Agent-Token: $AUTH_TO
 If this fails (5xx/network), stop. Do not continue.
 
 {% if frontend_worktree_parallel_enabled %}
-2. **Frontend Parallel Scheduler Gate.** This replaces the single-task
-   selector while `identity.frontend_parallel_mode={{ identity_frontend_parallel_mode }}`
-   is enabled. Do not use the main workspace for implementation children.
-   Maintain up to 5 active implementation tasks unless the operator has
-   explicitly raised the cap (the embedded scheduler enforces this at
-   `if len(active) < 5:` below).
+2. **Worker Parallel Scheduler Gate.** Worktree parallelism is enabled
+   (`identity.worker_parallel_mode={{ worker_parallel_mode }}`). The full
+   scheduler logic — cap-aware task selection, deterministic worktree
+   creation, per-board merge-back lock — lives in the
+   `worker-parallel-scheduler` skill. Load it on demand.
 
-   First, if this wake contains an ACP child completion, process that result
-   with `acp-post-review`; do not spawn new work on the same tick.
-
-   Otherwise fetch assigned work and comments. Count active implementation
-   tasks as assigned `in_progress` or `rework` tasks whose latest task thread
-   has an accepted `ACP_EXECUTOR_STARTED` marker AND no child completion has
-   been processed by the parent. A task that is parked, blocked on operator
-   decision (`operator_decision_required=true`), waiting on another role, or
-   whose ACP spawn never returned `accepted` does **not** count toward the
-   cap — these tasks are assigned to you but no child is running, so they
-   consume zero ACP capacity. If active count by this strict definition is
-   already `5`, return `HEARTBEAT_OK` unless a selected active child result
-   needs processing.
-
-   If active count is below `5`, choose the first non-blocked task in this
-   order: active `in_progress` without an unfinished child, assigned `rework`
-   that has cleared its blocker, then assigned `inbox`. Set `TASK_ID` before
-   continuing.
-
-```bash
-curl -fsS "$BASE_URL/api/v1/agent/boards/$BOARD_ID/tasks?assigned_agent_id=$AGENT_ID" \
-  -H "X-Agent-Token: $AUTH_TOKEN" -o /tmp/mc-my-tasks.json
-BASE_URL="$BASE_URL" AUTH_TOKEN="$AUTH_TOKEN" BOARD_ID="$BOARD_ID" AGENT_ID="$AGENT_ID" \
-python3 - <<'PY' > /tmp/mc-frontend-scheduler.env
-import json
-import os
-import shlex
-import urllib.request
-
-base = os.environ["BASE_URL"].rstrip("/")
-token = os.environ["AUTH_TOKEN"]
-board_id = os.environ["BOARD_ID"]
-tasks = json.load(open("/tmp/mc-my-tasks.json")).get("items", [])
-comment_cache = {}
-
-def task_comments(task_id):
-    """Fetch the LATEST 250 comments so the ACP marker scan is correct.
-
-    The cap-aware scheduler counts active children by scanning for the
-    latest ``ACP_EXECUTOR_STARTED`` vs ``FINAL_EVIDENCE_PACKET`` /
-    ``ACP_POST_REVIEW_COMPLETE`` marker. The MC comments endpoint
-    returns OLDEST first (``order_by(asc(created_at))`` in
-    ``app/api/tasks.py``), so a naive ``offset=0`` page fetches the
-    oldest comments — exactly the wrong window. Fix: probe ``total``
-    from the first paginated response, then fetch from
-    ``offset=total-250`` forward to capture the most recent window in
-    chronological order. ``unfinished_child()`` then correctly
-    identifies the latest START vs FINISH marker.
-    """
-    if task_id not in comment_cache:
-        page_size = 50
-        max_window = 250
-        probe_url = f"{base}/api/v1/agent/boards/{board_id}/tasks/{task_id}/comments?limit={page_size}&offset=0"
-        with urllib.request.urlopen(
-            urllib.request.Request(probe_url, headers={"X-Agent-Token": token}),
-            timeout=15,
-        ) as resp:
-            probe = json.load(resp)
-        total_raw = probe.get("total")
-        if not isinstance(total_raw, int) or total_raw < 0:
-            # Fail closed on schema drift: synthesize a START marker so
-            # ``unfinished_child()`` returns True for this task and the
-            # scheduler does NOT pick it as a fresh-spawn candidate.
-            # Better to leave a real child uncounted than to double-spawn.
-            comment_cache[task_id] = [{"message": "ACP_EXECUTOR_STARTED [pagination_total_missing_fail_closed]"}]
-            return comment_cache[task_id]
-        total = total_raw
-        if total <= max_window:
-            all_comments = list(probe.get("items", []))
-            offset = page_size
-        else:
-            all_comments = []
-            offset = total - max_window
-        while offset < total:
-            url = f"{base}/api/v1/agent/boards/{board_id}/tasks/{task_id}/comments?limit={page_size}&offset={offset}"
-            with urllib.request.urlopen(
-                urllib.request.Request(url, headers={"X-Agent-Token": token}),
-                timeout=15,
-            ) as resp:
-                page = json.load(resp).get("items", [])
-            all_comments.extend(page)
-            if not page or len(page) < page_size:
-                break
-            offset += page_size
-        comment_cache[task_id] = all_comments
-    return comment_cache[task_id]
-
-def unfinished_child(task):
-    last_start = -1
-    last_parent_finish = -1
-    for idx, comment in enumerate(task_comments(task["id"])):
-        message = comment.get("message") or ""
-        if "ACP_EXECUTOR_STARTED" in message:
-            last_start = idx
-        if "FINAL_EVIDENCE_PACKET" in message or "ACP_POST_REVIEW_COMPLETE" in message:
-            last_parent_finish = idx
-    return last_start >= 0 and last_start > last_parent_finish
-
-def usable(task):
-    return not task.get("is_blocked") and not task.get("operator_decision_required")
-
-active = [
-    task for task in tasks
-    if task.get("status") in {"in_progress", "rework"} and usable(task) and unfinished_child(task)
-]
-candidate = None
-if len(active) < 5:
-    for status in ("in_progress", "rework", "inbox"):
-        for task in tasks:
-            if task.get("status") == status and usable(task) and not unfinished_child(task):
-                candidate = task
-                break
-        if candidate:
-            break
-
-print(f"FRONTEND_PARALLEL_ACTIVE_COUNT={len(active)}")
-print("TASK_ID=" + shlex.quote(str(candidate["id"])) if candidate else "TASK_ID=")
-PY
-. /tmp/mc-frontend-scheduler.env
-```
-
-   If `TASK_ID` is empty, there is no eligible task or the active child cap is
-   full; return `HEARTBEAT_OK` without posting a filler comment.
-
-   Before spawning an implementation child, create or reuse the deterministic
-   worktree and include it in the ACP payload:
-```bash
-TASK_SHORT="$(printf '%s' "$TASK_ID" | cut -c1-8)"
-WT_PATH="/tmp/wt-$TASK_SHORT"
-WT_BRANCH="wt/$TASK_SHORT"
-if ! git -C "$WT_PATH" rev-parse --show-toplevel >/tmp/wt-root.txt 2>/tmp/wt-create.err; then
-  git -C "$WORKSPACE_PATH" worktree add -B "$WT_BRANCH" "$WT_PATH" HEAD
-fi
-git -C "$WT_PATH" status --short
-```
-
-   If any worktree command fails, post one blocker with the exact command and
-   stderr from `/tmp/wt-create.err`, then fall back to sequential main-workspace
-   mode until lead/operator re-enables parallelism. For the ACP implementation
-   payload, add:
-```json
-{ "cwd": "$WT_PATH" }
-```
+   Decision summary per tick:
+   - **ACP child completion event in this wake?** Process the result via
+     `acp-post-review`; do NOT spawn new work on the same tick.
+   - **Active implementation tasks** (assigned `in_progress`/`rework` with
+     accepted `ACP_EXECUTOR_STARTED` AND no processed completion) **≥ 5?**
+     Return `HEARTBEAT_OK` without posting a filler comment.
+   - **Otherwise** invoke the scheduler from the `worker-parallel-scheduler`
+     skill to select a candidate task, create the deterministic worktree
+     (`/tmp/wt-$TASK_SHORT`), then add `"cwd": "$WT_PATH"` to the ACP
+     `sessions_spawn` payload (per `acp-delegation` § Worktree Task Mode).
+     Post `ACP_EXECUTOR_STARTED` only after the spawn returns `accepted`.
 
 {% else %}
 2. **Select one task and act on it.** Do not end the tick after the task
@@ -545,87 +414,27 @@ If the task passes the gate, claim it atomically:
 
 If your draft says only "still blocked", "unchanged", "same failure", or "waiting", do not post it. Return `HEARTBEAT_OK`.
 
-{% if is_frontend and not is_lead and not is_main %}
-## Frontend Parallel Mode
+{% if (is_frontend or is_backend) and not is_lead and not is_main %}
+## Worker Parallel Mode
 
-{% if frontend_worktree_parallel_enabled %}
-Experimental opt-in worktree task parallelism is enabled by
-`identity.frontend_parallel_mode={{ identity_frontend_parallel_mode }}`.
-Use it only after `@lead` or the operator has posted live ACP `cwd` smoke-test
-evidence for this board. The **Frontend Parallel Scheduler Gate** above is the
-authoritative scheduler.
+{% if worker_worktree_parallel_enabled %}
+Opt-in worktree task parallelism is enabled by `identity.worker_parallel_mode={{ worker_parallel_mode }}`. Use it only after `@lead` or the operator has posted live ACP `cwd` smoke-test evidence for this board.
 
-Rules:
-- Cap at 5 active implementation tasks unless the operator explicitly raises
-  the cap for this board. "Active" = task with an accepted
-  `ACP_EXECUTOR_STARTED` marker and no processed child completion. Parked,
-  blocked, or `operator_decision_required=true` tasks do not count.
-  The scheduler enforces this cap at `if len(active) < 5:` above; bumping the
-  prose without also bumping the scheduler creates a phantom contract that
-  agents will hit as a hard rejection.
-- The cap is the concurrent-max, not a per-tick spawn budget. The scheduler
-  picks **exactly one** candidate per heartbeat tick when capacity is
-  available, so a board going from 0 active children to cap=5 ramps up over
-  five completion-or-heartbeat cycles, not in one tick. This is intentional
-  throttling to keep worktree creation, ACP spawn handshakes, and gateway
-  load bounded. If you observe the cap being hit but no new child spawning,
-  it is the scheduler's one-per-tick policy, not a bug.
-- Use `acp-delegation` § Worktree Task Mode. Parallelism is per task, not per
-  acceptance criterion, and each task gets one ACP executor session.
-- Post the `ACP_EXECUTOR_STARTED` marker only after the ACP spawn is accepted,
-  then return `HEARTBEAT_OK`.
-- Completion-woken ticks process child results only; do not spawn new work on a
-  completion wake. Merge `wt/$TASK_SHORT` back to the main workspace, remove the
-  worktree/branch after a clean merge, then run `acp-post-review`.
-- **Per-parent merge-back lock (cap=5 contention).** With multiple ACP
-  children completing in the same window, two heartbeat sessions can race
-  the merge into shared `$WORKSPACE_PATH` and leave the working tree in a
-  half-merged state. Wrap the merge/cleanup with `flock` against a
-  per-board file lock. If the lock is held longer than 60s, log busy and
-  exit this heartbeat tick — the next heartbeat retries. Lock contention
-  is normal at higher caps; only post a structured blocker for actual
-  merge/cleanup failure (the explicit `exit 1` branch below), not for
-  transient busy-lock waits:
-```bash
-WT_MERGE_LOCK="/tmp/mc-wt-merge-${BOARD_ID}.lock"
-exec 9>"$WT_MERGE_LOCK"
-if ! flock -w 60 9; then
-  # Another completion wake is mid-merge. Stop this tick and let it
-  # finish; the next heartbeat will pick this child up.
-  echo "WT_MERGE_LOCK_BUSY task=$TASK_SHORT board=$BOARD_ID"
-  exit 0
-fi
-git -C "$WORKSPACE_PATH" merge --no-ff "$WT_BRANCH" -m "merge $WT_BRANCH into main workspace" || {
-  flock -u 9
-  # Post a blocker via the standard worktree-failure path; do NOT
-  # leave the lock held.
-  exit 1
-}
-git -C "$WORKSPACE_PATH" worktree remove --force "$WT_PATH" || true
-git -C "$WORKSPACE_PATH" branch -D "$WT_BRANCH" || true
-flock -u 9
-```
-  The lock file at `/tmp/mc-wt-merge-${BOARD_ID}.lock` is per board, not
-  per task — only one merge into `$WORKSPACE_PATH` runs at a time, while
-  worktree builds, tests, and child spawns continue in parallel inside
-  their own `wt/$TASK_SHORT` directories.
-- On any worktree create, merge, cleanup, or ACP `cwd` uncertainty, stop
-  parallelism, post one blocker with the exact failing command/output, and
-  continue in sequential main-workspace mode until lead/operator re-enables it.
+The `worker-parallel-scheduler` skill is the authoritative source for:
+- Cap-aware scheduler (5 active concurrent, one-per-tick spawn rate)
+- Deterministic worktree paths (`/tmp/wt-$TASK_SHORT`)
+- Per-board merge-back lock (`/tmp/mc-wt-merge-${BOARD_ID}.lock`, 60s flock)
+- ACP spawn payload integration (`acp-delegation` § Worktree Task Mode)
+
+Cap = 5 active implementation tasks unless operator raises it. "Active" = `ACP_EXECUTOR_STARTED` marker + no processed child completion. Parked, blocked, or `operator_decision_required=true` tasks do NOT count. Cap is concurrent-max, not per-tick budget — ramp-up takes 5 cycles from 0→5.
+
+On any worktree create, merge, cleanup, or ACP `cwd` uncertainty: stop parallelism, post one structured blocker with exact failing command/output, continue in sequential main-workspace mode until lead/operator re-enables.
 {% else %}
-Default to one active implementation task. Do not create git worktrees,
-isolated sessions, or parallel workspace branches during heartbeat work.
-Those isolation paths have previously hidden state and caused stale merges.
+Default to one active implementation task. Do not create git worktrees, isolated sessions, or parallel workspace branches during heartbeat work — those isolation paths have previously hidden state and caused stale merges.
 
-When multiple assigned tasks are present, continue the oldest active
-`in_progress` task first. If none is active, pick one eligible task and finish
-it through evidence, ACP post-review, and handoff before starting another.
+When multiple assigned tasks are present, continue the oldest active `in_progress` task first. If none is active, pick one eligible task and finish it through evidence, `acp-post-review`, and handoff before starting another.
 
-Only if `@lead` explicitly routes independent parallel slices may you run more
-than one ACP child. In that case, use `acp-delegation` with disjoint file/AC
-ownership, unique labels, and parent-owned final integration. Do not move
-status or post completion evidence from child output until `acp-post-review`
-passes.
+Only if `@lead` explicitly routes independent parallel slices may you run more than one ACP child. In that case, use `acp-delegation` with disjoint file/AC ownership, unique labels, and parent-owned final integration. Do not move status or post completion evidence from child output until `acp-post-review` passes.
 {% endif %}
 {% endif %}
 {% endif %}

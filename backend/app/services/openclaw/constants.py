@@ -131,6 +131,12 @@ EXTRA_IDENTITY_PROFILE_FIELDS = {
     # with role "Security Auditor".
     "validation_flow": "identity_validation_flow",
     "frontend_parallel_mode": "identity_frontend_parallel_mode",
+    # ``worker_parallel_mode`` generalizes ``frontend_parallel_mode`` to any
+    # worker role (PB / DevOps / etc.) without tying parallel-mode opt-in to
+    # role string heuristics. The j2 template falls back to
+    # ``frontend_parallel_mode`` when this is unset, so existing PF agents
+    # keep working without identity_profile migration.
+    "worker_parallel_mode": "identity_worker_parallel_mode",
 }
 
 DEFAULT_GATEWAY_FILES = frozenset(

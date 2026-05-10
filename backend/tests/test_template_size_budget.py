@@ -221,18 +221,20 @@ def test_frontend_parallel_heartbeat_schedules_worktree_acp_children() -> None:
         **context,
     )
 
-    assert "Frontend Parallel Scheduler Gate" in rendered
-    assert "- `WORKSPACE_PATH` when `identity.frontend_parallel_mode` is worktree" in rendered
-    assert "Maintain up to 5 active implementation tasks" in rendered
-    assert "def unfinished_child" in rendered
-    assert "/tmp/mc-frontend-scheduler.env" in rendered
-    assert 'WT_PATH="/tmp/wt-$TASK_SHORT"' in rendered
-    assert 'WT_BRANCH="wt/$TASK_SHORT"' in rendered
-    assert 'git -C "$WORKSPACE_PATH" worktree add' in rendered
-    assert '"cwd": "$WT_PATH"' in rendered
-    assert "Merge `wt/$TASK_SHORT` back to the main workspace" in rendered
+    # Post skill conversion (2026-05-10): the rendered HEARTBEAT.md is a lean
+    # pointer to the `worker-parallel-scheduler` skill; the embedded Python
+    # scheduler, worktree creation bash, and merge-back lock now live in the
+    # skill. These assertions verify the lean pointer is intact.
+    assert "Worker Parallel Scheduler Gate" in rendered
+    assert "worker-parallel-scheduler` skill" in rendered
+    assert "- `WORKSPACE_PATH` when `identity.worker_parallel_mode`" in rendered
+    assert "ACP child completion event in this wake" in rendered
+    assert "ACP_EXECUTOR_STARTED" in rendered
     assert "wt-$TASK_ID" not in rendered
-    assert "Do not use the main workspace for implementation children" in rendered
+    # Embedded scheduler code MUST NOT appear inline anymore — it's in the skill
+    assert "def unfinished_child" not in rendered
+    assert "/tmp/mc-frontend-scheduler.env" not in rendered
+    assert 'git -C "$WORKSPACE_PATH" worktree add' not in rendered
 
 
 def test_acp_delegation_accepts_heartbeat_derived_worktree_cwd() -> None:
@@ -1047,12 +1049,15 @@ def test_frontend_heartbeat_allows_explicit_worktree_parallelism_only_by_profile
     }
 
     heartbeat = _render_template("BOARD_HEARTBEAT.md.j2", **ctx)
-    assert "Experimental opt-in worktree task parallelism is enabled" in heartbeat
-    assert "Cap at 5 active implementation tasks" in heartbeat
-    assert "concurrent-max, not a per-tick spawn budget" in heartbeat
-    assert "WT_MERGE_LOCK" in heartbeat
-    assert "`acp-delegation` § Worktree Task Mode" in heartbeat
-    assert "Completion-woken ticks process child results only" in heartbeat
+    # Post skill conversion: lean section pointing to skill.
+    assert "Worker Parallel Mode" in heartbeat
+    assert "Opt-in worktree task parallelism is enabled" in heartbeat
+    assert "Cap = 5 active implementation tasks" in heartbeat
+    assert "worker-parallel-scheduler` skill" in heartbeat
+    assert "acp-delegation` § Worktree Task Mode" in heartbeat
+    # Detail content moved to skill — verify it's NOT in the rendered HEARTBEAT.md
+    assert "WT_MERGE_LOCK" not in heartbeat
+    assert "Completion-woken ticks process child results only" not in heartbeat
     assert "sessions_spawn({" not in heartbeat
 
 

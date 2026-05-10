@@ -35,6 +35,7 @@ agents read to decide whether to invoke the skill.
 - **structured-review-verdict** — Use when a board reviewer has posted a review verdict comment and the verdict must become visible to Mission Control review-readiness gates.
 - **rework-resubmit** — Use when an OpenClaw board implementation task has been returned to rework after QA, Architect, Lead, or Supervisor rejection.
 - **reviewer-recheck** — Use when a QA, Architect, or review-only verdict has been challenged, rejected, or returned for correction on the same task.
+- **worker-parallel-scheduler** — Use when a worker agent (frontend or backend) operates in worktree-parallel mode and must select the next task across an active-child cap, create deterministic worktrees, and serialize merge-back into the main workspace.
 
 ### Lead playbook (board lead heartbeat)
 

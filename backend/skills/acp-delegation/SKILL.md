@@ -70,8 +70,12 @@ one complete feedback cycle per AC.
 ### Worktree Task Mode
 
 Worktree task parallelism is explicit opt-in only. Use it only when the parent
-heartbeat or lead instruction says PF worktree mode is enabled for this board
-and provides or derives the worktree path. Never invent a `cwd` outside that
+heartbeat or lead instruction says worker worktree mode is enabled for this
+board (the parent's `worker-parallel-scheduler` skill handles cap-aware
+scheduling and worktree creation) and provides or derives the worktree path.
+Applies to any worker role that has `identity.worker_parallel_mode=worktree`
+(or legacy `identity.frontend_parallel_mode=worktree`) — currently PF is the
+production user; PB is eligible to opt in. Never invent a `cwd` outside that
 gate. A heartbeat-derived `WT_PATH` counts as the supplied worktree path. If
 the scheduler created `WT_PATH`, do not omit `cwd` because the lead did not spell out the path.
 
