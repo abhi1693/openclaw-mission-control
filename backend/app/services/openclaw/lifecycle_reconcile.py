@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 
 from app.core.logging import get_logger
 from app.core.time import utcnow
@@ -27,7 +28,7 @@ def _has_checked_in_since_wake(agent: Agent) -> bool:
     return agent.last_seen_at >= agent.last_wake_sent_at
 
 
-def _has_checked_in_since_reference(agent: Agent, *, reference_at) -> bool:
+def _has_checked_in_since_reference(agent: Agent, *, reference_at: datetime | None) -> bool:
     if agent.last_seen_at is None:
         return False
     if reference_at is None:

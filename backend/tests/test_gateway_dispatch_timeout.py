@@ -24,7 +24,6 @@ import time
 import pytest
 
 from app.services.openclaw.gateway_dispatch import (
-    GATEWAY_NOTIFY_TIMEOUT_SECONDS,
     GatewayDispatchService,
 )
 from app.services.openclaw.gateway_rpc import GatewayConfig, OpenClawGatewayError

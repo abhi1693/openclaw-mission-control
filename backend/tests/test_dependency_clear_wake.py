@@ -209,7 +209,7 @@ async def test_dependency_cleared_wakes_lead_when_dependent_now_actionable(
 
     assert any("DEPENDENCY_CLEARED" in str(s.get("message", "")) for s in sent), (
         f"expected lead wake after last dep cleared; messages: "
-        f"{[str(s.get('message',''))[:120] for s in sent]}"
+        f"{[str(s.get('message', ''))[:120] for s in sent]}"
     )
 
 

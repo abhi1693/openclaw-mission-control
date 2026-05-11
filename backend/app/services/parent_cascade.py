@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Iterable
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import update
@@ -472,8 +473,11 @@ async def orphan_children_with_terminal_parent(
     gate to surface ``cancel_orphan_child`` candidates without
     walking each task's parent in a separate query.
     """
-    parent_alias = Task.__table__.alias("parent")  # pyright: ignore[reportAttributeAccessIssue]
-    child = Task.__table__  # pyright: ignore[reportAttributeAccessIssue]
+    # SQLModel doesn't expose ``__table__`` in its public type stubs even
+    # though it's set at class-creation time by SQLAlchemy.
+    task_table = cast(Any, Task).__table__
+    parent_alias = task_table.alias("parent")
+    child = task_table
     stmt = (
         select(child.c.id, child.c.parent_task_id)
         .select_from(

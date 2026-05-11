@@ -100,7 +100,9 @@ async def list_task_blockers(
     bodies even when every Blocker was resolved.
     """
     statement = (
-        Blocker.objects.filter_by(task_id=task.id).order_by(Blocker.created_at.desc()).statement
+        Blocker.objects.filter_by(task_id=task.id)
+        .order_by(col(Blocker.created_at).desc())
+        .statement
     )
     if status == "open":
         statement = statement.where(col(Blocker.resolved_at).is_(None))

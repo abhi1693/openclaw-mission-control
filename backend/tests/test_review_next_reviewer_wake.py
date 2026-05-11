@@ -247,7 +247,7 @@ async def test_architect_pass_wakes_qa_e2e_on_frontend_ui(
     ]
     assert len(qa_wakes) >= 1, (
         f"expected QA-E2E to receive a NEXT_REVIEWER wake after Architect PASS; "
-        f"sent={[(s.get('agent_name'), str(s.get('message',''))[:60]) for s in sent]}"
+        f"sent={[(s.get('agent_name'), str(s.get('message', ''))[:60]) for s in sent]}"
     )
     rows = list(
         await sqlite_session.exec(

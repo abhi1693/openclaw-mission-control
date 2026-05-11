@@ -253,9 +253,8 @@ class AppLogger:
     @classmethod
     def _resolve_level(cls) -> tuple[str, int]:
         settings = _settings_or_none()
-        level_name = (
-            (settings.log_level if settings else None) or os.getenv("LOG_LEVEL", "INFO")
-        ).upper()
+        raw_level = (settings.log_level if settings else None) or os.getenv("LOG_LEVEL", "INFO")
+        level_name = str(raw_level).upper()
         if level_name == "TRACE":
             return level_name, TRACE_LEVEL
         if level_name.isdigit():

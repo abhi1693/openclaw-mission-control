@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from contextlib import suppress
+from datetime import datetime as _datetime_type
 from datetime import timedelta
 
 from sqlmodel import col, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.logging import get_logger
 from app.core.time import utcnow
@@ -35,7 +38,6 @@ STUCK_TASK_THRESHOLD = timedelta(minutes=60)
 # Don't re-nudge the same task within the cooldown window.
 # Maps task_id → last nudge timestamp. Pruned each cycle.
 NUDGE_COOLDOWN = timedelta(minutes=60)
-from datetime import datetime as _datetime_type
 
 _recently_nudged_tasks: dict[str, _datetime_type] = {}
 
@@ -44,7 +46,7 @@ def _stuck_task_nudge_candidate(
     task: Task,
     *,
     attempted_agent_ids: set[str],
-    blocked_by_task_ids: list[object],
+    blocked_by_task_ids: Sequence[object],
 ) -> bool:
     if task.operator_decision_required:
         return False
@@ -90,7 +92,7 @@ def _heartbeat_enabled(agent: Agent) -> bool:
 
 async def _try_deliver_heartbeat_wake(
     *,
-    session,
+    session: AsyncSession,
     gateway: Gateway,
     agent: Agent,
     board: Board | None,
@@ -144,7 +146,7 @@ async def sweep_once() -> dict[str, int]:
 
     async with async_session_maker() as session:
         agents = (
-            await session.exec(select(Agent).where(Agent.checkin_deadline_at.is_not(None)))
+            await session.exec(select(Agent).where(col(Agent.checkin_deadline_at).is_not(None)))
         ).all()
 
         for agent in agents:
@@ -231,7 +233,6 @@ async def sweep_stuck_tasks() -> dict[str, int]:
     sweep catches the gap. It does NOT replace the Supervisor — it only
     fires when the Supervisor hasn't already handled the situation.
     """
-    global _recently_nudged_tasks
     now = utcnow()
     cutoff = now - STUCK_TASK_THRESHOLD
     scanned = 0
@@ -278,9 +279,6 @@ async def sweep_stuck_tasks() -> dict[str, int]:
             if not agent.openclaw_session_id:
                 continue
 
-            board = None
-            if agent.board_id is not None:
-                board = await Board.objects.by_id(agent.board_id).first(session)
             gateway = await Gateway.objects.by_id(agent.gateway_id).first(session)
             if gateway is None or not gateway.url:
                 continue

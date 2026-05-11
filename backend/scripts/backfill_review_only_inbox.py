@@ -40,15 +40,15 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 
-from app.api.deps import ActorContext
-from app.api.tasks import (
+from app.api.deps import ActorContext  # noqa: E402
+from app.api.tasks import (  # noqa: E402
     _apply_admin_task_rules,
     _finalize_updated_task,
     _TaskUpdateInput,
 )
-from app.db.session import async_session_maker
-from app.models.tasks import Task
-from app.models.users import User
+from app.db.session import async_session_maker  # noqa: E402
+from app.models.tasks import Task  # noqa: E402
+from app.models.users import User  # noqa: E402
 
 _SYSTEM_USER_EMAIL = "system-backfill@local"
 _SYSTEM_USER_CLERK_ID = "system-backfill"
@@ -99,6 +99,11 @@ async def backfill_async(
 
     advanced: list[UUID] = []
     for task in rows:
+        # Defensive: a review_only task without a board_id is impossible
+        # under normal flow (Task.board_id is FK-required at the API
+        # layer); skip rather than crash if a stale row leaked through.
+        if task.board_id is None:
+            continue
         advanced.append(task.id)
         if dry_run:
             continue

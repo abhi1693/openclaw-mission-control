@@ -85,7 +85,7 @@ def _decision_read(decision: OperatorDecision, task_ids: list[UUID]) -> Operator
         owner_user_id=decision.owner_user_id,
         unblock_rule=decision.unblock_rule,
         reason_code=decision.reason_code,
-        status=decision.status,  # type: ignore[arg-type]
+        status=decision.status,
         resolved_value=decision.resolved_value,
         created_by_agent_id=decision.created_by_agent_id,
         created_at=decision.created_at,

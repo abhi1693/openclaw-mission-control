@@ -14,13 +14,15 @@ writes in one event-loop tick can share a transaction.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlmodel import SQLModel, col
+from sqlmodel import SQLModel, col, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
 from app.models.agents import Agent
@@ -48,7 +50,7 @@ _NON_PK_COLUMNS = (
     "updated_at",
 )
 
-_DIALECT_INSERTS = {
+_DIALECT_INSERTS: dict[str, Callable[..., Any]] = {
     "postgresql": pg_insert,
     "sqlite": sqlite_insert,
 }
@@ -70,7 +72,7 @@ _ORPHAN_OWNERSHIP: tuple[tuple[str, type[SQLModel], tuple[str, ...]], ...] = (
 
 
 async def upsert_session_state(
-    session,  # AsyncSession; annotated dynamically to keep import surface minimal
+    session: AsyncSession,
     state: SessionState,
 ) -> None:
     """Insert or overwrite the row keyed by
@@ -100,14 +102,16 @@ async def upsert_session_state(
         "last_lifecycle_reason": state.last_lifecycle_reason,
         "updated_at": utcnow(),
     }
-    dialect_name = session.bind.dialect.name if session.bind is not None else None
-    insert = _DIALECT_INSERTS.get(dialect_name)
+    dialect_name: str | None = session.bind.dialect.name if session.bind is not None else None
+    insert = _DIALECT_INSERTS.get(dialect_name) if dialect_name is not None else None
     if insert is None:
         raise RuntimeError(
             f"upsert_session_state: unsupported SQL dialect {dialect_name!r}; "
             "only postgresql and sqlite expose the ON CONFLICT API used here."
         )
-    stmt = insert(GatewaySessionState).values(
+    # Dialect-specific Insert exposes on_conflict_do_update / excluded that
+    # the generic sqlalchemy.Insert in the stubs does not — keep dynamic.
+    stmt: Any = insert(GatewaySessionState).values(
         agent_id=state.agent_id,
         session_label=state.session_label,
         **payload,
@@ -120,39 +124,39 @@ async def upsert_session_state(
 
 
 async def get_session_state(
-    session,
+    session: AsyncSession,
     *,
     agent_id: str,
     session_label: str,
 ) -> GatewaySessionState | None:
     stmt = select(GatewaySessionState).where(
-        GatewaySessionState.agent_id == agent_id,
-        GatewaySessionState.session_label == session_label,
+        col(GatewaySessionState.agent_id) == agent_id,
+        col(GatewaySessionState.session_label) == session_label,
     )
     result = await session.exec(stmt)
-    return result.scalar_one_or_none()
+    return result.one_or_none()
 
 
 async def list_session_states_for_agent(
-    session,
+    session: AsyncSession,
     *,
     agent_id: str,
 ) -> list[GatewaySessionState]:
     stmt = select(GatewaySessionState).where(
-        GatewaySessionState.agent_id == agent_id,
+        col(GatewaySessionState.agent_id) == agent_id,
     )
     result = await session.exec(stmt)
-    return list(result.scalars().all())
+    return list(result.all())
 
 
-async def list_all_session_states(session) -> list[GatewaySessionState]:
+async def list_all_session_states(session: AsyncSession) -> list[GatewaySessionState]:
     stmt = select(GatewaySessionState)
     result = await session.exec(stmt)
-    return list(result.scalars().all())
+    return list(result.all())
 
 
 async def list_main_session_states_for_agent_ids(
-    session,
+    session: AsyncSession,
     *,
     agent_ids: Iterable[str],
 ) -> dict[str, GatewaySessionState]:
@@ -165,14 +169,14 @@ async def list_main_session_states_for_agent_ids(
         return {}
     stmt = select(GatewaySessionState).where(
         col(GatewaySessionState.agent_id).in_(ids),
-        GatewaySessionState.session_label == "main",
+        col(GatewaySessionState.session_label) == "main",
     )
     result = await session.exec(stmt)
-    return {row.agent_id: row for row in result.scalars().all()}
+    return {row.agent_id: row for row in result.all()}
 
 
 async def list_session_states_for_agent_ids(
-    session,
+    session: AsyncSession,
     *,
     agent_ids: Iterable[str],
 ) -> list[GatewaySessionState]:
@@ -186,11 +190,11 @@ async def list_session_states_for_agent_ids(
         col(GatewaySessionState.agent_id).in_(ids),
     )
     result = await session.exec(stmt)
-    return list(result.scalars().all())
+    return list(result.all())
 
 
 async def _orphan_agent_ids_for_owner(
-    session,
+    session: AsyncSession,
     *,
     prefix: str,
     owner_model: type[SQLModel],
@@ -202,11 +206,11 @@ async def _orphan_agent_ids_for_owner(
     candidate set (so a ``mc-`` scan skips ``mc-gateway-`` rows that
     are owned by a different model).
     """
-    candidate_stmt = select(GatewaySessionState.agent_id).where(
+    candidate_stmt = select(col(GatewaySessionState.agent_id)).where(
         col(GatewaySessionState.agent_id).startswith(prefix),
     )
     candidate_result = await session.exec(candidate_stmt)
-    candidates = list(candidate_result.scalars().all())
+    candidates = list(candidate_result.all())
     parsed_uuid_by_agent_id: dict[str, UUID] = {}
     for agent_id in candidates:
         if any(agent_id.startswith(p) for p in skip_prefixes):
@@ -219,11 +223,16 @@ async def _orphan_agent_ids_for_owner(
             continue
     if not parsed_uuid_by_agent_id:
         return []
-    existing_stmt = select(owner_model.id).where(
-        col(owner_model.id).in_(parsed_uuid_by_agent_id.values()),
+    # owner_model is a SQLModel subclass with an ``id`` Field, but the
+    # parameter is typed as the abstract ``type[SQLModel]`` for the
+    # _ORPHAN_OWNERSHIP table — narrow via getattr so mypy can see the
+    # column expression.
+    owner_id_col = cast(Any, owner_model).id
+    existing_stmt = select(owner_id_col).where(
+        col(owner_id_col).in_(parsed_uuid_by_agent_id.values()),
     )
     existing_result = await session.exec(existing_stmt)
-    existing_uuids = set(existing_result.scalars().all())
+    existing_uuids = set(existing_result.all())
     return [
         agent_id
         for agent_id, parsed in parsed_uuid_by_agent_id.items()
@@ -231,7 +240,7 @@ async def _orphan_agent_ids_for_owner(
     ]
 
 
-async def cleanup_orphaned_session_states(session) -> int:
+async def cleanup_orphaned_session_states(session: AsyncSession) -> int:
     """Delete projection rows whose ``agent_id`` namespace points at a
     no-longer-existent owning row. Three namespaces are tracked
     symmetrically:

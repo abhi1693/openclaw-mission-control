@@ -256,8 +256,12 @@ async def _ensure_move_to_done_targets_have_delivery_contract(
 ) -> None:
     if action_type not in DONE_APPROVAL_ACTION_TYPES or not task_ids:
         return
+    # reason: sqlmodel.select() typed overloads cap at 6 columns; this
+    # 7-column projection falls outside the overload set and triggers
+    # call-overload + the "too many unions" misc error from the stub.
+    # Runtime works correctly — purely a stub gap.
     rows = await session.exec(
-        select(
+        select(  # type: ignore[call-overload, misc]
             Task.id,
             Task.status,
             Task.review_packet_type,

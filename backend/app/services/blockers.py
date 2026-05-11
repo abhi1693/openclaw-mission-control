@@ -90,8 +90,11 @@ async def open_blocker_rows_by_task_id(
     task_id_list = list(task_ids)
     if not task_id_list:
         return {}
+    # reason: sqlmodel.select() typed overloads cap at 6 columns; this
+    # 7-column projection falls off the overload set and triggers
+    # call-overload. The runtime call works correctly — purely a stub gap.
     stmt = (
-        select(
+        select(  # type: ignore[call-overload]
             col(Blocker.task_id),
             col(Blocker.id),
             col(Blocker.reason_code),

@@ -332,8 +332,6 @@ class TestPaginateGet:
         page_results: list[dict[str, object]],
     ) -> object:
         """Return a urlopen replacement that serves successive pages."""
-        from unittest import mock as mock_module
-
         call_count = {"i": 0}
         captured_urls: list[str] = []
 

@@ -105,12 +105,7 @@ jobs:
           AUTH_MODE: "local"
           LOCAL_AUTH_TOKEN: "ci-local-auth-token-0123456789-0123456789-0123456789x"
         run: |
-          # Format + flake8 are blocking; mypy runs in the dedicated
-          # `typecheck` job below as a non-blocking signal so the CD gate
-          # isn't held up by the ~89 pre-existing strict-mode mypy errors.
-          make backend-format-check
-          cd backend && uv run flake8 --config .flake8
-          cd ..
+          make backend-lint
           make backend-coverage
 
       - name: Run frontend checks
@@ -139,41 +134,6 @@ jobs:
           path: |
             backend/coverage.xml
             frontend/coverage/**
-
-  typecheck:
-    # Non-blocking mypy run. There are ~89 pre-existing strict-mode mypy
-    # errors that would gate every push otherwise. Splitting it out keeps
-    # the signal visible (the job appears in the GitHub UI with its own
-    # status) without holding up the CD gate. Remove `continue-on-error`
-    # once the typecheck debt is paid down.
-    runs-on: ubuntu-latest
-    continue-on-error: true
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        run: python -m pip install --upgrade pip uv
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/uv
-            backend/.venv
-          key: uv-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
-
-      - name: Install backend dependencies
-        run: make backend-sync
-
-      - name: Run mypy
-        run: make backend-typecheck
 
   installer:
     name: Installer (${{ matrix.os }})

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlmodel import col, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.logging import get_logger
 from app.core.time import utcnow
@@ -59,7 +60,7 @@ class DeployNotifyResponse(BaseModel):
     dispatch: dict[str, Any]
 
 
-async def _resolve_target_agent(session) -> tuple[Board, Agent]:
+async def _resolve_target_agent(session: AsyncSession) -> tuple[Board, Agent]:
     board = (
         await session.exec(
             select(Board).where(func.lower(Board.name) == DEFAULT_BOARD_NAME.lower())
@@ -80,7 +81,7 @@ async def _resolve_target_agent(session) -> tuple[Board, Agent]:
     return board, agent
 
 
-async def _require_board_task(session, *, board_id: UUID, task_id: UUID) -> Task:
+async def _require_board_task(session: AsyncSession, *, board_id: UUID, task_id: UUID) -> Task:
     task = (
         await session.exec(
             select(Task).where(col(Task.id) == task_id).where(col(Task.board_id) == board_id)
@@ -195,6 +196,9 @@ async def api_deploy_notify(payload: DeployNotifyPayload = Body(...)) -> DeployN
                 status_code=503, detail="Gateway config unavailable for QA-E2E dispatch"
             )
 
+        # _resolve_target_agent enforces openclaw_session_id is non-empty;
+        # narrow for the non-Optional GatewayDispatchService signature.
+        assert agent.openclaw_session_id is not None
         error = await dispatch.try_send_agent_message(
             session_key=agent.openclaw_session_id,
             config=config,

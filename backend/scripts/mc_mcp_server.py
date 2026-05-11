@@ -112,11 +112,12 @@ def op_task_read(task_id: str) -> dict[str, Any]:
     token = _resolve_env("LOCAL_AUTH_TOKEN")
     board = _resolve_env("BOARD_ID")
     base = _base_url()
-    return _request(
+    response: dict[str, Any] = _request(
         method="GET",
         url=f"{base}/api/v1/boards/{board}/tasks/{task_id}",
         token=token,
     )
+    return response
 
 
 def op_comment_create(task_id: str, message: str) -> dict[str, Any]:
@@ -125,12 +126,13 @@ def op_comment_create(task_id: str, message: str) -> dict[str, Any]:
     base = _base_url()
     if not message or not message.strip():
         raise ValueError("message must be non-empty")
-    return _request(
+    response: dict[str, Any] = _request(
         method="POST",
         url=f"{base}/api/v1/boards/{board}/tasks/{task_id}/comments",
         token=token,
         payload={"message": message},
     )
+    return response
 
 
 def op_pipeline_event_create(
@@ -158,12 +160,13 @@ def op_pipeline_event_create(
         payload["live_sha"] = live_sha
     if evidence is not None:
         payload["evidence"] = evidence
-    return _request(
+    response: dict[str, Any] = _request(
         method="POST",
         url=f"{base}/api/v1/boards/{board}/tasks/{task_id}/pipeline/events",
         token=token,
         payload=payload,
     )
+    return response
 
 
 def op_review_event_create(
@@ -197,12 +200,13 @@ def op_review_event_create(
         payload["suggested_routing"] = suggested_routing
     if evidence is not None:
         payload["evidence"] = evidence
-    return _request(
+    response: dict[str, Any] = _request(
         method="POST",
         url=f"{base}/api/v1/boards/{board}/tasks/{task_id}/review-events",
         token=token,
         payload=payload,
     )
+    return response
 
 
 # --- MCP tool definitions ---

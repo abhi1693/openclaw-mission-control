@@ -6,12 +6,10 @@ between parsing and persistence is locked end-to-end.
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.services.mc_gateway_subscriber.db_session_state_projector import (

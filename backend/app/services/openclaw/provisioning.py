@@ -1392,7 +1392,7 @@ async def _gateway_config_for_board_id(board_id: UUID) -> GatewayClientConfig | 
 
 async def _any_board_active_on_gateway(gateway_id: UUID) -> bool:
     async with async_session_maker() as session:
-        paused_rows = await session.exec(text("""
+        paused_rows = await session.execute(text("""
                 SELECT b.id
                 FROM boards b
                 LEFT JOIN board_pause_states bps ON bps.board_id = b.id

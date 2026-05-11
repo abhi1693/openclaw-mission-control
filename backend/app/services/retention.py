@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from datetime import timedelta
+from typing import Any, cast
 
 from sqlalchemy import delete
 from sqlmodel import col
@@ -49,7 +50,10 @@ async def _purge_table(
     """
 
     threshold = utcnow() - timedelta(days=retention_days)
-    statement = delete(model).where(col(model.created_at) < threshold)
+    # ``model`` is a SQLModel subclass with a ``created_at`` column;
+    # the abstract ``type`` parameter doesn't expose it statically.
+    created_at_col = cast(Any, model).created_at
+    statement = delete(model).where(col(created_at_col) < threshold)
     result = await session.exec(statement)
     return int(getattr(result, "rowcount", 0) or 0)
 

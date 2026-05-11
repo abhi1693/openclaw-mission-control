@@ -23,23 +23,27 @@ pytestmark = pytest.mark.xfail(
     reason="subagent-failure route not yet mounted on app.api.agent",
     strict=False,
 )
-from fastapi import APIRouter, Depends, FastAPI
-from fastapi_pagination import add_pagination
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel, col, select
-from sqlmodel.ext.asyncio.session import AsyncSession
+from fastapi import APIRouter, Depends, FastAPI  # noqa: E402
+from fastapi_pagination import add_pagination  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncEngine,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlmodel import SQLModel, col, select  # noqa: E402
+from sqlmodel.ext.asyncio.session import AsyncSession  # noqa: E402
 
-from app.api.agent import router as agent_router
-from app.api.deps import get_board_for_actor_read, get_board_or_404
-from app.core.agent_tokens import hash_agent_token
-from app.db.session import get_session
-from app.models.agents import Agent
-from app.models.blockers import Blocker
-from app.models.boards import Board
-from app.models.gateways import Gateway
-from app.models.organizations import Organization
-from app.models.tasks import Task
+from app.api.agent import router as agent_router  # noqa: E402
+from app.api.deps import get_board_for_actor_read, get_board_or_404  # noqa: E402
+from app.core.agent_tokens import hash_agent_token  # noqa: E402
+from app.db.session import get_session  # noqa: E402
+from app.models.agents import Agent  # noqa: E402
+from app.models.blockers import Blocker  # noqa: E402
+from app.models.boards import Board  # noqa: E402
+from app.models.gateways import Gateway  # noqa: E402
+from app.models.organizations import Organization  # noqa: E402
+from app.models.tasks import Task  # noqa: E402
 
 
 async def _make_engine() -> AsyncEngine:

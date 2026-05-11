@@ -208,6 +208,11 @@ class AgentLifecycleOrchestrator(OpenClawDBService):
             await self.session.refresh(locked)
             return locked
 
+        # raw_token is guaranteed non-None here: each branch above either
+        # assigns a str directly or early-returns when no token can be
+        # recovered. Narrow explicitly so the provisioner signature is
+        # satisfied.
+        assert raw_token is not None
         try:
             lifecycle_result = await OpenClawGatewayProvisioner().apply_agent_lifecycle(
                 agent=locked,

@@ -212,7 +212,7 @@ async def _revert_to_in_progress(
             },
         )
 
-        rows_affected = result.rowcount  # type: ignore[union-attr]
+        rows_affected = result.rowcount
 
         if rows_affected == 0:
             logger.info(

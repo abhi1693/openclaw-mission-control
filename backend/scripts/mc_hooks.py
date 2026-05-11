@@ -175,12 +175,13 @@ def cmd_wake(args: argparse.Namespace) -> dict[str, Any]:
     token = _resolve_token(args)
     base = _resolve_base_url(args)
     payload = {"text": args.text, "mode": args.mode}
-    return _request(  # type: ignore[return-value]
+    response: dict[str, Any] = _request(
         method="POST",
         url=f"{base}/hooks/wake",
         token=token,
         payload=payload,
     )
+    return response
 
 
 def cmd_agent(args: argparse.Namespace) -> dict[str, Any]:
@@ -204,12 +205,13 @@ def cmd_agent(args: argparse.Namespace) -> dict[str, Any]:
         payload["deliver"] = True
     if args.timeout_seconds is not None:
         payload["timeoutSeconds"] = int(args.timeout_seconds)
-    return _request(  # type: ignore[return-value]
+    response: dict[str, Any] = _request(
         method="POST",
         url=f"{base}/hooks/agent",
         token=token,
         payload=payload,
     )
+    return response
 
 
 # --- argparse wiring ---

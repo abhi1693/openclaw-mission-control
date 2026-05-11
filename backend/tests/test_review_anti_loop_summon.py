@@ -24,7 +24,7 @@ These tests are RED until the auto-summon hook is wired into
 from __future__ import annotations
 
 from dataclasses import dataclass
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from sqlmodel import col, select

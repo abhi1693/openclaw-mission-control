@@ -60,7 +60,7 @@ MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN = 3
 # Re-exported from protocol_constants (the dependency-free worker
 # import). Kept here as an alias so existing call-sites under
 # openclaw.* don't have to change their import path.
-from app.services.openclaw.protocol_constants import (  # noqa: E402
+from app.services.openclaw.protocol_constants import (  # noqa: E402,F401
     AGENT_SESSION_PREFIX as AGENT_SESSION_PREFIX,
 )
 

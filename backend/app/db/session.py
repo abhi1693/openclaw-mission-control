@@ -15,6 +15,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import models as _models
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.db.url import normalize_database_url as _normalize_database_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -22,8 +23,6 @@ if TYPE_CHECKING:
 # Import model modules so SQLModel metadata is fully registered at startup.
 _MODEL_REGISTRY = _models
 
-
-from app.db.url import normalize_database_url as _normalize_database_url
 
 async_engine: AsyncEngine = create_async_engine(
     _normalize_database_url(settings.database_url),

@@ -9,6 +9,8 @@ silently bypassing the wake hook in api/blockers.py.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -24,7 +26,7 @@ logger = get_logger(__name__)
 async def _send_agent_wake(
     *,
     session: AsyncSession,
-    board_id,
+    board_id: UUID,
     agent: Agent,
     message: str,
 ) -> bool:
@@ -104,7 +106,7 @@ async def notify_lead_after_blocker_resolved(
 async def send_agent_wake(
     *,
     session: AsyncSession,
-    board_id,
+    board_id: UUID,
     agent: Agent,
     message: str,
 ) -> bool:

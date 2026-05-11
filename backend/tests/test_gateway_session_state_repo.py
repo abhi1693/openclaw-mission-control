@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.gateway_session_state import GatewaySessionState
 from app.services.mc_gateway_subscriber.session_state_projector import SessionState
 from app.services.mc_gateway_subscriber.session_state_repo import (
     cleanup_orphaned_session_states,
@@ -245,11 +244,11 @@ async def test_upsert_writes_updated_at_on_each_call(
 # the projection table doesn't accumulate state for hard-deleted agents.
 # ---------------------------------------------------------------------------
 
-from uuid import uuid4
+from uuid import uuid4  # noqa: E402
 
-from app.models.agents import Agent
-from app.models.gateways import Gateway
-from app.models.organizations import Organization
+from app.models.agents import Agent  # noqa: E402
+from app.models.gateways import Gateway  # noqa: E402
+from app.models.organizations import Organization  # noqa: E402
 
 
 async def _seed_org_and_gateway(session: AsyncSession) -> Gateway:

@@ -10,12 +10,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import timedelta
 from typing import Any
 
 import pytest
 
-from app.core.time import utcnow
 from app.models.agent_heartbeat_repair_events import AgentHeartbeatRepairEvent
 from app.models.shadow_metric_events import ShadowMetricEvent
 from app.services.retention import (

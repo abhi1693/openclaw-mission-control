@@ -801,7 +801,10 @@ async def list_tasks(
         )
         for task in page.items
     ]
-    return page.model_copy(update={"items": enriched})
+    # ``model_copy`` preserves the source generic param (TaskRead); the
+    # items field is structurally TaskCardRead post-enrichment, so widen
+    # explicitly for the response model.
+    return cast("LimitOffsetPage[TaskCardRead]", page.model_copy(update={"items": enriched}))
 
 
 @router.get(
@@ -1195,10 +1198,15 @@ async def create_task(
 
     task = Task.model_validate(data)
     task.board_id = board.id
-    task.status = normalize_review_only_initial_status(
+    # ``task.status`` is non-None on the model (default 'inbox'); the
+    # normaliser declares ``str | None`` for callers passing optional
+    # status, but here the input is always concrete.
+    normalised_status = normalize_review_only_initial_status(
         review_packet_type=task.review_packet_type,
         status=task.status,
     )
+    if normalised_status is not None:
+        task.status = normalised_status
     task.auto_created = True
     task.auto_reason = f"lead_agent:{agent_ctx.agent.id}"
 

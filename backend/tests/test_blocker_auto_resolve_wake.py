@@ -27,7 +27,6 @@ import pytest
 import pytest_asyncio
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-import app.api.tasks as tasks_api
 from app.api.blockers import create_task_blocker
 from app.api.tasks import record_task_pipeline_event
 from app.models.agents import Agent
@@ -222,7 +221,7 @@ async def test_pipeline_event_auto_resolve_wakes_lead(
     # At least one dispatch must be the BLOCKER_RESOLVED wake.
     assert any("BLOCKER_RESOLVED" in str(s.get("message", "")) for s in sent), (
         f"expected at least one BLOCKER_RESOLVED wake; messages: "
-        f"{[str(s.get('message',''))[:80] for s in sent]}"
+        f"{[str(s.get('message', ''))[:80] for s in sent]}"
     )
 
 
@@ -264,7 +263,7 @@ async def test_blocker_create_retroactive_auto_resolve_wakes_lead(
     # was the only one open on the task.
     assert any("BLOCKER_RESOLVED" in str(s.get("message", "")) for s in sent), (
         f"expected lead wake after retroactive auto-resolve; messages: "
-        f"{[str(s.get('message',''))[:80] for s in sent]}"
+        f"{[str(s.get('message', ''))[:80] for s in sent]}"
     )
 
 

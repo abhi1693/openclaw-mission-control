@@ -42,10 +42,8 @@ import pytest
 import pytest_asyncio
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-import app.api.blockers as blockers_api
 from app.api.blockers import create_task_blocker, update_task_blocker
 from app.models.agents import Agent
-from app.models.blockers import Blocker
 from app.models.boards import Board
 from app.models.gateways import Gateway
 from app.models.organizations import Organization

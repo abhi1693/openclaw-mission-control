@@ -37,9 +37,7 @@ from app.services.openclaw.protocol_constants import (
     GATEWAY_OPERATOR_SCOPES,
 )
 from app.services.openclaw.protocol_constants import HOST_PLATFORM as _HOST_PLATFORM  # noqa: E402
-from app.services.openclaw.protocol_constants import (
-    PROTOCOL_VERSION,
-)
+from app.services.openclaw.protocol_constants import PROTOCOL_VERSION as PROTOCOL_VERSION
 from app.services.openclaw.protocol_constants import (
     build_control_ui_origin as _build_control_ui_origin,
 )

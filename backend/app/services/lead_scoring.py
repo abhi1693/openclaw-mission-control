@@ -30,6 +30,7 @@ row alongside the candidate.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import exists
@@ -143,11 +144,12 @@ async def last_scoring_bookmark(session: AsyncSession, *, agent_id: UUID) -> dat
     Includes the bootstrap-event type so warmup counts as a bookmark.
     """
 
-    return await session.scalar(
+    result: Any = await session.scalar(
         select(func.max(col(ShadowMetricEvent.created_at)))
         .where(col(ShadowMetricEvent.agent_id) == agent_id)
         .where(col(ShadowMetricEvent.event_type).in_(_SCORING_EVENT_TYPES))
     )
+    return cast("datetime | None", result)
 
 
 async def _previous_noop_candidate_at(
@@ -160,12 +162,13 @@ async def _previous_noop_candidate_at(
     event for the lead, restricted to the given cutoff window. Used
     to decide whether this sweep's candidate constitutes a streak."""
 
-    return await session.scalar(
+    result: Any = await session.scalar(
         select(func.max(col(ShadowMetricEvent.created_at)))
         .where(col(ShadowMetricEvent.agent_id) == agent_id)
         .where(col(ShadowMetricEvent.event_type) == EVENT_SUPERVISOR_HEARTBEAT_NOOP_CANDIDATE)
         .where(col(ShadowMetricEvent.created_at) >= cutoff)
     )
+    return cast("datetime | None", result)
 
 
 async def score_lead_once(

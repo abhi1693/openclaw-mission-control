@@ -50,7 +50,7 @@ def _to_review_blocker_read(link: ReviewBlocker, blocker: Blocker) -> ReviewBloc
     return ReviewBlockerRead(
         id=link.id,
         blocker_id=blocker.id,
-        category=blocker.category,  # type: ignore[arg-type]
+        category=blocker.category,
         reason_code=blocker.reason_code,
         owner_role=blocker.owner_role,
         required_artifact=blocker.required_artifact,
@@ -85,7 +85,7 @@ def _review_read(review: Review, blockers: list[ReviewBlockerRead]) -> ReviewRea
         id=review.id,
         board_id=review.board_id,
         task_id=review.task_id,
-        verdict=review.verdict,  # type: ignore[arg-type]
+        verdict=review.verdict,
         citation=review.citation,
         reviewer_agent_id=review.reviewer_agent_id,
         created_at=review.created_at,
@@ -113,7 +113,7 @@ async def list_task_reviews(
         return [_review_read(review, blockers_by_id.get(review.id, [])) for review in reviews]
 
     statement = (
-        Review.objects.filter_by(task_id=task.id).order_by(Review.created_at.desc()).statement
+        Review.objects.filter_by(task_id=task.id).order_by(col(Review.created_at).desc()).statement
     )
     return await paginate(session, statement, transformer=_transform)
 

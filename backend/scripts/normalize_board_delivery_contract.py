@@ -15,12 +15,16 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
 
-from app.api.deps import ActorContext
-from app.api.tasks import _apply_admin_task_rules, _finalize_updated_task, _TaskUpdateInput
-from app.db.session import async_session_maker
-from app.models.tasks import Task
-from app.models.users import User
-from app.schemas.tasks import TaskUpdate
+from app.api.deps import ActorContext  # noqa: E402
+from app.api.tasks import (  # noqa: E402
+    _apply_admin_task_rules,
+    _finalize_updated_task,
+    _TaskUpdateInput,
+)
+from app.db.session import async_session_maker  # noqa: E402
+from app.models.tasks import Task  # noqa: E402
+from app.models.users import User  # noqa: E402
+from app.schemas.tasks import TaskUpdate  # noqa: E402
 
 
 class NormalizationTaskPatch(BaseModel):

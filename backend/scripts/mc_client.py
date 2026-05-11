@@ -77,7 +77,8 @@ def _request(
         raise HttpError(exc.code, body) from exc
     if not raw:
         return {}
-    return json.loads(raw)
+    parsed: dict[str, Any] | list[Any] = json.loads(raw)
+    return parsed
 
 
 def _resolve_token(args: argparse.Namespace) -> str:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlmodel import col, select
 
 from app.api.deps import require_org_admin
 from app.core.auth import AuthContext, get_auth_context
@@ -311,11 +311,11 @@ async def projected_gateway_sessions(
     # they're paired against (Agent.gateway_id → Gateway.organization_id).
     stmt = (
         select(Agent)
-        .join(Gateway, Gateway.id == Agent.gateway_id)
-        .where(Gateway.organization_id == ctx.organization.id)
+        .join(Gateway, col(Gateway.id) == col(Agent.gateway_id))
+        .where(col(Gateway.organization_id) == ctx.organization.id)
     )
     result = await session.exec(stmt)
-    org_agents = list(result.scalars().all())
+    org_agents = list(result.all())
     # Strict parser only — never fall back to slugify(agent.name).
     # Codex finding: a slug fallback can collide with a real
     # gateway-emitted agent_id from an UNRELATED org's session and

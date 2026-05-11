@@ -48,6 +48,7 @@ from app.models.task_review_events import TaskReviewEvent
 from app.models.tasks import Task
 from app.schemas.activity_events import ActivityEventRead
 from app.schemas.approvals import DONE_APPROVAL_ACTION_TYPES
+from app.schemas.boards import CommentSignalFilter
 from app.schemas.common import OkResponse
 from app.schemas.errors import BlockedTaskError
 from app.schemas.pagination import DefaultLimitOffsetPage
@@ -2866,10 +2867,15 @@ async def create_task(
 
     task = Task.model_validate(data)
     task.board_id = board.id
-    task.status = normalize_review_only_initial_status(
+    # ``task.status`` is non-None on the model (default 'inbox'); the
+    # normaliser declares ``str | None`` for callers that pass payloads
+    # with optional status, but here the input is always concrete.
+    normalised_status = normalize_review_only_initial_status(
         review_packet_type=task.review_packet_type,
         status=task.status,
     )
+    if normalised_status is not None:
+        task.status = normalised_status
     if task.created_by_user_id is None and auth.user is not None:
         task.created_by_user_id = auth.user.id
 
@@ -4154,15 +4160,18 @@ async def list_task_comments(
     ``app/services/comment_policy.py`` for filter semantics.
     """
 
-    filter_mode = board.comment_signal_filter
-    statement = (
+    # ``comment_signal_filter`` column is open-vocabulary ``str`` at the
+    # ORM level but constrained by DB CHECK + Pydantic Literal — the
+    # filter helper expects the Literal narrowing.
+    filter_mode = cast("CommentSignalFilter", board.comment_signal_filter)
+    base_statement = (
         select(ActivityEvent)
         .where(col(ActivityEvent.task_id) == task.id)
         .where(col(ActivityEvent.event_type) == "task.comment")
         .order_by(asc(col(ActivityEvent.created_at)))
     )
     statement = apply_comment_signal_filter(
-        statement,
+        base_statement,
         filter_mode=filter_mode,
         actor_is_agent=actor.actor_type == "agent",
         include_flagged=include_flagged,
@@ -4813,6 +4822,10 @@ async def _lead_notify_new_assignee(
     )
     if board:
         if _is_lead_rework_return(update):
+            # Lead-rework path is only entered for agent actors with a
+            # bound agent row — caller _apply_lead_task_update gated on
+            # update.actor.actor_type == "agent" and update.actor.agent.
+            assert update.actor.agent is not None
             await _notify_agent_on_task_rework(
                 session=session,
                 board=board,
@@ -5677,6 +5690,9 @@ async def _notify_task_update_assignment_changes(
     if _is_lead_rework_return(update):
         current_board = await _board()
         if current_board:
+            # Lead-rework path requires an agent actor — same precondition
+            # enforced upstream in _apply_lead_task_update.
+            assert update.actor.agent is not None
             await _notify_agent_on_task_rework(
                 session=session,
                 board=current_board,

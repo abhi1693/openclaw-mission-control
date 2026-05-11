@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, cast
 from uuid import UUID
 
 from app.core.time import as_naive_utc, utcnow
@@ -114,7 +114,7 @@ def latest_approval_state_by_task_id(
         if current is not None and timestamp <= current[0]:
             continue
         if raw_status in {"pending", "approved", "rejected"}:
-            latest_by_task_id[task_id] = (timestamp, raw_status)
+            latest_by_task_id[task_id] = (timestamp, cast(ApprovalState, raw_status))
     for task_id, (_timestamp, approval_status) in latest_by_task_id.items():
         state_by_task_id[task_id] = approval_status
     return state_by_task_id
@@ -198,9 +198,12 @@ def _in_progress_is_fresh(
     return age < grace
 
 
-_GATEWAY_SESSION_DETAIL_FIELDS = frozenset(
-    {"session_id", "last_phase", "last_changed_at_ms", "aborted_last_run"}
-)
+_GATEWAY_SESSION_DETAIL_FIELDS: set[str] = {
+    "session_id",
+    "last_phase",
+    "last_changed_at_ms",
+    "aborted_last_run",
+}
 
 
 def _gateway_session_details(

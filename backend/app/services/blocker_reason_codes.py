@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
-from typing import Final, Literal, get_args
+from typing import Final, Literal, cast, get_args
 from uuid import UUID
 
 ReasonCodeClass = Literal[
@@ -89,7 +89,10 @@ def classify(code: str | None) -> ReasonCodeClass | None:
     """Return the classification for a recognised code, or None."""
     if code is None or code not in _CODE_CLASS:
         return None
-    return _CODE_CLASS[code]
+    # ``code in _CODE_CLASS`` narrows the runtime value to a known key,
+    # but the dict's key type is the ``KnownReasonCode`` Literal — cast
+    # so the lookup is well-typed.
+    return _CODE_CLASS[cast("KnownReasonCode", code)]
 
 
 def is_auto_revalidatable(code: str | None) -> bool:

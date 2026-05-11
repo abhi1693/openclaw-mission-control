@@ -199,13 +199,6 @@ class TestAgentAllowlist:
         # Import the actual allowlist computation from the function body.
         # We can't import it directly (it's inline), so verify by checking
         # the expected fields are present.
-        expected = {
-            "status",
-            "comment",
-            "custom_field_values",
-            "packet_commit_sha",
-            "packet_build_sha",
-        }
         # Read the source to verify (belt-and-suspenders).
         import inspect
 

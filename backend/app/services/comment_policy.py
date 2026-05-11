@@ -19,7 +19,7 @@ Filter modes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, ColumnElement, or_
 from sqlmodel import col
@@ -28,7 +28,7 @@ from app.models.activity_events import ActivityEvent
 from app.schemas.boards import CommentSignalFilter
 
 if TYPE_CHECKING:
-    from sqlalchemy.sql.expression import Select
+    from sqlmodel.sql.expression import Select, SelectOfScalar
 
 FILTER_OFF: CommentSignalFilter = "off"
 FILTER_DEFAULT_HIDDEN: CommentSignalFilter = "default_hidden"
@@ -56,12 +56,12 @@ def _not_flagged_clause() -> ColumnElement[bool]:
 
 
 def apply_comment_signal_filter(
-    statement: "Select",
+    statement: "Select[Any] | SelectOfScalar[Any]",
     *,
     filter_mode: CommentSignalFilter,
     actor_is_agent: bool,
     include_flagged: bool,
-) -> "Select":
+) -> "Select[Any] | SelectOfScalar[Any]":
     """Apply the board's classifier-filter policy to a comment Select.
 
     Args:

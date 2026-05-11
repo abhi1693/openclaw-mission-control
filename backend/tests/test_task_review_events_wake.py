@@ -255,7 +255,7 @@ async def test_record_task_review_event_fail_auto_transitions_review_to_rework(
     packet, and the assignee is routed back to the worker who moved
     the task to review (the implementer, not the reviewer).
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     org_id = uuid4()
     gateway_id = uuid4()
