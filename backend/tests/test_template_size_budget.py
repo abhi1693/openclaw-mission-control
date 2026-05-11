@@ -118,8 +118,13 @@ def _read_skill_text_or_skip(skill_name: str) -> str:
     for root in dict.fromkeys(roots):
         path = root / skill_name / "SKILL.md"
         checked.append(str(path))
-        if path.exists():
-            return path.read_text()
+        try:
+            if path.exists():
+                return path.read_text()
+        except OSError:
+            # ``Path.exists()`` raises ``PermissionError`` on GitHub-hosted
+            # CI runners that can't stat root-owned parents; skip those.
+            continue
     pytest.skip(f"{skill_name} skill is not installed; checked: {', '.join(checked)}")
 
 
@@ -137,8 +142,14 @@ def _openclaw_config_path() -> Path | None:
         ],
     )
     for path in dict.fromkeys(candidates):
-        if path.exists():
-            return path
+        try:
+            if path.exists():
+                return path
+        except OSError:
+            # `path.exists()` raises ``PermissionError`` on GitHub-hosted CI
+            # runners (non-root cannot stat root-owned ``/root/`` parents);
+            # treat any OSError as "not present" and keep looking.
+            continue
     return None
 
 
