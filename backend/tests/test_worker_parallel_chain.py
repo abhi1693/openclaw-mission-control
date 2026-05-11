@@ -13,8 +13,20 @@ OPENCLAW_SKILLS_ROOT = Path("/root/.openclaw/skills")
 # These tests cross-check the in-repo skill source against the
 # gateway-deployed copy at ``/root/.openclaw/skills/`` (only present
 # on the gateway host .60). On dev workstations and GitHub-hosted CI
-# runners that path does not exist, so the live-checks are skipped.
-_HAS_LIVE_SKILLS = OPENCLAW_SKILLS_ROOT.is_dir()
+# runners the path is missing or unreadable; treat both as "skip".
+# ``is_dir()`` raises ``PermissionError`` on GitHub-hosted runners
+# (non-root runner can't stat a 700/root-owned ``/root/`` parent),
+# so guard with try/except and treat any OSError as "not available".
+
+
+def _has_live_skills() -> bool:
+    try:
+        return OPENCLAW_SKILLS_ROOT.is_dir()
+    except OSError:
+        return False
+
+
+_HAS_LIVE_SKILLS = _has_live_skills()
 _requires_live_skills = pytest.mark.skipif(
     not _HAS_LIVE_SKILLS,
     reason="requires deployed gateway skills at /root/.openclaw/skills/ (.60 only)",
