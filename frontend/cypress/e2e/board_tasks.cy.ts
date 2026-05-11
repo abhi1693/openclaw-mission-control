@@ -244,7 +244,12 @@ describe("/boards/:id task board", () => {
       .should("be.visible")
       .within(() => {
         cy.contains("label", "Title").parent().find("input").type("New task");
+        // The dialog footer can sit below the viewport on shorter CI
+        // browser windows (the dialog has ``position: fixed``); scroll
+        // into view before asserting visibility to avoid the Cypress
+        // "overflowed by other elements" failure.
         cy.contains("button", /^Create task$/)
+          .scrollIntoView()
           .should("be.visible")
           .and("not.be.disabled")
           .click();
