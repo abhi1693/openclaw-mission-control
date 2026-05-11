@@ -22,3 +22,8 @@ ignores:
   - "**/.mypy_cache/**"
   - "**/coverage/**"
   - "**/~/**"
+  # Operator-managed scratchpad — keep out of CI lint so prose
+  # screenshots / pasted shell output can be appended freely without
+  # fighting markdownlint. Re-add to lint scope once the file is
+  # split into proper docs.
+  - "docs/NOTES.md"
