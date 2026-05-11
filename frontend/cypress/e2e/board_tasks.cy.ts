@@ -269,13 +269,20 @@ describe("/boards/:id task board", () => {
       cy.contains("label", "Status")
         .parent()
         .within(() => {
-          cy.get('[role="combobox"]').first().should("be.visible").click();
+          // Same position:fixed dialog viewport-overflow as the create
+          // dialog; scrollIntoView before asserting visibility on CI.
+          cy.get('[role="combobox"]')
+            .first()
+            .scrollIntoView()
+            .should("be.visible")
+            .click();
         });
     });
 
     cy.contains("In progress").should("be.visible").click();
 
     cy.contains("button", /save changes/i)
+      .scrollIntoView()
       .should("be.visible")
       .and("not.be.disabled")
       .click();
