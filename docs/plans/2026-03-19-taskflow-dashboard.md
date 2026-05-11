@@ -1,6 +1,6 @@
 # TaskFlow Dashboard — Implementation Plan
 
-> **Standalone project** (`taskflow-api/` + `taskflow-dashboard/`). 
+> **Standalone project** (`taskflow-api/` + `taskflow-dashboard/`).
 > **Methodology:** TDD. **Multilingual:** pt-BR / en-US.
 
 **Goal:** Dashboard for the TaskFlow WhatsApp GTD system on NanoClaw.

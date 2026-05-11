@@ -9,7 +9,7 @@
 **Architecture:** Two independent services. A FastAPI server runs on the NanoClaw machine (`nanoclaw@192.168.2.63`), reading the TaskFlow SQLite database directly and serving REST + WebSocket. A standalone TypeScript/React SPA connects to this API directly. No proxy, no middleware.
 
 **Tech Stack:**
-- API: Python 3.11+ / FastAPI / SQLite 
+- API: Python 3.11+ / FastAPI / SQLite
 - Frontend: **Pure TypeScript + React 19** — no Next.js, no SSR, no meta-framework. Single-page application with client-side routing only.
 - UI libraries: React Router, TanStack Query, TanStack Table, Recharts, Radix UI, Tailwind CSS 3, Lucide icons
 - Real-time: WebSocket
@@ -1538,7 +1538,6 @@ git tag v1.0.0-taskflow-dashboard
 - Per-board timezone in overdue evaluation (v1 uses server local time)
 - Pagination on task endpoints (v1 data volumes are small)
 
-
   ┌────────────────────────────────────────────────────────────────────────┬──────────┐
   │                                 Agent                                  │ Interval │
   ├────────────────────────────────────────────────────────────────────────┼──────────┤
@@ -1578,5 +1577,5 @@ skills list as:
   Ready for bash scripts/board-start.sh when you give
   the word.
 
-  Are the plans file following the strucuture from https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4 and                                                    
-https://claude.com/blog/improving-frontend-design-through-skills, review and validate     
+  Are the plans file following the strucuture from https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4 and
+https://claude.com/blog/improving-frontend-design-through-skills, review and validate

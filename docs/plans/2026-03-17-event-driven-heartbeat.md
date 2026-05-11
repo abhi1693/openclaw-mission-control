@@ -10,7 +10,7 @@
 
 **Previous approach (deleted):** A bash pre-check gate in HEARTBEAT.md was proposed but fundamentally flawed — HEARTBEAT.md is prompt context sent TO the model, not a pre-model shell hook. The LLM call (and token consumption) happens before the agent reads the instructions. The bash gate would reduce output tokens but not the prompt tokens that are the bulk of the cost.
 
-**Companion plan:** For true push-driven scheduling, see [docs/plans/2026-03-17-native-event-driven-wake.md](docs/plans/2026-03-17-native-event-driven-wake.md). This document is only about reducing token cost within the existing heartbeat contract.
+**Companion plan:** For true push-driven scheduling, see [docs/plans/2026-03-17-native-event-driven-wake.md](2026-03-17-native-event-driven-wake.md). This document is only about reducing token cost within the existing heartbeat contract.
 
 ---
 
@@ -264,12 +264,12 @@ ssh root@192.168.2.60 "tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | gr
 
 - Does not skip the LLM call when idle (that requires a gateway-level change, not a config change)
 - Does not reduce heartbeat frequency (agents still fire on their interval)
-- Does not implement event-driven wakeups (see [docs/plans/2026-03-17-native-event-driven-wake.md](docs/plans/2026-03-17-native-event-driven-wake.md))
+- Does not implement event-driven wakeups (see [docs/plans/2026-03-17-native-event-driven-wake.md](2026-03-17-native-event-driven-wake.md))
 
 The token savings come entirely from **smaller context per call** (isolated sessions + slimmer template), not from fewer calls.
 
 ## Future Enhancements (not in scope)
 
 - **Cron-based monitoring:** Replace heartbeat with cron jobs that use `sessionTarget: "isolated"` and cheaper models for pure monitoring tasks. Reserve heartbeat for context-aware work.
-- **Webhook-driven wakeup:** Fire agent runs only when tasks are assigned, rather than polling. See [docs/plans/2026-03-17-native-event-driven-wake.md](docs/plans/2026-03-17-native-event-driven-wake.md).
+- **Webhook-driven wakeup:** Fire agent runs only when tasks are assigned, rather than polling. See [docs/plans/2026-03-17-native-event-driven-wake.md](2026-03-17-native-event-driven-wake.md).
 - **Per-agent model override:** Use `heartbeat.model` to assign a smaller/faster model for heartbeat runs specifically (e.g., qwen2.5:7b for heartbeats, qwen3.5:27b for real work).
