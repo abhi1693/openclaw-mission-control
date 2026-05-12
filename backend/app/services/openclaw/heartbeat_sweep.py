@@ -7,7 +7,9 @@ from collections.abc import Sequence
 from contextlib import suppress
 from datetime import datetime as _datetime_type
 from datetime import timedelta
+from uuid import UUID
 
+from sqlalchemy import text
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -90,6 +92,19 @@ def _heartbeat_enabled(agent: Agent) -> bool:
     return bool(every and every != "0m")
 
 
+async def _fetch_paused_board_ids(session: AsyncSession) -> set[UUID]:
+    """Return board IDs currently marked is_paused=TRUE.
+
+    Source of truth is ``board_pause_states``, written by
+    ``POST /api/mission-control/boards/{id}/pause``. Sweep and watchdog
+    consult this set to skip agents whose board is paused.
+    """
+    result = await session.execute(
+        text("SELECT board_id FROM board_pause_states WHERE is_paused = TRUE")
+    )
+    return {row[0] for row in result.all()}
+
+
 async def _try_deliver_heartbeat_wake(
     *,
     session: AsyncSession,
@@ -143,14 +158,19 @@ async def sweep_once() -> dict[str, int]:
     overdue = 0
     woke = 0
     offline = 0
+    paused_skipped = 0
 
     async with async_session_maker() as session:
+        paused_boards = await _fetch_paused_board_ids(session)
         agents = (
             await session.exec(select(Agent).where(col(Agent.checkin_deadline_at).is_not(None)))
         ).all()
 
         for agent in agents:
             if not _heartbeat_enabled(agent):
+                continue
+            if agent.board_id is not None and agent.board_id in paused_boards:
+                paused_skipped += 1
                 continue
             scanned += 1
             deadline = agent.checkin_deadline_at
@@ -215,13 +235,20 @@ async def sweep_once() -> dict[str, int]:
                 woke += 1
 
     logger.info(
-        "heartbeat_sweep.summary scanned=%s overdue=%s woke=%s offline=%s",
+        "heartbeat_sweep.summary scanned=%s overdue=%s woke=%s offline=%s paused_skipped=%s",
         scanned,
         overdue,
         woke,
         offline,
+        paused_skipped,
     )
-    return {"scanned": scanned, "overdue": overdue, "woke": woke, "offline": offline}
+    return {
+        "scanned": scanned,
+        "overdue": overdue,
+        "woke": woke,
+        "offline": offline,
+        "paused_skipped": paused_skipped,
+    }
 
 
 async def sweep_stuck_tasks() -> dict[str, int]:

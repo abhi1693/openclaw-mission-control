@@ -51,6 +51,7 @@ from app.services.openclaw.constants import (
 )
 from app.services.openclaw.gateway_resolver import optional_gateway_client_config
 from app.services.openclaw.gateway_rpc import models_auth_status
+from app.services.openclaw.heartbeat_sweep import _fetch_paused_board_ids
 from app.services.openclaw.provisioning import _is_disabled_heartbeat_every
 
 logger = get_logger(__name__)
@@ -231,6 +232,7 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
 
     now = utcnow()
     alert_since = now - REPEAT_REPAIR_ALERT_WINDOW
+    paused_boards = await _fetch_paused_board_ids(session)
     raw_candidates = (
         await session.exec(
             select(Agent).where(
@@ -245,7 +247,9 @@ async def sweep_null_deadlines_once(session: AsyncSession) -> SweepReport:
     candidates = [
         agent
         for agent in raw_candidates
-        if _is_heartbeat_enabled(agent) and _null_deadline_is_suspicious(agent, now=now)
+        if _is_heartbeat_enabled(agent)
+        and not (agent.board_id is not None and agent.board_id in paused_boards)
+        and _null_deadline_is_suspicious(agent, now=now)
     ]
     report = SweepReport(total_scanned=len(candidates))
     if not candidates:

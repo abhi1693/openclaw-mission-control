@@ -134,6 +134,12 @@ class _FakeSweepSession:
             return _FakeExecResult(rows=[], rowcount=rowcount)
         return _FakeExecResult(rows=list(self.agents), rowcount=0)
 
+    async def execute(self, statement: Any) -> _FakeExecResult:
+        # Watchdog's pause-skip query lives outside this fake's scope —
+        # all existing tests want an empty paused-set.
+        del statement
+        return _FakeExecResult(rows=[], rowcount=0)
+
     def add(self, value: Any) -> None:
         if isinstance(value, AgentHeartbeatRepairEvent):
             self.repair_events.append(value)
