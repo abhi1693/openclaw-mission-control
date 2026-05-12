@@ -24,7 +24,6 @@ from app.core.time import utcnow
 from app.models.agent_heartbeat_repair_events import AgentHeartbeatRepairEvent
 from app.models.agents import Agent
 
-
 # ---------------------------------------------------------------------
 # Shared fake session
 # ---------------------------------------------------------------------
@@ -185,9 +184,7 @@ async def test_sweep_wakes_overdue_agent_on_unpaused_board(
     monkeypatch.setattr(
         heartbeat_sweep.Gateway,
         "objects",
-        SimpleNamespace(
-            by_id=lambda _id: SimpleNamespace(first=_fake_gateway_first)
-        ),
+        SimpleNamespace(by_id=lambda _id: SimpleNamespace(first=_fake_gateway_first)),
         raising=False,
     )
 
