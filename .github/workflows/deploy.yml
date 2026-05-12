@@ -108,12 +108,28 @@ jobs:
         if: steps.shas.outputs.needed == 'true'
         run: |
           set -euo pipefail
+          # Poll /healthz instead of a single curl: systemd's `is-active`
+          # returns 'active' as soon as the unit's MainPID is spawned, but
+          # uvicorn (mc-backend) and next-server (mission-control) take a
+          # few seconds to bind their ports. A single curl races them.
+          wait_for() {
+            local url=$1 label=$2
+            local start=$SECONDS
+            while (( SECONDS - start < 30 )); do
+              if curl -fsS -o /dev/null "$url"; then
+                echo "$label OK (after $((SECONDS - start))s)"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "ERROR: $label not responding after 30s" >&2
+            return 1
+          }
           if [ "${{ steps.surfaces.outputs.backend }}" = "true" ]; then
-            curl -fsS http://localhost:8000/healthz >/dev/null
-            echo "mc-backend /healthz OK"
+            wait_for http://localhost:8000/healthz "mc-backend /healthz"
           fi
           if [ "${{ steps.surfaces.outputs.frontend }}" = "true" ]; then
-            curl -fsS -o /dev/null -w "frontend HTTP %{http_code}\n" http://localhost:3000/
+            wait_for http://localhost:3000/ "frontend /"
           fi
 
       - name: Summary
