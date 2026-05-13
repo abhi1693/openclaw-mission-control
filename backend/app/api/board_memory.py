@@ -220,11 +220,28 @@ async def _notify_chat_targets(
 async def list_board_memory(
     *,
     is_chat: bool | None = IS_CHAT_QUERY,
+    # Backward-compat aliases: agents historically used ?tag=chat or ?tags=chat
+    # because AGENTS.md describes chat entries as having "tag: chat". The API only
+    # recognises is_chat, so these aliases were silently ignored, causing agents to
+    # receive ALL memory entries instead of only chat. Accept both forms so older
+    # agent scripts and cached API knowledge work correctly without agent changes.
+    tag: str | None = Query(default=None, include_in_schema=False),
+    tags: str | None = Query(default=None, include_in_schema=False),
     board: Board = BOARD_READ_DEP,
     session: AsyncSession = SESSION_DEP,
     _actor: ActorContext = ACTOR_DEP,
 ) -> LimitOffsetPage[BoardMemoryRead]:
-    """List board memory entries, optionally filtering chat entries."""
+    """List board memory entries, optionally filtering chat entries.
+
+    Supports ``is_chat=true/false`` and the legacy aliases ``tag=chat`` /
+    ``tags=chat`` used by agent scripts that pre-date the ``is_chat`` parameter.
+    """
+    # Resolve legacy aliases when is_chat is not explicitly set.
+    if is_chat is None:
+        if tag == "chat" or tags == "chat":
+            is_chat = True
+        elif tag == "non-chat" or tags == "non-chat":
+            is_chat = False
     statement = (
         BoardMemory.objects.filter_by(board_id=board.id)
         # Old/invalid rows (empty/whitespace-only content) can exist; exclude them to

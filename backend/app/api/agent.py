@@ -1084,17 +1084,26 @@ async def create_task_comment(
 )
 async def list_board_memory(
     is_chat: bool | None = IS_CHAT_QUERY,
+    # Legacy aliases: agent scripts historically used ?tag=chat (ignored by the API).
+    # Accept them here and pass through so board_memory_api.list_board_memory can
+    # resolve them to is_chat=True without requiring agent script changes.
+    tag: str | None = Query(default=None, include_in_schema=False),
+    tags: str | None = Query(default=None, include_in_schema=False),
     board: Board = BOARD_DEP,
     session: AsyncSession = SESSION_DEP,
     agent_ctx: AgentAuthContext = AGENT_CTX_DEP,
 ) -> LimitOffsetPage[BoardMemoryRead]:
     """List board memory with optional chat filtering.
 
-    Use `is_chat=false` for durable context and `is_chat=true` for board chat.
+    Use ``is_chat=true`` for board chat and ``is_chat=false`` for durable context.
+    The legacy aliases ``tag=chat`` and ``tags=chat`` are also accepted for
+    backward compatibility with agent scripts that pre-date the ``is_chat`` param.
     """
     _guard_board_access(agent_ctx, board)
     return await board_memory_api.list_board_memory(
         is_chat=is_chat,
+        tag=tag,
+        tags=tags,
         board=board,
         session=session,
         _actor=_actor(agent_ctx),

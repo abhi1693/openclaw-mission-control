@@ -51,3 +51,13 @@ def test_not_checked_in_since_wake_when_missing_last_seen() -> None:
 def test_lifecycle_convergence_policy_constants() -> None:
     assert CHECKIN_DEADLINE_AFTER_WAKE == timedelta(seconds=30)
     assert MAX_WAKE_ATTEMPTS_WITHOUT_CHECKIN == 3
+
+
+def test_wake_check_uses_last_seen_not_heartbeat() -> None:
+    """_has_checked_in_since_wake uses last_seen_at, not last_heartbeat_at.
+    Wake-escalation tracks any authenticated presence; health tracks heartbeat.
+    These are separate concerns and should remain decoupled.
+    """
+    agent = _agent(last_seen_offset_s=5, last_wake_offset_s=0)
+    assert agent.last_heartbeat_at is None
+    assert _has_checked_in_since_wake(agent) is True

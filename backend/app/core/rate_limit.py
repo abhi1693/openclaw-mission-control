@@ -223,10 +223,15 @@ def create_rate_limiter(
 
 
 # Shared limiter instances for specific endpoints.
-# Agent auth: 20 attempts per 60 seconds per IP.
+#
+# Agent auth: keyed by token prefix (first 8 chars), NOT by client IP.
+# Keying by IP causes false-positive 429s when multiple agents share the same
+# Docker bridge IP (e.g. all gateway-side agents appear as 192.168.x.1).
+# 60 requests per 60 seconds per token prefix gives each agent 1 req/s sustained
+# burst capacity, which is enough for heartbeat + task + memory calls.
 agent_auth_limiter: RateLimiter = create_rate_limiter(
     namespace="agent_auth",
-    max_requests=20,
+    max_requests=60,
     window_seconds=60.0,
 )
 # Webhook ingest: 60 requests per 60 seconds per IP.

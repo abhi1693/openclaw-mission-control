@@ -22,6 +22,9 @@ def mint_agent_token(agent: Agent) -> str:
 
     raw_token = generate_agent_token()
     agent.agent_token_hash = hash_agent_token(raw_token)
+    # Prefix stored in plaintext for fast DB pre-filter in _find_agent_for_token().
+    # Not a security mechanism -- PBKDF2 on the full hash remains the auth gate.
+    agent.agent_token_prefix = raw_token[:8]
     return raw_token
 
 

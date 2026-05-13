@@ -123,6 +123,7 @@ export default function SettingsPage() {
     await updateMeMutation.mutateAsync({
       data: {
         name: resolvedName.trim(),
+        preferred_name: resolvedName.trim(),
         timezone: resolvedTimezone.trim(),
       },
     });

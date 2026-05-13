@@ -32,3 +32,40 @@ def test_agent_healthz_returns_authenticated_agent_context() -> None:
     assert response.gateway_id == agent_ctx.agent.gateway_id
     assert response.status == "online"
     assert response.is_board_lead is True
+
+
+def test_stale_heartbeat_agent_shows_offline() -> None:
+    """with_computed_status() overrides stored 'online' when heartbeat is stale."""
+    from datetime import timedelta
+    from uuid import uuid4
+    from app.core.time import utcnow
+    from app.models.agents import Agent
+    from app.services.openclaw.provisioning_db import AgentLifecycleService
+
+    agent = Agent(
+        id=uuid4(), board_id=uuid4(), gateway_id=uuid4(),
+        name="Stale", status="online",
+        last_seen_at=utcnow(),
+        last_heartbeat_at=utcnow() - timedelta(hours=1),
+        heartbeat_config={"every": "10m"},
+    )
+    AgentLifecycleService.with_computed_status(agent)
+    assert agent.status == "offline"
+
+
+def test_recent_heartbeat_agent_stays_online() -> None:
+    from datetime import timedelta
+    from uuid import uuid4
+    from app.core.time import utcnow
+    from app.models.agents import Agent
+    from app.services.openclaw.provisioning_db import AgentLifecycleService
+
+    agent = Agent(
+        id=uuid4(), board_id=uuid4(), gateway_id=uuid4(),
+        name="Healthy", status="online",
+        last_seen_at=utcnow(),
+        last_heartbeat_at=utcnow() - timedelta(minutes=5),
+        heartbeat_config={"every": "10m"},
+    )
+    AgentLifecycleService.with_computed_status(agent)
+    assert agent.status == "online"

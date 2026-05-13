@@ -56,5 +56,7 @@ USER appuser
 # Default API port
 EXPOSE 8000
 
-# Run the API
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations then start the API.
+# alembic upgrade head is idempotent — safe to run on every container start.
+# It ensures the DB schema is always current without a separate migration step.
+CMD ["sh", "-c", "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
