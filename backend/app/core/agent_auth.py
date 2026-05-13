@@ -23,7 +23,6 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlmodel import col, select
 
 from app.core.agent_tokens import verify_agent_token
-from app.core.client_ip import get_client_ip
 from app.core.logging import get_logger
 from app.core.rate_limit import agent_auth_limiter
 from app.core.time import utcnow
@@ -49,14 +48,38 @@ class AgentAuthContext:
 
 
 async def _find_agent_for_token(session: AsyncSession, token: str) -> Agent | None:
-    agents = list(
+    # Fast path: filter by token prefix to reduce PBKDF2 candidates from O(N) to O(1).
+    # The prefix (first 8 chars of the raw token) is written by mint_agent_token() at
+    # creation/rotation time. At 1000 agents the collision probability is ~4e-12.
+    prefix = token[:8]
+    candidates = list(
         await session.exec(
-            select(Agent).where(col(Agent.agent_token_hash).is_not(None)),
+            select(Agent).where(
+                col(Agent.agent_token_hash).is_not(None),
+                col(Agent.agent_token_prefix) == prefix,
+            ),
         ),
     )
-    for agent in agents:
+    for agent in candidates:
         if agent.agent_token_hash and verify_agent_token(token, agent.agent_token_hash):
             return agent
+
+    # Fallback: scan only NULL-prefix rows (agents provisioned before the prefix column).
+    # TODO: Remove this fallback after all agents are re-keyed via gateway sync
+    # (rotate_tokens=true). Once agent_token_prefix is non-NULL for all rows, this
+    # branch is unreachable. Track removal in follow-up issue.
+    null_prefix_agents = list(
+        await session.exec(
+            select(Agent).where(
+                col(Agent.agent_token_hash).is_not(None),
+                col(Agent.agent_token_prefix).is_(None),
+            ),
+        ),
+    )
+    for agent in null_prefix_agents:
+        if agent.agent_token_hash and verify_agent_token(token, agent.agent_token_hash):
+            return agent
+
     return None
 
 
@@ -114,9 +137,6 @@ async def get_agent_auth_context(
     session: AsyncSession = SESSION_DEP,
 ) -> AgentAuthContext:
     """Require and validate agent auth token from request headers."""
-    client_ip = get_client_ip(request)
-    if not await agent_auth_limiter.is_allowed(client_ip):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     resolved = _resolve_agent_token(
         agent_token,
         authorization,
@@ -130,6 +150,13 @@ async def get_agent_auth_context(
             bool(authorization),
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    # Rate-limit by token prefix (first 8 chars), not by client IP.
+    # All Docker-side agents share the same bridge IP, so an IP-based limit
+    # creates false-positive 429s when multiple agents make concurrent requests.
+    # Using the token prefix gives each agent its own independent bucket.
+    rate_key = resolved[:8]
+    if not await agent_auth_limiter.is_allowed(rate_key):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     agent = await _find_agent_for_token(session, resolved)
     if agent is None:
         logger.warning(
@@ -171,10 +198,9 @@ async def get_agent_auth_context_optional(
                 bool(authorization),
             )
         return None
-    # Rate-limit any request that is actually attempting agent auth on the
-    # optional path. Shared user/agent dependencies resolve user auth first.
-    client_ip = get_client_ip(request)
-    if not await agent_auth_limiter.is_allowed(client_ip):
+    # Rate-limit by token prefix, not client IP (same reasoning as get_agent_auth_context).
+    rate_key = resolved[:8]
+    if not await agent_auth_limiter.is_allowed(rate_key):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     agent = await _find_agent_for_token(session, resolved)
     if agent is None:

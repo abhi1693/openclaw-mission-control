@@ -51,7 +51,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "0.0.0.0:${BACKEND_PORT:-8000}:8000"
 
   frontend:
     build:
@@ -71,7 +71,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "0.0.0.0:${FRONTEND_PORT:-3000}:3000"
     develop:
       watch:
         # Rebuild frontend image when UI source or build config changes.

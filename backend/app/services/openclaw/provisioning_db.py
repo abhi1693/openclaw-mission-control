@@ -12,7 +12,7 @@ import asyncio
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 from uuid import UUID, uuid4
 
@@ -51,6 +51,27 @@ from app.services.openclaw.constants import (
     DEFAULT_HEARTBEAT_CONFIG,
     OFFLINE_AFTER,
 )
+
+_FALLBACK_OFFLINE_AFTER = OFFLINE_AFTER  # retained for backward-compat fallback path
+
+
+def _heartbeat_offline_threshold(agent: "Agent") -> timedelta:
+    """Return 1.5× the configured heartbeat interval for this agent.
+
+    Falls back to OFFLINE_AFTER (10 min) when heartbeat_config is missing or the
+    'every' format is unrecognised. Only simple formats are supported: "10m", "30m",
+    "1h", "60s". Compound forms like "10m30s" are intentionally not handled -- if
+    introduced, this parser must be updated.
+    """
+    every = (agent.heartbeat_config or {}).get("every", "")
+    m = re.match(r"^(\d+)([smh])$", every or "")
+    if not m:
+        return _FALLBACK_OFFLINE_AFTER
+    val, unit = int(m.group(1)), m.group(2)
+    base_secs = val * {"s": 1, "m": 60, "h": 3600}[unit]
+    return timedelta(seconds=base_secs * 1.5)
+
+
 from app.services.openclaw.db_agent_state import (
     mint_agent_token,
 )
@@ -866,12 +887,25 @@ class AgentLifecycleService(OpenClawDBService):
 
     @classmethod
     def with_computed_status(cls, agent: Agent) -> Agent:
+        # NOTE: agent_auth.py also sets agent.status = "online" on any successful
+        # authenticated request via _touch_agent_presence(). That write is now
+        # superseded on every read for stale-heartbeat agents (with_computed_status
+        # overrides to "offline"). The agent_auth write is harmless for agents with
+        # current heartbeats and is left in place as cleanup scope is out of band.
         now = utcnow()
         if agent.status in {"deleting", "updating"}:
             return agent
         if agent.last_seen_at is None:
             agent.status = "provisioning"
-        elif now - agent.last_seen_at > OFFLINE_AFTER:
+            return agent
+        # PRIMARY: per-agent interval-aware threshold derived from last_heartbeat_at.
+        if agent.last_heartbeat_at is not None:
+            if now - agent.last_heartbeat_at > _heartbeat_offline_threshold(agent):
+                agent.status = "offline"
+            # else: status already set to "online" by commit_heartbeat or agent_auth.
+            return agent
+        # FALLBACK: pre-migration rows and agents that have never called /heartbeat.
+        if now - agent.last_seen_at > _FALLBACK_OFFLINE_AFTER:
             agent.status = "offline"
         return agent
 
@@ -1434,7 +1468,12 @@ class AgentLifecycleService(OpenClawDBService):
             agent.status = status_value
         elif agent.status == "provisioning":
             agent.status = "online"
-        agent.last_seen_at = utcnow()
+        now = utcnow()
+        agent.last_seen_at = now
+        # Canonical heartbeat health signal. Only POST /api/v1/agent/heartbeat advances
+        # this field. General authenticated calls (board reads, task updates) advance
+        # last_seen_at via _touch_agent_presence() but do not advance last_heartbeat_at.
+        agent.last_heartbeat_at = now
         # Successful check-in ends the current wake escalation cycle.
         agent.wake_attempts = 0
         agent.checkin_deadline_at = None
