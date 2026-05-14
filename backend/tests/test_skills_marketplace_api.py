@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 from sqlmodel import SQLModel, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api import skills_marketplace as skills_marketplace_module
 from app.api.deps import require_org_admin
 from app.api.gateways import router as gateways_router
 from app.api.skills_marketplace import (
@@ -322,8 +323,13 @@ async def test_sync_pack_clones_and_upserts_skills(monkeypatch: pytest.MonkeyPat
             ),
         ]
 
-        def _fake_collect_pack_skills(source_url: str) -> list[PackSkillCandidate]:
+        def _fake_collect_pack_skills(
+            *,
+            source_url: str,
+            branch: str = "main",
+        ) -> list[PackSkillCandidate]:
             assert source_url == "https://github.com/sickn33/antigravity-awesome-skills"
+            assert branch == "main"
             return collected
 
         monkeypatch.setattr(
@@ -706,6 +712,84 @@ async def test_update_skill_pack_normalizes_source_url_on_update() -> None:
                 )
             ).one()
             assert str(updated.source_url) == "https://github.com/org/new"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_sync_skill_pack_uses_configured_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = await _make_engine()
+    session_maker = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    called: dict[str, str] = {}
+
+    def fake_collect_pack_skills(
+        *,
+        source_url: str,
+        branch: str = "main",
+    ) -> list[PackSkillCandidate]:
+        called["source_url"] = source_url
+        called["branch"] = branch
+        return [
+            PackSkillCandidate(
+                name="TweetClaw",
+                description="X/Twitter automation for OpenClaw",
+                source_url=f"{source_url}/tree/{branch}/skills/tweetclaw",
+            ),
+        ]
+
+    monkeypatch.setattr(
+        skills_marketplace_module,
+        "_collect_pack_skills",
+        fake_collect_pack_skills,
+    )
+
+    try:
+        async with session_maker() as session:
+            organization, _gateway = await _seed_base(session)
+            pack = SkillPack(
+                organization_id=organization.id,
+                source_url="https://github.com/Xquik-dev/tweetclaw",
+                name="TweetClaw",
+                branch="master",
+            )
+            session.add(pack)
+            await session.commit()
+            await session.refresh(pack)
+
+        app = _build_test_app(session_maker, organization=organization)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.post(f"/api/v1/skills/packs/{pack.id}/sync")
+
+        assert response.status_code == 200
+        assert response.json()["synced"] == 1
+        assert response.json()["created"] == 1
+        assert called == {
+            "source_url": "https://github.com/Xquik-dev/tweetclaw",
+            "branch": "master",
+        }
+
+        async with session_maker() as session:
+            skill = (
+                await session.exec(
+                    select(MarketplaceSkill).where(
+                        col(MarketplaceSkill.organization_id) == organization.id,
+                    ),
+                )
+            ).one()
+            assert skill.source_url == (
+                "https://github.com/Xquik-dev/tweetclaw/tree/master/skills/tweetclaw"
+            )
+            assert skill.name == "TweetClaw"
     finally:
         await engine.dispose()
 

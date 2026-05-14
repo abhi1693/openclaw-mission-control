@@ -1309,6 +1309,7 @@ async def sync_skill_pack(
     try:
         discovered = _collect_pack_skills(
             source_url=pack.source_url,
+            branch=pack.branch,
         )
     except RuntimeError as exc:
         raise HTTPException(
