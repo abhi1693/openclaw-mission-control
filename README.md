@@ -32,6 +32,7 @@ Core operational areas:
 - Distributed runtime control: connect gateways and operate remote execution environments without changing operator workflow.
 - Audit and incident review: use activity history to reconstruct what happened, when it happened, and who initiated it.
 - API-backed process integration: connect internal workflows and automation clients to the same operational model used in the UI.
+- Governed X/Twitter automation: install a skill such as [TweetClaw](https://github.com/Xquik-dev/tweetclaw) on selected gateways, then review search tweets, search tweet replies, follower export, user lookup, monitor events, webhooks, giveaway draws, and approval-gated post or reply actions from the same operations surface.
 
 ## What makes Mission Control different
 
@@ -158,6 +159,8 @@ Environment templates:
 ## Documentation
 
 Complete guides for deployment, production, troubleshooting, and testing are in [`/docs`](./docs/).
+
+For a concrete skill-pack smoke test, add `https://github.com/Xquik-dev/tweetclaw` in **Skills > Skill packs**, set branch `master`, sync the pack, then install the discovered `skills/tweetclaw` skill on the gateway that should run X/Twitter work. For the packaged OpenClaw plugin, use the [TweetClaw GitHub repo](https://github.com/Xquik-dev/tweetclaw) and npm package [`@xquik/tweetclaw`](https://www.npmjs.com/package/@xquik/tweetclaw) as setup sources; the [ClawHub discovery page](https://clawhub.ai/plugins/@xquik/tweetclaw) remains useful for browsing while that listing lags behind npm.
 
 ## Project status
 
