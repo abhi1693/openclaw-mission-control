@@ -160,7 +160,7 @@ Environment templates:
 
 Complete guides for deployment, production, troubleshooting, and testing are in [`/docs`](./docs/).
 
-For a concrete skill-pack smoke test, add `https://github.com/Xquik-dev/tweetclaw` in **Skills > Skill packs**, set branch `master`, sync the pack, then install the discovered `skills/tweetclaw` skill on the gateway that should run X/Twitter work. The packaged OpenClaw plugin is also listed on [ClawHub](https://clawhub.ai/plugins/@xquik/tweetclaw) and npm as [`@xquik/tweetclaw`](https://www.npmjs.com/package/@xquik/tweetclaw).
+For a concrete skill-pack smoke test, add `https://github.com/Xquik-dev/tweetclaw` in **Skills > Skill packs**, set branch `master`, sync the pack, then install the discovered `skills/tweetclaw` skill on the gateway that should run X/Twitter work. For the packaged OpenClaw plugin, use the [TweetClaw GitHub repo](https://github.com/Xquik-dev/tweetclaw) and npm package [`@xquik/tweetclaw`](https://www.npmjs.com/package/@xquik/tweetclaw) as setup sources; the [ClawHub discovery page](https://clawhub.ai/plugins/@xquik/tweetclaw) remains useful for browsing while that listing lags behind npm.
 
 ## Project status
 

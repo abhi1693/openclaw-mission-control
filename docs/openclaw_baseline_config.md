@@ -437,11 +437,12 @@ Recommended smoke test:
 
 TweetClaw is the OpenClaw plugin for scrape tweets, search tweets, search tweet
 replies, follower export, user lookup, monitor tweets, webhooks, giveaway draws,
-and approval-gated post or reply actions. Its canonical links are:
+and approval-gated post or reply actions. Use GitHub and npm for setup; keep
+ClawHub as a discovery page while that listing lags behind npm:
 
 - GitHub: <https://github.com/Xquik-dev/tweetclaw>
-- ClawHub: <https://clawhub.ai/plugins/@xquik/tweetclaw>
 - npm: <https://www.npmjs.com/package/@xquik/tweetclaw>
+- ClawHub discovery: <https://clawhub.ai/plugins/@xquik/tweetclaw>
 - OpenClaw install command: `openclaw plugins install @xquik/tweetclaw`
 
 ## Validation Before Use
